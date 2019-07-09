@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <diagram program="umlet" version="14.3.0">
-  <zoom_level>9</zoom_level>
+  <zoom_level>8</zoom_level>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>567</x>
-      <y>234</y>
-      <w>189</w>
-      <h>171</h>
+      <x>624</x>
+      <y>208</y>
+      <w>168</w>
+      <h>152</h>
     </coordinates>
     <panel_attributes>MeshMaster
 --
@@ -18,10 +18,10 @@
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>279</x>
-      <y>234</y>
-      <w>189</w>
-      <h>171</h>
+      <x>368</x>
+      <y>208</y>
+      <w>168</w>
+      <h>152</h>
     </coordinates>
     <panel_attributes>DomainOwner
 --
@@ -31,10 +31,10 @@
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>459</x>
-      <y>306</y>
-      <w>126</w>
-      <h>45</h>
+      <x>528</x>
+      <y>272</y>
+      <w>112</w>
+      <h>40</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
 m2=1
@@ -44,10 +44,10 @@ m2=1
   <element>
     <id>UMLNote</id>
     <coordinates>
-      <x>18</x>
+      <x>136</x>
       <y>0</y>
-      <w>162</w>
-      <h>180</h>
+      <w>144</w>
+      <h>160</h>
     </coordinates>
     <panel_attributes>ASSUMPTIONS:
 --
@@ -70,10 +70,10 @@ they belong to</panel_attributes>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>567</x>
-      <y>477</y>
-      <w>189</w>
-      <h>171</h>
+      <x>624</x>
+      <y>424</y>
+      <w>168</w>
+      <h>152</h>
     </coordinates>
     <panel_attributes>BoundaryDomainOwner
 --
@@ -83,10 +83,10 @@ they belong to</panel_attributes>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>648</x>
-      <y>396</y>
-      <w>36</w>
-      <h>99</h>
+      <x>696</x>
+      <y>352</y>
+      <w>32</w>
+      <h>88</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
 m2=1
@@ -96,10 +96,10 @@ m2=1
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>279</x>
-      <y>477</y>
-      <w>189</w>
-      <h>171</h>
+      <x>368</x>
+      <y>424</y>
+      <w>168</w>
+      <h>152</h>
     </coordinates>
     <panel_attributes>Domain
 --
@@ -109,10 +109,10 @@ m2=1
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>612</x>
-      <y>720</y>
-      <w>189</w>
-      <h>171</h>
+      <x>664</x>
+      <y>640</y>
+      <w>168</w>
+      <h>152</h>
     </coordinates>
     <panel_attributes>BoundaryDomain
 --
@@ -122,10 +122,10 @@ m2=1
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>369</x>
-      <y>396</y>
-      <w>45</w>
-      <h>99</h>
+      <x>448</x>
+      <y>352</y>
+      <w>40</w>
+      <h>88</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
 m2=1..*</panel_attributes>
@@ -134,10 +134,10 @@ m2=1..*</panel_attributes>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>666</x>
-      <y>639</y>
-      <w>45</w>
-      <h>99</h>
+      <x>712</x>
+      <y>568</y>
+      <w>40</w>
+      <h>88</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
 m2=1..*</panel_attributes>
@@ -146,10 +146,10 @@ m2=1..*</panel_attributes>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>279</x>
-      <y>720</y>
-      <w>252</w>
-      <h>171</h>
+      <x>368</x>
+      <y>640</y>
+      <w>224</w>
+      <h>152</h>
     </coordinates>
     <panel_attributes>/ElementBase/
 --
@@ -164,12 +164,12 @@ m2=1..*</panel_attributes>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>729</x>
-      <y>963</y>
-      <w>423</w>
-      <h>171</h>
+      <x>776</x>
+      <y>856</y>
+      <w>352</w>
+      <h>152</h>
     </coordinates>
-    <panel_attributes>template= Type : ElementType, Order : int
+    <panel_attributes>template= Type : BoundaryElementType, Order : int
 BoundaryElement
 --
 _-ElementQuadratures : vector&lt;Quadrature&gt;_
@@ -180,10 +180,10 @@ _-ElementQuadratures : vector&lt;Quadrature&gt;_
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>369</x>
-      <y>639</y>
-      <w>45</w>
-      <h>99</h>
+      <x>448</x>
+      <y>568</y>
+      <w>40</w>
+      <h>88</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
 m2=1..*</panel_attributes>
@@ -192,10 +192,10 @@ m2=1..*</panel_attributes>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>855</x>
-      <y>477</y>
-      <w>189</w>
-      <h>171</h>
+      <x>880</x>
+      <y>424</y>
+      <w>168</w>
+      <h>152</h>
     </coordinates>
     <panel_attributes>Node
 --
@@ -205,10 +205,10 @@ m2=1..*</panel_attributes>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>855</x>
-      <y>234</y>
-      <w>189</w>
-      <h>171</h>
+      <x>880</x>
+      <y>208</y>
+      <w>168</w>
+      <h>152</h>
     </coordinates>
     <panel_attributes>NodeOwner
 --
@@ -218,10 +218,10 @@ m2=1..*</panel_attributes>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>747</x>
-      <y>315</y>
-      <w>126</w>
-      <h>36</h>
+      <x>784</x>
+      <y>280</y>
+      <w>112</w>
+      <h>32</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
 m2=1</panel_attributes>
@@ -230,10 +230,10 @@ m2=1</panel_attributes>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>936</x>
-      <y>396</y>
-      <w>45</w>
-      <h>99</h>
+      <x>952</x>
+      <y>352</y>
+      <w>40</w>
+      <h>88</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
 m2=1..*</panel_attributes>
@@ -242,22 +242,22 @@ m2=1..*</panel_attributes>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>855</x>
-      <y>639</y>
-      <w>117</w>
-      <h>351</h>
+      <x>880</x>
+      <y>568</y>
+      <w>104</w>
+      <h>312</h>
     </coordinates>
     <panel_attributes>lt=&lt;.
 </panel_attributes>
-    <additional_attributes>110.0;10.0;110.0;210.0;10.0;210.0;10.0;370.0</additional_attributes>
+    <additional_attributes>120.0;10.0;120.0;210.0;20.0;210.0;19.0;370.0</additional_attributes>
   </element>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>360</x>
-      <y>882</y>
-      <w>27</w>
-      <h>108</h>
+      <x>440</x>
+      <y>784</y>
+      <w>24</w>
+      <h>96</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;-</panel_attributes>
     <additional_attributes>10.0;10.0;10.0;100.0</additional_attributes>
@@ -265,10 +265,10 @@ m2=1..*</panel_attributes>
   <element>
     <id>UMLFrame</id>
     <coordinates>
-      <x>189</x>
-      <y>144</y>
-      <w>1170</w>
-      <h>1224</h>
+      <x>288</x>
+      <y>128</y>
+      <w>1040</w>
+      <h>1088</h>
     </coordinates>
     <panel_attributes>Mesh</panel_attributes>
     <additional_attributes/>
@@ -276,10 +276,10 @@ m2=1..*</panel_attributes>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>279</x>
-      <y>963</y>
-      <w>423</w>
-      <h>171</h>
+      <x>368</x>
+      <y>856</y>
+      <w>376</w>
+      <h>152</h>
     </coordinates>
     <panel_attributes>template= Type : ElementType, Order : int
 Element
@@ -292,10 +292,10 @@ _-ElementQuadratures : vector&lt;Quadrature&gt;_
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>279</x>
-      <y>1161</y>
-      <w>117</w>
-      <h>171</h>
+      <x>368</x>
+      <y>1032</y>
+      <w>104</w>
+      <h>152</h>
     </coordinates>
     <panel_attributes>&lt;&lt;Enumeration&gt;&gt;
 ElementType
@@ -307,10 +307,10 @@ QuadCL</panel_attributes>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>324</x>
-      <y>1125</y>
-      <w>27</w>
-      <h>54</h>
+      <x>408</x>
+      <y>1000</y>
+      <w>24</w>
+      <h>48</h>
     </coordinates>
     <panel_attributes>lt=&lt;-</panel_attributes>
     <additional_attributes>10.0;10.0;10.0;40.0</additional_attributes>
@@ -318,10 +318,10 @@ QuadCL</panel_attributes>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>522</x>
-      <y>801</y>
-      <w>108</w>
-      <h>36</h>
+      <x>584</x>
+      <y>712</y>
+      <w>96</w>
+      <h>32</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
 m2=1..*</panel_attributes>
@@ -330,33 +330,33 @@ m2=1..*</panel_attributes>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>468</x>
-      <y>882</y>
-      <w>342</w>
-      <h>108</h>
+      <x>520</x>
+      <y>784</y>
+      <w>320</w>
+      <h>96</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;-</panel_attributes>
-    <additional_attributes>10.0;10.0;10.0;50.0;360.0;50.0;360.0;100.0</additional_attributes>
+    <additional_attributes>10.0;10.0;10.0;50.0;380.0;50.0;380.0;100.0</additional_attributes>
   </element>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>594</x>
-      <y>1035</y>
-      <w>153</w>
-      <h>36</h>
+      <x>648</x>
+      <y>920</y>
+      <w>144</w>
+      <h>32</h>
     </coordinates>
     <panel_attributes>lt=&lt;.
 </panel_attributes>
-    <additional_attributes>10.0;20.0;150.0;20.0</additional_attributes>
+    <additional_attributes>10.0;20.0;160.0;20.0</additional_attributes>
   </element>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>432</x>
-      <y>1161</y>
-      <w>144</w>
-      <h>171</h>
+      <x>504</x>
+      <y>1032</y>
+      <w>128</w>
+      <h>152</h>
     </coordinates>
     <panel_attributes>&lt;&lt;Enumeration&gt;&gt;
 BoundaryElementType
@@ -368,24 +368,41 @@ SegmentCL</panel_attributes>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>567</x>
-      <y>1125</y>
-      <w>270</w>
-      <h>81</h>
+      <x>624</x>
+      <y>1000</y>
+      <w>240</w>
+      <h>64</h>
     </coordinates>
     <panel_attributes>lt=&lt;-</panel_attributes>
-    <additional_attributes>280.0;10.0;280.0;70.0;10.0;70.0</additional_attributes>
+    <additional_attributes>280.0;10.0;280.0;60.0;10.0;60.0</additional_attributes>
   </element>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>450</x>
-      <y>639</y>
-      <w>450</w>
-      <h>99</h>
+      <x>520</x>
+      <y>568</y>
+      <w>416</w>
+      <h>88</h>
     </coordinates>
     <panel_attributes>lt=&lt;.
 </panel_attributes>
-    <additional_attributes>480.0;10.0;480.0;40.0;10.0;40.0;10.0;90.0</additional_attributes>
+    <additional_attributes>500.0;10.0;500.0;50.0;10.0;50.0;10.0;90.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>880</x>
+      <y>1040</y>
+      <w>192</w>
+      <h>104</h>
+    </coordinates>
+    <panel_attributes>Quadrature
+--
+-order : int
+-qPoints : vector&lt;vector&lt;double&gt;&gt;
+-weights : vector&lt;double&gt;
+--
++</panel_attributes>
+    <additional_attributes/>
   </element>
 </diagram>
