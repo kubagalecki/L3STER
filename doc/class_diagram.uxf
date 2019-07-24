@@ -1,15 +1,16 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <diagram program="umlet" version="14.3.0">
-  <zoom_level>11</zoom_level>
+  <zoom_level>9</zoom_level>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>957</x>
-      <y>451</y>
-      <w>231</w>
-      <h>209</h>
+      <x>441</x>
+      <y>216</y>
+      <w>189</w>
+      <h>171</h>
     </coordinates>
-    <panel_attributes>MeshMaster
+    <panel_attributes>&lt;&lt;Singleton&gt;&gt;
+MeshMaster
 --
 --
 </panel_attributes>
@@ -18,12 +19,13 @@
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>605</x>
-      <y>451</y>
-      <w>231</w>
-      <h>209</h>
+      <x>153</x>
+      <y>216</y>
+      <w>189</w>
+      <h>171</h>
     </coordinates>
-    <panel_attributes>DomainOwner
+    <panel_attributes>&lt;&lt;Singleton&gt;&gt;
+DomainOwner
 --
 --</panel_attributes>
     <additional_attributes/>
@@ -31,10 +33,10 @@
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>825</x>
-      <y>539</y>
-      <w>154</w>
-      <h>55</h>
+      <x>333</x>
+      <y>288</y>
+      <w>126</w>
+      <h>45</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
 m2=1
@@ -44,10 +46,10 @@ m2=1
   <element>
     <id>UMLNote</id>
     <coordinates>
-      <x>2321</x>
-      <y>0</y>
-      <w>242</w>
-      <h>275</h>
+      <x>1989</x>
+      <y>783</y>
+      <w>198</w>
+      <h>225</h>
     </coordinates>
     <panel_attributes>ASSUMPTIONS:
 
@@ -66,12 +68,13 @@ bg=green</panel_attributes>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>957</x>
-      <y>748</y>
-      <w>231</w>
-      <h>209</h>
+      <x>504</x>
+      <y>468</y>
+      <w>189</w>
+      <h>171</h>
     </coordinates>
-    <panel_attributes>BoundaryDomainOwner
+    <panel_attributes>&lt;&lt;Singleton&gt;&gt;
+BoundaryDomainOwner
 --
 --</panel_attributes>
     <additional_attributes/>
@@ -79,23 +82,23 @@ bg=green</panel_attributes>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>1056</x>
-      <y>649</y>
-      <w>44</w>
-      <h>121</h>
+      <x>522</x>
+      <y>378</y>
+      <w>99</w>
+      <h>108</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
 m2=1
 </panel_attributes>
-    <additional_attributes>10.0;10.0;10.0;90.0</additional_attributes>
+    <additional_attributes>10.0;10.0;10.0;60.0;80.0;60.0;80.0;100.0</additional_attributes>
   </element>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>605</x>
-      <y>748</y>
-      <w>231</w>
-      <h>209</h>
+      <x>153</x>
+      <y>468</y>
+      <w>189</w>
+      <h>171</h>
     </coordinates>
     <panel_attributes>Domain
 --
@@ -108,120 +111,143 @@ m2=1
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>1012</x>
-      <y>1045</y>
-      <w>231</w>
-      <h>209</h>
+      <x>540</x>
+      <y>765</y>
+      <w>252</w>
+      <h>171</h>
     </coordinates>
     <panel_attributes>BoundaryDomain
 --
-
+-boundary_list : vector&lt;BoundaryElement&gt;
 --</panel_attributes>
     <additional_attributes/>
   </element>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>715</x>
-      <y>649</y>
-      <w>55</w>
-      <h>121</h>
+      <x>243</x>
+      <y>378</y>
+      <w>45</w>
+      <h>108</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
 m2=1..*</panel_attributes>
-    <additional_attributes>10.0;10.0;10.0;90.0</additional_attributes>
+    <additional_attributes>10.0;10.0;10.0;100.0</additional_attributes>
   </element>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>1078</x>
-      <y>946</y>
-      <w>55</w>
-      <h>121</h>
+      <x>594</x>
+      <y>630</y>
+      <w>81</w>
+      <h>153</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
 m2=1..*</panel_attributes>
-    <additional_attributes>10.0;10.0;10.0;90.0</additional_attributes>
+    <additional_attributes>10.0;10.0;10.0;90.0;50.0;90.0;50.0;150.0</additional_attributes>
   </element>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>605</x>
-      <y>1045</y>
-      <w>308</w>
-      <h>209</h>
+      <x>153</x>
+      <y>711</y>
+      <w>369</w>
+      <h>171</h>
     </coordinates>
-    <panel_attributes>/ElementBase/
+    <panel_attributes>template=Type : ElementType, Order : uint
+Element
+{final}
 --
-#nodes : array&lt;uint&gt;
-#globalNodes : vector&lt;uint&gt;
-#elData : ElementDataBase*
+-nodes : array&lt;uint, nelnodes&gt;
+-globalNodes : vector&lt;uint&gt;
 --
-/+GetQuadrature(order : int) : Quadrature/
++Element(nodes : vector&lt;double&gt;)
++Element(nodes : array&lt;double, nelnodes&gt;)
++getNodes(order : int) : array&lt;uint, nelnodes&gt;
+--
+Deleted:
+-Element()
+
 </panel_attributes>
     <additional_attributes/>
   </element>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>1188</x>
-      <y>1331</y>
-      <w>451</w>
-      <h>209</h>
+      <x>918</x>
+      <y>693</y>
+      <w>135</w>
+      <h>135</h>
     </coordinates>
-    <panel_attributes>template=Type : ElementType
-BoundaryElement
+    <panel_attributes>BoundaryElement
+{final}
 --
-_-BoundaryElementQuadratures : vector&lt;Quadrature&gt;_
+-element : ElementId
+-element_side : uint
 --
-+GetQuadrature(in order : int) : Quadrature</panel_attributes>
++getElement() : 
++getSide() : uint
+--
+Deleted:
+-BoundaryElement()</panel_attributes>
     <additional_attributes/>
   </element>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>715</x>
-      <y>946</y>
-      <w>55</w>
-      <h>121</h>
+      <x>234</x>
+      <y>630</y>
+      <w>45</w>
+      <h>108</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
 m2=1..*</panel_attributes>
-    <additional_attributes>10.0;10.0;10.0;90.0</additional_attributes>
+    <additional_attributes>10.0;10.0;10.0;100.0</additional_attributes>
   </element>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>1309</x>
-      <y>748</y>
-      <w>231</w>
-      <h>209</h>
+      <x>837</x>
+      <y>468</y>
+      <w>252</w>
+      <h>90</h>
     </coordinates>
     <panel_attributes>Node
 --
---</panel_attributes>
+-coordinates : array&lt;double, 3&gt;
+--
++Node(coords : array&lt;double, 3&gt;)
++setCoordinates(coords : array&lt;double, 3&gt;)
++getCoordinates() : array&lt;double, 3&gt;</panel_attributes>
     <additional_attributes/>
   </element>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>1309</x>
-      <y>451</y>
-      <w>231</w>
-      <h>209</h>
+      <x>729</x>
+      <y>216</y>
+      <w>441</w>
+      <h>171</h>
     </coordinates>
-    <panel_attributes>NodeOwner
+    <panel_attributes>&lt;&lt;Singleton&gt;&gt;
+NodeOwner
 --
---</panel_attributes>
+-node_list : vector&lt; pair&lt;uint, Node&gt; &gt;
+--
++addNode(code_coords, pair&lt; uint, array&lt;double, 3&gt; &gt;)
++getNodeCoords(node_numbers : vector&lt;uint&gt;) : vector&lt; array&lt;double, 3&gt; &gt;
++getNodeCoords(node_number : uint) : array&lt;double, 3&gt;
++getNodeGlobalIds(node_numbers : vector&lt;uint&gt;) : array&lt;double, 3&gt;
++getNodeGlobalIds(node_number : uint) : uint</panel_attributes>
     <additional_attributes/>
   </element>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>1177</x>
-      <y>550</y>
-      <w>154</w>
-      <h>44</h>
+      <x>621</x>
+      <y>297</y>
+      <w>126</w>
+      <h>36</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
 m2=1</panel_attributes>
@@ -230,52 +256,22 @@ m2=1</panel_attributes>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>1408</x>
-      <y>649</y>
-      <w>55</w>
-      <h>121</h>
+      <x>936</x>
+      <y>378</y>
+      <w>45</w>
+      <h>108</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
 m2=1..*</panel_attributes>
-    <additional_attributes>10.0;10.0;10.0;90.0</additional_attributes>
-  </element>
-  <element>
-    <id>Relation</id>
-    <coordinates>
-      <x>704</x>
-      <y>1243</y>
-      <w>33</w>
-      <h>121</h>
-    </coordinates>
-    <panel_attributes>lt=&lt;&lt;-
-</panel_attributes>
-    <additional_attributes>10.0;10.0;10.0;90.0</additional_attributes>
+    <additional_attributes>10.0;10.0;10.0;100.0</additional_attributes>
   </element>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>605</x>
-      <y>1331</y>
-      <w>561</w>
-      <h>209</h>
-    </coordinates>
-    <panel_attributes>template=Type : ElementType, Order : uint
-Element
-{final}
---
-_-ElementQuadratures : map&lt;uint, QuadratureBase*&gt;_
-_-ElementBoundaryQuadratures : map&lt;uint, QuadratureBase*&gt;_
---
-+GetQuadrature(in Order : int) : Quadrature</panel_attributes>
-    <additional_attributes/>
-  </element>
-  <element>
-    <id>UMLClass</id>
-    <coordinates>
-      <x>1001</x>
-      <y>1584</y>
-      <w>154</w>
-      <h>66</h>
+      <x>126</x>
+      <y>1224</y>
+      <w>126</w>
+      <h>63</h>
     </coordinates>
     <panel_attributes>&lt;&lt;Enumeration&gt;&gt;
 ElementType
@@ -286,57 +282,33 @@ Quad</panel_attributes>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>880</x>
-      <y>1529</y>
-      <w>143</w>
-      <h>99</h>
+      <x>180</x>
+      <y>1278</y>
+      <w>27</w>
+      <h>90</h>
     </coordinates>
     <panel_attributes>lt=&lt;-</panel_attributes>
-    <additional_attributes>10.0;10.0;10.0;70.0;110.0;70.0</additional_attributes>
+    <additional_attributes>10.0;80.0;10.0;10.0</additional_attributes>
   </element>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>1232</x>
-      <y>1144</y>
-      <w>187</w>
-      <h>220</h>
+      <x>783</x>
+      <y>783</y>
+      <w>153</w>
+      <h>36</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
 m2=1..*</panel_attributes>
-    <additional_attributes>10.0;10.0;130.0;10.0;130.0;180.0</additional_attributes>
-  </element>
-  <element>
-    <id>Relation</id>
-    <coordinates>
-      <x>1034</x>
-      <y>1419</y>
-      <w>176</w>
-      <h>44</h>
-    </coordinates>
-    <panel_attributes>lt=&lt;.
-</panel_attributes>
-    <additional_attributes>10.0;20.0;140.0;20.0</additional_attributes>
-  </element>
-  <element>
-    <id>Relation</id>
-    <coordinates>
-      <x>814</x>
-      <y>946</y>
-      <w>572</w>
-      <h>121</h>
-    </coordinates>
-    <panel_attributes>lt=&lt;.
-</panel_attributes>
-    <additional_attributes>500.0;10.0;500.0;50.0;10.0;50.0;10.0;90.0</additional_attributes>
+    <additional_attributes>10.0;10.0;150.0;10.0</additional_attributes>
   </element>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>847</x>
-      <y>2090</y>
-      <w>341</w>
-      <h>132</h>
+      <x>738</x>
+      <y>1377</y>
+      <w>279</w>
+      <h>108</h>
     </coordinates>
     <panel_attributes>/QuadratureBase/
 --
@@ -351,108 +323,21 @@ m2=1..*</panel_attributes>
   <element>
     <id>UMLFrame</id>
     <coordinates>
-      <x>11</x>
-      <y>341</y>
-      <w>1694</w>
-      <h>1364</h>
+      <x>126</x>
+      <y>180</y>
+      <w>1071</w>
+      <h>909</h>
     </coordinates>
     <panel_attributes>Mesh</panel_attributes>
     <additional_attributes/>
   </element>
   <element>
-    <id>Relation</id>
-    <coordinates>
-      <x>1144</x>
-      <y>1529</y>
-      <w>132</w>
-      <h>99</h>
-    </coordinates>
-    <panel_attributes>lt=&lt;-</panel_attributes>
-    <additional_attributes>100.0;10.0;100.0;70.0;10.0;70.0</additional_attributes>
-  </element>
-  <element>
-    <id>Relation</id>
-    <coordinates>
-      <x>429</x>
-      <y>1463</y>
-      <w>198</w>
-      <h>33</h>
-    </coordinates>
-    <panel_attributes>lt=.&gt;</panel_attributes>
-    <additional_attributes>10.0;10.0;160.0;10.0</additional_attributes>
-  </element>
-  <element>
-    <id>Relation</id>
-    <coordinates>
-      <x>275</x>
-      <y>1067</y>
-      <w>99</w>
-      <h>77</h>
-    </coordinates>
-    <panel_attributes/>
-    <additional_attributes>10.0;10.0;70.0;50.0</additional_attributes>
-  </element>
-  <element>
-    <id>UMLNote</id>
-    <coordinates>
-      <x>143</x>
-      <y>968</y>
-      <w>297</w>
-      <h>110</h>
-    </coordinates>
-    <panel_attributes>Dummy class for element type-specific
-element data classes to inherit from.
-
-Naming convention for inheriting classes:
-ElementData_[ElementType]
-bg=light_gray</panel_attributes>
-    <additional_attributes/>
-  </element>
-  <element>
-    <id>Relation</id>
-    <coordinates>
-      <x>429</x>
-      <y>1133</y>
-      <w>198</w>
-      <h>33</h>
-    </coordinates>
-    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-</panel_attributes>
-    <additional_attributes>10.0;10.0;160.0;10.0</additional_attributes>
-  </element>
-  <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>264</x>
-      <y>1122</y>
-      <w>176</w>
-      <h>77</h>
-    </coordinates>
-    <panel_attributes>ElementDataBase
---
- -
---
- -
-</panel_attributes>
-    <additional_attributes/>
-  </element>
-  <element>
-    <id>Relation</id>
-    <coordinates>
-      <x>330</x>
-      <y>1188</y>
-      <w>33</w>
-      <h>121</h>
-    </coordinates>
-    <panel_attributes>lt=&lt;&lt;-</panel_attributes>
-    <additional_attributes>10.0;10.0;10.0;90.0</additional_attributes>
-  </element>
-  <element>
-    <id>UMLClass</id>
-    <coordinates>
-      <x>110</x>
-      <y>1287</y>
-      <w>330</w>
-      <h>352</h>
+      <x>1422</x>
+      <y>0</y>
+      <w>270</w>
+      <h>297</h>
     </coordinates>
     <panel_attributes>ElementData_Quad
 --
@@ -480,10 +365,10 @@ bg=light_gray</panel_attributes>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>429</x>
-      <y>1804</y>
-      <w>957</w>
-      <h>187</h>
+      <x>396</x>
+      <y>1143</y>
+      <w>783</w>
+      <h>153</h>
     </coordinates>
     <panel_attributes>template=ELTYPE: ElementType, ELORDER : uint
 &lt;&lt;Singleton&gt;&gt;
@@ -502,10 +387,10 @@ _+getBoundaryQuadrature(order : uint, side : uint) : const pair&lt; Quadrature, 
   <element>
     <id>UMLNote</id>
     <coordinates>
-      <x>44</x>
-      <y>1815</y>
-      <w>363</w>
-      <h>44</h>
+      <x>81</x>
+      <y>1152</y>
+      <w>297</w>
+      <h>36</h>
     </coordinates>
     <panel_attributes>Cannot take advantage of the Singleton class
 due to the presence of constexpr member functions
@@ -515,10 +400,10 @@ bg=light_gray</panel_attributes>
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>275</x>
-      <y>1848</y>
-      <w>176</w>
-      <h>88</h>
+      <x>270</x>
+      <y>1179</y>
+      <w>144</w>
+      <h>72</h>
     </coordinates>
     <panel_attributes/>
     <additional_attributes>10.0;10.0;140.0;60.0</additional_attributes>
@@ -526,10 +411,10 @@ bg=light_gray</panel_attributes>
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>22</x>
-      <y>2090</y>
-      <w>792</w>
-      <h>242</h>
+      <x>63</x>
+      <y>1377</y>
+      <w>648</w>
+      <h>198</h>
     </coordinates>
     <panel_attributes>template=ELTYPE: ElementType, ELORDER : uint
 ShapeFunction
@@ -551,10 +436,10 @@ ShapeFunction
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>330</x>
-      <y>1980</y>
-      <w>231</w>
-      <h>143</h>
+      <x>315</x>
+      <y>1287</y>
+      <w>189</w>
+      <h>117</h>
     </coordinates>
     <panel_attributes>lt=.&gt;</panel_attributes>
     <additional_attributes>10.0;110.0;10.0;60.0;190.0;60.0;190.0;10.0</additional_attributes>
@@ -562,10 +447,10 @@ ShapeFunction
   <element>
     <id>UMLFrame</id>
     <coordinates>
-      <x>0</x>
-      <y>1771</y>
-      <w>1408</w>
-      <h>682</h>
+      <x>45</x>
+      <y>1116</y>
+      <w>1152</w>
+      <h>567</h>
     </coordinates>
     <panel_attributes>Reference Element</panel_attributes>
     <additional_attributes/>
@@ -573,10 +458,10 @@ ShapeFunction
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>1012</x>
-      <y>1980</y>
-      <w>33</w>
-      <h>132</h>
+      <x>873</x>
+      <y>1287</y>
+      <w>27</w>
+      <h>108</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-</panel_attributes>
     <additional_attributes>10.0;10.0;10.0;100.0</additional_attributes>
@@ -584,10 +469,10 @@ ShapeFunction
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>847</x>
-      <y>2288</y>
-      <w>484</w>
-      <h>143</h>
+      <x>738</x>
+      <y>1548</y>
+      <w>396</w>
+      <h>117</h>
     </coordinates>
     <panel_attributes>template=ELTYPE: ElementType, QORDER : uint
 Quadrature
@@ -603,21 +488,21 @@ Quadrature
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>1012</x>
-      <y>2211</y>
-      <w>33</w>
-      <h>110</h>
+      <x>873</x>
+      <y>1476</y>
+      <w>27</w>
+      <h>99</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;-</panel_attributes>
-    <additional_attributes>10.0;10.0;10.0;80.0</additional_attributes>
+    <additional_attributes>10.0;10.0;10.0;90.0</additional_attributes>
   </element>
   <element>
     <id>UMLFrame</id>
     <coordinates>
-      <x>1485</x>
-      <y>1771</y>
-      <w>1243</w>
-      <h>693</h>
+      <x>1224</x>
+      <y>1116</y>
+      <w>1017</w>
+      <h>567</h>
     </coordinates>
     <panel_attributes>Design Patterns</panel_attributes>
     <additional_attributes/>
@@ -625,10 +510,10 @@ Quadrature
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>1815</x>
-      <y>715</y>
-      <w>330</w>
-      <h>253</h>
+      <x>1242</x>
+      <y>864</y>
+      <w>270</w>
+      <h>207</h>
     </coordinates>
     <panel_attributes>Mapper
 --
@@ -640,10 +525,10 @@ Quadrature
   <element>
     <id>UMLFrame</id>
     <coordinates>
-      <x>1793</x>
-      <y>385</y>
-      <w>374</w>
-      <h>605</h>
+      <x>1224</x>
+      <y>594</y>
+      <w>306</w>
+      <h>495</h>
     </coordinates>
     <panel_attributes>Mapper</panel_attributes>
     <additional_attributes/>
@@ -651,10 +536,10 @@ Quadrature
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>1529</x>
-      <y>1848</y>
-      <w>374</w>
-      <h>242</h>
+      <x>1260</x>
+      <y>1179</y>
+      <w>306</w>
+      <h>198</h>
     </coordinates>
     <panel_attributes>template=T : class
 Singleton
@@ -676,10 +561,10 @@ Deleted:
   <element>
     <id>UMLFrame</id>
     <coordinates>
-      <x>1507</x>
-      <y>1815</y>
-      <w>418</w>
-      <h>297</h>
+      <x>1242</x>
+      <y>1152</y>
+      <w>342</w>
+      <h>243</h>
     </coordinates>
     <panel_attributes>Singleton Design Pattern</panel_attributes>
     <additional_attributes/>
@@ -687,10 +572,10 @@ Deleted:
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>2013</x>
-      <y>1848</y>
-      <w>473</w>
-      <h>154</h>
+      <x>1656</x>
+      <y>1179</y>
+      <w>387</w>
+      <h>126</h>
     </coordinates>
     <panel_attributes>template=PRODUCTBASE : Class, CREATOR : Class
 Factory
@@ -707,10 +592,10 @@ _-type_map : MapType_
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>2398</x>
-      <y>1947</y>
-      <w>264</w>
-      <h>55</h>
+      <x>1971</x>
+      <y>1260</y>
+      <w>216</w>
+      <h>45</h>
     </coordinates>
     <panel_attributes>&lt;&lt;typedef&gt;&gt;
 MapType : map&lt;string, CREATOR*&gt;
@@ -720,10 +605,10 @@ MapType : map&lt;string, CREATOR*&gt;
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>2013</x>
-      <y>2255</y>
-      <w>539</w>
-      <h>143</h>
+      <x>1656</x>
+      <y>1512</y>
+      <w>441</w>
+      <h>117</h>
     </coordinates>
     <panel_attributes>template=KEYTYPE : class, PRODUCT : class, PRODUCTBASE : class
 Creator
@@ -738,10 +623,10 @@ Creator
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>2310</x>
-      <y>1958</y>
-      <w>110</w>
-      <h>33</h>
+      <x>1899</x>
+      <y>1269</y>
+      <w>90</w>
+      <h>27</h>
     </coordinates>
     <panel_attributes>lt=&lt;.</panel_attributes>
     <additional_attributes>80.0;10.0;10.0;10.0</additional_attributes>
@@ -749,10 +634,10 @@ Creator
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>2013</x>
-      <y>2057</y>
-      <w>407</w>
-      <h>99</h>
+      <x>1656</x>
+      <y>1350</y>
+      <w>333</w>
+      <h>81</h>
     </coordinates>
     <panel_attributes>template=PRODUCTBASE : Class
 CreatorBase
@@ -765,10 +650,10 @@ CreatorBase
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>2167</x>
-      <y>2145</y>
-      <w>33</w>
-      <h>132</h>
+      <x>1782</x>
+      <y>1422</y>
+      <w>27</w>
+      <h>108</h>
     </coordinates>
     <panel_attributes>lt=&lt;&lt;-</panel_attributes>
     <additional_attributes>10.0;10.0;10.0;100.0</additional_attributes>
@@ -776,10 +661,10 @@ CreatorBase
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>1661</x>
-      <y>2079</y>
-      <w>374</w>
-      <h>308</h>
+      <x>1368</x>
+      <y>1368</y>
+      <w>306</w>
+      <h>252</h>
     </coordinates>
     <panel_attributes>lt=&lt;.</panel_attributes>
     <additional_attributes>320.0;260.0;10.0;260.0;10.0;10.0</additional_attributes>
@@ -787,10 +672,10 @@ CreatorBase
   <element>
     <id>Relation</id>
     <coordinates>
-      <x>1969</x>
-      <y>1947</y>
-      <w>66</w>
-      <h>374</h>
+      <x>1620</x>
+      <y>1260</y>
+      <w>54</w>
+      <h>306</h>
     </coordinates>
     <panel_attributes>lt=&lt;.</panel_attributes>
     <additional_attributes>40.0;320.0;10.0;320.0;10.0;10.0;40.0;10.0</additional_attributes>
@@ -798,10 +683,10 @@ CreatorBase
   <element>
     <id>UMLFrame</id>
     <coordinates>
-      <x>1958</x>
-      <y>1815</y>
-      <w>748</w>
-      <h>627</h>
+      <x>1611</x>
+      <y>1152</y>
+      <w>612</w>
+      <h>513</h>
     </coordinates>
     <panel_attributes>Abstract Factory Design Pattern</panel_attributes>
     <additional_attributes/>
@@ -809,10 +694,10 @@ CreatorBase
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>1815</x>
-      <y>429</y>
-      <w>330</w>
-      <h>253</h>
+      <x>1242</x>
+      <y>630</y>
+      <w>270</w>
+      <h>207</h>
     </coordinates>
     <panel_attributes>MapperBase
 --
@@ -824,10 +709,10 @@ CreatorBase
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>2255</x>
-      <y>715</y>
-      <w>330</w>
-      <h>253</h>
+      <x>1602</x>
+      <y>864</y>
+      <w>270</w>
+      <h>207</h>
     </coordinates>
     <panel_attributes>Assembler
 --
@@ -839,10 +724,10 @@ CreatorBase
   <element>
     <id>UMLFrame</id>
     <coordinates>
-      <x>2233</x>
-      <y>385</y>
-      <w>374</w>
-      <h>605</h>
+      <x>1584</x>
+      <y>594</y>
+      <w>306</w>
+      <h>495</h>
     </coordinates>
     <panel_attributes>Assembler</panel_attributes>
     <additional_attributes/>
@@ -850,10 +735,10 @@ CreatorBase
   <element>
     <id>UMLClass</id>
     <coordinates>
-      <x>2255</x>
-      <y>429</y>
-      <w>330</w>
-      <h>253</h>
+      <x>1602</x>
+      <y>630</y>
+      <w>270</w>
+      <h>207</h>
     </coordinates>
     <panel_attributes>AssemblerBase
 --
@@ -861,5 +746,64 @@ CreatorBase
 --
 </panel_attributes>
     <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>855</x>
+      <y>891</y>
+      <w>315</w>
+      <h>171</h>
+    </coordinates>
+    <panel_attributes>ElementId
+--
+-domain_number : uint
+-element_type : ElementType
+-element_index : uint
+--
++ElementId(dom : uint, type : ElementType, index: uint)
++getDomainNumber() : uint
++getElementType() : ElementType
++getElementIndex() : uint
+--
+Deleted:
+-ElementId()</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>972</x>
+      <y>819</y>
+      <w>27</w>
+      <h>90</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;80.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLNote</id>
+    <coordinates>
+      <x>198</x>
+      <y>918</y>
+      <w>225</w>
+      <h>54</h>
+    </coordinates>
+    <panel_attributes>Nodes are referenced wrt the local
+(mesh partition) index, the global
+index is available within NodeOwner
+bg=light_gray</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>225</x>
+      <y>873</y>
+      <w>108</w>
+      <h>63</h>
+    </coordinates>
+    <panel_attributes/>
+    <additional_attributes>100.0;50.0;10.0;10.0</additional_attributes>
   </element>
 </diagram>
