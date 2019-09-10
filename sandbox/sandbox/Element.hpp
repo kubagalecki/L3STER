@@ -1,0 +1,147 @@
+#pragma once
+
+#include "ReferenceElement.hpp"
+#include "Types.h"
+
+#include <array>
+#include <vector>
+#include <stdexcept>
+#include <string>
+#include <typeinfo>
+#include <iostream>
+#include <algorithm>
+#include <numeric>
+#include <utility>
+
+namespace lstr
+{
+	namespace mesh
+	{
+		namespace helpers
+		{
+			// HELPER FOR GENERATING {1, 2, 3, ..., N_NODES} ARRAY
+			template <size_t SIZE>
+			class NodeOrderHelper
+			{
+			public:
+				static std::array<size_t, SIZE> get()
+				{
+					if (first_call)
+					{
+						std::iota(unsorted_order.begin(), unsorted_order.end(), 0);
+						first_call = false;
+					}
+
+					return unsorted_order;
+				}
+
+			private:
+				static bool							first_call;
+				static std::array<size_t, SIZE>		unsorted_order;
+			};
+
+			template <size_t SIZE>
+			bool NodeOrderHelper<SIZE>::first_call = true;
+
+			template <size_t SIZE>
+			std::array<size_t, SIZE> NodeOrderHelper<SIZE>::unsorted_order = { {0} };
+		}
+
+		template <ElementTypes ELTYPE, types::el_o_t ELORDER>
+		class Element final
+		{
+		public:
+
+			// ALIASES
+			static constexpr const size_t n_nodes	= ReferenceElement<ELTYPE, ELORDER>::getNumberOfNodes();
+			using node_array						= std::array <types::n_id_t, n_nodes>;
+			using node_array_ref					= node_array &;
+			using node_array_constref				= const node_array &;
+
+			// CONSTRUCTORS
+			Element();
+			Element(node_array _nodes);
+
+			// GETTERS
+			node_array_constref	getNodes() const;
+
+			// SETTERS
+			void				setNode(size_t, types::n_id_t);
+			void				pushBackNode(types::n_id_t);
+			
+			// SORT
+			void				sort();
+
+		private:
+
+			// MEMBERS
+			node_array						nodes;
+			std::array<size_t, n_nodes>		node_order = helpers::NodeOrderHelper<n_nodes>::get();
+			size_t							size;
+		};
+
+		template <ElementTypes ELTYPE, types::el_o_t ELORDER>
+		Element<ELTYPE, ELORDER>::Element()						: nodes{ { 0 } }, size(0),
+			node_order(helpers::NodeOrderHelper<n_nodes>::get())										{}
+
+		template <ElementTypes ELTYPE, types::el_o_t ELORDER>
+		Element<ELTYPE, ELORDER>::Element(node_array _nodes)	: nodes(_nodes), size(nodes.size),
+			node_order(helpers::NodeOrderHelper<n_nodes>::get())										{}
+
+		template <ElementTypes ELTYPE, types::el_o_t ELORDER>
+		typename Element<ELTYPE, ELORDER>::node_array_constref Element<ELTYPE, ELORDER>::getNodes() const
+		{
+			return nodes;
+		}
+
+		template <ElementTypes ELTYPE, types::el_o_t ELORDER>
+		void Element<ELTYPE, ELORDER>::setNode(size_t n_no, types::n_id_t n_id)
+		{
+			if (n_no >= nodes.size())
+			{
+				std::string exceptTxt = static_cast<std::string>("Requested set node ") + std::to_string(n_no)
+					+ static_cast<std::string>(". Element ") + typeid(Element<ELTYPE, ELORDER>).name()
+					+ static_cast<std::string>(" has only ") + std::to_string(nodes.size())
+					+ static_cast<std::string>(" nodes.");
+				throw (std::out_of_range(exceptTxt));
+				return;
+			}
+
+			nodes[n_no] = n_id;
+		}
+
+		template <ElementTypes ELTYPE, types::el_o_t ELORDER>
+		void Element<ELTYPE, ELORDER>::pushBackNode(types::n_id_t n_id)
+		{
+			if (size == nodes.size())
+				throw (std::out_of_range("Requested push back of node, but element is full"));
+
+			auto it = nodes.begin();
+			std::advance(it, size);
+			*it = n_id;
+			++size;
+		}
+
+		template <ElementTypes ELTYPE, types::el_o_t ELORDER>
+		void Element<ELTYPE, ELORDER>::sort()
+		{
+			// Aliases
+			using aux_p_t = std::pair<types::n_id_t, size_t>;
+			using aux_a_t = std::array<aux_p_t, n_nodes>;
+
+			// Group nodes IDs and their indices into a vector of pairs
+			aux_a_t aux_a;
+			std::transform(nodes.begin(), nodes.end(), node_order.begin(),
+				aux_a.begin(), [](types::n_id_t n, size_t o) -> aux_p_t { return std::make_pair(n, o); });
+
+			// Sort
+			std::sort(aux_a.begin(), aux_a.end());
+
+			// Move data back to Element class members
+			std::transform(aux_a.begin(), aux_a.end(), nodes.begin(),
+				[](aux_p_t p) -> types::n_id_t { return p.first; });
+			std::transform(aux_a.begin(), aux_a.end(), node_order.begin(),
+				[](aux_p_t p) -> size_t { return p.second; });
+		}
+	}
+}
