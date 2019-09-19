@@ -8,7 +8,7 @@
 #include <stdexcept>
 #include <string>
 #include <typeinfo>
-#include <iostream>
+//#include <iostream>
 #include <algorithm>
 #include <numeric>
 #include <utility>
@@ -59,7 +59,7 @@ namespace lstr
 			using node_array_constref				= const node_array &;
 
 			// CONSTRUCTORS
-			Element();
+			Element()								= delete;
 			Element(node_array _nodes);
 
 			// GETTERS
@@ -67,7 +67,6 @@ namespace lstr
 
 			// SETTERS
 			void				setNode(size_t, types::n_id_t);
-			void				pushBackNode(types::n_id_t);
 			
 			// SORT
 			void				sort();
@@ -75,18 +74,23 @@ namespace lstr
 		private:
 
 			// MEMBERS
-			node_array						nodes;
-			std::array<size_t, n_nodes>		node_order = helpers::NodeOrderHelper<n_nodes>::get();
-			size_t							size;
+			const node_array				nodes;
+			std::array<size_t, n_nodes>		node_order;
 		};
 
-		template <ElementTypes ELTYPE, types::el_o_t ELORDER>
-		Element<ELTYPE, ELORDER>::Element()						: nodes{ { 0 } }, size(0),
-			node_order(helpers::NodeOrderHelper<n_nodes>::get())										{}
+		//template <ElementTypes ELTYPE, types::el_o_t ELORDER>
+		//Element<ELTYPE, ELORDER>::Element()						: nodes{ { 0 } },
+		//	node_order(helpers::NodeOrderHelper<n_nodes>::get())
+		//{
+		//	
+		//}
 
 		template <ElementTypes ELTYPE, types::el_o_t ELORDER>
-		Element<ELTYPE, ELORDER>::Element(node_array _nodes)	: nodes(_nodes), size(nodes.size),
-			node_order(helpers::NodeOrderHelper<n_nodes>::get())										{}
+		Element<ELTYPE, ELORDER>::Element(node_array _nodes)	: nodes(_nodes),
+			node_order(helpers::NodeOrderHelper<n_nodes>::get())
+		{
+			this->sort();
+		}
 
 		template <ElementTypes ELTYPE, types::el_o_t ELORDER>
 		typename Element<ELTYPE, ELORDER>::node_array_constref Element<ELTYPE, ELORDER>::getNodes() const
@@ -111,37 +115,32 @@ namespace lstr
 		}
 
 		template <ElementTypes ELTYPE, types::el_o_t ELORDER>
-		void Element<ELTYPE, ELORDER>::pushBackNode(types::n_id_t n_id)
-		{
-			if (size == nodes.size())
-				throw (std::out_of_range("Requested push back of node, but element is full"));
-
-			auto it = nodes.begin();
-			std::advance(it, size);
-			*it = n_id;
-			++size;
-		}
-
-		template <ElementTypes ELTYPE, types::el_o_t ELORDER>
 		void Element<ELTYPE, ELORDER>::sort()
 		{
-			// Aliases
-			using aux_p_t = std::pair<types::n_id_t, size_t>;
-			using aux_a_t = std::array<aux_p_t, n_nodes>;
+			std::sort(node_order.begin(), node_order.end(),
+				[this] (size_t n1, size_t n2) { return this->nodes[n1] < this->nodes[n2]; });
 
-			// Group nodes IDs and their indices into a vector of pairs
-			aux_a_t aux_a;
-			std::transform(nodes.begin(), nodes.end(), node_order.begin(),
-				aux_a.begin(), [](types::n_id_t n, size_t o) -> aux_p_t { return std::make_pair(n, o); });
+			///////////////////////////////////////////////////////////////////////////////////////////////
+			// OLD CODE FOR ACTUALLY SORTING THE NODES, AS OPPOSED TO JUST GENERATING THE REORDER VECTOR //
+			///////////////////////////////////////////////////////////////////////////////////////////////
 
-			// Sort
-			std::sort(aux_a.begin(), aux_a.end());
+			//// Aliases
+			//using aux_p_t = std::pair<types::n_id_t, size_t>;
+			//using aux_a_t = std::array<aux_p_t, n_nodes>;
 
-			// Move data back to Element class members
-			std::transform(aux_a.begin(), aux_a.end(), nodes.begin(),
-				[](aux_p_t p) -> types::n_id_t { return p.first; });
-			std::transform(aux_a.begin(), aux_a.end(), node_order.begin(),
-				[](aux_p_t p) -> size_t { return p.second; });
+			//// Group nodes IDs and their indices into a vector of pairs
+			//aux_a_t aux_a;
+			//std::transform(nodes.begin(), nodes.end(), node_order.begin(),
+			//	aux_a.begin(), [](types::n_id_t n, size_t o) -> aux_p_t { return std::make_pair(n, o); });
+
+			//// Sort
+			//std::sort(aux_a.begin(), aux_a.end());
+
+			//// Move data back to Element class members
+			//std::transform(aux_a.begin(), aux_a.end(), nodes.begin(),
+			//	[](aux_p_t p) -> types::n_id_t { return p.first; });
+			//std::transform(aux_a.begin(), aux_a.end(), node_order.begin(),
+			//	[](aux_p_t p) -> size_t { return p.second; });
 		}
 	}
 }

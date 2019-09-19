@@ -25,7 +25,7 @@ namespace lstr
 				if (creator_map.find(key) != creator_map.end())
 					throw (std::invalid_argument("The creator you are trying to register is already registered\n"));
 
-				creator_map.emplace(std::make_pair(key, creator)
+				creator_map.emplace(std::make_pair(key, creator));
 			}
 
 			// Unregister creator

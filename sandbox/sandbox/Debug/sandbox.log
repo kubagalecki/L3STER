@@ -1,4 +1,2 @@
 ﻿  main.cpp
-C:\Users\jgalecki\Documents\Kuba\L3STER\sandbox\sandbox\ReferenceElement.hpp(21,1): error C2272:  'getNumberOfNodes': modifiers not allowed on static member functions
-C:\Users\jgalecki\Documents\Kuba\L3STER\sandbox\sandbox\ReferenceElement.hpp(29): message :  see reference to class template instantiation 'lstr::mesh::ReferenceElement<ELTYPE,ELORDER>' being compiled
-C:\Users\jgalecki\Documents\Kuba\L3STER\sandbox\sandbox\ReferenceElement.hpp(26,1): error C2272:  'getDim': modifiers not allowed on static member functions
+  sandbox.vcxproj -> C:\Users\jgalecki\Documents\Kuba\L3STER\sandbox\sandbox\Debug\sandbox.exe
