@@ -23,28 +23,23 @@ namespace lstr
 			template <size_t SIZE>
 			class NodeOrderHelper
 			{
-			public:
-				static std::array<size_t, SIZE> get()
-				{
-					if (first_call)
-					{
-						std::iota(unsorted_order.begin(), unsorted_order.end(), 0);
-						first_call = false;
-					}
+				using array_t = std::array<size_t, SIZE>;
 
-					return unsorted_order;
-				}
+			public:
+				static const array_t& get() { return unsorted_order; }
 
 			private:
-				static bool							first_call;
-				static std::array<size_t, SIZE>		unsorted_order;
+				static array_t			generate();
+				static const array_t	unsorted_order{ generate() };
 			};
 
 			template <size_t SIZE>
-			bool NodeOrderHelper<SIZE>::first_call = true;
-
-			template <size_t SIZE>
-			std::array<size_t, SIZE> NodeOrderHelper<SIZE>::unsorted_order = { {0} };
+			NodeOrderHelper<SIZE>::array_t NodeOrderHelper<SIZE>::generate()
+			{
+				array_t ret_val{ {0} };
+				std::iota(ret_val.begin(), ret_val.end(), 0);
+				return ret_val;
+			}
 		}
 
 		template <ElementTypes ELTYPE, types::el_o_t ELORDER>
