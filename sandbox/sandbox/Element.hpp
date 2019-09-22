@@ -30,16 +30,19 @@ namespace lstr
 
 			private:
 				static array_t			generate();
-				static const array_t	unsorted_order{ generate() };
+				static const array_t	unsorted_order;
 			};
 
 			template <size_t SIZE>
-			NodeOrderHelper<SIZE>::array_t NodeOrderHelper<SIZE>::generate()
+			typename NodeOrderHelper<SIZE>::array_t NodeOrderHelper<SIZE>::generate()
 			{
 				array_t ret_val{ {0} };
 				std::iota(ret_val.begin(), ret_val.end(), 0);
 				return ret_val;
 			}
+
+			template <size_t SIZE>
+			const typename NodeOrderHelper<SIZE>::array_t unsorted_order = NodeOrderHelper<SIZE>::generate();
 		}
 
 		template <ElementTypes ELTYPE, types::el_o_t ELORDER>
