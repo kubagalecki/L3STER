@@ -1,3 +1,0 @@
-﻿  main.cpp
-main.obj : error LNK2001: unresolved external symbol "private: static class std::array<unsigned int,4> const lstr::mesh::helpers::NodeOrderHelper<4>::unsorted_order" (?unsorted_order@?$NodeOrderHelper@$03@helpers@mesh@lstr@@0V?$array@I$03@std@@B)
-C:\Users\jgalecki\Documents\Kuba\L3STER\sandbox\sandbox\Debug\sandbox.exe : fatal error LNK1120: 1 unresolved externals

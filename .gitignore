@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+# Visual studio
+.vs/
+sandbox/x86/
+sandbox/x64/
+sandbox/x32/
