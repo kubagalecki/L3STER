@@ -2,8 +2,9 @@
 
 #pragma once
 
-#include "Singleton.h"
 #include "Factory.h"
+
+#include <memory>
 
 namespace lstr
 {
@@ -13,22 +14,23 @@ namespace lstr
 		class CreatorBase
 		{
 		public:
-			virtual BaseT*		Create() const = 0;
-			virtual				~CreatorBase()			{}
+			virtual std::unique_ptr<BaseT>		Create() const		= 0;
+			virtual								~CreatorBase()		= default;
 		};
 
-		template<typename KeyType, typename T, typename BaseT>
+		template<typename KeyType, typename BaseT, typename T>
 		class Creator final : public Creator<BaseT>
 		{
 		public:
-			explicit		Creator(const KeyType& key)
-			{
-				Singleton<Factory< BaseT, Creator< BaseT > >>::getInstance()->registerCreator(key, this);
-			}
-
-			virtual BaseT*	Create() const override		{ return new T; }
-
-			virtual			~Creator() override			{}
+			explicit Creator(const KeyType& key);
+			virtual std::unique_ptr<BaseT>		Create() const override { return std::unique_ptr<BaseT>{new T}; }
+			virtual								~Creator() override			= default;
 		};
+
+		template<typename KeyType, typename BaseT, typename T>
+		Creator<KeyType, BaseT, T>::Creator(const KeyType& key)
+		{
+			Factory< KeyType, Creator< BaseT > >::registerCreator(key, this);
+		}
 	}
 }

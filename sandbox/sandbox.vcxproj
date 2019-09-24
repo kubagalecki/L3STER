@@ -130,11 +130,11 @@
     <ClInclude Include="Creator.h" />
     <ClInclude Include="Element.hpp" />
     <ClInclude Include="ElementTypes.hpp" />
+    <ClInclude Include="ElementVector.hpp" />
     <ClInclude Include="Factory.h" />
     <ClInclude Include="QuadratureBase.hpp" />
     <ClInclude Include="ReferenceElement.hpp" />
     <ClInclude Include="ReferenceElementBase.hpp" />
-    <ClInclude Include="Singleton.h" />
     <ClInclude Include="Types.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
