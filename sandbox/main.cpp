@@ -44,10 +44,11 @@ struct C2 :public Base
 	}
 };
 
-void main()
+int main()
 {
-	auto&& ptr1 = std::unique_ptr<Base>{ new C1 };
+	auto&& ptr1 = static_cast<std::unique_ptr< Base >>(std::make_unique<C1>());
 	auto&& ptr2 = std::unique_ptr<Base>{ new C2 };
 	ptr1->foo();
 	ptr2->foo();
+	return 0;
 }

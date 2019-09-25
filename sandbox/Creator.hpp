@@ -14,27 +14,31 @@ namespace lstr
 		class CreatorBase
 		{
 		public:
-			// ALIASES
-			using					ptr_t							= std::unique_ptr<BaseT>;
-
-			// METHODS
-			virtual ptr_t			Create() const					= 0;
-			virtual					~CreatorBase()					= default;
+			using						ptr_t					= std::unique_ptr<BaseT>;
+			virtual ptr_t				Create() const			= 0;
+			virtual						~CreatorBase()			= default;
 		};
 
 		template<typename KeyType, typename BaseT, typename T>
 		class Creator final : public Creator<BaseT>
 		{
 		public:
-			explicit Creator(const KeyType& key);
-			virtual ptr_t			Create() const override			{ return ptr_t{ new T }; }
-			virtual					~Creator() override				= default;
+			// CTORS & DTORS
+			explicit			Creator(const KeyType& key);
+			virtual				~Creator() override				= default;
+
+			// METHODS
+			virtual ptr_t		Create() const override			{ return std::make_unique<T>(); }
+
 		};
 
 		template<typename KeyType, typename BaseT, typename T>
 		Creator<KeyType, BaseT, T>::Creator(const KeyType& key)
 		{
-			Factory< KeyType, Creator< BaseT > >::registerCreator(key, this);
+			Factory<KeyType, Creator< BaseT >>::registerCreator
+			(
+				key, std::unique_ptr<CreatorBase< BaseT >>(this)
+			);
 		}
 	}
 }

@@ -15,11 +15,12 @@ namespace lstr
 		class Factory final
 		{
 			// ALIASES
-			using map_t = std::map<KeyType, std::unique_ptr< CreatorBase >>;
+			using map_t			= std::map<KeyType, std::unique_ptr< CreatorBase >>;
+			using ptr_t			= typename CreatorBase::ptr_t;
 
 		public:
 			// METHODS
-			// Factory is a singleton
+			// Factory is a static class and cannot be instantiated
 			Factory()											= delete;
 			Factory(const Factory&)								= delete;
 			Factory& operator=(const Factory&)					= delete;
@@ -27,9 +28,9 @@ namespace lstr
 			Factory& operator=(const Factory&&)					= delete;
 			~Factory()											= delete;
 
-			static void								registerCreator(const KeyType&, std::unique_ptr<CreatorBase>);
+			static void								registerCreator(const KeyType&, ptr_t);
 			static void								unregisterCreator(const KeyType&);
-			static std::unique_ptr<CreatorBase>		getCreator(const KeyType&);
+			static ptr_t		getCreator(const KeyType&);
 
 		private:
 			// MEMBERS
@@ -43,7 +44,7 @@ namespace lstr
 
 		template<typename KeyType, typename CreatorBase>
 		void Factory<KeyType, CreatorBase>::
-			registerCreator(const KeyType& key, std::unique_ptr<CreatorBase> creator)
+			registerCreator(const KeyType& key, ptr_t creator)
 		{
 			if (creator_map.find(key) != creator_map.end())
 				throw (std::invalid_argument("The creator you are trying to register is already registered\n"));
@@ -65,7 +66,7 @@ namespace lstr
 		}
 
 		template<typename KeyType, typename CreatorBase>
-		std::unique_ptr<CreatorBase> Factory<KeyType, CreatorBase>::
+		Factory<KeyType, CreatorBase>::ptr_t Factory<KeyType, CreatorBase>::
 			getCreator(const KeyType& key)
 		{
 			auto it = creator_map.find(key);
