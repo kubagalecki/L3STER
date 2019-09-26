@@ -2,7 +2,9 @@
 
 #include "Element.hpp"
 
+//#include <functional>
 #include <vector>
+#include <algorithm>
 
 namespace lstr
 {
@@ -25,11 +27,23 @@ namespace lstr
 		{
 		public:
 			// ALIASES
-			using vec_t = std::vector<Element< ELTYPE, ELORDER >>;
+			using el_t				= Element<ELTYPE, ELORDER>;
+			using vec_t				= std::vector<el_t>;
+			using vec_iter_t		= vec_t::iterator;
+			using vec_citer_t		= vec_t::const_iterator;
 
-			// GETTERS
-			const vec_t&		getConstRef() const			{ return vec_t; }
-			vec_t&				getRef()					{ return vec_t; }
+			// METHODS
+			const vec_t&	getConstRef()	const					{ return vec_t; }
+			vec_t&			getRef()								{ return vec_t; }
+
+			vec_citer_t		cbegin()		const					{ return element_vector.cbegin(); }
+			vec_citer_t		cend()			const					{ return element_vector.cend(); }
+
+			vec_iter_t		begin()									{ return element_vector.begin(); }
+			vec_iter_t		end()									{ return element_vector.end(); }
+
+			//void			for_each(std::function<el_t> f)			{ for_each(this->begin(), this->end(), f); }
+			//void			const_for_each(std::function<el_t> f)	{ for_each(this->cbegin(), this->cend(), f); }
 
 		private:
 			// MEMBERS

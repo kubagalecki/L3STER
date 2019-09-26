@@ -16,6 +16,14 @@ namespace lstr
 			// ALIASES
 			using parent_t = ReferenceElementBase<ELTYPE, ReferenceElement>;
 
+			// ReferenceElement is a static class
+			ReferenceElement()										= delete;
+			ReferenceElement(const ReferenceElement&)				= delete;
+			ReferenceElement& operator=(const ReferenceElement&)	= delete;
+			virtual ~ReferenceElement()								= delete;
+			ReferenceElement(const ReferenceElement&&)				= delete;
+			ReferenceElement& operator=(const ReferenceElement&&)	= delete;
+
 		public:
 			// METHODS
 			static constexpr size_t				getNumberOfNodes()

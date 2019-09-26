@@ -20,35 +20,106 @@
 //	}
 //}
 
-#include <memory>
+//#include <memory>
+//#include <iostream>
+//#include <vector>
+//
+//struct BaseR {
+//	virtual void foo() const = 0;
+//};
+//
+//struct R1 : BaseR {
+//	void foo() const override
+//	{
+//		std::cout << "R1" << std::endl;
+//	}
+//};
+//
+//struct R2 : BaseR {
+//	void foo() const override
+//	{
+//		std::cout << "R2" << std::endl;
+//	}
+//};
+//
+//struct Base
+//{
+//	virtual const BaseR& get() = 0;
+//};
+//
+//struct C1 :public Base
+//{
+//	R1 a{};
+//	virtual const R1& get() override
+//	{
+//		return a;
+//	}
+//};
+//
+//struct C2 :public Base
+//{
+//	R2 a{};
+//	virtual const R2& get() override
+//	{
+//		return a;
+//	}
+//};
+//
+//int main()
+//{
+//	std::vector<Base*> a{};
+//	a.push_back(new C1);
+//	a.push_back(new C2);
+//	a.push_back(new C1);
+//	for (auto it : a)
+//		it->get().foo();
+//
+//	return 0;
+//}
+
+#include "Creator.hpp"
+#include <vector>
 #include <iostream>
 
-struct Base
+struct A
 {
-	virtual void foo() = 0;
+	virtual ~A(){}
 };
 
-struct C1 :public Base
+struct B : public A
 {
-	void foo() override
-	{
-		std::cout << "C1" << std::endl;
-	}
+	virtual ~B(){}
 };
 
-struct C2 :public Base
+struct C : public A
 {
-	void foo() override
-	{
-		std::cout << "C2" << std::endl;
-	}
+	virtual ~C() {}
 };
+
+void init()
+{
+	//lstr::despat::Creator<int, A, B>{ 1 };
+	auto a = std::make_shared<lstr::despat::Creator<int, A, C>>(1);
+	if (a)
+		std::cout << 1;
+	else
+		std::cout << 0;
+	auto x = a->create();
+}
 
 int main()
 {
-	auto&& ptr1 = static_cast<std::unique_ptr< Base >>(std::make_unique<C1>());
-	auto&& ptr2 = std::unique_ptr<Base>{ new C2 };
-	ptr1->foo();
-	ptr2->foo();
-	return 0;
+	
+	try {
+		init();
+		return 0;
+		std::vector<std::unique_ptr<A>> vec;
+		vec.push_back(std::make_unique<B>());
+		vec.push_back(std::make_unique<C>());
+		return 0;
+	}
+	catch (...)
+	{
+		return 1;
+	}
 }
