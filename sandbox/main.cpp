@@ -77,49 +77,50 @@
 //	return 0;
 //}
 
-#include "Creator.hpp"
+
+#include "Factory.hpp"
 #include <vector>
 #include <iostream>
 
 struct A
 {
-	virtual ~A(){}
+	A() {}
+	virtual ~A() {}
 };
 
 struct B : public A
 {
-	virtual ~B(){}
+	B() {}
+	virtual ~B() {}
 };
 
 struct C : public A
 {
+	C() {}
 	virtual ~C() {}
 };
 
 void init()
 {
-	//lstr::despat::Creator<int, A, B>{ 1 };
-	auto a = std::make_shared<lstr::despat::Creator<int, A, C>>(1);
-	if (a)
-		std::cout << 1;
-	else
-		std::cout << 0;
-	auto x = a->create();
+	lstr::despat::Creator<int, A, B>{ 1 };
+	lstr::despat::Creator<int, A, C>{ 2 };
 }
 
 int main()
 {
-	
+
 	try {
 		init();
-		return 0;
-		std::vector<std::unique_ptr<A>> vec;
-		vec.push_back(std::make_unique<B>());
-		vec.push_back(std::make_unique<C>());
+		std::vector<A*> vec;
+		vec.push_back(lstr::despat::Factory<int, A>::getCreator(1)->create());
+		std::cout << "aaa";
+		//std::cout << vec[0].get();
+		//vec.push_back(std::make_unique<C>());
 		return 0;
 	}
 	catch (...)
 	{
 		return 1;
 	}
+	std::cout << "aaa";
 }

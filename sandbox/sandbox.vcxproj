@@ -127,7 +127,6 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Creator.hpp" />
     <ClInclude Include="Element.hpp" />
     <ClInclude Include="ElementTypes.hpp" />
     <ClInclude Include="ElementVector.hpp" />
