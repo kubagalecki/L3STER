@@ -20,90 +20,29 @@
 //	}
 //}
 
-//#include <memory>
-//#include <iostream>
-//#include <vector>
-//
-//struct BaseR {
-//	virtual void foo() const = 0;
-//};
-//
-//struct R1 : BaseR {
-//	void foo() const override
-//	{
-//		std::cout << "R1" << std::endl;
-//	}
-//};
-//
-//struct R2 : BaseR {
-//	void foo() const override
-//	{
-//		std::cout << "R2" << std::endl;
-//	}
-//};
-//
-//struct Base
-//{
-//	virtual const BaseR& get() = 0;
-//};
-//
-//struct C1 :public Base
-//{
-//	R1 a{};
-//	virtual const R1& get() override
-//	{
-//		return a;
-//	}
-//};
-//
-//struct C2 :public Base
-//{
-//	R2 a{};
-//	virtual const R2& get() override
-//	{
-//		return a;
-//	}
-//};
-//
-//int main()
-//{
-//	std::vector<Base*> a{};
-//	a.push_back(new C1);
-//	a.push_back(new C2);
-//	a.push_back(new C1);
-//	for (auto it : a)
-//		it->get().foo();
-//
-//	return 0;
-//}
-
-
 #include "Factory.hpp"
 #include <vector>
 #include <iostream>
 
-struct A
+struct Base
 {
-	A() {}
-	virtual ~A() {}
+	virtual void foo() = 0;
 };
 
-struct B : public A
+struct C1 : public Base
 {
-	B() {}
-	virtual ~B() {}
+	virtual void foo() override { std::cout << "C1" << '\n'; }
 };
 
-struct C : public A
+struct C2 : public Base
 {
-	C() {}
-	virtual ~C() {}
+	virtual void foo() override { std::cout << "C2" << '\n'; }
 };
 
 void init()
 {
-	lstr::despat::Creator<int, A, B>{ 1 };
-	lstr::despat::Creator<int, A, C>{ 2 };
+	lstr::despat::Factory<int, Base>::registerCreator<C1>(1);
+	lstr::despat::Factory<int, Base>::registerCreator<C2>(2);
 }
 
 int main()
@@ -111,16 +50,20 @@ int main()
 
 	try {
 		init();
-		std::vector<A*> vec;
-		vec.push_back(lstr::despat::Factory<int, A>::getCreator(1)->create());
-		std::cout << "aaa";
-		//std::cout << vec[0].get();
-		//vec.push_back(std::make_unique<C>());
+		std::vector<std::unique_ptr< Base >> vec;
+		vec.push_back(lstr::despat::Factory<int, Base>::create(1));
+		vec.push_back(lstr::despat::Factory<int, Base>::create(2));
+		for (auto&& it : vec)
+			it->foo();
+
+		// Output:
+		// C1
+		// C2
+
 		return 0;
 	}
 	catch (...)
 	{
 		return 1;
 	}
-	std::cout << "aaa";
 }

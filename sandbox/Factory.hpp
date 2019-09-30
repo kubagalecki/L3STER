@@ -18,42 +18,43 @@ namespace lstr
 		class CreatorBase
 		{
 		public:
-			using						ptr_t					= std::unique_ptr<BaseT>;
-			virtual BaseT* create() const						= 0;
+			using						s_ptr_t					= std::shared_ptr<BaseT>;
+			using						u_ptr_t					= std::unique_ptr<BaseT>;
+			virtual u_ptr_t				create() const			= 0;
 			virtual						~CreatorBase()			= default;
 
 		protected:
-			CreatorBase() = default;
-			CreatorBase(const CreatorBase&) = default;
-			CreatorBase(CreatorBase&&) = default;
+			CreatorBase()						= default;
+			CreatorBase(const CreatorBase&)		= default;
+			CreatorBase(CreatorBase&&)			= default;
 		};
 
 		//////////////////////////////////////////////////////////////////////////////////////////////
 		//										CREATOR CLASS										//
 		//////////////////////////////////////////////////////////////////////////////////////////////
-		template<typename KeyType, typename BaseT, typename T>
-		class Creator final : public CreatorBase<BaseT>
+		template<typename KeyType, typename ProductBase, typename Product>
+		class Creator final : public CreatorBase<ProductBase>
 		{
-			// Creator is a singleton - even if it's registered with multiple keys, it still creates objects
-			// of a given type
-			static std::shared_ptr<const Creator> instance;
-
 		public:
+			using s_ptr_t = std::shared_ptr<const Creator>;
+
 			// CTORS & DTORS
-			explicit			Creator(const KeyType& key);
-								Creator()							= default;
-			virtual				~Creator() override					= default;
+							Creator()					= default;
+			virtual			~Creator() override			= default;
 
 			// METHODS
-			virtual BaseT* create() const override
-			{
-				return new T;
-			}
+			const static s_ptr_t&					getInstance()				{ return instance; }
+			virtual std::unique_ptr<ProductBase>	create() const override		{ return std::make_unique<Product>(); }
+
+		private:
+			// Creator is a singleton - even if it's registered with multiple keys, it still creates objects
+			// of a given type
+			static s_ptr_t instance;
 		};
 
-		template<typename KeyType, typename BaseT, typename T>
-		std::shared_ptr<const Creator< KeyType, BaseT, T >> Creator<KeyType, BaseT, T>::instance
-			= std::make_shared<const Creator< KeyType, BaseT, T >>();
+		template<typename KeyType, typename ProductBase, typename Product>
+		std::shared_ptr<const Creator< KeyType, ProductBase, Product >> Creator<KeyType, ProductBase, Product>::
+			instance = std::make_shared<const Creator< KeyType, ProductBase, Product >>();
 
 		//////////////////////////////////////////////////////////////////////////////////////////////
 		//										FACTORY CLASS										//
@@ -75,36 +76,40 @@ namespace lstr
 			Factory& operator=(const Factory&&)					= delete;
 			~Factory()											= delete;
 
-			static void					registerCreator(const KeyType&, ptr_t&&);
-			static void					unregisterCreator(const KeyType&);
-			static const ptr_t&			getCreator(const KeyType&);
+			template<typename Product>
+			static void								registerCreator(const KeyType&);
+			static void								unregisterCreator(const KeyType&);
+			static const ptr_t&						getCreator(const KeyType&);
+			static std::unique_ptr<ProductBase>		create(const KeyType& key)
+			{
+				return getCreator(key)->create();
+			}
 
 		private:
 			// MEMBERS
 			static map_t		creator_map;
 		};
 
-		template<typename KeyType, typename BaseT, typename T>
-		Creator<KeyType, BaseT, T>::Creator(const KeyType& key)
-		{
-			Factory<KeyType, BaseT>::
-				registerCreator(key, std::shared_ptr<const CreatorBase< BaseT >>(instance));
-		}
-
 		// initialize creator_map as empty
-		template<typename KeyType, typename CreatorBase>
-		typename Factory<KeyType, CreatorBase>::map_t
-			Factory<KeyType, CreatorBase>::
-			creator_map	= Factory<KeyType, CreatorBase>::map_t{};
+		template<typename KeyType, typename ProductBase>
+		typename Factory<KeyType, ProductBase>::map_t
+			Factory<KeyType, ProductBase>::
+			creator_map	= Factory<KeyType, ProductBase>::map_t{};
 
-		template<typename KeyType, typename CreatorBase>
-		void Factory<KeyType, CreatorBase>::
-			registerCreator(const KeyType& key, ptr_t&& creator)
+		template<typename KeyType, typename ProductBase>
+		template<typename Product>
+		void Factory<KeyType, ProductBase>::registerCreator(const KeyType& key)
 		{
+			static_assert
+			(
+				std::is_base_of<ProductBase, Product>::value,
+				"The product type you are trying to register must be derived from the factory ProductBase class."
+			);
+
 			if (creator_map.find(key) != creator_map.end())
 				throw (std::invalid_argument("The creator you are trying to register is already registered\n"));
 
-			creator_map[key] = std::move(creator);
+			creator_map[key] = Creator<KeyType, ProductBase, Product>::getInstance();
 		}
 
 		template<typename KeyType, typename CreatorBase>
