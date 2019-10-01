@@ -33,11 +33,13 @@ struct Base
 struct C1 : public Base
 {
 	virtual void foo() override { std::cout << "C1" << '\n'; }
+    virtual ~C1() override = default;
 };
 
 struct C2 : public Base
 {
 	virtual void foo() override { std::cout << "C2" << '\n'; }
+    virtual ~C2() override = default;
 };
 
 void init()
