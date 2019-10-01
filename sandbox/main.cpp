@@ -27,6 +27,7 @@
 struct Base
 {
 	virtual void foo() = 0;
+    virtual ~Base() = default;
 };
 
 struct C1 : public Base
