@@ -39,7 +39,7 @@ namespace lstr
             using s_ptr_t = std::shared_ptr<const Creator>;
 
             // CTORS & DTORS
-            Creator()					= default;
+							Creator()					= default;
             virtual			~Creator() override			= default;
 
             // METHODS
@@ -100,11 +100,8 @@ namespace lstr
         template<typename Product>
         void Factory<KeyType, ProductBase>::registerCreator(const KeyType& key)
         {
-            static_assert
-                    (
-                        std::is_base_of<ProductBase, Product>::value,
-                        "The product type you are trying to register must be derived from the factory ProductBase class."
-                        );
+            static_assert(std::is_base_of<ProductBase, Product>::value,
+				"The product type you are trying to register must be derived from the declared base class.");
 
             if (creator_map.find(key) != creator_map.end())
                 throw (std::invalid_argument("The creator you are trying to register is already registered\n"));
@@ -121,8 +118,7 @@ namespace lstr
             if (it == creator_map.end())
                 throw (std::invalid_argument("The creator you are trying to unregister was never registered.\n"));
 
-            if (creator_map.erase(key))
-                throw (std::runtime_error("Could not register creator.\n"));
+			creator_map.erase(key);
         }
 
         template<typename KeyType, typename CreatorBase>
