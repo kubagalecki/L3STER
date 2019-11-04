@@ -133,7 +133,6 @@
     <ClInclude Include="Factory.hpp" />
     <ClInclude Include="QuadratureBase.hpp" />
     <ClInclude Include="ReferenceElement.hpp" />
-    <ClInclude Include="ReferenceElementBase.hpp" />
     <ClInclude Include="Types.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

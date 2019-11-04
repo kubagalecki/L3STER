@@ -10,6 +10,12 @@ namespace lstr
 {
     namespace mesh
     {
+		//////////////////////////////////////////////////////////////////////////////////////////////
+		//  						      ELEMENT VECTOR BASE CLASS									//
+		//////////////////////////////////////////////////////////////////////////////////////////////
+		/*
+		Uninstantiable base class for element vector.
+		*/
         class ElementVectorBase
         {
         protected:
@@ -22,6 +28,12 @@ namespace lstr
             ElementVectorBase& operator=(const ElementVectorBase&&)		= delete;
         };
 
+		//////////////////////////////////////////////////////////////////////////////////////////////
+		//  								ELEMENT VECTOR CLASS									//
+		//////////////////////////////////////////////////////////////////////////////////////////////
+		/*
+		Wrapper for a std::vector of elements of a given type.
+		*/
         template <ElementTypes ELTYPE, types::el_o_t ELORDER>
         class ElementVector final :public ElementVectorBase
         {

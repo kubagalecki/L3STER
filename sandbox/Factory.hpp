@@ -43,8 +43,8 @@ namespace lstr
             virtual			~Creator() override			= default;
 
             // METHODS
-            const static s_ptr_t&					getInstance()				{ return instance; }
-            virtual std::unique_ptr<ProductBase>	create() const override		{ return std::make_unique<Product>(); }
+			static const s_ptr_t&					getInstance()				{ return instance; }
+            std::unique_ptr<ProductBase>			create() const final		{ return std::make_unique<Product>(); }
 
         private:
             // Creator is a singleton - even if it's registered with multiple keys, it still creates objects
@@ -80,10 +80,7 @@ namespace lstr
             static void								registerCreator(const KeyType&);
             static void								unregisterCreator(const KeyType&);
             static const ptr_t&						getCreator(const KeyType&);
-            static std::unique_ptr<ProductBase>		create(const KeyType& key)
-            {
-                return getCreator(key)->create();
-            }
+            static std::unique_ptr<ProductBase>		create(const KeyType& key)			{ return getCreator(key)->create(); }
 
         private:
             // MEMBERS
