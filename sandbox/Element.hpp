@@ -62,16 +62,16 @@ namespace lstr
         public:
 
             // ALIASES
-            using node_array                        = std::array <types::n_id_t, n_nodes>;
-            using node_array_ref                    = node_array &;
-            using node_array_constref               = const node_array &;
+            using node_array_t                        = std::array <types::n_id_t, n_nodes>;
+            using node_array_ref_t                    = node_array_t &;
+            using node_array_constref_t               = const node_array_t &;
 
             // CONSTRUCTORS
-            Element()                               = delete;
-            Element(node_array_constref _nodes);
+            Element()                                 = delete;
+            Element(node_array_constref_t _nodes);
 
             // GETTERS
-            node_array_constref getNodes() const;
+            node_array_constref_t getNodes() const;
 
         private:
 
@@ -79,19 +79,19 @@ namespace lstr
             void                sort();
 
             // MEMBERS
-            const node_array                nodes;
-            std::array<size_t, n_nodes>     node_order;
+            const node_array_t                  nodes;
+            std::array<size_t, n_nodes>         node_order;
         };
 
         template <ElementTypes ELTYPE, types::el_o_t ELORDER>
-        Element<ELTYPE, ELORDER>::Element(node_array_constref _nodes)   : nodes(_nodes),
+        Element<ELTYPE, ELORDER>::Element(node_array_constref_t _nodes)   : nodes(_nodes),
             node_order(helpers::NodeOrderHelper<n_nodes>::get())
         {
             this->sort();
         }
 
         template <ElementTypes ELTYPE, types::el_o_t ELORDER>
-        typename Element<ELTYPE, ELORDER>::node_array_constref Element<ELTYPE, ELORDER>::getNodes() const
+        typename Element<ELTYPE, ELORDER>::node_array_constref_t Element<ELTYPE, ELORDER>::getNodes() const
         {
             return nodes;
         }
