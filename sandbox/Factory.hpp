@@ -98,7 +98,7 @@ namespace lstr
         void Factory<KeyType, ProductBase>::registerCreator(const KeyType& key)
         {
             static_assert(std::is_base_of<ProductBase, Product>::value,
-				"The product type you are trying to register must be derived from the declared base class.");
+				"The product type you are trying to register must be derived from the declared base class\n");
 
             if (creator_map.find(key) != creator_map.end())
                 throw (std::invalid_argument("The creator you are trying to register is already registered\n"));

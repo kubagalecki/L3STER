@@ -28,8 +28,8 @@ namespace lstr
                 static const array_t& get();
 
             private:
-                static array_t			generate();
-                static const array_t	unsorted_order;
+                static array_t          generate();
+                static const array_t    unsorted_order;
             };
 
             template <size_t SIZE>
@@ -41,7 +41,7 @@ namespace lstr
             template <size_t SIZE>
             typename NodeOrderHelper<SIZE>::array_t NodeOrderHelper<SIZE>::generate()
             {
-                auto && ret_val = array_t{ {0} };
+                auto&& ret_val = array_t{ {0} };
                 std::iota(ret_val.begin(), ret_val.end(), 0);
                 return ret_val;
             }
@@ -62,29 +62,29 @@ namespace lstr
         public:
 
             // ALIASES
-            using node_array						= std::array <types::n_id_t, n_nodes>;
-            using node_array_ref					= node_array &;
-            using node_array_constref				= const node_array &;
+            using node_array                        = std::array <types::n_id_t, n_nodes>;
+            using node_array_ref                    = node_array &;
+            using node_array_constref               = const node_array &;
 
             // CONSTRUCTORS
-            Element()								= delete;
+            Element()                               = delete;
             Element(node_array_constref _nodes);
 
             // GETTERS
-            node_array_constref	getNodes() const;
+            node_array_constref getNodes() const;
 
         private:
 
             // SORT
-            void				sort();
+            void                sort();
 
             // MEMBERS
-            const node_array				nodes;
-            std::array<size_t, n_nodes>		node_order;
+            const node_array                nodes;
+            std::array<size_t, n_nodes>     node_order;
         };
 
         template <ElementTypes ELTYPE, types::el_o_t ELORDER>
-        Element<ELTYPE, ELORDER>::Element(node_array_constref _nodes)	: nodes(_nodes),
+        Element<ELTYPE, ELORDER>::Element(node_array_constref _nodes)   : nodes(_nodes),
             node_order(helpers::NodeOrderHelper<n_nodes>::get())
         {
             this->sort();
@@ -100,7 +100,10 @@ namespace lstr
         void Element<ELTYPE, ELORDER>::sort()
         {
             std::sort(node_order.begin(), node_order.end(),
-                      [this] (size_t n1, size_t n2) { return this->nodes[n1] < this->nodes[n2]; });
+                      [this](size_t n1, size_t n2)
+            {
+                return this->nodes[n1] < this->nodes[n2];
+            });
 
             ///////////////////////////////////////////////////////////////////////////////////////////////
             // OLD CODE FOR ACTUALLY SORTING THE NODES, AS OPPOSED TO JUST GENERATING THE REORDER VECTOR //
@@ -113,16 +116,16 @@ namespace lstr
             //// Group nodes IDs and their indices into a vector of pairs
             //aux_a_t aux_a;
             //std::transform(nodes.begin(), nodes.end(), node_order.begin(),
-            //	aux_a.begin(), [](types::n_id_t n, size_t o) -> aux_p_t { return std::make_pair(n, o); });
+            //  aux_a.begin(), [](types::n_id_t n, size_t o) -> aux_p_t { return std::make_pair(n, o); });
             //
             //// Sort
             //std::sort(aux_a.begin(), aux_a.end());
             //
             //// Move data back to Element class members
             //std::transform(aux_a.begin(), aux_a.end(), nodes.begin(),
-            //	[](aux_p_t p) -> types::n_id_t { return p.first; });
+            //  [](aux_p_t p) -> types::n_id_t { return p.first; });
             //std::transform(aux_a.begin(), aux_a.end(), node_order.begin(),
-            //	[](aux_p_t p) -> size_t { return p.second; });
+            //  [](aux_p_t p) -> size_t { return p.second; });
         }
     }
 }
