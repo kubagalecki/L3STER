@@ -1,6 +1,7 @@
 // Implementation of the abstract factory design pattern
 
-#pragma once
+#ifndef L3STER_INCGUARD_UTIL_ELEMENTVECTOR_HPP
+#define L3STER_INCGUARD_UTIL_ELEMENTVECTOR_HPP
 
 #include <map>
 #include <stdexcept>
@@ -9,7 +10,7 @@
 
 namespace lstr
 {
-    namespace despat
+    namespace util
     {
         //////////////////////////////////////////////////////////////////////////////////////////////
         //									CREATOR BASE CLASS										//
@@ -131,3 +132,5 @@ namespace lstr
         }
     }
 }
+
+#endif      // end include guard

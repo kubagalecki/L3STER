@@ -1,4 +1,7 @@
-#pragma once
+// Data type representing a physical element
+
+#ifndef L3STER_INCGUARD_MESH_ELEMENT_HPP
+#define L3STER_INCGUARD_MESH_ELEMENT_HPP
 
 #include "ReferenceElement.hpp"
 #include "Types.h"
@@ -11,6 +14,7 @@
 #include <algorithm>
 #include <numeric>
 #include <utility>
+#include <cstddef>
 
 namespace lstr
 {
@@ -129,3 +133,5 @@ namespace lstr
         }
     }
 }
+
+#endif      // end include guard

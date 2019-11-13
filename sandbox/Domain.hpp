@@ -1,6 +1,7 @@
 // Domain handling
 
-#pragma once
+#ifndef L3STER_INCGUARD_MESH_DOMAIN_HPP
+#define L3STER_INCGUARD_MESH_DOMAIN_HPP
 
 #include "ElementVector.hpp"
 #include "Factory.hpp"
@@ -29,59 +30,64 @@ namespace lstr
             void                setId(types::d_id_t _id)    { id = _id; }
 
             template <ElementTypes ELTYPE, types::el_o_t ELORDER>
-            void pushBack(Element<ELTYPE, ELORDER>);
-            
+            void pushBack(const Element<ELTYPE, ELORDER>&);
+
             template <ElementTypes ELTYPE, types::el_o_t ELORDER, typename ... Types>
-            void emplaceBack(Types ... Args);
+            void emplaceBack(const Types& ... Args);
 
         private:
             types::d_id_t       id          = 0;
             map_t               element_vectors;
         };
-        
-        // proxy for puch_back of the underlying vector
+
+        // Proxy for puch_back of the underlying vector
         template <ElementTypes ELTYPE, types::el_o_t ELORDER>
-        void Domain::pushBack(Element<ELTYPE, ELORDER> element)
+        void Domain::pushBack(const Element<ELTYPE, ELORDER>& element)
         {
             auto pos_iter = element_vectors.find(std::make_pair(ELTYPE, ELORDER));
-            
+
             // If vector of elements of given type does not exist, create it
             if (pos_iter == element_vectors.end())
             {
                 auto insert_result = element_vectors.insert(std::make_pair(std::make_pair(ELTYPE, ELORDER),
-                                               std::make_unique< ElementVector<ELTYPE, ELORDER> >()));
-                
+                                     std::make_unique< ElementVector<ELTYPE, ELORDER> >()));
+
                 if (!insert_result.second)
+                {
                     throw (std::runtime_error("Element insertion failed\n"));
-                
+                }
+
                 pos_iter = insert_result.first;
             }
-            
+
             // Push element back to appropriate vector
-            static_cast< ElementVector<ELTYPE, ELORDER>* >(pos_iter->second.get())->getRef().push_back(std::move(element));
+            static_cast< ElementVector<ELTYPE, ELORDER>* >(pos_iter->second.get())->getRef().push_back(element);
         }
-        
-        
-        
+
+        // Proxy for emplace_back of the underlying vector
         template <ElementTypes ELTYPE, types::el_o_t ELORDER, typename ... Types>
-        void Domain::emplaceBack(Types ... Args)
+        void Domain::emplaceBack(const Types& ... Args)
         {
             auto pos_iter = element_vectors.find(std::make_pair(ELTYPE, ELORDER));
-            
+
             // If vector of elements of given type does not exist, create it
             if (pos_iter == element_vectors.end())
             {
                 auto insert_result = element_vectors.insert(std::make_pair(std::make_pair(ELTYPE, ELORDER),
-                                               std::make_unique< ElementVector<ELTYPE, ELORDER> >()));
-                
+                                     std::make_unique< ElementVector<ELTYPE, ELORDER> >()));
+
                 if (!insert_result.second)
+                {
                     throw (std::runtime_error("Element insertion failed\n"));
-                
+                }
+
                 pos_iter = insert_result.first;
             }
-            
+
             // Push element back to appropriate vector
             static_cast< ElementVector<ELTYPE, ELORDER>* >(pos_iter->second.get())->getRef().emplace_back(Args ...);
         }
     }
 }
+
+#endif      // end include guard

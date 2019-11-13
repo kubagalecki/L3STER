@@ -1,4 +1,7 @@
-#pragma once
+// Polymorphic data structure for storing multiple elements of same type
+
+#ifndef L3STER_INCGUARD_MESH_ELEMENTVECTOR_HPP
+#define L3STER_INCGUARD_MESH_ELEMENTVECTOR_HPP
 
 #include "Element.hpp"
 
@@ -14,19 +17,9 @@ namespace lstr
         //                                ELEMENT VECTOR BASE CLASS                                 //
         //////////////////////////////////////////////////////////////////////////////////////////////
         /*
-        Uninstantiable base class for element vector.
+        Empty base class for element vector.
         */
-        class ElementVectorBase
-        {
-//         protected:
-//             Cannot directly instantiate ElementVectorBase, only derived classes
-//             ElementVectorBase()                                         = default;
-//             ElementVectorBase(const ElementVectorBase&)                 = delete;
-//             ElementVectorBase& operator=(const ElementVectorBase&)      = delete;
-//             virtual ~ElementVectorBase()                                = default;
-//             ElementVectorBase(const ElementVectorBase&&)                = delete;
-//             ElementVectorBase& operator=(const ElementVectorBase&&)     = delete;
-        };
+        class ElementVectorBase {};
 
         //////////////////////////////////////////////////////////////////////////////////////////////
         //                                  ELEMENT VECTOR CLASS                                    //
@@ -48,18 +41,11 @@ namespace lstr
             const vec_t&    getConstRef()   const                   { return element_vector; }
             vec_t&          getRef()                                { return element_vector; }
 
-            vec_citer_t     cbegin()        const                   { return element_vector.cbegin(); }
-            vec_citer_t     cend()          const                   { return element_vector.cend(); }
-
-            vec_iter_t      begin()                                 { return element_vector.begin(); }
-            vec_iter_t      end()                                   { return element_vector.end(); }
-
-            //void          for_each(std::function<el_t> f)         { for_each(this->begin(), this->end(), f); }
-            //void          const_for_each(std::function<el_t> f)   { for_each(this->cbegin(), this->cend(), f); }
-
         private:
             // MEMBERS
             vec_t element_vector;
         };
     }
 }
+
+#endif      // end include guard

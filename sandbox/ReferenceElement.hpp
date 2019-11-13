@@ -1,74 +1,126 @@
 // ReferenceElement class implementation
 
-#pragma once
+#ifndef L3STER_INCGUARD_MESH_REFERENCEELEMENT_HPP
+#define L3STER_INCGUARD_MESH_REFERENCEELEMENT_HPP
 
-#include "ElementTypes.hpp"
+#include "ElementTypes.h"
 #include "Types.h"
+#include "Quadrature.hpp"
+
+#include <map>
+#include <memory>
 
 namespace lstr
 {
     namespace mesh
     {
-		//////////////////////////////////////////////////////////////////////////////////////////////
-		//  						    REFERENCE ELEMENT BASE CLASS								//
-		//////////////////////////////////////////////////////////////////////////////////////////////
-		/*
-		 Class ReferenceElementBase needs to be specialized for each element type.
-		 The specializations must have the following methods:		
-		 -static constexpr size_t getNumberOfNodes(types::el_o_t)
-		 -static constexpr types::el_dim_t getDim()
-		 */
-		template <ElementTypes ELTYPE, typename CRTP_Child>
-		class ReferenceElementBase;
-
-		// QUAD
-		template <typename CRTP_Child>
-		class ReferenceElementBase<ElementTypes::Quad, CRTP_Child>
-		{
-		protected:
-			static constexpr size_t getNumberOfNodes(types::el_o_t elorder)
-			{
-				return (elorder + 1) * (elorder + 1);
-			}
-
-			static constexpr types::el_dim_t getDim()
-			{
-				return 2;
-			}
-		};
-
-		//////////////////////////////////////////////////////////////////////////////////////////////
-		//  						      REFERENCE ELEMENT CLASS									//
-		//////////////////////////////////////////////////////////////////////////////////////////////
-		/*
-		This static class constitutes the interface through which general information about elements of
-		a given type and order is available. The interface is available within the constexpr context.
-		*/
-        template <ElementTypes ELTYPE, types::el_o_t ELORDER>
-        class ReferenceElement final : public ReferenceElementBase<ELTYPE, ReferenceElement< ELTYPE, ELORDER >>
+        //////////////////////////////////////////////////////////////////////////////////////////////
+        //                             REFERENCE ELEMENT TRAITS CLASS                               //
+        //////////////////////////////////////////////////////////////////////////////////////////////
+        /*
+        This class is to be specialized for each element type. It must contain the following member functions:
+        -static constexpr size_t            getNumberOfNodes()
+        -static constexpr types::el_dim_t   getDim()
+        */
+        template <ElementTypes ELTYPE>
+        struct ReferenceElementTraits;
+        
+        //////////////////////////////////////////////////////////////////////////////////////////////
+        //                              REFERENCE BASE ELEMENT CLASS                                //
+        //////////////////////////////////////////////////////////////////////////////////////////////
+        /*
+        Static base class for ReferenceElement, contains all element type-specific data, makes use of
+        ReferenceElementTraits
+        */
+        template <ElementTypes ELTYPE>
+        class ReferenceElementBase
         {
-            // ALIASES
-            using parent_t = ReferenceElementBase<ELTYPE, ReferenceElement>;
+        public:
+            // Quadrature access
+            
+            
+        protected:
+            static constexpr size_t             getNumberOfNodes(types::el_o_t);
+            static constexpr types::el_dim_t    getDim();
+            
+        private:
+            std::map< types::q_o_t, std::unique_ptr<QuadratureBase<ELTYPE> > > quadratures;
+            
+            // ReferenceElementBase is a static class
+            ReferenceElementBase()                                          = delete;
+            ReferenceElementBase(const ReferenceElementBase&)               = delete;
+            ReferenceElementBase& operator=(const ReferenceElementBase&)    = delete;
+            virtual ~ReferenceElementBase()                                 = delete;
+            ReferenceElementBase(const ReferenceElementBase&&)              = delete;
+            ReferenceElementBase& operator=(const ReferenceElementBase&&)   = delete;
+        };
+        
+        template <ElementTypes ELTYPE>
+        constexpr size_t ReferenceElementBase<ELTYPE>::getNumberOfNodes(types::el_o_t ELORDER)
+        {
+            return ReferenceElementTraits<ELTYPE>::getNumberOfNodes(ELORDER);
+        }
+        
+        template <ElementTypes ELTYPE>
+        constexpr size_t ReferenceElementBase<ELTYPE>::getDim()
+        {
+            return ReferenceElementTraits<ELTYPE>::getDim();
+        }
 
+        //////////////////////////////////////////////////////////////////////////////////////////////
+        //                                REFERENCE ELEMENT CLASS                                   //
+        //////////////////////////////////////////////////////////////////////////////////////////////
+        /*
+        This static class constitutes the interface through which general information about elements of
+        a given type and order is available. The interface is available within the constexpr context.
+        */
+        template <ElementTypes ELTYPE, types::el_o_t ELORDER>
+        class ReferenceElement final : ReferenceElementBase<ELTYPE>
+        {
+            using parent_t = ReferenceElementBase<ELTYPE>;
+            
             // ReferenceElement is a static class
-            ReferenceElement()										= delete;
-            ReferenceElement(const ReferenceElement&)				= delete;
-            ReferenceElement& operator=(const ReferenceElement&)	= delete;
-            virtual ~ReferenceElement()								= delete;
-            ReferenceElement(const ReferenceElement&&)				= delete;
-            ReferenceElement& operator=(const ReferenceElement&&)	= delete;
+            ReferenceElement()                                      = delete;
+            ReferenceElement(const ReferenceElement&)               = delete;
+            ReferenceElement& operator=(const ReferenceElement&)    = delete;
+            virtual ~ReferenceElement()                             = delete;
+            ReferenceElement(const ReferenceElement&&)              = delete;
+            ReferenceElement& operator=(const ReferenceElement&&)   = delete;
 
         public:
             // METHODS
-            static constexpr size_t				getNumberOfNodes()
+            static constexpr size_t             getNumberOfNodes()
             {
                 return parent_t::getNumberOfNodes(ELORDER);
             }
 
-            static constexpr types::el_dim_t	getDim()
+            static constexpr types::el_dim_t    getDim()
             {
-                return parent_t::getDim(ELORDER);
+                return parent_t::getDim();
             }
         };
+        
+        //////////////////////////////////////////////////////////////////////////////////////////////
+        //                         REFERENCE ELEMENT TRAITS SPECIALIZATIONS                         //
+        //////////////////////////////////////////////////////////////////////////////////////////////
+        // When adding new element types, modify this file only below this point
+        
+        // QUAD
+        template <>
+        struct ReferenceElementTraits<ElementTypes::Quad> final
+        {
+            static constexpr size_t             getNumberOfNodes(types::el_o_t elorder)
+            {
+                return (elorder + 1) * (elorder + 1);
+            }
+            
+            static constexpr types::el_dim_t    getDim()
+            {
+                return 2;
+            }
+        };
+        //////////////////////////////////////////////////////////////////////////////////////////////
     }
 }
+
+#endif      // end include guard
