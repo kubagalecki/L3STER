@@ -20,11 +20,11 @@ namespace lstr
         //////////////////////////////////////////////////////////////////////////////////////////////
         /*
         This class is to be specialized for each element type. It must contain the following member functions:
-        
+
         static constexpr size_t            getNumberOfNodes(types::el_o_t)
-        
+
         static constexpr types::el_dim_t   getDim()
-        
+
         template <quad::QuadratureTypes QTYPE>
         static constexpr size_t             getQuadratureSize(types::q_o_t);
         */
@@ -45,13 +45,10 @@ namespace lstr
             // Aliases
             using q_pair_t = std::pair<quad::QuadratureTypes, types::q_o_t>;
 
-            // Quadrature access
-
-
-        protected:
+            // Info access
             static constexpr size_t             getNumberOfNodes(types::el_o_t);
             static constexpr types::el_dim_t    getDim();
-            static constexpr size_t             getQuadratureSize(types::q_o_t);
+            static constexpr size_t             getQuadratureSize(quad::QuadratureTypes, types::q_o_t);
 
         private:
             static std::map< q_pair_t, std::unique_ptr< quad::QuadratureBase<ELTYPE> > > quadratures;
@@ -78,10 +75,17 @@ namespace lstr
         }
 
         template <ElementTypes ELTYPE>
-        constexpr size_t ReferenceElementBase<ELTYPE>::getQuadratureSize(types::q_o_t QORDER)
+        constexpr size_t ReferenceElementBase<ELTYPE>::getQuadratureSize(quad::QuadratureTypes qtype, types::q_o_t qorder)
         {
-            return ReferenceElementTraits<ELTYPE>::getQuadratureSize(QORDER);
+            return ReferenceElementTraits<ELTYPE>::getQuadratureSize(qtype, qorder);
         }
+
+//         template <ElementTypes ELTYPE>
+//         template <quad::QuadratureTypes QTYPE>
+//         constexpr size_t ReferenceElementBase<ELTYPE>::getQuadratureSize<QTYPE>(types::q_o_t qorder)
+//         {
+//             return ReferenceElementTraits<ELTYPE>::getQuadratureSize<QTYPE>(qorder);
+//         }
 
         //////////////////////////////////////////////////////////////////////////////////////////////
         //                                REFERENCE ELEMENT CLASS                                   //
@@ -135,21 +139,11 @@ namespace lstr
                 return 2;
             }
 
-            template <quad::QuadratureTypes QTYPE>
-            static constexpr size_t             getQuadratureSize(types::q_o_t);
+            static constexpr size_t             getQuadratureSize(quad::QuadratureTypes, types::q_o_t qorder)
+            {
+                 return (qorder / 2 + 1) * (qorder / 2 + 1);
+            }
         };
-
-        template<>
-        constexpr size_t
-        ReferenceElementTraits<ElementTypes::Quad>::
-        getQuadratureSize<quad::QuadratureTypes::GLeg>
-        (types::q_o_t qorder)
-        {
-            if (qorder % 2 == 0)
-                return (qorder / 2 + 1) * (qorder / 2 + 1);
-            else
-                return (qorder + 1) * (qorder + 1) / 4;
-        }
         //////////////////////////////////////////////////////////////////////////////////////////////
     }
 }
