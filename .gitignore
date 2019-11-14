@@ -40,3 +40,6 @@ sandbox/build/
 
 # Build
 build/
+
+# KDevelop projects
+*.kdev4
