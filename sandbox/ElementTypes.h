@@ -9,7 +9,7 @@ namespace lstr
     {
         enum class ElementTypes
         {
-            Quad,
+            Quad,                   // Quadrilateral elements
         };
     }
 }
