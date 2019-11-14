@@ -1,3 +1,6 @@
 [submodule "cmake-modules"]
 	path = cmake-modules
 	url = https://github.com/jedbrown/cmake-modules.git
+[submodule "eigen-git-mirror"]
+	path = eigen-git-mirror
+	url = https://github.com/eigenteam/eigen-git-mirror.git
