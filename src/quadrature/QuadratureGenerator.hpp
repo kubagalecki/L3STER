@@ -18,6 +18,17 @@ namespace lstr
         template <mesh::ElementTypes, QuadratureTypes, types::q_o_t>
         class Quadrature;
 
+        //////////////////////////////////////////////////////////////////////////////////////////////
+        //                                 QUADRATURE GENERATOR CLASS                               //
+        //////////////////////////////////////////////////////////////////////////////////////////////
+        /*
+        Helper class for generating concrete quadrature points and weights for specific quad. order,
+        element type, and quadrature type. To be specialized below. The specializations must include:
+        
+        static typename Quadrature<ELTYPE, QTYPE, QORDER>::q_points_t  getQPoints();
+        
+        static typename Quadrature<ELTYPE, QTYPE, QORDER>::weights_t   getWeights();
+        */
         template <mesh::ElementTypes ELTYPE, QuadratureTypes QTYPE, types::q_o_t QORDER>
         class QuadratureGenerator;
 
@@ -105,13 +116,12 @@ namespace lstr
             for (auto i = 0; i < gl1d_size; ++i)
             {
                 for (auto j = 0; j < gl1d_size; ++j)
-                    ret_val[i + j * gl1d_size] =
-                        4 * es.eigenvectors()(0, i) * es.eigenvectors()(0, i) * es.eigenvectors()(0, j) * es.eigenvectors()(0, j);
+                    ret_val[i + j * gl1d_size] = 4 * es.eigenvectors()(0, i) * es.eigenvectors()(0, i) *
+                                                 es.eigenvectors()(0, j) * es.eigenvectors()(0, j);
             }
 
             return ret_val;
         }
-
     }
 }
 

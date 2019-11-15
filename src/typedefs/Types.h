@@ -18,14 +18,15 @@ namespace lstr
 {
     namespace types
     {
-        using dim_t     = size_t;
-        using n_id_t    = size_t;
-        using el_id_t   = size_t;
-        using el_o_t    = size_t;
-        using el_dim_t  = size_t;
-        using d_id_t    = size_t;
-        using val_t     = double;
-        using q_o_t     = size_t;
+        using dim_t         = size_t;
+        using n_id_t        = size_t;
+        using el_id_t       = size_t;
+        using el_o_t        = size_t;
+        using el_dim_t      = size_t;
+        using d_id_t        = size_t;
+        using val_t         = double;
+        using q_o_t         = size_t;
+        using poly_o_t      = size_t;
     }
 }
 
