@@ -19,6 +19,8 @@
 #include <iterator>
 #include <numeric>
 
+#include <iostream>
+
 namespace lstr
 {
     namespace util
@@ -35,9 +37,6 @@ namespace lstr
         public:
             template <types::poly_o_t I>
             friend class Polynomial;
-            
-            template<types::poly_o_t I>
-            friend Polynomial<I> lagrangeFit(std::array<types::val_t, I + 1>, std::array<types::val_t, I + 1>);
 
             //Aliases
             using array_t = std::array < types::val_t, N + 1 >;
@@ -236,24 +235,25 @@ namespace lstr
         /*
         Returns the polynomial p of order N, such that for all 0 <= i < N p(x[i]) = y[i]
         */
-        template <types::poly_o_t N>
-        Polynomial<N> lagrangeFit(const std::array<types::val_t, N + 1>& x, const std::array<types::val_t, N + 1>& y)
+        template < typename T, types::poly_o_t N = std::tuple_size<T>::value - 1 >
+        Polynomial<N> lagrangeFit(const T& x, const T& y)
         {
             auto A = Eigen::Matrix < types::val_t, N + 1, N + 1 > {};
             auto b = Eigen::Matrix < types::val_t, N + 1, 1 > {};
-            
+
             for (auto i = 0; i <= N; i++)
             {
                 b[i] = y[i];
                 A(i, 0) = 1.;
+
                 for (auto j = 1; j <= N; j++)
-                    A(i, j) = A(i, j - 1)*x[i];
+                    A(i, j) = A(i, j - 1) * x[i];
             }
-            
-            auto ret_coefs = A.colPivHouseholderQr().solve(b);
-            
-            auto ret_val = Polynomial<N>{};
-            std::copy(ret_coefs.cbegin(), ret_coefs.cend(), ret_val.coefs.begin());
+
+            Eigen::Matrix < types::val_t, N + 1, 1 > ret_coefs = A.colPivHouseholderQr().solve(b);
+
+            auto ret_val = Polynomial<N> {};
+            std::copy(ret_coefs.cbegin(), ret_coefs.cend(), ret_val.data());
             return ret_val;
         }
     }

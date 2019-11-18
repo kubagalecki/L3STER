@@ -14,9 +14,9 @@ int main()
 
         auto&& Q = lstr::quad::Quadrature<lstr::mesh::ElementTypes::Quad, lstr::quad::QuadratureTypes::GLeg, 2>{};
         
-        using a_t = std::array<lstr::types::val_t, 2>;
-        const auto x = std::array<lstr::types::val_t, 2>{0., 1.};
-        const auto y = std::array<lstr::types::val_t, 2>{0., 1.};
+        using a_t = std::array<lstr::types::val_t, 3>;
+        const auto x = a_t{0., 1., -1.};
+        const auto y = a_t{0., 1., 1.};
         auto p2 = lstr::util::lagrangeFit(x, y);
         
         return 0;
