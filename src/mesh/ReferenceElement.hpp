@@ -3,9 +3,9 @@
 #ifndef L3STER_INCGUARD_MESH_REFERENCEELEMENT_HPP
 #define L3STER_INCGUARD_MESH_REFERENCEELEMENT_HPP
 
-#include "ElementTypes.h"
-#include "Types.h"
-#include "Quadrature.hpp"
+#include "mesh/ElementTypes.h"
+#include "typedefs/Types.h"
+#include "quadrature/Quadrature.hpp"
 
 #include <map>
 #include <memory>
@@ -51,7 +51,7 @@ namespace lstr
             static constexpr size_t             getQuadratureSize(quad::QuadratureTypes, types::q_o_t);
 
         private:
-            static std::map< q_pair_t, std::unique_ptr< quad::QuadratureBase<ELTYPE> > > quadratures;
+            static std::map< q_pair_t, std::unique_ptr<quad::QuadratureBase> > quadratures;
 
             // ReferenceElementBase is a static class
             ReferenceElementBase()                                          = delete;
@@ -130,11 +130,6 @@ namespace lstr
             static constexpr types::el_dim_t    getDim()
             {
                 return 2;
-            }
-
-            static constexpr size_t             getQuadratureSize(quad::QuadratureTypes, types::q_o_t qorder)
-            {
-                return (qorder / 2 + 1) * (qorder / 2 + 1);
             }
         };
         //////////////////////////////////////////////////////////////////////////////////////////////

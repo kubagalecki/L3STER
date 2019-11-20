@@ -7,7 +7,7 @@
 #ifndef L3STER_INCGUARD_UTIL_POLYNOMIAL_HPP
 #define L3STER_INCGUARD_UTIL_POLYNOMIAL_HPP
 
-#include "Types.h"
+#include "typedefs/Types.h"
 #include "Eigen/Dense"
 
 #include <array>
@@ -18,8 +18,6 @@
 #include <string>
 #include <iterator>
 #include <numeric>
-
-#include <iostream>
 
 namespace lstr
 {

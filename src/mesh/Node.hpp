@@ -3,7 +3,8 @@
 #ifndef L3STER_INCGUARD_MESH_NODE_HPP
 #define L3STER_INCGUARD_MESH_NODE_HPP
 
-#include "Types.h"
+#include "typedefs/Types.h"
+
 #include <array>
 
 namespace lstr

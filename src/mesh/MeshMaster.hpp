@@ -3,9 +3,9 @@
 #ifndef L3STER_INCGUARD_MESH_MESHMASTER_HPP
 #define L3STER_INCGUARD_MESH_MESHMASTER_HPP
 
-#include "Domain.hpp"
-#include "Types.h"
-#include "Node.hpp"
+#include "mesh/Domain.hpp"
+#include "mesh/Node.hpp"
+#include "typedefs/Types.h"
 
 #include <string>
 #include <vector>

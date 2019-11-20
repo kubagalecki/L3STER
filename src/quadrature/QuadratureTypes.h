@@ -10,6 +10,7 @@ namespace lstr
         enum class QuadratureTypes
         {
             GLeg,                       // Gauss-Legendre quadrature
+            GLob,                       // Gauss-Lobatto quadrature
         };
     }
 }
