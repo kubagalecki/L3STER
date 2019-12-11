@@ -87,7 +87,7 @@ void Domain::emplaceBack(Types&& ... Args)
     // Push element back to appropriate vector
     static_cast< ElementVector<ELTYPE, ELORDER>* >(pos_iter->second.get())->getRef().emplace_back(std::forward<Types>(Args) ...);
 }
-}
-}
+}           // namespace mesh
+}           // namespace lstr
 
 #endif      // end include guard

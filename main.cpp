@@ -2,6 +2,8 @@
 #include "quadrature/QuadratureGenerator.hpp"
 #include "utility/Polynomial.hpp"
 
+# include "utility/Factory.hpp"
+
 #include <iostream>
 #include <exception>
 
@@ -21,6 +23,10 @@ int main()
         const auto x = a_t{0., 1., -1.};
         const auto y = a_t{0., 1., 1.};
         auto p2 = lstr::util::lagrangeFit(x, y);
+
+        auto ev =
+        lstr::util::Factory< std::pair<lstr::mesh::ElementTypes, lstr::types::el_o_t>, lstr::mesh::ElementVectorBase >
+        ::create(std::make_pair(lstr::mesh::ElementTypes::Quad, 1));
         
         return 0;
     }
@@ -35,3 +41,4 @@ int main()
         return 2;
     }
 }
+

@@ -10,41 +10,47 @@
 
 namespace lstr
 {
-    namespace mesh
+namespace mesh
+{
+//////////////////////////////////////////////////////////////////////////////////////////////
+//                                ELEMENT VECTOR BASE CLASS                                 //
+//////////////////////////////////////////////////////////////////////////////////////////////
+/*
+Empty base class for element vector.
+*/
+class ElementVectorBase {};
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+//                                  ELEMENT VECTOR CLASS                                    //
+//////////////////////////////////////////////////////////////////////////////////////////////
+/*
+Wrapper for a std::vector of elements of a given type.
+*/
+template <ElementTypes ELTYPE, types::el_o_t ELORDER>
+class ElementVector final : public ElementVectorBase
+{
+public:
+    // ALIASES
+    using el_t              = Element<ELTYPE, ELORDER>;
+    using vec_t             = std::vector<el_t>;
+    using vec_iter_t        = typename vec_t::iterator;
+    using vec_citer_t       = typename vec_t::const_iterator;
+
+    // METHODS
+    const vec_t&    getConstRef()   const
     {
-        //////////////////////////////////////////////////////////////////////////////////////////////
-        //                                ELEMENT VECTOR BASE CLASS                                 //
-        //////////////////////////////////////////////////////////////////////////////////////////////
-        /*
-        Empty base class for element vector.
-        */
-        class ElementVectorBase {};
-
-        //////////////////////////////////////////////////////////////////////////////////////////////
-        //                                  ELEMENT VECTOR CLASS                                    //
-        //////////////////////////////////////////////////////////////////////////////////////////////
-        /*
-        Wrapper for a std::vector of elements of a given type.
-        */
-        template <ElementTypes ELTYPE, types::el_o_t ELORDER>
-        class ElementVector final : public ElementVectorBase
-        {
-        public:
-            // ALIASES
-            using el_t              = Element<ELTYPE, ELORDER>;
-            using vec_t             = std::vector<el_t>;
-            using vec_iter_t        = typename vec_t::iterator;
-            using vec_citer_t       = typename vec_t::const_iterator;
-
-            // METHODS
-            const vec_t&    getConstRef()   const                   { return element_vector; }
-            vec_t&          getRef()                                { return element_vector; }
-
-        private:
-            // MEMBERS
-            vec_t element_vector;
-        };
+        return element_vector;
     }
-}
+    vec_t&          getRef()
+    {
+        return element_vector;
+    }
+
+private:
+    // MEMBERS
+    vec_t element_vector;
+};
+}           // namespace mesh
+}           // namespace lstr
 
 #endif      // end include guard

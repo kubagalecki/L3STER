@@ -10,25 +10,25 @@
 
 namespace lstr
 {
-    namespace quad
-    {
-        //////////////////////////////////////////////////////////////////////////////////////////////
-        //                              QUADRATURE INITIALIZER CLASS                                //
-        //////////////////////////////////////////////////////////////////////////////////////////////
-        /*
-        Helper class for initializing specific quadratures
-        */
-        template <QuadratureTypes QTYPE, types::q_o_t QORDER>
-        class QuadratureInitializer
-        {
-        public:
-            // Aliases
-            using q_pair_t = std::pair<quad::QuadratureTypes, types::q_o_t>;
-            
-        private:
-            static std::map< q_pair_t, std::unique_ptr<quad::QuadratureBase> > quadratures;
-        };
-    }
-}
+namespace quad
+{
+//////////////////////////////////////////////////////////////////////////////////////////////
+//                              QUADRATURE INITIALIZER CLASS                                //
+//////////////////////////////////////////////////////////////////////////////////////////////
+/*
+Helper class for initializing specific quadratures
+*/
+template <QuadratureTypes QTYPE, types::q_o_t QORDER>
+class QuadratureInitializer
+{
+public:
+    // Aliases
+    using q_pair_t = std::pair<quad::QuadratureTypes, types::q_o_t>;
+
+private:
+    static std::map< q_pair_t, std::unique_ptr<quad::QuadratureBase> > quadratures;
+};
+}           // namespace quad
+}           // namespace lstr
 
 #endif      // end include guard

@@ -116,7 +116,7 @@ auto QuadratureGenerator<mesh::ElementTypes::Quad>::getQuadrature()
                QuadratureGenerator<mesh::ElementTypes::Quad>::getQDim(QTYPE, QORDER)> {ret_arr1, ret_arr2};
     }
 }
-}
-}
+}           // namespace quad
+}           // namespace lstr
 
 #endif      // end include guard

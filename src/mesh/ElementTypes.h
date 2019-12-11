@@ -5,13 +5,12 @@
 
 namespace lstr
 {
-    namespace mesh
-    {
-        enum class ElementTypes
-        {
-            Quad,                   // Quadrilateral elements
-        };
-    }
-}
+namespace mesh
+{
+enum class ElementTypes {
+    Quad,                   // Quadrilateral elements
+};
+}           // namespace mesh
+}           // namespace lstr
 
 #endif      // end include guard

@@ -53,7 +53,7 @@ typename NodeOrderHelper<SIZE>::array_t NodeOrderHelper<SIZE>::generate()
 template <size_t SIZE>
 const typename NodeOrderHelper<SIZE>::array_t NodeOrderHelper<SIZE>::unsorted_order
 { NodeOrderHelper<SIZE>::generate() };
-}
+}           // namespace helpers
 
 class ElementBase {};
 
@@ -63,7 +63,7 @@ class Element final : public ElementBase
 private:
 
     // private static ("alias for variable")
-    static constexpr const size_t n_nodes = ReferenceElement<ELTYPE, ELORDER>::getNumberOfNodes();
+    static constexpr const size_t n_nodes{ReferenceElement<ELTYPE, ELORDER>::getNumberOfNodes()};
 
 public:
 
@@ -73,6 +73,7 @@ public:
     using node_array_constref_t               = const node_array_t &;
 
     // CONSTRUCTORS
+    Element()               = default;
     Element(node_array_constref_t _nodes);
 
     // GETTERS
@@ -84,7 +85,7 @@ private:
     void                sort();
 
     // MEMBERS
-    const node_array_t                  nodes;
+    const node_array_t                  nodes           = node_array_t{};
     std::array<size_t, n_nodes>         node_order;
 };
 
@@ -132,7 +133,7 @@ void Element<ELTYPE, ELORDER>::sort()
     //std::transform(aux_a.begin(), aux_a.end(), node_order.begin(),
     //  [](aux_p_t p) -> size_t { return p.second; });
 }
-}
-}
+}           // namespace mesh
+}           // namespace lstr
 
 #endif      // end include guard
