@@ -7,11 +7,13 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_COMPILER mpicc)
 set(CMAKE_CXX_COMPILER mpicxx)
 
+#add_compile_options(-Wall -Wextra -Wpedantic)
+
 # set up clang-tidy
-set(CMAKE_CXX_CLANG_TIDY 
-  clang-tidy;
-  -header-filter=.*\.hpp;
-  -checks=-*,performance-*;)
+# set(CMAKE_CXX_CLANG_TIDY 
+#   clang-tidy;
+#   -header-filter=.*\.hpp;
+#   -checks=-*,performance-*;)
 
 # PETSC
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake-modules")

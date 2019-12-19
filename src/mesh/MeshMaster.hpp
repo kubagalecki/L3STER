@@ -25,12 +25,12 @@ template <types::dim_t DIM>
 class MeshMaster
 {
     // Ctor & Dtors
-    MeshMaster()                                = default;
-    MeshMaster(const MeshMaster&)               = default;
-    MeshMaster(MeshMaster&&)                    = default;
-    MeshMaster& operator=(const MeshMaster&)    = default;
-    MeshMaster& operator=(MeshMaster&&)         = default;
-    ~MeshMaster()                               = default;
+    MeshMaster()                                    = default;
+    MeshMaster(const MeshMaster&)                   = default;
+    MeshMaster(MeshMaster&&) noexcept               = default;
+    MeshMaster& operator=(const MeshMaster&)        = default;
+    MeshMaster& operator=(MeshMaster&&) noexcept    = default;
+    ~MeshMaster()                                   = default;
 
     void meshRead ( std::string );
     void meshAppend ( std::string );

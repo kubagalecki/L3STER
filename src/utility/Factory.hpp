@@ -25,11 +25,11 @@ public:
     virtual                     ~CreatorBase()          = default;
 
 protected:
-    CreatorBase()                               = default;
-    CreatorBase(const CreatorBase&)             = default;
-    CreatorBase(CreatorBase&&)                  = default;
-    CreatorBase& operator=(const CreatorBase&)  = default;
-    CreatorBase& operator=(CreatorBase&&)       = default;
+    CreatorBase()                                       = default;
+    CreatorBase(const CreatorBase&)                     = default;
+    CreatorBase(CreatorBase&&) noexcept                 = default;
+    CreatorBase& operator=(const CreatorBase&)          = default;
+    CreatorBase& operator=(CreatorBase&&) noexcept      = default;
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,9 +42,9 @@ public:
     // CTORS & DTORS
     Creator()                               = default;
     Creator(const Creator&)                 = default;
-    Creator(Creator&&)                      = default;
+    Creator(Creator&&) noexcept             = default;
     Creator& operator=(const Creator&)      = default;
-    Creator& operator=(Creator&&)           = default;
+    Creator& operator=(Creator&&) noexcept  = default;
     virtual ~Creator() final                = default;
 
     // METHODS

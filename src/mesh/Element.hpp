@@ -4,6 +4,7 @@
 #define L3STER_INCGUARD_MESH_ELEMENT_HPP
 
 #include "mesh/ReferenceElement.hpp"
+#include "mesh/ElementTraits.hpp"
 #include "typedefs/Types.h"
 
 #include <array>
@@ -85,8 +86,12 @@ private:
     void                sort();
 
     // MEMBERS
+    // nodes
     const node_array_t                  nodes           = node_array_t{};
     std::array<size_t, n_nodes>         node_order;
+    
+    // element data
+    typename ElementTraits< Element<ELTYPE, ELORDER> >::ElementData data;
 };
 
 template <ElementTypes ELTYPE, types::el_o_t ELORDER>

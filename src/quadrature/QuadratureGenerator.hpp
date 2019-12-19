@@ -79,13 +79,13 @@ auto QuadratureGenerator<mesh::ElementTypes::Quad>::getQuadrature()
 
         mat_t                                               gl1d_mat;
 
-        for (auto i = 0; i < gl1d_size; ++i)
+        for (size_t i = 0; i < gl1d_size; ++i)
         {
-            for (auto j = 0; j < gl1d_size; ++j)
+            for (size_t j = 0; j < gl1d_size; ++j)
                 gl1d_mat(i, j) = 0.;
         }
 
-        for (auto i = 0; i < gl1d_size - 1; ++i)
+        for (size_t i = 0; i < gl1d_size - 1; ++i)
         {
             auto I = static_cast<types::val_t>(i + 1);
             types::val_t temp = I / sqrt(4. * I * I - 1);
@@ -101,9 +101,9 @@ auto QuadratureGenerator<mesh::ElementTypes::Quad>::getQuadrature()
         typename Quadrature<QuadratureGenerator<mesh::ElementTypes::Quad>::getQLength(QTYPE, QORDER),
                  QuadratureGenerator<mesh::ElementTypes::Quad>::getQDim(QTYPE, QORDER)>::weights_t ret_arr2;
 
-        for (auto i = 0; i < gl1d_size; ++i)
+        for (size_t i = 0; i < gl1d_size; ++i)
         {
-            for (auto j = 0; j < gl1d_size; ++j)
+            for (size_t j = 0; j < gl1d_size; ++j)
             {
                 ret_arr1[0][i + j * gl1d_size] = es.eigenvalues()[i];
                 ret_arr1[1][j + i * gl1d_size] = es.eigenvalues()[i];

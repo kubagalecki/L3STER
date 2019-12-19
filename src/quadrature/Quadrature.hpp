@@ -38,7 +38,11 @@ public:
 
     // Ctors & Dtors
     Quadrature()                                        = default;
-    Quadrature ( const q_points_t&, const weights_t& );
+    Quadrature(const Quadrature&)                       = default;
+    Quadrature(Quadrature&&)                            = default;
+    Quadrature& operator=(const Quadrature&)            = default;
+    Quadrature& operator=(Quadrature&&)                 = default;
+    Quadrature(const q_points_t&, const weights_t&);
 
     // Access
     const q_points_t&   getQPoints()
@@ -49,11 +53,11 @@ public:
     {
         return weights;
     }
-    void                setQPoints ( const q_points_t& qp )
+    void                setQPoints(const q_points_t& qp)
     {
         q_points = qp;
     }
-    void                setWeights ( const weights_t& w )
+    void                setWeights(const weights_t& w)
     {
         weights = w;
     }
@@ -64,8 +68,8 @@ private:
 };
 
 template <types::q_l_t QLENGTH, types::dim_t QDIM>
-Quadrature<QLENGTH, QDIM>::Quadrature ( const q_points_t& qpts, const weights_t& w )
-    : q_points ( qpts ), weights ( w ) {}
+Quadrature<QLENGTH, QDIM>::Quadrature(const q_points_t& qpts, const weights_t& w)
+    : q_points(qpts), weights(w) {}
 }           // namespace quad
 }           // namespace lstr
 

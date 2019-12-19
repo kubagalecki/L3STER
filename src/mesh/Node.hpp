@@ -24,13 +24,13 @@ public:
     using array_t = std::array<types::val_t, DIM>;
 
     // Ctors & Dtors
-    Node()                                                      = delete;
-    Node (const array_t& _coords) : coords (_coords)            {}
-    Node (const Node&)                                          = default;
-    Node (Node&&)                                               = default;
-    Node& operator=(const Node&)                                = default;
-    Node& operator=(Node&&)                                     = default;
-    ~Node()                                                     = default;
+    Node()                                              = delete;
+    Node (const array_t& _coords) : coords (_coords)    {}
+    Node (const Node&)                                  = default;
+    Node (Node&&) noexcept                              = default;
+    Node& operator=(const Node&)                        = default;
+    Node& operator=(Node&&) noexcept                    = default;
+    ~Node()                                             = default;
 
     // access
     const array_t& getCoords()
