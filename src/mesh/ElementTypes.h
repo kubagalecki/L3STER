@@ -31,7 +31,7 @@ constexpr auto makeElementTypeArray(std::index_sequence<Ints ...>)
 }           // namespace helpers
 
 constexpr auto element_type_array = helpers::makeElementTypeArray(
-    std::make_index_sequence<static_cast<size_t>(ElementTypes::Count)>{});
+    std::make_index_sequence< static_cast<size_t>(ElementTypes::Count) > {} );
 
 }           // namespace mesh
 }           // namespace lstr
