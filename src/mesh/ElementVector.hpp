@@ -4,6 +4,7 @@
 #define L3STER_INCGUARD_MESH_ELEMENTVECTOR_HPP
 
 #include "mesh/Element.hpp"
+#include "mesh/ElementVectorDispatcher.hpp"
 
 #include <vector>
 #include <algorithm>
@@ -16,9 +17,12 @@ namespace mesh
 //                                ELEMENT VECTOR BASE CLASS                                 //
 //////////////////////////////////////////////////////////////////////////////////////////////
 /*
-Empty base class for element vector.
+Base class for element vector.
 */
-class ElementVectorBase {};
+class ElementVectorBase
+{
+    virtual void acceptDispatcher(const ElementVectorDispatcher&) = 0;
+};
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 //                                  ELEMENT VECTOR CLASS                                    //
@@ -37,14 +41,17 @@ public:
     using vec_citer_t       = typename vec_t::const_iterator;
 
     // METHODS
-    const vec_t&    getConstRef()   const
-    {
-        return element_vector;
-    }
     vec_t&          getRef()
     {
         return element_vector;
     }
+
+    const vec_t&    getConstRef() const
+    {
+        return element_vector;
+    }
+
+    void            acceptDispatcher(const ElementVectorDispatcher& d) final { d(*this); }
 
 private:
     // MEMBERS
