@@ -6,20 +6,18 @@
 #include "mesh/ReferenceElement.hpp"
 #include "mesh/ElementTraits.hpp"
 #include "typedefs/Types.h"
+#include "utility/Meta.hpp"
 
 #include <array>
 #include <vector>
 #include <stdexcept>
 #include <string>
-#include <typeinfo>
 #include <algorithm>
 #include <numeric>
 #include <utility>
 #include <cstddef>
 
-namespace lstr
-{
-namespace mesh
+namespace lstr::mesh
 {
 namespace helpers
 {
@@ -115,30 +113,13 @@ void Element<ELTYPE, ELORDER>::sort()
     {
         return this->nodes[n1] < this->nodes[n2];
     });
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////
-    // OLD CODE FOR ACTUALLY SORTING THE NODES, AS OPPOSED TO JUST GENERATING THE REORDER VECTOR //
-    ///////////////////////////////////////////////////////////////////////////////////////////////
-    //
-    //// Aliases
-    //using aux_p_t = std::pair<types::n_id_t, size_t>;
-    //using aux_a_t = std::array<aux_p_t, n_nodes>;
-    //
-    //// Group nodes IDs and their indices into a vector of pairs
-    //aux_a_t aux_a;
-    //std::transform(nodes.begin(), nodes.end(), node_order.begin(),
-    //  aux_a.begin(), [](types::n_id_t n, size_t o) -> aux_p_t { return std::make_pair(n, o); });
-    //
-    //// Sort
-    //std::sort(aux_a.begin(), aux_a.end());
-    //
-    //// Move data back to Element class members
-    //std::transform(aux_a.begin(), aux_a.end(), nodes.begin(),
-    //  [](aux_p_t p) -> types::n_id_t { return p.first; });
-    //std::transform(aux_a.begin(), aux_a.end(), node_order.begin(),
-    //  [](aux_p_t p) -> size_t { return p.second; });
 }
-}           // namespace mesh
-}           // namespace lstr
+
+// Define alias for easy templating over all possible element/order combinations
+template <template <typename ...> typename T>
+using TemplateOverAllElements = typename
+    util::meta::cart2<T, Element, ElementTypesArray, ElementOrdersArray>::type;
+
+}           // namespace lstr::mesh
 
 #endif      // end include guard

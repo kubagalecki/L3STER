@@ -3,7 +3,7 @@
 #ifndef L3STER_INCGUARD_MESH_ELEMENTINITIALIZER_HPP
 #define L3STER_INCGUARD_MESH_ELEMENTINITIALIZER_HPP
 
-#include "mesh/ElementTypes.h"
+#include "mesh/ElementTypes.hpp"
 #include "mesh/ElementVector.hpp"
 #include "typedefs/Types.h"
 #include "utility/Factory.hpp"

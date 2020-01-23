@@ -4,7 +4,8 @@
 #define L3STER_INCGUARD_MESH_ELEMENTVECTOR_HPP
 
 #include "mesh/Element.hpp"
-#include "mesh/ElementVectorDispatcher.hpp"
+#include "utility/Visitor.hpp"
+#include "utility/Meta.hpp"
 
 #include <vector>
 #include <algorithm>
@@ -13,6 +14,16 @@ namespace lstr
 {
 namespace mesh
 {
+
+// Forward declare element vector class
+template <ElementTypes, types::el_o_t>
+class ElementVector;
+
+// Define alias for easy templating over vectors of elements of all type/order combinations
+template <template <typename ...> typename T>
+using TemplateOverAllElementVectors = typename util::meta::cart2<T,
+      ElementVector, ElementTypesArray, ElementOrdersArray>::type;
+
 //////////////////////////////////////////////////////////////////////////////////////////////
 //                                ELEMENT VECTOR BASE CLASS                                 //
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,7 +32,15 @@ Base class for element vector.
 */
 class ElementVectorBase
 {
-    virtual void acceptDispatcher(const ElementVectorDispatcher&) = 0;
+protected:
+    using visitor_t = TemplateOverAllElementVectors<util::VisitorBase>;
+    using v_ptr_t   = std::unique_ptr<visitor_t>;
+
+private:
+    // Accept visitor (C suffix implies the const variant
+    // - the visitor does not alter the underlying elements)
+    virtual void acceptVisitor(const v_ptr_t&)        = 0;
+    virtual void acceptVisitorC(const v_ptr_t&) const = 0;
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,12 +70,26 @@ public:
         return element_vector;
     }
 
-    void            acceptDispatcher(const ElementVectorDispatcher& d) final { d(*this); }
+    void acceptVisitor(const v_ptr_t&) final;
+    void acceptVisitorC(const v_ptr_t&) const final;
 
 private:
     // MEMBERS
     vec_t element_vector;
 };
+
+template <ElementTypes ELTYPE, types::el_o_t ELORDER>
+void ElementVector<ELTYPE, ELORDER>::acceptVisitor(const v_ptr_t& visitor)
+{
+    visitor->visit(*this);
+}
+
+template <ElementTypes ELTYPE, types::el_o_t ELORDER>
+void ElementVector<ELTYPE, ELORDER>::acceptVisitorC(const v_ptr_t& visitor) const
+{
+    visitor->cvisit(*this);
+}
+
 }           // namespace mesh
 }           // namespace lstr
 

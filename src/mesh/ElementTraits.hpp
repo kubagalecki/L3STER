@@ -3,7 +3,7 @@
 #ifndef L3STER_INCGUARD_MESH_ELEMENTTRAITS_HPP
 #define L3STER_INCGUARD_MESH_ELEMENTTRAITS_HPP
 
-#include "mesh/ElementTypes.h"
+#include "mesh/ElementTypes.hpp"
 #include "typedefs/Types.h"
 
 namespace lstr

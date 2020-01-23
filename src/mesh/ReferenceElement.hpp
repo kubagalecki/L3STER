@@ -3,7 +3,7 @@
 #ifndef L3STER_INCGUARD_MESH_REFERENCEELEMENT_HPP
 #define L3STER_INCGUARD_MESH_REFERENCEELEMENT_HPP
 
-#include "mesh/ElementTypes.h"
+#include "mesh/ElementTypes.hpp"
 #include "typedefs/Types.h"
 #include "quadrature/Quadrature.hpp"
 

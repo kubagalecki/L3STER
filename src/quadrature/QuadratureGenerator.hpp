@@ -3,7 +3,7 @@
 #ifndef L3STER_INCGUARD_QUAD_QUADRATUREGENERATOR_HPP
 #define L3STER_INCGUARD_QUAD_QUADRATUREGENERATOR_HPP
 
-#include "mesh/ElementTypes.h"
+#include "mesh/ElementTypes.hpp"
 #include "typedefs/Types.h"
 #include "quadrature/QuadratureTypes.h"
 #include "quadrature/Quadrature.hpp"

@@ -8,9 +8,7 @@
 #include <array>
 #include <utility>
 
-namespace lstr
-{
-namespace mesh
+namespace lstr::mesh
 {
 enum class ElementTypes
 {
@@ -30,10 +28,23 @@ constexpr auto makeElementTypeArray(std::index_sequence<Ints ...>)
 }
 }           // namespace helpers
 
-constexpr auto element_type_array = helpers::makeElementTypeArray(
-    std::make_index_sequence< static_cast<size_t>(ElementTypes::Count) > {} );
+// Array containing all defined element types
+struct ElementTypesArray
+{
 
-}           // namespace mesh
-}           // namespace lstr
+    static constexpr auto values = helpers::makeElementTypeArray(
+    std::make_index_sequence< static_cast<size_t>(ElementTypes::Count) > {});
+
+};
+
+// Array containing all possible element orders.
+struct ElementOrdersArray
+{
+
+    static constexpr std::array<types::el_o_t, 10> values = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+
+};
+
+}           // namespace lstr::mesh
 
 #endif      // end include guard

@@ -1,6 +1,6 @@
 // Macro which takes care of namespaces for convenience
 #include "mesh/ElementInitializer.hpp"
-#include "mesh/ElementTypes.h"
+#include "mesh/ElementTypes.hpp"
 #include "typedefs/Types.h"
 
 #define INIT_ELEMENT(ELTYPE, ELORDER) \
