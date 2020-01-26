@@ -22,7 +22,7 @@ include_directories(${PETSC_INCLUDES})
 add_definitions(${PETSC_DEFINITIONS})
 
 # EIGEN
-include_directories(${CMAKE_SOURCE_DIR}/eigen-git-mirror/)
+include_directories(${CMAKE_SOURCE_DIR}/eigen/)
 
 # SRC
 include_directories(${CMAKE_SOURCE_DIR}/src/)
