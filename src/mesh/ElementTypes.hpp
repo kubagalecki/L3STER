@@ -14,18 +14,23 @@ enum class ElementTypes
 {
     Quad,                   // Quadrilateral elements (geometrically linear)
 
-    // NEW ELEMENT TYPES BEFORE THIS LINE //
+    //////////////////////////////////////////////////////////////////////////////
+    //////////          NEW ELEMENT TYPES BEFORE THIS LINE              //////////
+    //////////////////////////////////////////////////////////////////////////////
+
     Count                   // value for tracking number of Element Types
 };
 
 namespace helpers
 {
+
 // Use meta-programming to create constexpr array of element types
 template<size_t ... Ints>
 constexpr auto makeElementTypeArray(std::index_sequence<Ints ...>)
 {
     return std::array<ElementTypes, sizeof...(Ints)> {static_cast<ElementTypes>(Ints) ...};
 }
+
 }           // namespace helpers
 
 // Array containing all defined element types
