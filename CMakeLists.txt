@@ -1,11 +1,9 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.8)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.15)
 
 PROJECT(L3STER)
 
 set(CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_C_COMPILER mpicc)
-set(CMAKE_CXX_COMPILER mpicxx)
+set(CMAKE_CXX_STANDARD 20)
 
 #add_compile_options(-Wall -Wextra -Wpedantic)
 
@@ -14,12 +12,6 @@ set(CMAKE_CXX_COMPILER mpicxx)
 #   clang-tidy;
 #   -header-filter=.*\.hpp;
 #   -checks=-*,performance-*;)
-
-# PETSC
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake-modules")
-find_package(PETSc REQUIRED)
-include_directories(${PETSC_INCLUDES})
-add_definitions(${PETSC_DEFINITIONS})
 
 # EIGEN
 include_directories(${CMAKE_SOURCE_DIR}/eigen/)
@@ -31,5 +23,3 @@ add_executable(main
 ${CMAKE_SOURCE_DIR}/main.cpp
 ${CMAKE_SOURCE_DIR}/src/mesh/init_elements.cpp
 )
-
-target_link_libraries(main ${PETSC_LIBRARIES})
