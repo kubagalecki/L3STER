@@ -10,9 +10,7 @@
 #include <vector>
 #include <algorithm>
 
-namespace lstr
-{
-namespace mesh
+namespace lstr::mesh
 {
 
 // Forward declare element vector class
@@ -34,13 +32,13 @@ class ElementVectorBase
 {
 protected:
     using visitor_t = TemplateOverAllElementVectors<util::VisitorBase>;
-    using v_ptr_t   = std::unique_ptr<visitor_t>;
+    using v_ptr_t   = std::shared_ptr<visitor_t>;
 
 private:
     // Accept visitor (C suffix implies the const variant
     // - the visitor does not alter the underlying elements)
-    virtual void acceptVisitor(const v_ptr_t&)        = 0;
-    virtual void acceptVisitorC(const v_ptr_t&) const = 0;
+    virtual void acceptVisitor(const v_ptr_t&)          = 0;
+    virtual void acceptVisitorC(const v_ptr_t&) const   = 0;
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,7 +88,6 @@ void ElementVector<ELTYPE, ELORDER>::acceptVisitorC(const v_ptr_t& visitor) cons
     visitor->cvisit(*this);
 }
 
-}           // namespace mesh
-}           // namespace lstr
+}           // namespace lstr::mesh
 
 #endif      // end include guard

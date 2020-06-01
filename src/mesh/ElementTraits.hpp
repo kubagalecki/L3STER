@@ -6,10 +6,9 @@
 #include "mesh/ElementTypes.hpp"
 #include "typedefs/Types.h"
 
-namespace lstr
+namespace lstr::mesh
 {
-namespace mesh
-{
+
 // Forward-declare the Element class
 template <ElementTypes ELTYPE, types::el_o_t ELORDER>
 class Element;
@@ -44,7 +43,7 @@ struct ElementTraits< Element<ElementTypes::Quad, ELORDER> >
         double gammay;
     };
 };
-}           // namespace mesh
-}           // namespace lstr
+
+}           // namespace lstr::mesh
 
 #endif      // end include guard
