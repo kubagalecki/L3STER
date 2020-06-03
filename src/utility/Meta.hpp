@@ -211,7 +211,7 @@ struct combine2
 /////////////////////////////////////////////////////////////////////////////
 template < template <typename ...> typename M,
            template <auto, auto> typename C, typename I1, typename I2>
-struct cart2
+struct cartesian_product_t
 {
 private:
     using I1_i = typename array_to_valseq<I1>::type;

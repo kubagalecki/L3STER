@@ -9,6 +9,10 @@
 
 int main()
 {
+    std::vector<int> v = {1, 2, 3};
+    for (int i = 0; const auto& e : v)
+        std::cout << i++ << ' ' << e << '\n';
+    
     try
     {
         auto&& q = lstr::mesh::Element<lstr::mesh::ElementTypes::Quad, 1> { {1, 2, 8, 6} };

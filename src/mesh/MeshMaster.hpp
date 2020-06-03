@@ -8,7 +8,7 @@
 #include "typedefs/Types.h"
 //#include "mesh/ElementInitializer.hpp"
 
-#include <string>
+#include <string_view>
 #include <vector>
 
 namespace lstr
@@ -32,9 +32,9 @@ class MeshMaster
     MeshMaster& operator=(MeshMaster&&) noexcept    = default;
     ~MeshMaster()                                   = default;
 
-    void meshRead ( std::string );
-    void meshAppend ( std::string );
-    void meshWrite ( std::string );
+    void meshRead ( const std::string_view& );
+    void meshAppend ( const std::string_view& );
+    void meshWrite ( const std::string_view& );
 private:
     std::map<types::d_id_t, Domain>     elems;
     std::vector< Node<DIM> >            nodes;

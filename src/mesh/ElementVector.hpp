@@ -19,7 +19,7 @@ class ElementVector;
 
 // Define alias for easy templating over vectors of elements of all type/order combinations
 template <template <typename ...> typename T>
-using TemplateOverAllElementVectors = typename util::meta::cart2<T,
+using TemplateOverAllElementVectors = typename util::meta::cartesian_product_t<T,
       ElementVector, ElementTypesArray, ElementOrdersArray>::type;
 
 //////////////////////////////////////////////////////////////////////////////////////////////

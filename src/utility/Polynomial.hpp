@@ -272,12 +272,12 @@ Polynomial<N> lagrangeFit(const T& x, const T& y)
     auto A = Eigen::Matrix < types::val_t, N + 1, N + 1 > {};
     auto b = Eigen::Matrix < types::val_t, N + 1, 1 > {};
 
-    for (auto i = 0; i <= N; i++)
+    for (size_t i = 0; i <= N; i++)
     {
         b[i] = y[i];
         A(i, 0) = 1.;
 
-        for (auto j = 1; j <= N; j++)
+        for (size_t j = 1; j <= N; j++)
             A(i, j) = A(i, j - 1) * x[i];
     }
 

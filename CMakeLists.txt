@@ -5,7 +5,7 @@ PROJECT(L3STER)
 set(CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 20)
 
-#add_compile_options(-Wall -Wextra -Wpedantic)
+add_compile_options(-Wall -Wextra -Wpedantic)
 
 # set up clang-tidy
 # set(CMAKE_CXX_CLANG_TIDY 
