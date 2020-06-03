@@ -15,7 +15,7 @@ namespace lstr
 {
 namespace quad
 {
-// Forward declare eferenceElementTraits
+// Forward declare ReferenceElementTraits
 template <mesh::ElementTypes ELTYPE>
 struct ReferenceElementTraits;
 

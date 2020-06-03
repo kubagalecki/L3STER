@@ -33,10 +33,6 @@
 
 # Visual studio
 .vs/
-sandbox/x86/
-sandbox/x64/
-sandbox/x32/
-sandbox/build/
 
 # Build
 build/
