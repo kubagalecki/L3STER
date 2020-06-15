@@ -9,97 +9,88 @@
 #include <array>
 #include <map>
 #include <memory>
-#include <utility>
 #include <stdexcept>
+#include <utility>
 
-namespace lstr::mesh
-{
+namespace lstr::mesh {
 //////////////////////////////////////////////////////////////////////////////////////////////
 //                                      DOMAIN CLASS                                        //
 //////////////////////////////////////////////////////////////////////////////////////////////
 /*
 The domain class stores 1+ element vectors
 */
-class Domain
-{
-public:
-    using map_t = std::map< std::pair<ElementTypes, types::el_o_t>,
-          std::unique_ptr<ElementVectorBase> >;
-    //using el_data_t = std::array< std::map< types::el_o_t, std::unique_ptr<ElementVectorBase> >,
-    //    std::tuple_size<decltype(element_type_array)>::value >;
+    class Domain {
+    public:
+        using map_t =
+        std::map<std::pair<ElementTypes, types::el_o_t>, std::unique_ptr<ElementVectorBase>>;
+        // using el_data_t = std::array< std::map< types::el_o_t, std::unique_ptr<ElementVectorBase> >,
+        //    std::tuple_size<decltype(element_type_array)>::value >;
 
-    types::d_id_t       getId() const
-    {
-        return id;
-    }
-    void                setId(const types::d_id_t& _id)
-    {
-        id = _id;
-    }
+        types::d_id_t getId() const { return id; }
 
-    template <ElementTypes ELTYPE, types::el_o_t ELORDER>
-    void pushBack(const Element<ELTYPE, ELORDER>&);
+        void setId(const types::d_id_t &_id) { id = _id; }
 
-    template <ElementTypes ELTYPE, types::el_o_t ELORDER, typename ... Types>
-    void emplaceBack(Types&& ... Args);
+        template<ElementTypes ELTYPE, types::el_o_t ELORDER>
+        void pushBack(const Element<ELTYPE, ELORDER> &);
 
-    //template <typename OperatorFactory>
-    //auto iterateOverElements();
+        template<ElementTypes ELTYPE, types::el_o_t ELORDER, typename... Types>
+        void emplaceBack(Types &&... Args);
 
-private:
-    types::d_id_t       id          = 0;
-    map_t               element_vectors;
-    //el_data_t           elements;
-};
+        // template <typename OperatorFactory>
+        // auto iterateOverElements();
+
+    private:
+        types::d_id_t id = 0;
+        map_t element_vectors;
+        // el_data_t           elements;
+    };
 
 // Proxy for puch_back of the underlying vector
-template <ElementTypes ELTYPE, types::el_o_t ELORDER>
-void Domain::pushBack(const Element<ELTYPE, ELORDER>& element)
-{
-    auto pos_iter = element_vectors.find(std::make_pair(ELTYPE, ELORDER));
+    template<ElementTypes ELTYPE, types::el_o_t ELORDER>
+    void Domain::pushBack(const Element<ELTYPE, ELORDER> &element) {
+        auto pos_iter = element_vectors.find(std::make_pair(ELTYPE, ELORDER));
 
-    // If vector of elements of given type does not exist, create it
-    if (pos_iter == element_vectors.end())
-    {
-        auto insert_result = element_vectors.insert(std::make_pair(std::make_pair(ELTYPE, ELORDER),
-                             std::make_unique< ElementVector<ELTYPE, ELORDER> >()));
+        // If vector of elements of given type does not exist, create it
+        if (pos_iter == element_vectors.end()) {
+            auto insert_result = element_vectors.insert(std::make_pair(
+                    std::make_pair(ELTYPE, ELORDER), std::make_unique<ElementVector<ELTYPE, ELORDER>>()));
 
-        if (!insert_result.second)
-        {
-            throw (std::runtime_error("Element insertion failed\n"));
+            if (!insert_result.second) {
+                throw (std::runtime_error("Element insertion failed\n"));
+            }
+
+            pos_iter = insert_result.first;
         }
 
-        pos_iter = insert_result.first;
+        // Push element back to appropriate vector
+        static_cast<ElementVector<ELTYPE, ELORDER> *>(pos_iter->second.get())
+                ->getRef()
+                .push_back(element);
     }
-
-    // Push element back to appropriate vector
-    static_cast< ElementVector<ELTYPE, ELORDER>* >(pos_iter->second.get())->getRef().push_back(element);
-}
 
 // Proxy for emplace_back of the underlying vector
-template <ElementTypes ELTYPE, types::el_o_t ELORDER, typename ... Types>
-void Domain::emplaceBack(Types&& ... Args)
-{
-    auto pos_iter = element_vectors.find(std::make_pair(ELTYPE, ELORDER));
+    template<ElementTypes ELTYPE, types::el_o_t ELORDER, typename... Types>
+    void Domain::emplaceBack(Types &&... Args) {
+        auto pos_iter = element_vectors.find(std::make_pair(ELTYPE, ELORDER));
 
-    // If vector of elements of given type does not exist, create it
-    if (pos_iter == element_vectors.end())
-    {
-        auto insert_result = element_vectors.insert(std::make_pair(std::make_pair(ELTYPE, ELORDER),
-                             std::make_unique< ElementVector<ELTYPE, ELORDER> >()));
+        // If vector of elements of given type does not exist, create it
+        if (pos_iter == element_vectors.end()) {
+            auto insert_result = element_vectors.insert(std::make_pair(
+                    std::make_pair(ELTYPE, ELORDER), std::make_unique<ElementVector<ELTYPE, ELORDER>>()));
 
-        if (!insert_result.second)
-        {
-            throw (std::runtime_error("Element insertion failed\n"));
+            if (!insert_result.second) {
+                throw (std::runtime_error("Element insertion failed\n"));
+            }
+
+            pos_iter = insert_result.first;
         }
 
-        pos_iter = insert_result.first;
+        // Push element back to appropriate vector
+        static_cast<ElementVector<ELTYPE, ELORDER> *>(pos_iter->second.get())
+                ->getRef()
+                .emplace_back(std::forward<Types>(Args)...);
     }
 
-    // Push element back to appropriate vector
-    static_cast< ElementVector<ELTYPE, ELORDER>* >(pos_iter->second.get())->getRef().emplace_back(std::forward<Types>(Args) ...);
-}
+} // namespace lstr::mesh
 
-}           // namespace lstr::mesh
-
-#endif      // end include guard
+#endif // end include guard
