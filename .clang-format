@@ -1,10 +1,9 @@
 ---
-BasedOnStyle: LLVM
-IndentWidth: 4
-DerivePointerAlignment: false
-PointerAlignment: Left
-ColumnLimit: 100
-ConstructorInitializerAllOnOneLineOrOnePerLine: true
+AccessModifierOffset: -4
+AlignAfterOpenBracket: Align
+AlignConsecutiveDeclarations: true
+AlignOperands: true
+AlignTrailingComments: true
 AllowAllConstructorInitializersOnNextLine: true
 AllowShortBlocksOnASingleLine: Empty
 AllowShortCaseLabelsOnASingleLine: false
@@ -12,11 +11,20 @@ AllowShortFunctionsOnASingleLine: InlineOnly
 AllowShortIfStatementsOnASingleLine: Never
 AllowShortLambdasOnASingleLine: Inline
 AlwaysBreakTemplateDeclarations: Yes
+BasedOnStyle: LLVM
 BinPackArguments: false
 BinPackParameters: false
 BreakBeforeBraces: Allman
+BreakInheritanceList: AfterColon
+ColumnLimit: 100
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+Cpp11BracedListStyle: true
+DerivePointerAlignment: false
+FixNamespaceComments: true
+IncludeBlocks: Preserve
+IndentWidth: 4
 NamespaceIndentation: None
-AlignConsecutiveDeclarations: true
-AlignOperands: true
-AlignTrailingComments: true
+PointerAlignment: Left
+SpaceBeforeParens: ControlStatements
+SpacesInAngles: true
 

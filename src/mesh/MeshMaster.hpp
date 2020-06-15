@@ -11,40 +11,37 @@
 #include <string_view>
 #include <vector>
 
-namespace lstr {
-    namespace mesh {
+namespace lstr::mesh
+{
 //////////////////////////////////////////////////////////////////////////////////////////////
 //                                     MESH MASTER CLASS                                    //
 //////////////////////////////////////////////////////////////////////////////////////////////
 /*
 Mesh master class - highest level mesh interface. Templated with space dimension
 */
-        template<types::dim_t DIM>
-        class MeshMaster {
-            // Ctor & Dtors
-            MeshMaster() = default;
+template < types::dim_t DIM >
+class MeshMaster
+{
+public:
+    // Ctor & Dtors
+    MeshMaster() = default;
+    MeshMaster(const MeshMaster&) = default;
+    MeshMaster(MeshMaster&&) noexcept = default;
+    MeshMaster& operator=(const MeshMaster&) = default;
+    MeshMaster& operator=(MeshMaster&&) noexcept = default;
 
-            MeshMaster(const MeshMaster &) = default;
+    ~MeshMaster() = default;
 
-            MeshMaster(MeshMaster &&) noexcept = default;
+    void meshRead(const std::string_view&);
 
-            MeshMaster &operator=(const MeshMaster &) = default;
+    void meshAppend(const std::string_view&);
 
-            MeshMaster &operator=(MeshMaster &&) noexcept = default;
+    void meshWrite(const std::string_view&);
 
-            ~MeshMaster() = default;
-
-            void meshRead(const std::string_view &);
-
-            void meshAppend(const std::string_view &);
-
-            void meshWrite(const std::string_view &);
-
-        private:
-            std::map<types::d_id_t, Domain> elems;
-            std::vector<Node<DIM>> nodes;
-        };
-    } // namespace mesh
-} // namespace lstr
+private:
+    std::map< types::d_id_t, Domain > elems;
+    std::vector< Node< DIM > >        nodes;
+};
+} // namespace lstr::mesh
 
 #endif // end include guard

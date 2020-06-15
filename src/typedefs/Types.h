@@ -16,19 +16,21 @@
 //  dim - dimension
 //  l   - length
 
-namespace lstr {
-    namespace types {
-        using val_t = double;
-        using dim_t = size_t;
-        using n_id_t = size_t;
-        using el_id_t = size_t;
-        using el_o_t = size_t;
-        using el_dim_t = size_t;
-        using d_id_t = size_t;
-        using q_o_t = size_t;
-        using q_l_t = size_t;
-        using poly_o_t = size_t;
-    } // namespace types
+namespace lstr
+{
+namespace types
+{
+using val_t = double;
+using dim_t = size_t;
+using n_id_t = size_t;
+using el_id_t = size_t;
+using el_o_t = size_t;
+using el_dim_t = size_t;
+using d_id_t = size_t;
+using q_o_t = size_t;
+using q_l_t = size_t;
+using poly_o_t = size_t;
+} // namespace types
 } // namespace lstr
 
 #endif // end include guard
