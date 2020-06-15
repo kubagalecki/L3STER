@@ -36,6 +36,11 @@
 
 # Build
 build/
+cmake-build-debug/
 
 # KDevelop projects
 *.kdev4
+
+# CLion project files
+.idea/
+
