@@ -18,18 +18,15 @@ namespace lstr::util::meta
 // Helper class - determines if T is a static array or std::array type
 template < typename T >
 struct is_array : std::false_type
-{
-};
+{};
 
 template < typename T, std::size_t N >
 struct is_array< T[N] > : std::true_type
-{
-};
+{};
 
 template < typename T, std::size_t N >
 struct is_array< const std::array< T, N > > : std::true_type
-{
-};
+{};
 
 template < typename T >
 struct array;
@@ -38,14 +35,14 @@ template < typename T, std::size_t N >
 struct array< T[N] >
 {
     static constexpr size_t size = N;
-    using type = T;
+    using type                   = T;
 };
 
 template < typename T, std::size_t N >
 struct array< const std::array< T, N > >
 {
     static constexpr size_t size = N;
-    using type = T;
+    using type                   = T;
 };
 
 // This class is essentially std::integer_sequence, but extended to all NTTP
@@ -54,7 +51,7 @@ struct value_sequence
 {
     using value_type = T;
 
-    static constexpr size_t size() { return sizeof...(Vals); }
+    static constexpr size_t size = sizeof...(Vals);
 };
 
 // lift constexpr array to value_sequence
@@ -217,8 +214,11 @@ template < template < typename... > typename M,
 struct combine2
 {
     using type =
-        typename combine2_helper< M, C, I1, I2, std::make_index_sequence< I1::size() > >::type;
+        typename combine2_helper< M, C, I1, I2, std::make_index_sequence< I1::size > >::type;
 };
+
+template < template < typename... > typename T, template < auto > typename U, typename A >
+struct apply_valseq;
 
 /////////////////////////////////////////////////////////////////////////////
 template < template < typename... > typename M,
@@ -235,8 +235,18 @@ private:
 public:
     using type = typename combine2< M,
                                     C,
-                                    typename stretch_valseq< I1_i, I2_i::size() >::type,
-                                    typename repeat_valseq< I2_i, I1_i::size() >::type >::type;
+                                    typename stretch_valseq< I1_i, I2_i::size >::type,
+                                    typename repeat_valseq< I2_i, I1_i::size >::type >::type;
+};
+
+template < template < typename... > typename T,
+           template < auto >
+           typename U,
+           typename A_t,
+           A_t... vals >
+struct apply_valseq< T, U, value_sequence< A_t, vals... > >
+{
+    using type = T< U< vals >... >;
 };
 /////////////////////////////////////////////////////////////////////////////
 

@@ -8,7 +8,7 @@
 #define L3STER_INCGUARD_UTIL_POLYNOMIAL_HPP
 
 #include "Eigen/Dense"
-#include "typedefs/Types.h"
+#include "definitions/Typedefs.h"
 
 #include <algorithm>
 #include <array>
@@ -44,8 +44,7 @@ public:
 
     template < typename... Types >
     Polynomial(const Types&... args) : coefs(args...)
-    {
-    }
+    {}
 
     // Access
     types::val_t* data()
@@ -99,7 +98,7 @@ template < types::poly_o_t N >
 types::val_t Polynomial< N >::eval(const types::val_t& x)
 {
     // evaluate p(x)
-    auto ret_val = coefs.front();
+    auto ret_val     = coefs.front();
     auto current_exp = x;
 
     auto op = [&](types::val_t c) -> void {
@@ -138,9 +137,9 @@ Polynomial< N - 1 > Polynomial< N >::polyder()
 template < types::poly_o_t N >
 Polynomial< N + 1 > Polynomial< N >::polyint()
 {
-    auto ret_val = Polynomial< N + 1 >{};
+    auto ret_val          = Polynomial< N + 1 >{};
     ret_val.coefs.front() = 0.;
-    auto current_exp = 1;
+    auto current_exp      = 1;
 
     auto op = [&](const typename array_t::value_type& a_old) {
         return a_old / (current_exp++);
@@ -271,7 +270,7 @@ Polynomial< N > lagrangeFit(const T& x, const T& y)
 
     for (size_t i = 0; i <= N; i++)
     {
-        b[i] = y[i];
+        b[i]    = y[i];
         A(i, 0) = 1.;
 
         for (size_t j = 1; j <= N; j++)

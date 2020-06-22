@@ -3,50 +3,23 @@
 #ifndef L3STER_INCGUARD_MESH_NODE_HPP
 #define L3STER_INCGUARD_MESH_NODE_HPP
 
-#include "typedefs/Types.h"
+#include "definitions/Typedefs.h"
 
 #include <array>
 
-namespace lstr
-{
-namespace mesh
+namespace lstr::mesh
 {
 //////////////////////////////////////////////////////////////////////////////////////////////
 //                                       NODE CLASS                                         //
 //////////////////////////////////////////////////////////////////////////////////////////////
 /*
-Node class - essentially a container for node coordinates, templated with space dimension
+Node class - aggregate of node dimensions
 */
 template < types::dim_t DIM >
-class Node
+struct Node
 {
-public:
-    using array_t = std::array< types::val_t, DIM >;
-
-    // Ctors & Dtors
-    Node() = delete;
-
-    Node(const array_t& _coords) : coords(_coords) {}
-
-    Node(const Node&) = default;
-
-    Node(Node&&) noexcept = default;
-
-    Node& operator=(const Node&) = default;
-
-    Node& operator=(Node&&) noexcept = default;
-
-    ~Node() = default;
-
-    // access
-    const array_t& getCoords() { return coords; }
-
-    void setCoords(const array_t& _coords) { coords = _coords; }
-
-private:
-    array_t coords;
+    std::array< types::val_t, DIM > coords;
 };
-} // namespace mesh
-} // namespace lstr
+} // namespace lstr::mesh
 
 #endif // end include guard

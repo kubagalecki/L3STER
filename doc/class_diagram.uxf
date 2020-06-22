@@ -10,7 +10,7 @@
       <h>76</h>
     </coordinates>
     <panel_attributes>&lt;&lt;Singleton&gt;&gt;
-MeshMaster
+MeshPartition
 --
 --
 </panel_attributes>
@@ -329,7 +329,7 @@ m2=1..*</panel_attributes>
       <w>712</w>
       <h>664</h>
     </coordinates>
-    <panel_attributes>Mesh</panel_attributes>
+    <panel_attributes>MeshPartition</panel_attributes>
     <additional_attributes/>
   </element>
   <element>

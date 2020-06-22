@@ -4,10 +4,10 @@
 #define L3STER_INCGUARD_QUAD_QUADRATUREGENERATOR_HPP
 
 #include "Eigen/Dense" // Eigen needed for small scale matrix computations
+#include "definitions/Typedefs.h"
 #include "mesh/ElementTypes.hpp"
 #include "quadrature/Quadrature.hpp"
 #include "quadrature/QuadratureTypes.h"
-#include "typedefs/Types.h"
 
 #include <array>
 
@@ -78,7 +78,7 @@ auto QuadratureGenerator< mesh::ElementTypes::Quad >::getQuadrature()
     if constexpr (QTYPE == QuadratureTypes::GLeg)
     {
         constexpr size_t gl1d_size = QORDER / 2 + 1;
-        using mat_t = Eigen::Matrix< types::val_t, gl1d_size, gl1d_size >;
+        using mat_t                = Eigen::Matrix< types::val_t, gl1d_size, gl1d_size >;
 
         mat_t gl1d_mat;
 
@@ -90,8 +90,8 @@ auto QuadratureGenerator< mesh::ElementTypes::Quad >::getQuadrature()
 
         for (size_t i = 0; i < gl1d_size - 1; ++i)
         {
-            auto         I = static_cast< types::val_t >(i + 1);
-            types::val_t temp = I / sqrt(4. * I * I - 1);
+            auto         I     = static_cast< types::val_t >(i + 1);
+            types::val_t temp  = I / sqrt(4. * I * I - 1);
             gl1d_mat(i + 1, i) = temp;
             gl1d_mat(i, i + 1) = temp;
         }
@@ -114,7 +114,7 @@ auto QuadratureGenerator< mesh::ElementTypes::Quad >::getQuadrature()
             {
                 ret_arr1[0][i + j * gl1d_size] = es.eigenvalues()[i];
                 ret_arr1[1][j + i * gl1d_size] = es.eigenvalues()[i];
-                ret_arr2[i + j * gl1d_size] = 4 * es.eigenvectors()(0, i) *
+                ret_arr2[i + j * gl1d_size]    = 4 * es.eigenvectors()(0, i) *
                                               es.eigenvectors()(0, i) * es.eigenvectors()(0, j) *
                                               es.eigenvectors()(0, j);
             }

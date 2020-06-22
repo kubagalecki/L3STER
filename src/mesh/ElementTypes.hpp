@@ -3,7 +3,8 @@
 #ifndef L3STER_INCGUARD_MESH_ELEMENTTYPES_H
 #define L3STER_INCGUARD_MESH_ELEMENTTYPES_H
 
-#include "typedefs/Types.h"
+#include "definitions/Constants.hpp"
+#include "definitions/Typedefs.h"
 
 #include <array>
 #include <utility>
@@ -23,8 +24,7 @@ enum class ElementTypes
 
 namespace helpers
 {
-
-// Use meta-programming to create constexpr array of element types
+// Constexpr array of element types
 template < size_t... Ints >
 constexpr auto makeElementTypeArray(std::index_sequence< Ints... >)
 {
@@ -36,7 +36,6 @@ constexpr auto makeElementTypeArray(std::index_sequence< Ints... >)
 // Array containing all defined element types
 struct ElementTypesArray
 {
-
     static constexpr auto values = helpers::makeElementTypeArray(
         std::make_index_sequence< static_cast< size_t >(ElementTypes::Count) >{});
 };
@@ -44,10 +43,8 @@ struct ElementTypesArray
 // Array containing all possible element orders.
 struct ElementOrdersArray
 {
-
-    static constexpr std::array< types::el_o_t, 10 > values = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    static constexpr std::array values = allowed_orders;
 };
-
 } // namespace lstr::mesh
 
 #endif // end include guard

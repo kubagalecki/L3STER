@@ -3,10 +3,10 @@
 #ifndef L3STER_INCGUARD_QUADRATURE_QUADRATUREINITIALIZER_HPP
 #define L3STER_INCGUARD_QUADRATURE_QUADRATUREINITIALIZER_HPP
 
+#include "definitions/Typedefs.h"
 #include "mesh/ElementTypes.h"
 #include "quadrature/Quadrature.hpp"
 #include "quadrature/QuadratureGenerator.hpp"
-#include "typedefs/Types.h"
 
 namespace lstr
 {
