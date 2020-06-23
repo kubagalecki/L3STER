@@ -6,7 +6,9 @@ set(CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_BUILD_TYPE DEBUG)
 
-add_compile_options(-Wall -Wextra -Wpedantic -Wshadow)
+if (UNIX)
+    add_compile_options(-Wall -Wextra -Wpedantic -Wshadow)
+endif()
 
 # set up clang-tidy
 # set(CMAKE_CXX_CLANG_TIDY 
