@@ -33,6 +33,8 @@
 
 # Visual studio
 .vs/
+CMakeSettings.json
+VSproject/
 
 # Build
 build/
