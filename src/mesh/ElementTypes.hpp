@@ -13,7 +13,11 @@ namespace lstr::mesh
 {
 enum class ElementTypes
 {
+    // Domain elements
     Quad, // Quadrilateral elements (geometrically linear)
+
+    // Boundary elements
+    Edge2D, // 2D edge
 
     //////////////////////////////////////////////////////////////////////////////
     //////////          NEW ELEMENT TYPES BEFORE THIS LINE              //////////
