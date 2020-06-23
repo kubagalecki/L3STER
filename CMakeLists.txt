@@ -8,6 +8,8 @@ set(CMAKE_BUILD_TYPE DEBUG)
 
 if (UNIX)
     add_compile_options(-Wall -Wextra -Wpedantic -Wshadow)
+elseif(WIN32)
+    add_compile_options(/Wall)
 endif()
 
 # set up clang-tidy
