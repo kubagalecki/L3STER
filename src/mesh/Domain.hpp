@@ -22,8 +22,9 @@ class Domain
 public:
     template < ElementTypes ELTYPE, types::el_o_t ELORDER >
     using element_vector_t = std::vector< Element< ELTYPE, ELORDER > >;
-    using variant_t = parametrize_over_element_types_and_orders_t< std::variant, element_vector_t >;
-    using element_vector_vector_t = std::vector< variant_t >;
+    using element_vector_variant_t =
+        parametrize_over_element_types_and_orders_t< std::variant, element_vector_t >;
+    using element_vector_variant_vector_t = std::vector< element_vector_variant_t >;
 
     template < ElementTypes ELTYPE, types::el_o_t ELORDER >
     void pushBack(const Element< ELTYPE, ELORDER >&);
@@ -41,7 +42,7 @@ public:
     void cvisit(const F&) const;
 
 private:
-    element_vector_vector_t element_vectors;
+    element_vector_variant_vector_t element_vectors;
 };
 
 template < ElementTypes ELTYPE, types::el_o_t ELORDER >
@@ -93,17 +94,17 @@ void Domain::reserve(size_t size)
 template < typename F >
 void Domain::visit(const F& fun)
 {
-    std::for_each(element_vectors.begin(), element_vectors.end(), [&fun](variant_t& v) {
-        std::visit(fun, v);
-    });
+    std::for_each(element_vectors.begin(),
+                  element_vectors.end(),
+                  [&fun](element_vector_variant_t& v) { std::visit(fun, v); });
 }
 
 template < typename F >
 void Domain::cvisit(const F& fun) const
 {
-    std::for_each(element_vectors.cbegin(), element_vectors.cend(), [&fun](const variant_t& v) {
-        std::visit(fun, v);
-    });
+    std::for_each(element_vectors.cbegin(),
+                  element_vectors.cend(),
+                  [&fun](const element_vector_variant_t& v) { std::visit(fun, v); });
 }
 } // namespace lstr::mesh
 

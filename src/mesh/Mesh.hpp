@@ -1,5 +1,5 @@
-#ifndef L3STER_INCGUARD_MESH_HPP
-#define L3STER_INCGUARD_MESH_HPP
+#ifndef L3STER_INCGUARD_MESH_MESH_HPP
+#define L3STER_INCGUARD_MESH_MESH_HPP
 
 #include "definitions/Constants.hpp"
 #include "definitions/Typedefs.h"
@@ -21,13 +21,13 @@ class Mesh
 {
 public:
     template < types::dim_t DIM >
-    using node_vector_t = std::vector< Node< DIM > >;
-    using variant_t     = parametrize_over_dims_t< std::variant, node_vector_t >;
+    using node_vector_t         = std::vector< Node< DIM > >;
+    using node_vector_variant_t = parametrize_over_dims_t< std::variant, node_vector_t >;
 
 private:
-    variant_t                    nodes;
+    node_vector_variant_t        nodes;
     std::vector< MeshPartition > partitions;
 };
 } // namespace lstr::mesh
 
-#endif // L3STER_INCGUARD_MESH_HPP
+#endif // L3STER_INCGUARD_MESH_MESH_HPP

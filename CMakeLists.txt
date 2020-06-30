@@ -8,7 +8,7 @@ set(CMAKE_BUILD_TYPE DEBUG)
 
 if (UNIX)
     add_compile_options(-Wall -Wextra -Wpedantic -Wshadow)
-elseif(WIN32)
+elseif(MSVC)
     add_compile_options(/Wall)
 endif()
 
