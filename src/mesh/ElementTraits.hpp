@@ -42,9 +42,9 @@ struct ElementTraits< Element< ElementTypes::Quad, ELORDER > >
 };
 
 template < types::el_o_t ELORDER >
-struct ElementTraits< Element< ElementTypes::Edge2D, ELORDER > >
+struct ElementTraits< Element< ElementTypes::Line, ELORDER > >
 {
-    static constexpr ElementTypes  element_type      = ElementTypes::Edge2D;
+    static constexpr ElementTypes  element_type      = ElementTypes::Line;
     static constexpr types::el_o_t element_order     = ELORDER;
     static constexpr types::n_id_t nodes_per_element = (ELORDER + 1);
 

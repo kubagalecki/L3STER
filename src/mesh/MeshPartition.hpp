@@ -7,7 +7,6 @@
 #include "mesh/Domain.hpp"
 
 #include <map>
-#include <memory_resource>
 #include <variant>
 
 namespace lstr::mesh
@@ -21,11 +20,27 @@ MeshPartition class - a mapping of IDs to domains
 class MeshPartition
 {
 public:
+    using domain_map_t = std::map< types::d_id_t, Domain >;
+
+    MeshPartition()                     = default;
+    MeshPartition(const MeshPartition&) = delete;
+    MeshPartition(MeshPartition&&)      = default;
+    MeshPartition& operator=(const MeshPartition&) = delete;
+    MeshPartition& operator=(MeshPartition&&) = default;
+
+    explicit MeshPartition(MeshPartition::domain_map_t&& domains_) : domains(domains_) {}
+
     template < typename F >
     void visitAllElements(F&&);
 
     template < typename F >
     void cvisitAllElements(F&&) const;
+
+    template < typename F, size_t N >
+    void visitSpecifiedDomains(F&& fun, const std::array< types::d_id_t, N >& domain_ids);
+
+    template < typename F, size_t N >
+    void cvisitSpecifiedDomains(F&& fun, const std::array< types::d_id_t, N >& domain_ids) const;
 
     template < typename F, typename D >
     void visitDomainIf(F&& fun, D&& domain_predicate);
@@ -38,15 +53,7 @@ public:
     inline void popDomain(types::d_id_t);
 
 private:
-    // Domains are kept in a map allocated to a buffer using the STL PMR to avoid memory
-    // fragmentation. This is merely an optimization, once the buffer is exhausted the allocator
-    // will fall back to heap allocation (vide documentation of the <memory_resource> header)
-    constexpr static inline size_t      domain_buffer_size = 256;
-    std::byte                           domain_buffer[domain_buffer_size];
-    std::pmr::monotonic_buffer_resource domain_memory_resource{domain_buffer, domain_buffer_size};
-
-    using domain_map_t = std::pmr::map< types::d_id_t, Domain >;
-    domain_map_t domains{&domain_memory_resource};
+    domain_map_t domains;
 };
 
 template < typename F >
@@ -69,6 +76,31 @@ void MeshPartition::cvisitAllElements(F&& fun) const
     std::for_each(domains.cbegin(), domains.cend(), [&](const domain_map_t::value_type& d) {
         d.second.cvisit(element_vector_visitor);
     });
+}
+
+template < typename F, size_t N >
+void MeshPartition::visitSpecifiedDomains(F&& fun, const std::array< types::d_id_t, N >& domain_ids)
+{
+    const auto domain_predicate = [&domain_ids](const types::d_id_t& d) {
+        return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&d](const types::d_id_t& d1) {
+            return d == d1;
+        });
+    };
+
+    visitDomainIf(std::forward< F >(fun), domain_predicate);
+}
+
+template < typename F, size_t N >
+void MeshPartition::cvisitSpecifiedDomains(F&&                                   fun,
+                                           const std::array< types::d_id_t, N >& domain_ids) const
+{
+    const auto domain_predicate = [&domain_ids](const types::d_id_t& d) {
+        return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&d](const types::d_id_t& d1) {
+            return d == d1;
+        });
+    };
+
+    cvisitDomainIf(std::forward< F >(fun), domain_predicate);
 }
 
 template < typename F, typename D >
