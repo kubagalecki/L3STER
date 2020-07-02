@@ -1,2 +1,2 @@
 # L3STER
-Open-source C++ least-square finite element method framework
+Open-source C++ least-squares finite element method framework
