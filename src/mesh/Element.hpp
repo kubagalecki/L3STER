@@ -38,22 +38,28 @@ public:
         typename UINT,
         std::enable_if_t< std::is_unsigned_v< UINT > && !std::is_same_v< UINT, types::n_id_t >,
                           bool > = true >
-    explicit Element(const std::array< UINT, std::tuple_size_v< node_array_t > >& nodes_)
-    {
-        std::transform(nodes_.cbegin(), nodes.cend(), nodes.begin(), [](const UINT& node) {
-            return static_cast< types::n_id_t >(node);
-        });
-    }
-
+    explicit Element(const std::array< UINT, std::tuple_size_v< node_array_t > >& nodes_);
     explicit Element(const node_array_t& nodes_) : nodes{nodes_} {}
 
-private:
-    node_array_t nodes;
-    // std::array< size_t, n_nodes > node_order;
+    const node_array_t& getNodes() const { return nodes; }
+    node_array_t&       getNodesRef() { return nodes; }
 
-    // element data
-    // typename ElementTraits< Element< ELTYPE, ELORDER > >::ElementData data;
+private:
+    node_array_t                                                      nodes;
+    typename ElementTraits< Element< ELTYPE, ELORDER > >::ElementData data{};
 };
+
+template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+template <
+    typename UINT,
+    std::enable_if_t< std::is_unsigned_v< UINT > && !std::is_same_v< UINT, types::n_id_t >, bool > >
+Element< ELTYPE, ELORDER >::Element(
+    const std::array< UINT, std::tuple_size_v< node_array_t > >& nodes_)
+{
+    std::transform(nodes_.cbegin(), nodes.cend(), nodes.begin(), [](const UINT& node) {
+        return static_cast< types::n_id_t >(node);
+    });
+}
 } // namespace lstr::mesh
 
 #endif // L3STER_INCGUARD_MESH_ELEMENT_HPP

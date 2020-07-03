@@ -8,11 +8,12 @@
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <memory>
-#include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <tuple>
+#include <unordered_map>
 #include <utility>
 
 #include <iostream>
@@ -378,14 +379,24 @@ Mesh readMesh(const std::filesystem::path& file_path, MeshFormatTag< MeshFormat:
     };
 
     const auto make_contiguous_mesh = [&](node_data_t& node_data, MeshPartition& part) {
+        auto& [is_contiguous, node_vector] = node_data;
+        std::sort(node_vector.begin(), node_vector.end(), [](const auto& p1, const auto& p2) {
+            return p1.first < p2.first;
+        });
         std::vector< Node< 3 > > nodes;
-        if (node_data.first)
+        if (is_contiguous)
         {
             auto node_inserter = std::back_inserter(nodes);
-            std::transform(node_data.second.cbegin(),
-                           node_data.second.cend(),
+            std::transform(node_vector.cbegin(),
+                           node_vector.cend(),
                            node_inserter,
                            [](const auto& node_data_entry) { return node_data_entry.second; });
+
+            part.visitAllElements([min_node_tag = node_vector.front().first](auto& element) {
+                std::for_each(element.getNodesRef().begin(),
+                              element.getNodesRef().end(),
+                              [&min_node_tag](auto& node) { node -= min_node_tag; });
+            });
         }
         else
             throw_error("Node numbering must start at 0 and be contiguous [TO DO]");
