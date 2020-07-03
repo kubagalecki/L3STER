@@ -1,9 +1,6 @@
 #ifndef L3STER_INCGUARD_DEFINITIONS_CONSTANTS_HPP
 #define L3STER_INCGUARD_DEFINITIONS_CONSTANTS_HPP
 
-#include "definitions/Typedefs.h"
-#include "utility/Meta.hpp"
-
 #include <array>
 
 namespace lstr::mesh

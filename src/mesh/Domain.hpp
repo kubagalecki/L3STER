@@ -1,9 +1,6 @@
 #ifndef L3STER_INCGUARD_MESH_DOMAIN_HPP
 #define L3STER_INCGUARD_MESH_DOMAIN_HPP
 
-#include "definitions/Aliases.hpp"
-#include "mesh/Element.hpp"
-
 #include <algorithm>
 #include <utility>
 #include <variant>

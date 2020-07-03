@@ -3,9 +3,6 @@
 #ifndef L3STER_INCGUARD_MESH_MESHPARTITION_HPP
 #define L3STER_INCGUARD_MESH_MESHPARTITION_HPP
 
-#include "definitions/Typedefs.h"
-#include "mesh/Domain.hpp"
-
 #include <map>
 #include <variant>
 

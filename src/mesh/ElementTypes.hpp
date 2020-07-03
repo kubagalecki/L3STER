@@ -3,9 +3,6 @@
 #ifndef L3STER_INCGUARD_MESH_ELEMENTTYPES_H
 #define L3STER_INCGUARD_MESH_ELEMENTTYPES_H
 
-#include "definitions/Constants.hpp"
-#include "definitions/Typedefs.h"
-
 #include <array>
 #include <utility>
 

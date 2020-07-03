@@ -3,22 +3,10 @@
 #ifndef L3STER_INCGUARD_QUAD_QUADRATURE_HPP
 #define L3STER_INCGUARD_QUAD_QUADRATURE_HPP
 
-#include "definitions/Typedefs.h"
-#include "quadrature/QuadratureTypes.h"
-
 #include <array>
 
 namespace lstr::quad
 {
-//////////////////////////////////////////////////////////////////////////////////////////////
-//                                    QUADRATURE BASE CLASS                                 //
-//////////////////////////////////////////////////////////////////////////////////////////////
-/*
-Empty base class for quadrature type
-*/
-class QuadratureBase
-{};
-
 //////////////////////////////////////////////////////////////////////////////////////////////
 //                                      QUADRATURE CLASS                                    //
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,7 +15,7 @@ This class holds quadrature points and weights for a given element type and orde
 */
 
 template < types::q_l_t QLENGTH, types::dim_t QDIM >
-class Quadrature final : public QuadratureBase
+class Quadrature
 {
 public:
     // Aliases
@@ -36,9 +24,9 @@ public:
 
     // Ctors & Dtors
     Quadrature()                      = default;
-    Quadrature(const Quadrature&)     = default;
+    Quadrature(const Quadrature&)     = delete;
     Quadrature(Quadrature&&) noexcept = default;
-    Quadrature& operator=(const Quadrature&) = default;
+    Quadrature& operator=(const Quadrature&) = delete;
     Quadrature& operator=(Quadrature&&) noexcept = default;
     Quadrature(const q_points_t&, const weights_t&);
 

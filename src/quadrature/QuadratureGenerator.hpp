@@ -3,12 +3,6 @@
 #ifndef L3STER_INCGUARD_QUAD_QUADRATUREGENERATOR_HPP
 #define L3STER_INCGUARD_QUAD_QUADRATUREGENERATOR_HPP
 
-#include "Eigen/Dense" // Eigen needed for small scale matrix computations
-#include "definitions/Typedefs.h"
-#include "mesh/ElementTypes.hpp"
-#include "quadrature/Quadrature.hpp"
-#include "quadrature/QuadratureTypes.h"
-
 #include <array>
 
 namespace lstr
@@ -38,8 +32,7 @@ class QuadratureGenerator< mesh::ElementTypes::Quad >
 {
 public:
     static constexpr types::q_l_t getQLength(QuadratureTypes, types::q_o_t);
-
-    static constexpr types::dim_t getQDim(QuadratureTypes, types::q_o_t);
+    static constexpr types::dim_t QDim(QuadratureTypes, types::q_o_t);
 
     template < QuadratureTypes QTYPE, types::q_o_t QORDER >
     static auto getQuadrature();
@@ -59,12 +52,6 @@ QuadratureGenerator< mesh::ElementTypes::Quad >::getQLength(QuadratureTypes q_ty
         return (q_order / 2 + 3) * (q_order / 2 + 3);
         break;
     }
-}
-
-constexpr types::q_l_t QuadratureGenerator< mesh::ElementTypes::Quad >::getQDim(QuadratureTypes,
-                                                                                types::q_o_t)
-{
-    return 2;
 }
 
 template < QuadratureTypes QTYPE, types::q_o_t QORDER >

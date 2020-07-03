@@ -1,11 +1,6 @@
 #ifndef L3STER_INCGUARD_DEFINITIONS_ALIASES_HPP
 #define L3STER_INCGUARD_DEFINITIONS_ALIASES_HPP
 
-#include "definitions/Constants.hpp"
-#include "mesh/Element.hpp"
-#include "mesh/ElementTypes.hpp"
-#include "utility/Meta.hpp"
-
 namespace lstr::mesh
 {
 // Define alias for easy templating over all possible element/order combinations

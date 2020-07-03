@@ -3,10 +3,6 @@
 #ifndef L3STER_INCGUARD_MESH_ELEMENT_HPP
 #define L3STER_INCGUARD_MESH_ELEMENT_HPP
 
-#include "definitions/Typedefs.h"
-#include "mesh/ElementTraits.hpp"
-#include "utility/Meta.hpp"
-
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -41,8 +37,8 @@ public:
     explicit Element(const std::array< UINT, std::tuple_size_v< node_array_t > >& nodes_);
     explicit Element(const node_array_t& nodes_) : nodes{nodes_} {}
 
-    const node_array_t& getNodes() const { return nodes; }
-    node_array_t&       getNodesRef() { return nodes; }
+    [[nodiscard]] const node_array_t& getNodes() const noexcept { return nodes; }
+    [[nodiscard]] node_array_t&       getNodesRef() noexcept { return nodes; }
 
 private:
     node_array_t                                                      nodes;

@@ -1,8 +1,6 @@
 #ifndef L3STER_INCGUARD_MESH_READMESH_HPP
 #define L3STER_INCGUARD_MESH_READMESH_HPP
 
-#include "mesh/Mesh.hpp"
-
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -33,7 +31,7 @@ struct MeshFormatTag
 constexpr inline MeshFormatTag gmsh_tag = MeshFormatTag< MeshFormat::Gmsh >{};
 
 template < MeshFormat FMT >
-Mesh readMesh(const std::filesystem::path& file_path, MeshFormatTag< FMT >);
+std::shared_ptr< Mesh > readMesh(const std::filesystem::path& file_path, MeshFormatTag< FMT >);
 
 namespace helpers
 {
@@ -49,7 +47,8 @@ Element< ELTYPE, 1 > parse_element(std::ifstream& f)
 } // namespace helpers
 
 template <>
-Mesh readMesh(const std::filesystem::path& file_path, MeshFormatTag< MeshFormat::Gmsh >)
+std::shared_ptr< Mesh > readMesh(const std::filesystem::path& file_path,
+                                 MeshFormatTag< MeshFormat::Gmsh >)
 {
     // Define parsing lambdas
     const auto throw_error = [&file_path](const char* message) {
@@ -414,7 +413,7 @@ Mesh readMesh(const std::filesystem::path& file_path, MeshFormatTag< MeshFormat:
     auto       node_data    = parse_nodes(format_data);
     auto       element_data = parse_elements(format_data, entity_data);
 
-    return make_contiguous_mesh(node_data, element_data);
+    return std::make_shared< Mesh >(make_contiguous_mesh(node_data, element_data));
 } // namespace lstr::mesh
 } // namespace lstr::mesh
 

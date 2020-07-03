@@ -18,11 +18,8 @@ endif()
 #   -header-filter=.*\.hpp;
 #   -checks=-*,performance-*;)
 
-# EIGEN
-include_directories(${CMAKE_SOURCE_DIR}/eigen/)
-
 # SRC
-include_directories(${CMAKE_SOURCE_DIR}/src/)
+include_directories(${CMAKE_SOURCE_DIR}/include/)
 
 add_executable(main
         ${CMAKE_SOURCE_DIR}/main.cpp)

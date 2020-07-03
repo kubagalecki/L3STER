@@ -7,9 +7,6 @@
 #ifndef L3STER_INCGUARD_UTIL_POLYNOMIAL_HPP
 #define L3STER_INCGUARD_UTIL_POLYNOMIAL_HPP
 
-#include "Eigen/Dense"
-#include "definitions/Typedefs.h"
-
 #include <algorithm>
 #include <array>
 #include <exception>

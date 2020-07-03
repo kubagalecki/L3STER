@@ -6,6 +6,12 @@
 #include <cstddef>
 #include <cstdint>
 
+namespace lstr
+{
+using std::ptrdiff_t;
+using std::size_t;
+} // namespace lstr
+
 namespace lstr::types
 {
 using val_t    = double;        // floating point value type
