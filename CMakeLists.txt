@@ -9,7 +9,7 @@ set(CMAKE_BUILD_TYPE DEBUG)
 if (UNIX)
     add_compile_options(-Wall -Wextra -Wpedantic -Wshadow)
 elseif(MSVC)
-    add_compile_options(/Wall)
+    add_compile_options(/Wall /experimental:newLambdaProcessor)
 endif()
 
 # set up clang-tidy
