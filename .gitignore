@@ -35,6 +35,7 @@
 .vs/
 CMakeSettings.json
 VSproject/
+out/
 
 # Build
 build/
