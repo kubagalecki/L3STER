@@ -16,7 +16,7 @@ jobs:
                           run: mkdir ../build; cd ../build; cmake $GITHUB_WORKSPACE/tests/
 
                         - name: ll
-                          -run: ls -al
+                          run: ls -al
 
                         - name: build
                           run: make -j4
