@@ -13,10 +13,7 @@ jobs:
                                   submodules: true
 
                         - name: Configure & build
-                          run: mkdir ../build
-                          run: cd ../build
-                          run: cmake $GITHUB_WORKSPACE/tests/
-                          run: make -j4
+                          run: mkdir ../build; cd ../build; cmake $GITHUB_WORKSPACE/tests/; make -j4
 
                         - name: Run tests
                           run: $GITHUB_WORKSPACE/../build/test
