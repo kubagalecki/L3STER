@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <filesystem>
 #include <fstream>
 #include <map>
 #include <memory>
@@ -31,7 +30,7 @@ struct MeshFormatTag
 constexpr inline MeshFormatTag gmsh_tag = MeshFormatTag< MeshFormat::Gmsh >{};
 
 template < MeshFormat FMT >
-std::shared_ptr< Mesh > readMesh(const std::filesystem::path& file_path, MeshFormatTag< FMT >);
+std::shared_ptr< Mesh > readMesh(const char* file_path, MeshFormatTag< FMT >);
 
 namespace helpers
 {
@@ -47,7 +46,7 @@ Element< ELTYPE, 1 > parse_element(std::ifstream& f)
 } // namespace helpers
 
 template <>
-std::shared_ptr< Mesh > readMesh(const std::filesystem::path& file_path,
+std::shared_ptr< Mesh > readMesh(const char* file_path,
                                  MeshFormatTag< MeshFormat::Gmsh >)
 {
     // Define parsing lambdas
