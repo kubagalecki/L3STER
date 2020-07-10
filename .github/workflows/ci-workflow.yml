@@ -12,8 +12,17 @@ jobs:
                           with:
                                   submodules: true
 
+                        - name: pwd
+                          run: pwd
+
+                        - name: echo-workdir
+                          run: echo $GITHUB_WORKSPACE
+
+                        - name: ll
+                          run: ls -al
+
                         - name: configure
-                          run: mkdir build; cd build; cmake $GITHUB_WORKSPACE/tests/
+                          run: mkdir build; cd build; cmake $GITHUB_WORKSPACE/L3STER/tests/
 
                         - name: build
                           run: make -j4
