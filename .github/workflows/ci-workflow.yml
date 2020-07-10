@@ -1,0 +1,22 @@
+name: CI
+on: push
+
+jobs:
+        build:
+                name: Catch2-Tests
+
+                runs-on: ubuntu-latest
+
+                steps:
+                        - uses: actions/checkout@v2
+                          with:
+                                  submodules: true
+
+                        - name: configure
+                          run: mkdir build; cd build; cmake $GITHUB_WORKSPACE/tests/
+
+                        - name: build
+                          run: make -j4
+
+                        - name: test
+                          run: ./test
