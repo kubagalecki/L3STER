@@ -1,7 +1,5 @@
-// Data structures representing quadratures
-
-#ifndef L3STER_INCGUARD_QUAD_QUADRATURE_HPP
-#define L3STER_INCGUARD_QUAD_QUADRATURE_HPP
+#ifndef L3STER_QUAD_QUADRATURE_HPP
+#define L3STER_QUAD_QUADRATURE_HPP
 
 #include <array>
 
@@ -18,19 +16,19 @@ template < types::q_l_t QLENGTH, types::dim_t QDIM >
 class Quadrature
 {
 public:
-    // Aliases
-    using q_points_t = std::array< std::array< types::val_t, QLENGTH >, QDIM >;
+    using q_points_t = std::array< std::array< types::val_t, QDIM >, QLENGTH >;
     using weights_t  = std::array< types::val_t, QLENGTH >;
 
-    // Ctors & Dtors
+    static constexpr types::q_l_t size = QLENGTH;
+    static constexpr types::dim_t dim  = QDIM;
+
     Quadrature()                      = default;
-    Quadrature(const Quadrature&)     = delete;
+    Quadrature(const Quadrature&)     = default;
     Quadrature(Quadrature&&) noexcept = default;
-    Quadrature& operator=(const Quadrature&) = delete;
+    Quadrature& operator=(const Quadrature&) = default;
     Quadrature& operator=(Quadrature&&) noexcept = default;
     Quadrature(const q_points_t&, const weights_t&);
 
-    // Access
     const q_points_t& getQPoints() const { return q_points; }
     const weights_t&  getWeights() const { return weights; }
     void              setQPoints(const q_points_t& qp) { q_points = qp; }
@@ -47,4 +45,4 @@ Quadrature< QLENGTH, QDIM >::Quadrature(const q_points_t& qpts, const weights_t&
 {}
 } // namespace lstr::quad
 
-#endif // end include guard
+#endif // L3STER_QUAD_QUADRATURE_HPP

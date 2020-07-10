@@ -31,5 +31,11 @@ int main()
         std::cout << '\n';
     });
 
+    lstr::mesh::Element< lstr::mesh::ElementTypes::Quad, 1 > el{{1, 2, 3, 4}};
+
+    lstr::quad::QuadratureGenerator< lstr::quad::QuadratureTypes::GLeg, 1 > quad_gen;
+
+    const auto quadrature = quad_gen.get(el);
+
     return EXIT_SUCCESS;
 }

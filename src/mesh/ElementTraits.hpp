@@ -23,6 +23,7 @@ struct ElementTraits< Element< ElementTypes::Quad, ELORDER > >
     static constexpr ElementTypes  element_type      = ElementTypes::Quad;
     static constexpr types::el_o_t element_order     = ELORDER;
     static constexpr types::n_id_t nodes_per_element = (ELORDER + 1) * (ELORDER + 1);
+    static constexpr types::dim_t  native_dim        = 2;
 
     struct ElementData
     {
@@ -44,6 +45,7 @@ struct ElementTraits< Element< ElementTypes::Line, ELORDER > >
     static constexpr ElementTypes  element_type      = ElementTypes::Line;
     static constexpr types::el_o_t element_order     = ELORDER;
     static constexpr types::n_id_t nodes_per_element = (ELORDER + 1);
+    static constexpr types::dim_t  native_dim        = 1;
 
     struct ElementData
     {
