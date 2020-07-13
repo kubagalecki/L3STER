@@ -1,7 +1,7 @@
-name: CI
+name: Tests 
 'on': push
 jobs:
-  CI:
+  Tests:
     name: Catch2-Tests
     runs-on: ubuntu-latest
     steps:

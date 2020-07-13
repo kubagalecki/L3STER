@@ -1,4 +1,4 @@
-![CI Status](https://github.com/kubagalecki/L3STER/workflows/CI/badge.svg "CI Status")
+![CI Status](https://github.com/kubagalecki/L3STER/workflows/Tests/badge.svg "Test Status")
 
 # L3STER
 Open-source C++ least-squares finite element method framework
