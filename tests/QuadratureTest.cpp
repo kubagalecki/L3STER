@@ -44,9 +44,9 @@ TEST_CASE("1D Gauss-Legendre quadrature, 3 point", "[quadrature]")
     Approx qp_0 = Approx(-0.77459666924).margin(tol);
     Approx qp_1 = Approx(0).margin(tol);
     Approx qp_2 = Approx(0.77459666924).margin(tol);
-    Approx w_0 = Approx(0.5555555555).margin(tol);
-    Approx w_1 = Approx(0.8888888888).margin(tol);
-    Approx w_2 = Approx(0.5555555555).margin(tol);
+    Approx w_0 = Approx(0.5555555556).margin(tol);
+    Approx w_1 = Approx(0.8888888889).margin(tol);
+    Approx w_2 = Approx(0.5555555556).margin(tol);
     CHECK(ref_quad.getQPoints()[0].front() == qp_0);
     CHECK(ref_quad.getQPoints()[1].front() == qp_1);
     CHECK(ref_quad.getQPoints()[2].front() == qp_2);
