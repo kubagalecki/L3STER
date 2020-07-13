@@ -1,4 +1,4 @@
-#include "catch.hpp"
+#include "catch2/catch.hpp"
 #include "l3ster.h"
 
 TEST_CASE("Quadratures are computed correctly", "[quadrature]")

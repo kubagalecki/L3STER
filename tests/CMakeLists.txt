@@ -16,9 +16,10 @@ endif()
 include_directories(${CMAKE_SOURCE_DIR}/../include/)
 
 # Catch2
-include_directories(${CMAKE_SOURCE_DIR}/../Catch2/include/)
+include_directories(${CMAKE_SOURCE_DIR}/../Catch2/single_include/)
 
 add_executable(test
         ${CMAKE_SOURCE_DIR}/tests_main.cpp
 	    ${CMAKE_SOURCE_DIR}/quadrature_test.cpp
 	)
+
