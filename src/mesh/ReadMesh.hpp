@@ -46,8 +46,7 @@ Element< ELTYPE, 1 > parse_element(std::ifstream& f)
 } // namespace helpers
 
 template <>
-std::shared_ptr< Mesh > readMesh(const char* file_path,
-                                 MeshFormatTag< MeshFormat::Gmsh >)
+std::shared_ptr< Mesh > readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
 {
     // Define parsing lambdas
     const auto throw_error = [&file_path](const char* message) {

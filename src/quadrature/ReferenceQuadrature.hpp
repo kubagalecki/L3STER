@@ -25,13 +25,17 @@ template < types::q_o_t QORDER >
 auto ReferenceQuadrature< QuadratureTypes::GLeg, QORDER >::compute()
 {
     constexpr auto size = ReferenceQuadratureTraits< this_t >::size;
-    using matrix_t      = Eigen::Matrix< types::val_t, size, size >;
+
+    if constexpr (size == 1)
+        return quadrature_t{{0.}, {2.}};
+
+    using matrix_t = Eigen::Matrix< types::val_t, size, size >;
 
     matrix_t coef_matrix = matrix_t::Zero();
 
-    for (size_t i = 0; i < size; ++i)
+    for (size_t i = 0; i < size - 1; ++i)
     {
-        auto         i_inc1   = static_cast< types::val_t >(i + 1);
+        const auto   i_inc1   = static_cast< types::val_t >(i + 1);
         types::val_t val      = i_inc1 / sqrt(4. * i_inc1 * i_inc1 - 1.);
         coef_matrix(i + 1, i) = val;
         coef_matrix(i, i + 1) = val;

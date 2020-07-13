@@ -8,8 +8,6 @@ set(CMAKE_BUILD_TYPE RELEASE)
 
 if (UNIX)
     add_compile_options(-Wall -Wextra -Wpedantic -Wshadow)
-elseif(MSVC)
-    add_compile_options(/Wall /experimental:newLambdaProcessor)
 endif()
 
 # SRC
@@ -19,7 +17,6 @@ include_directories(${CMAKE_SOURCE_DIR}/../include/)
 include_directories(${CMAKE_SOURCE_DIR}/../Catch2/single_include/)
 
 add_executable(test
-        ${CMAKE_SOURCE_DIR}/tests_main.cpp
-	    ${CMAKE_SOURCE_DIR}/quadrature_test.cpp
+        ${CMAKE_SOURCE_DIR}/TestsMain.cpp
+	    ${CMAKE_SOURCE_DIR}/QuadratureTest.cpp
 	)
-
