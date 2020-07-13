@@ -19,4 +19,4 @@ jobs:
           make -j4
 
       - name: Run tests
-        run: $GITHUB_WORKSPACE/../build/test -s -d
+        run: $GITHUB_WORKSPACE/../build/test -s -d yes
