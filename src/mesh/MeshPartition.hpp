@@ -1,7 +1,7 @@
 // Top level data structure for storing the entire mesh
 
-#ifndef L3STER_INCGUARD_MESH_MESHPARTITION_HPP
-#define L3STER_INCGUARD_MESH_MESHPARTITION_HPP
+#ifndef L3STER_MESH_MESHPARTITION_HPP
+#define L3STER_MESH_MESHPARTITION_HPP
 
 #include <map>
 #include <variant>
@@ -78,9 +78,9 @@ void MeshPartition::cvisitAllElements(F&& fun) const
 template < typename F, size_t N >
 void MeshPartition::visitSpecifiedDomains(F&& fun, const std::array< types::d_id_t, N >& domain_ids)
 {
-    const auto domain_predicate = [&domain_ids](const types::d_id_t& d) {
+    const auto domain_predicate = [&domain_ids](const DomainView& d) {
         return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&d](const types::d_id_t& d1) {
-            return d == d1;
+            return d.getID() == d1;
         });
     };
 
@@ -91,9 +91,9 @@ template < typename F, size_t N >
 void MeshPartition::cvisitSpecifiedDomains(F&&                                   fun,
                                            const std::array< types::d_id_t, N >& domain_ids) const
 {
-    const auto domain_predicate = [&domain_ids](const types::d_id_t& d) {
+    const auto domain_predicate = [&domain_ids](const DomainView& d) {
         return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&d](const types::d_id_t& d1) {
-            return d == d1;
+            return d.getID() == d1;
         });
     };
 
@@ -110,7 +110,7 @@ void MeshPartition::visitDomainIf(F&& fun, D&& domain_predicate)
                   domains.end(),
                   [&element_vector_visitor,
                    dp = std::forward< D >(domain_predicate)](domain_map_t::value_type& d) {
-                      if (dp(d.first))
+                      if (dp(DomainView{d.second, d.first}))
                           d.second.visit(element_vector_visitor);
                   });
 }
@@ -125,7 +125,7 @@ void MeshPartition::cvisitDomainIf(F&& fun, D&& domain_predicate) const
                   domains.cend(),
                   [&element_vector_visitor,
                    dp = std::forward< D >(domain_predicate)](const domain_map_t::value_type& d) {
-                      if (dp(d.first))
+                      if (dp(DomainView{d.second, d.first}))
                           d.second.cvisit(element_vector_visitor);
                   });
 }
@@ -146,4 +146,4 @@ void MeshPartition::popDomain(types::d_id_t id)
 }
 } // namespace lstr::mesh
 
-#endif // L3STER_INCGUARD_MESH_MESHPARTITION_HPP
+#endif // L3STER_MESH_MESHPARTITION_HPP

@@ -1,5 +1,5 @@
-#ifndef L3STER_H
-#define L3STER_H
+#ifndef L3STER_HPP
+#define L3STER_HPP
 
 // This header includes the entire L3STER library
 
@@ -27,6 +27,10 @@
 #include "../src/mesh/Element.hpp"
 #include "../src/mesh/Domain.hpp"
 #include "../src/mesh/MeshPartition.hpp"
+#include "../src/mesh/Mesh.hpp"
+#include "../src/mesh/ReadMesh.hpp"
+#include "../src/mesh/BoundaryElementView.hpp"
+#include "../src/mesh/BoundaryView.hpp"
 
 // Quadratures, dependent on elements
 #include "../src/quadrature/Quadrature.hpp"
@@ -34,8 +38,4 @@
 #include "../src/quadrature/ReferenceQuadrature.hpp"
 #include "../src/quadrature/QuadratureGenerator.hpp"
 
-// Mesh, dependent on elements and nodes
-#include "../src/mesh/Mesh.hpp"
-#include "../src/mesh/ReadMesh.hpp"
-
-#endif // L3STER_H
+#endif // L3STER_HPP

@@ -8,12 +8,6 @@
 
 namespace lstr::mesh
 {
-//////////////////////////////////////////////////////////////////////////////////////////////
-//                                      DOMAIN CLASS                                        //
-//////////////////////////////////////////////////////////////////////////////////////////////
-/*
-The domain class stores element vectors
-*/
 class Domain
 {
 public:
@@ -38,8 +32,11 @@ public:
     template < typename F >
     void cvisit(const F&) const;
 
+    [[nodiscard]] types::dim_t getDim() const;
+
 private:
     element_vector_variant_vector_t element_vectors;
+    types::dim_t                    dim = 0;
 };
 
 template < ElementTypes ELTYPE, types::el_o_t ELORDER >
@@ -52,6 +49,14 @@ template < ElementTypes ELTYPE, types::el_o_t ELORDER, typename... ArgTypes >
 void Domain::emplaceBack(ArgTypes&&... Args)
 {
     using el_vec_t = element_vector_t< ELTYPE, ELORDER >;
+
+    if (!element_vectors.empty())
+    {
+        if (ElementTraits< Element< ELTYPE, ELORDER > >::native_dim != dim)
+            throw std::invalid_argument("Pushing element to domain of different dimension");
+    }
+    else
+        dim = ElementTraits< Element< ELTYPE, ELORDER > >::native_dim;
 
     const auto vector_variant_it =
         std::find_if(element_vectors.begin(), element_vectors.end(), [](const auto& v) {
@@ -72,6 +77,14 @@ template < ElementTypes ELTYPE, types::el_o_t ELORDER >
 void Domain::reserve(size_t size)
 {
     using el_vec_t = element_vector_t< ELTYPE, ELORDER >;
+
+    if (!element_vectors.empty())
+    {
+        if (ElementTraits< Element< ELTYPE, ELORDER > >::native_dim != dim)
+            throw std::invalid_argument("Pushing element to domain of different dimension");
+    }
+    else
+        dim = ElementTraits< Element< ELTYPE, ELORDER > >::native_dim;
 
     const auto vector_variant_it =
         std::find_if(element_vectors.begin(), element_vectors.end(), [](const auto& v) {
@@ -103,6 +116,34 @@ void Domain::cvisit(const F& fun) const
                   element_vectors.cend(),
                   [&fun](const element_vector_variant_t& v) { std::visit(fun, v); });
 }
+
+types::dim_t Domain::getDim() const
+{
+    return dim;
+}
+
+class DomainView
+{
+public:
+    DomainView()                  = delete;
+    DomainView(const DomainView&) = default;
+    DomainView(DomainView&&)      = default;
+    DomainView& operator=(const DomainView&) = delete;
+    DomainView& operator=(DomainView&&) = delete;
+    DomainView(const Domain& domain_, types::el_id_t id);
+
+    types::el_id_t getID() const { return id; }
+    types::dim_t   getDim() const { return domain.getDim(); }
+    const Domain&  getDomainRef() const { return domain; }
+
+private:
+    const Domain&  domain;
+    types::el_id_t id;
+};
+
+DomainView::DomainView(const Domain& domain_, types::el_id_t id_) : domain{domain_}, id{id_}
+{}
+
 } // namespace lstr::mesh
 
 #endif // L3STER_INCGUARD_MESH_DOMAIN_HPP

@@ -1,19 +1,11 @@
-#ifndef L3STER_INCGUARD_MESH_ELEMENTTRAITS_HPP
-#define L3STER_INCGUARD_MESH_ELEMENTTRAITS_HPP
+#ifndef L3STER_MESH_ELEMENTTRAITS_HPP
+#define L3STER_MESH_ELEMENTTRAITS_HPP
 
 namespace lstr::mesh
 {
 template < ElementTypes ELTYPE, types::el_o_t ELORDER >
 class Element;
 
-//////////////////////////////////////////////////////////////////////////////////////////////
-//                                   ELEMENT TRAITS CLASS                                   //
-//////////////////////////////////////////////////////////////////////////////////////////////
-/*
-This class is to be specialized for each element type and/or order. It must contain the member
-class ElementData, which holds useful physical-element-specific information (e.g. for
-computing the Jacobian)
-*/
 template < typename Element >
 struct ElementTraits;
 
@@ -27,15 +19,23 @@ struct ElementTraits< Element< ElementTypes::Quad, ELORDER > >
 
     struct ElementData
     {
-        double a;
-        double b;
-        double c;
-        double alphax;
-        double alphay;
-        double betax;
-        double betay;
-        double gammax;
-        double gammay;
+        types::val_t a;
+        types::val_t b;
+        types::val_t c;
+        types::val_t alphax;
+        types::val_t alphay;
+        types::val_t betax;
+        types::val_t betay;
+        types::val_t gammax;
+        types::val_t gammay;
+    };
+
+    enum class Boundaries
+    {
+        Left,
+        Right,
+        Top,
+        Bottom,
     };
 };
 
@@ -49,11 +49,15 @@ struct ElementTraits< Element< ElementTypes::Line, ELORDER > >
 
     struct ElementData
     {
-        ElementTypes   parent_el_t;
-        types::el_id_t parent_el;
-        types::el_f_t  face;
+        types::val_t L;
+    };
+
+    enum class Boundaries
+    {
+        Left,
+        Right,
     };
 };
 } // namespace lstr::mesh
 
-#endif // L3STER_INCGUARD_MESH_ELEMENTTRAITS_HPP
+#endif // L3STER_MESH_ELEMENTTRAITS_HPP
