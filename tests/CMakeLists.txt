@@ -18,5 +18,5 @@ include_directories(${CMAKE_SOURCE_DIR}/../Catch2/single_include/)
 
 add_executable(test
         ${CMAKE_SOURCE_DIR}/TestsMain.cpp
-	    ${CMAKE_SOURCE_DIR}/QuadratureTest.cpp
+	    ${CMAKE_SOURCE_DIR}/QuadratureTests.cpp
 	)
