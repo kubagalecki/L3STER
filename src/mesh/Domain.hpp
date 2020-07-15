@@ -2,6 +2,9 @@
 #define L3STER_INCGUARD_MESH_DOMAIN_HPP
 
 #include <algorithm>
+#include <functional>
+#include <optional>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -31,6 +34,9 @@ public:
 
     template < typename F >
     void cvisit(const F&) const;
+
+    template < typename F >
+    [[nodiscard]] std::optional< element_ref_variant_t > findElement(const F& predicate);
 
     [[nodiscard]] types::dim_t getDim() const;
 
@@ -120,6 +126,40 @@ void Domain::cvisit(const F& fun) const
 types::dim_t Domain::getDim() const
 {
     return dim;
+}
+
+template < typename F >
+std::optional< element_ref_variant_t > Domain::findElement(const F& predicate)
+{
+    static_assert(std::is_same_v< std::invoke_result_t< F >, bool >);
+
+    std::optional< element_ref_variant_t > ret_val;
+
+    const auto wrapped_predicate = [&ret_val, &predicate](const auto& element) {
+        const bool check = predicate(element);
+
+        if (check)
+        {
+            using element_t     = std::decay_t< decltype(element) >;
+            using element_ref_t = std::reference_wrapper< element_t >;
+
+            ret_val.emplace(std::in_place_type< element_ref_t >,
+                            std::ref(const_cast< element_t& >(element)));
+
+            // Note: const_cast is used correctly, because the underlying element is not const.
+            // However, we need to pass it to the predicate as a const reference, since the
+            // predicate is not allowed to modify the element.
+        }
+
+        return check;
+    };
+
+    for (const auto& element_vector_variant : element_vectors)
+    {
+
+    }
+
+    return ret_val;
 }
 
 class DomainView

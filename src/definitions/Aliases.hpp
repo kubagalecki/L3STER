@@ -13,8 +13,14 @@ using parametrize_over_element_types_and_orders_t =
 
 template < ElementTypes ELTYPE, types::el_o_t ELORDER >
 class Element;
-using element_variant_t =
-    util::meta::cartesian_product_t< std::variant, Element, ElementTypesArray, ElementOrdersArray >;
+
+using element_variant_t = parametrize_over_element_types_and_orders_t< std::variant, Element >;
+
+template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+using element_ref_t = std::reference_wrapper< Element< ELTYPE, ELORDER > >;
+
+using element_ref_variant_t =
+    parametrize_over_element_types_and_orders_t< std::variant, element_ref_t >;
 } // namespace lstr::mesh
 
 #endif // L3STER_DEFINITIONS_ALIASES_HPP
