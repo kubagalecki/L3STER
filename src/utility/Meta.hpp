@@ -226,7 +226,7 @@ template < template < typename... > typename M,
            typename C,
            typename I1,
            typename I2 >
-struct cartesian_product_t
+struct cartesian_product
 {
 private:
     using I1_i = typename array_to_valseq< I1 >::type;
@@ -238,6 +238,13 @@ public:
                                     typename stretch_valseq< I1_i, I2_i::size >::type,
                                     typename repeat_valseq< I2_i, I1_i::size >::type >::type;
 };
+
+template < template < typename... > typename M,
+           template < auto, auto >
+           typename C,
+           typename I1,
+           typename I2 >
+using cartesian_product_t = typename cartesian_product< M, C, I1, I2 >::type;
 
 template < template < typename... > typename T,
            template < auto >
