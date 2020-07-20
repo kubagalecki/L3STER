@@ -21,8 +21,8 @@ public:
     Mesh& operator=(const Mesh&) = delete;
     Mesh& operator=(Mesh&&) = default;
 
-    Mesh(std::vector< Node< 3 > >&& nodes_, MeshPartition&& partition_);
-    Mesh(std::vector< Node< 3 > >&& nodes_, std::vector< MeshPartition >&& partitions_);
+    inline Mesh(std::vector< Node< 3 > >&& nodes_, MeshPartition&& partition_);
+    inline Mesh(std::vector< Node< 3 > >&& nodes_, std::vector< MeshPartition >&& partitions_);
 
     [[nodiscard]] const std::vector< MeshPartition >& getPartitions() const { return partitions; }
     [[nodiscard]] const std::vector< Node< 3 > >&     getNodes() const { return nodes; }
@@ -34,12 +34,13 @@ private:
     std::vector< Node< 3 > >     nodes;      // All meshes are assumed 3D
 };
 
-Mesh::Mesh(std::vector< Node< 3 > >&& nodes_, MeshPartition&& partition_) : nodes(std::move(nodes_))
+inline Mesh::Mesh(std::vector< Node< 3 > >&& nodes_, MeshPartition&& partition_)
+    : nodes(std::move(nodes_))
 {
     partitions.emplace_back(std::move(partition_));
 }
 
-Mesh::Mesh(std::vector< Node< 3 > >&& nodes_, std::vector< MeshPartition >&& partitions_)
+inline Mesh::Mesh(std::vector< Node< 3 > >&& nodes_, std::vector< MeshPartition >&& partitions_)
     : partitions(std::move(partitions_)), nodes(std::move(nodes_))
 {}
 } // namespace lstr::mesh

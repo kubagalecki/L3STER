@@ -37,6 +37,21 @@ struct is_invocable_on_all_elements
 template < typename F >
 inline constexpr bool is_invocable_on_all_elements_v = is_invocable_on_all_elements< F >::value;
 
+template < typename F, typename R >
+struct is_invocable_r_on_all_elements
+{
+    template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+    using is_invocable_r_on_element = std::is_invocable_r< R, F, Element< ELTYPE, ELORDER >& >;
+
+    static constexpr bool value =
+        parametrize_type_over_element_types_and_orders_t< util::meta::and_pack,
+                                                          is_invocable_r_on_element >::value;
+};
+
+template < typename F, typename R >
+inline constexpr bool is_invocable_r_on_all_elements_v =
+    is_invocable_r_on_all_elements< F, R >::value;
+
 } // namespace lstr::mesh
 
 #endif // L3STER_DEFINITIONS_ALIASES_HPP

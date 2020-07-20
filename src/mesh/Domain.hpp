@@ -38,7 +38,7 @@ public:
     template < typename F >
     [[nodiscard]] std::optional< element_ref_variant_t > findElement(const F& predicate);
 
-    [[nodiscard]] types::dim_t getDim() const;
+    [[nodiscard]] types::dim_t getDim() const { return dim; };
 
 private:
     element_vector_variant_vector_t element_vectors;
@@ -132,15 +132,10 @@ void Domain::cvisit(F& element_visitor) const
             const element_vector_variant_t& el_vec) mutable { std::visit(visitor, el_vec); });
 }
 
-types::dim_t Domain::getDim() const
-{
-    return dim;
-}
-
 template < typename F >
 std::optional< element_ref_variant_t > Domain::findElement(const F& predicate)
 {
-    static_assert(is_invocable_on_all_elements_v< F >);
+    static_assert(is_invocable_r_on_all_elements_v< F, bool >);
 
     std::optional< element_ref_variant_t > ret_val;
 
@@ -201,7 +196,7 @@ public:
     DomainView(DomainView&&)      = default;
     DomainView& operator=(const DomainView&) = delete;
     DomainView& operator=(DomainView&&) = delete;
-    DomainView(const Domain& domain_, types::el_id_t id);
+    DomainView(const Domain& domain_, types::el_id_t id_) : domain{domain_}, id{id_} {}
 
     types::el_id_t getID() const { return id; }
     types::dim_t   getDim() const { return domain.getDim(); }
@@ -211,9 +206,6 @@ private:
     const Domain&  domain;
     types::el_id_t id;
 };
-
-DomainView::DomainView(const Domain& domain_, types::el_id_t id_) : domain{domain_}, id{id_}
-{}
 
 } // namespace lstr::mesh
 

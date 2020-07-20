@@ -38,7 +38,7 @@ public:
     explicit Element(const node_array_t& nodes_) : nodes{nodes_} {}
 
     [[nodiscard]] const node_array_t& getNodes() const noexcept { return nodes; }
-    [[nodiscard]] node_array_t&       getNodesRef() noexcept { return nodes; }
+    [[nodiscard]] node_array_t&       getNodes() noexcept { return nodes; }
 
 private:
     node_array_t                                                      nodes;

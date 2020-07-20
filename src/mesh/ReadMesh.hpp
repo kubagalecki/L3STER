@@ -30,9 +30,6 @@ struct MeshFormatTag
 
 constexpr inline MeshFormatTag gmsh_tag = MeshFormatTag< MeshFormat::Gmsh >{};
 
-template < MeshFormat FMT >
-Mesh readMesh(const char* file_path, MeshFormatTag< FMT >);
-
 namespace helpers
 {
 template < ElementTypes ELTYPE >
@@ -46,8 +43,7 @@ Element< ELTYPE, 1 > parse_element(std::ifstream& f)
 }
 } // namespace helpers
 
-template <>
-Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
+inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
 {
     // Define parsing lambdas
     const auto throw_error = [&file_path](const char* message) {
@@ -391,8 +387,8 @@ Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
                            [](const auto& node_data_entry) { return node_data_entry.second; });
 
             part.visitAllElements([min_node_tag = node_vector.front().first](auto& element) {
-                std::for_each(element.getNodesRef().begin(),
-                              element.getNodesRef().end(),
+                std::for_each(element.getNodes().begin(),
+                              element.getNodes().end(),
                               [&min_node_tag](auto& node) { node -= min_node_tag; });
             });
         }
