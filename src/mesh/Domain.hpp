@@ -174,7 +174,7 @@ std::optional< element_ref_variant_t > Domain::findElement(const F& predicate)
 }
 
 template < typename F >
-inline auto Domain::wrapElementVisitor(F& element_visitor)
+auto Domain::wrapElementVisitor(F& element_visitor)
 {
     static_assert(is_invocable_on_all_elements_v< F >);
 
@@ -184,7 +184,7 @@ inline auto Domain::wrapElementVisitor(F& element_visitor)
 }
 
 template < typename F >
-inline auto Domain::wrapElementCVisitor(F& element_visitor)
+auto Domain::wrapElementCVisitor(F& element_visitor)
 {
     static_assert(is_invocable_on_all_elements_v< F >);
 

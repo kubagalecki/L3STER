@@ -1,6 +1,7 @@
 #ifndef L3STER_DEFINITIONS_ALIASES_HPP
 #define L3STER_DEFINITIONS_ALIASES_HPP
 
+#include <functional>
 #include <variant>
 
 namespace lstr::mesh
@@ -26,7 +27,7 @@ template < typename F >
 struct is_invocable_on_all_elements
 {
     template < ElementTypes ELTYPE, types::el_o_t ELORDER >
-    using is_invocable_on_element = std::is_invocable< F, Element< ELTYPE, ELORDER > >;
+    using is_invocable_on_element = std::is_invocable< F, Element< ELTYPE, ELORDER >& >;
 
     static constexpr bool value =
         parametrize_type_over_element_types_and_orders_t< util::meta::and_pack,

@@ -121,7 +121,7 @@ auto MeshPartition::visitDomainIf(F&& element_visitor, D&& domain_predicate)
                           domain_visitor(domain);
                   });
 
-    return std::move(visitor);
+    return visitor;
 }
 
 template < typename F, typename D >
