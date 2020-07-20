@@ -20,4 +20,7 @@ jobs:
           cp $GITHUB_WORKSPACE/tests/data/. ./ -r
 
       - name: Run tests
-        run: $GITHUB_WORKSPACE/../build/test -s -d yes
+        run: |
+          cd $GITHUB_WORKSPACE/../build/
+          ll
+          ./test -s -d yes
