@@ -30,7 +30,7 @@ struct MeshFormatTag
 constexpr inline MeshFormatTag gmsh_tag = MeshFormatTag< MeshFormat::Gmsh >{};
 
 template < MeshFormat FMT >
-std::shared_ptr< Mesh > readMesh(const char* file_path, MeshFormatTag< FMT >);
+Mesh readMesh(const char* file_path, MeshFormatTag< FMT >);
 
 namespace helpers
 {
@@ -46,7 +46,7 @@ Element< ELTYPE, 1 > parse_element(std::ifstream& f)
 } // namespace helpers
 
 template <>
-std::shared_ptr< Mesh > readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
+Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
 {
     // Define parsing lambdas
     const auto throw_error = [&file_path](const char* message) {
@@ -156,7 +156,7 @@ std::shared_ptr< Mesh > readMesh(const char* file_path, MeshFormatTag< MeshForma
         }();
 
         if (f != Format::ASCII_V4)
-            throw_error("Only the ASCII v4 gmsh format is currently supported");
+            throw_error("Only the ASCII v4 gmsh format is currently supported [TO DO]");
 
         return f;
     };
@@ -225,12 +225,12 @@ std::shared_ptr< Mesh > readMesh(const char* file_path, MeshFormatTag< MeshForma
         case Format::BIN32_V4:
         case Format::BIN64_V4:
         default:
-            throw_error("Only the ASCII v4 gmsh format is currently supported");
+            throw_error("Only the ASCII v4 gmsh format is currently supported [TO DO]");
         }
 
         const size_t n_physical_domains = [&]() {
             const size_t n_physical_entities = std::transform_reduce(
-                entity_data.cbegin(), entity_data.cend(), 0, std::plus<>{}, [](const auto& map) {
+                entity_data.cbegin(), entity_data.cend(), 0u, std::plus<>{}, [](const auto& map) {
                     return map.size();
                 });
             std::vector< types::d_id_t > unique_physical_ids;
@@ -306,7 +306,7 @@ std::shared_ptr< Mesh > readMesh(const char* file_path, MeshFormatTag< MeshForma
         case Format::BIN32_V4:
         case Format::BIN64_V4:
         default:
-            throw_error("Only the ASCII v4 gmsh format is currently supported");
+            throw_error("Only the ASCII v4 gmsh format is currently supported [TO DO]");
         }
         return node_data;
     };
@@ -368,7 +368,7 @@ std::shared_ptr< Mesh > readMesh(const char* file_path, MeshFormatTag< MeshForma
         case Format::BIN32_V4:
         case Format::BIN64_V4:
         default:
-            throw_error("Only the ASCII v4 gmsh format is currently supported");
+            throw_error("Only the ASCII v4 gmsh format is currently supported [TO DO]");
         }
 
         skip_until_section("$EndElements");
@@ -411,7 +411,7 @@ std::shared_ptr< Mesh > readMesh(const char* file_path, MeshFormatTag< MeshForma
     auto       node_data    = parse_nodes(format_data);
     auto       element_data = parse_elements(format_data, entity_data);
 
-    return std::make_shared< Mesh >(make_contiguous_mesh(node_data, element_data));
+    return make_contiguous_mesh(node_data, element_data);
 } // namespace lstr::mesh
 } // namespace lstr::mesh
 

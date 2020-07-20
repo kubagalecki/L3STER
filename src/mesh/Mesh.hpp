@@ -26,8 +26,8 @@ public:
 
     [[nodiscard]] const std::vector< MeshPartition >& getPartitions() const { return partitions; }
     [[nodiscard]] const std::vector< Node< 3 > >&     getNodes() const { return nodes; }
-    [[nodiscard]] std::vector< MeshPartition >&       getPartitionsRef() { return partitions; }
-    [[nodiscard]] std::vector< Node< 3 > >&           getNodesRef() { return nodes; }
+    [[nodiscard]] std::vector< MeshPartition >&       getPartitions() { return partitions; }
+    [[nodiscard]] std::vector< Node< 3 > >&           getNodes() { return nodes; }
 
 private:
     std::vector< MeshPartition > partitions; // Mesh = multiple partitions

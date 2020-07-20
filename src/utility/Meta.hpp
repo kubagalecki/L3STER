@@ -220,7 +220,6 @@ struct combine2
 template < template < typename... > typename T, template < auto > typename U, typename A >
 struct apply_valseq;
 
-/////////////////////////////////////////////////////////////////////////////
 template < template < typename... > typename M,
            template < auto, auto >
            typename C,
@@ -239,6 +238,13 @@ public:
                                     typename repeat_valseq< I2_i, I1_i::size >::type >::type;
 };
 
+template < typename... V >
+struct and_pack
+{
+    static constexpr bool value = (V::value && ...);
+};
+
+/////////////////////////////////////////////////////////////////////////////
 template < template < typename... > typename M,
            template < auto, auto >
            typename C,
@@ -255,6 +261,9 @@ struct apply_valseq< T, U, value_sequence< A_t, vals... > >
 {
     using type = T< U< vals >... >;
 };
+
+template < typename... V >
+inline constexpr bool and_pack_v = and_pack< V... >::value;
 /////////////////////////////////////////////////////////////////////////////
 
 } // namespace lstr::util::meta
