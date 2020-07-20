@@ -22,4 +22,4 @@ jobs:
       - name: Run tests
         run: |
           cd $GITHUB_WORKSPACE/../build/
-          ./test -s -d yes
+          ./test -d yes
