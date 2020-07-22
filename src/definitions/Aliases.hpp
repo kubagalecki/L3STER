@@ -20,8 +20,14 @@ using element_variant_t = parametrize_type_over_element_types_and_orders_t< std:
 template < ElementTypes ELTYPE, types::el_o_t ELORDER >
 using element_ref_t = std::reference_wrapper< Element< ELTYPE, ELORDER > >;
 
+template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+using element_cref_t = std::reference_wrapper< const Element< ELTYPE, ELORDER > >;
+
 using element_ref_variant_t =
     parametrize_type_over_element_types_and_orders_t< std::variant, element_ref_t >;
+
+using element_cref_variant_t =
+    parametrize_type_over_element_types_and_orders_t< std::variant, element_cref_t >;
 
 template < typename F >
 struct is_invocable_on_all_elements

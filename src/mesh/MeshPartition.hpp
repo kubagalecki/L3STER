@@ -46,13 +46,27 @@ public:
     std::optional< element_ref_variant_t > findElement(const F& predicate);
 
     template < typename F >
+    std::optional< element_cref_variant_t > findElement(const F& predicate) const;
+
+    template < typename F >
     std::optional< element_ref_variant_t >
     findElementInSpecifiedDomains(const F&                            predicate,
                                   const std::vector< types::d_id_t >& domain_ids);
 
+    template < typename F >
+    std::optional< element_cref_variant_t >
+    findElementInSpecifiedDomains(const F&                            predicate,
+                                  const std::vector< types::d_id_t >& domain_ids) const;
+
     template < typename F, typename D >
     std::optional< element_ref_variant_t > findElementIfDomain(const F& predicate,
                                                                const D& domain_predicate);
+
+    template < typename F, typename D >
+    std::optional< element_cref_variant_t > findElementIfDomain(const F& predicate,
+                                                                const D& domain_predicate) const;
+
+    DomainView getDomainView(types::d_id_t id) const { return DomainView(domains.at(id), id); }
 
     inline void pushDomain(types::d_id_t, Domain&&);
     inline void pushDomain(types::d_id_t, const Domain&);
@@ -105,7 +119,7 @@ auto MeshPartition::cvisitSpecifiedDomains(F&&                                 e
 template < typename F, typename D >
 auto MeshPartition::visitDomainIf(F&& element_visitor, D&& domain_predicate)
 {
-    static_assert(std::is_invocable_v< D, DomainView >);
+    static_assert(std::is_invocable_r_v< bool, D, DomainView& >);
 
     auto visitor   = std::forward< F >(element_visitor);
     auto predicate = std::forward< D >(domain_predicate);
@@ -127,7 +141,7 @@ auto MeshPartition::visitDomainIf(F&& element_visitor, D&& domain_predicate)
 template < typename F, typename D >
 auto MeshPartition::cvisitDomainIf(F&& element_visitor, D&& domain_predicate) const
 {
-    static_assert(std::is_invocable_v< D, DomainView >);
+    static_assert(std::is_invocable_r_v< bool, D, DomainView& >);
 
     auto visitor   = std::forward< F >(element_visitor);
     auto predicate = std::forward< D >(domain_predicate);
@@ -153,9 +167,27 @@ std::optional< element_ref_variant_t > MeshPartition::findElement(const F& predi
 }
 
 template < typename F >
+std::optional< element_cref_variant_t > MeshPartition::findElement(const F& predicate) const
+{
+    return findElementIfDomain(predicate, [](const auto&) { return true; });
+}
+
+template < typename F >
 std::optional< element_ref_variant_t >
 MeshPartition::findElementInSpecifiedDomains(const F&                            predicate,
                                              const std::vector< types::d_id_t >& domain_ids)
+{
+    return findElementIfDomain(predicate, [&domain_ids](const auto& domain_view) {
+        return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&domain_view](types::d_id_t d) {
+            return d == domain_view.getID();
+        });
+    });
+}
+
+template < typename F >
+std::optional< element_cref_variant_t >
+MeshPartition::findElementInSpecifiedDomains(const F&                            predicate,
+                                             const std::vector< types::d_id_t >& domain_ids) const
 {
     return findElementIfDomain(predicate, [&domain_ids](const auto& domain_view) {
         return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&domain_view](types::d_id_t d) {
@@ -169,6 +201,26 @@ std::optional< element_ref_variant_t > MeshPartition::findElementIfDomain(const 
                                                                           const D& domain_predicate)
 {
     std::optional< element_ref_variant_t > ret_val;
+
+    for (auto& domain_map_entry : domains)
+    {
+        if (domain_predicate(DomainView{domain_map_entry.second, domain_map_entry.first}))
+        {
+            ret_val = domain_map_entry.second.findElement(predicate);
+
+            if (ret_val)
+                break;
+        }
+    };
+
+    return ret_val;
+}
+
+template < typename F, typename D >
+std::optional< element_cref_variant_t >
+MeshPartition::findElementIfDomain(const F& predicate, const D& domain_predicate) const
+{
+    std::optional< element_cref_variant_t > ret_val;
 
     for (auto& domain_map_entry : domains)
     {

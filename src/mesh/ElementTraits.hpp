@@ -12,10 +12,37 @@ struct ElementTraits;
 template < types::el_o_t ELORDER >
 struct ElementTraits< Element< ElementTypes::Quad, ELORDER > >
 {
-    static constexpr ElementTypes  element_type      = ElementTypes::Quad;
-    static constexpr types::el_o_t element_order     = ELORDER;
-    static constexpr types::n_id_t nodes_per_element = (ELORDER + 1) * (ELORDER + 1);
-    static constexpr types::dim_t  native_dim        = 2;
+    static constexpr ElementTypes       element_type       = ElementTypes::Quad;
+    static constexpr types::el_o_t      element_order      = ELORDER;
+    static constexpr types::n_id_t      nodes_per_element  = (ELORDER + 1) * (ELORDER + 1);
+    static constexpr types::dim_t       native_dim         = 2;
+    static constexpr types::el_ns_t     n_sides            = 4;
+    static constexpr types::el_locind_t max_nodes_per_side = ELORDER + 1;
+
+    using boundary_table_t =
+        std::array< std::array< types::el_locind_t, max_nodes_per_side + 1 >, n_sides >;
+
+private:
+    static constexpr boundary_table_t makeBoundaryTable()
+    {
+        boundary_table_t bt{};
+
+        for (size_t i = 0; i < n_sides; ++i)
+            bt[i][0] = max_nodes_per_side;
+
+        for (size_t i = 0; i < max_nodes_per_side; ++i)
+        {
+            bt[0][i + 1] = i;                                                 // bottom
+            bt[1][i + 1] = i * max_nodes_per_side;                            // left
+            bt[2][i + 1] = i + (max_nodes_per_side - 1) * max_nodes_per_side; // top
+            bt[3][i + 1] = i * max_nodes_per_side + max_nodes_per_side - 1;   // right
+        }
+
+        return bt;
+    }
+
+public:
+    static constexpr boundary_table_t boundary_table = makeBoundaryTable();
 
     struct ElementData
     {
@@ -29,33 +56,26 @@ struct ElementTraits< Element< ElementTypes::Quad, ELORDER > >
         types::val_t gammax;
         types::val_t gammay;
     };
-
-    enum class Boundaries
-    {
-        Left,
-        Right,
-        Top,
-        Bottom,
-    };
 };
 
 template < types::el_o_t ELORDER >
 struct ElementTraits< Element< ElementTypes::Line, ELORDER > >
 {
-    static constexpr ElementTypes  element_type      = ElementTypes::Line;
-    static constexpr types::el_o_t element_order     = ELORDER;
-    static constexpr types::n_id_t nodes_per_element = (ELORDER + 1);
-    static constexpr types::dim_t  native_dim        = 1;
+    static constexpr ElementTypes       element_type       = ElementTypes::Line;
+    static constexpr types::el_o_t      element_order      = ELORDER;
+    static constexpr types::n_id_t      nodes_per_element  = (ELORDER + 1);
+    static constexpr types::dim_t       native_dim         = 1;
+    static constexpr types::el_ns_t     n_sides            = 2;
+    static constexpr types::el_locind_t max_nodes_per_side = 1;
+
+    using boundary_table_t =
+        std::array< std::array< types::el_locind_t, max_nodes_per_side + 1 >, n_sides >;
+
+    static constexpr boundary_table_t boundary_table = {{{1, 0}, {1, ELORDER}}};
 
     struct ElementData
     {
         types::val_t L;
-    };
-
-    enum class Boundaries
-    {
-        Left,
-        Right,
     };
 };
 } // namespace lstr::mesh

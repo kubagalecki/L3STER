@@ -3,17 +3,22 @@
 
 namespace lstr::mesh
 {
-template < typename >
-struct BoundaryElementView;
-
 template < ElementTypes ELTYPE, types::el_o_t ELORDER >
-struct BoundaryElementView< Element< ELTYPE, ELORDER > >
+struct BoundaryElementView
 {
-    using element_t  = Element< ELTYPE, ELORDER >;
-    using boundary_t = typename ElementTraits< element_t >::Boundaries;
+    using element_t = Element< ELTYPE, ELORDER >;
 
-    const element_t& element;
-    boundary_t       boundary;
+    BoundaryElementView()                               = delete;
+    BoundaryElementView(const BoundaryElementView&)     = default;
+    BoundaryElementView(BoundaryElementView&&) noexcept = default;
+    BoundaryElementView& operator=(const BoundaryElementView&) = default;
+    BoundaryElementView& operator=(BoundaryElementView&&) noexcept = default;
+    BoundaryElementView(const element_t& element_, const types::el_ns_t element_side_)
+        : element{std::cref(element_)}, element_side{element_side_}
+    {}
+
+    element_cref_t< ELTYPE, ELORDER > element;
+    types::el_ns_t                    element_side;
 };
 } // namespace lstr::mesh
 

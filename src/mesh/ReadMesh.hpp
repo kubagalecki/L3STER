@@ -39,6 +39,18 @@ Element< ELTYPE, 1 > parse_element(std::ifstream& f)
     std::array< size_t, n_nodes > nodes{};
     for (auto& node : nodes)
         f >> node;
+
+    // Reorder nodes if needed
+    if constexpr (ELTYPE == ElementTypes::Quad)
+    {
+        std::swap(nodes[2], nodes[3]);
+        std::rotate(nodes.begin(), nodes.begin() + 2, nodes.end());
+    }
+    else if constexpr (ELTYPE == ElementTypes::Line)
+    {
+        ;
+    }
+
     return Element< ELTYPE, 1 >{nodes};
 }
 } // namespace helpers

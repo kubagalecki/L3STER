@@ -38,7 +38,11 @@ public:
     template < typename F >
     [[nodiscard]] std::optional< element_ref_variant_t > findElement(const F& predicate);
 
-    [[nodiscard]] types::dim_t getDim() const { return dim; };
+    template < typename F >
+    [[nodiscard]] std::optional< element_cref_variant_t > findElement(const F& predicate) const;
+
+    [[nodiscard]] types::dim_t  getDim() const { return dim; };
+    [[nodiscard]] inline size_t getNElements() const;
 
 private:
     element_vector_variant_vector_t element_vectors;
@@ -169,6 +173,31 @@ std::optional< element_ref_variant_t > Domain::findElement(const F& predicate)
 }
 
 template < typename F >
+std::optional< element_cref_variant_t > Domain::findElement(const F& predicate) const
+{
+    // The non-const version of findElement does not modify `this`, it merely returns a non-const
+    // reference to the underlying data. For this reason, we can call it as const, as long as we
+    // const-qualify the returned value. Therefore, the following line of code does NOT invoke UB.
+    auto nonconst_ref_opt = const_cast< Domain* >(this)->findElement(predicate);
+
+    if (!nonconst_ref_opt)
+        return std::optional< element_cref_variant_t >{};
+
+    const auto const_qualify = [](const auto& element_ref) {
+        using element_t              = typename std::decay_t< decltype(element_ref) >::type;
+        constexpr auto element_type  = ElementTraits< element_t >::element_type;
+        constexpr auto element_order = ElementTraits< element_t >::element_order;
+
+        return std::optional< element_cref_variant_t >{
+            std::in_place,
+            std::in_place_type< element_cref_t< element_type, element_order > >,
+            std::cref(element_ref)};
+    };
+
+    return std::visit(const_qualify, *nonconst_ref_opt);
+}
+
+template < typename F >
 auto Domain::wrapElementVisitor(F& element_visitor)
 {
     static_assert(is_invocable_on_all_elements_v< F >);
@@ -188,6 +217,17 @@ auto Domain::wrapElementCVisitor(F& element_visitor)
     };
 }
 
+inline size_t Domain::getNElements() const
+{
+    return std::accumulate(
+        element_vectors.cbegin(),
+        element_vectors.cend(),
+        0u,
+        [](size_t sum, const auto& el_vec_var) {
+            return sum + std::visit([](const auto& el_vec) { return el_vec.size(); }, el_vec_var);
+        });
+}
+
 class DomainView
 {
 public:
@@ -200,6 +240,7 @@ public:
 
     types::el_id_t getID() const { return id; }
     types::dim_t   getDim() const { return domain.getDim(); }
+    size_t         getNElements() const { return domain.getNElements(); }
     const Domain&  getDomainRef() const { return domain; }
 
 private:
