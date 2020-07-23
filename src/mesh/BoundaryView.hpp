@@ -20,6 +20,8 @@ public:
     template < typename F >
     auto visit(F&& element_variant) const;
 
+    size_t size() const { return boundary_element_view_variant_vector.size(); }
+
 private:
     boundary_element_view_variant_vector_t boundary_element_view_variant_vector;
 };
@@ -30,23 +32,21 @@ template < typename Element, size_t N, types::el_ns_t I >
 constexpr auto makeSideMatcher()
 {
     return [](const Element& element, const std::array< types::n_id_t, N >& sorted_side_nodes) {
-        constexpr auto& side_inds = ElementTraits< Element >::boundary_table[I];
-        if constexpr (side_inds.front() == N)
+        constexpr auto& side_inds = std::get< I >(ElementTraits< Element >::boundary_table);
+        if constexpr (std::tuple_size_v< std::decay_t< decltype(side_inds) > > == N)
         {
             std::array< types::n_id_t, N > element_side_nodes;
-            std::transform(side_inds.cbegin() + 1,
-                           side_inds.cbegin() + 1 + N,
+            std::transform(side_inds.cbegin(),
+                           side_inds.cend(),
                            element_side_nodes.begin(),
-                           [&side_inds, &element_nodes = element.getNodes()](types::el_locind_t i) {
+                           [&element_nodes = element.getNodes()](types::el_locind_t i) {
                                return element_nodes[i];
                            });
 
             std::sort(element_side_nodes.begin(), element_side_nodes.end());
 
-            bool ret;
-            ret = std::equal(
+            return std::equal(
                 element_side_nodes.cbegin(), element_side_nodes.cend(), sorted_side_nodes.cbegin());
-            return ret;
         }
         else
             return false;
@@ -96,13 +96,13 @@ inline BoundaryView::BoundaryView(const MeshPartition& topology, const types::d_
             std::sort(bn.begin(), bn.end());
             return bn;
         }();
-        constexpr size_t boundary_size =
-            std::tuple_size_v< std::decay_t< decltype(boundary_nodes) > >;
 
         types::el_ns_t side_index = 0;
 
         const auto is_domain_element =
-            [&side_index, &topology, &boundary_nodes, &boundary_size](const auto& domain_element) {
+            [&side_index, &topology, &boundary_nodes](const auto& domain_element) {
+                constexpr size_t boundary_size =
+                    std::tuple_size_v< std::decay_t< decltype(boundary_nodes) > >;
                 using domain_element_t = std::decay_t< decltype(domain_element) >;
                 constexpr auto n_sides = ElementTraits< domain_element_t >::n_sides;
 
@@ -139,6 +139,7 @@ inline BoundaryView::BoundaryView(const MeshPartition& topology, const types::d_
 
     topology.cvisitSpecifiedDomains(insert_boundary_element_view, {boundary_id});
 }
+
 template < typename F >
 auto BoundaryView::visit(F&& visitor) const
 {

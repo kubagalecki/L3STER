@@ -82,9 +82,12 @@ struct ElementFinder : ConstructionTracker
     nv_t nodes;
 };
 
-TEST_CASE("Quadrilateral mesh", "[mesh]")
+TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::mesh::Mesh, const lstr::mesh::Mesh)
 {
-    auto mesh = lstr::mesh::readMesh("mesh_ascii4.msh", lstr::mesh::gmsh_tag);
+    // Flag to prevent non-const member functions from being tested on const object
+    constexpr bool is_const = std::is_same_v< TestType, const lstr::mesh::Mesh >;
+
+    TestType mesh = lstr::mesh::readMesh("mesh_ascii4.msh", lstr::mesh::gmsh_tag);
 
     REQUIRE(mesh.getPartitions().size() == 1);
 
@@ -92,37 +95,12 @@ TEST_CASE("Quadrilateral mesh", "[mesh]")
     const auto& nodes    = mesh.getNodes();
 
     REQUIRE(nodes.size() == 121);
-
-    auto element_counter = topology.visitAllElements(ElementCounter{});
+    
+    // Const visitors
+    auto element_counter = topology.cvisitAllElements(ElementCounter{});
 
     REQUIRE(element_counter.counter == 140);
     CHECK(ConstructionTracker::defaults == 1);
-    CHECK(ConstructionTracker::copies == 0);
-    CHECK(ConstructionTracker::cp_asgn == 0);
-    CHECK(ConstructionTracker::moves <= 1);
-    CHECK(ConstructionTracker::mv_asgn <= 1);
-
-    ConstructionTracker::resetCount();
-    element_counter.counter = 0;
-
-    element_counter =
-        topology.visitDomainIf(std::move(element_counter),
-                               [](const lstr::mesh::DomainView& dv) { return dv.getDim() == 2; });
-
-    CHECK(element_counter.counter == 100);
-    CHECK(ConstructionTracker::defaults == 0);
-    CHECK(ConstructionTracker::copies == 0);
-    CHECK(ConstructionTracker::cp_asgn == 0);
-    CHECK(ConstructionTracker::moves <= 1);
-    CHECK(ConstructionTracker::mv_asgn <= 1);
-
-    ConstructionTracker::resetCount();
-    element_counter.counter = 0;
-
-    element_counter = topology.cvisitAllElements(std::move(element_counter));
-
-    REQUIRE(element_counter.counter == 140);
-    CHECK(ConstructionTracker::defaults == 0);
     CHECK(ConstructionTracker::copies == 0);
     CHECK(ConstructionTracker::cp_asgn == 0);
     CHECK(ConstructionTracker::moves <= 1);
@@ -145,6 +123,37 @@ TEST_CASE("Quadrilateral mesh", "[mesh]")
     ConstructionTracker::resetCount();
     element_counter.counter = 0;
 
+    // Non-const visitors
+    if constexpr (!is_const)
+    {
+        element_counter = topology.visitAllElements(std::move(element_counter));
+
+        REQUIRE(element_counter.counter == 140);
+        CHECK(ConstructionTracker::defaults == 0);
+        CHECK(ConstructionTracker::copies == 0);
+        CHECK(ConstructionTracker::cp_asgn == 0);
+        CHECK(ConstructionTracker::moves <= 1);
+        CHECK(ConstructionTracker::mv_asgn <= 1);
+
+        ConstructionTracker::resetCount();
+        element_counter.counter = 0;
+
+        element_counter = topology.visitDomainIf(
+            std::move(element_counter),
+            [](const lstr::mesh::DomainView& dv) { return dv.getDim() == 2; });
+
+        CHECK(element_counter.counter == 100);
+        CHECK(ConstructionTracker::defaults == 0);
+        CHECK(ConstructionTracker::copies == 0);
+        CHECK(ConstructionTracker::cp_asgn == 0);
+        CHECK(ConstructionTracker::moves <= 1);
+        CHECK(ConstructionTracker::mv_asgn <= 1);
+
+        ConstructionTracker::resetCount();
+        element_counter.counter = 0;
+    }
+
+    // Find (both const and non-const)
     const auto predicate = ElementFinder(std::vector< lstr::types::n_id_t >({54, 55, 64, 62}));
     const auto element1  = topology.findElement(predicate);
 
@@ -156,4 +165,15 @@ TEST_CASE("Quadrilateral mesh", "[mesh]")
     CHECK(ConstructionTracker::mv_asgn == 0);
 
     ConstructionTracker::resetCount();
+
+    // BoundaryView
+    std::vector< lstr::mesh::BoundaryView > boundaries;
+    boundaries.reserve(4);
+    for (int i = 2; i <= 5; ++i)
+        boundaries.emplace_back(mesh.getPartitions()[0], i);
+
+    CHECK(boundaries[0].size() == 10);
+    CHECK(boundaries[1].size() == 10);
+    CHECK(boundaries[2].size() == 10);
+    CHECK(boundaries[3].size() == 10);
 }
