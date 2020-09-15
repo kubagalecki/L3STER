@@ -1,9 +1,1 @@
-[submodule "eigen"]
-	path = eigen
-	url = https://gitlab.com/libeigen/eigen
-	tag = eigen-3.3.7
-[submodule "Catch2"]
-	path = Catch2
-	url = https://github.com/catchorg/Catch2.git
-	tag = v2.12.4
 
