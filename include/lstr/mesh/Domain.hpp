@@ -1,5 +1,8 @@
-#ifndef L3STER_INCGUARD_MESH_DOMAIN_HPP
-#define L3STER_INCGUARD_MESH_DOMAIN_HPP
+#ifndef L3STER_MESH_DOMAIN_HPP
+#define L3STER_MESH_DOMAIN_HPP
+
+#include "lstr/mesh/Aliases.hpp"
+#include "lstr/mesh/Element.hpp"
 
 #include <algorithm>
 #include <functional>
@@ -49,10 +52,10 @@ private:
     types::dim_t                    dim = 0;
 
     template < typename F >
-    [[nodiscard]] static auto wrapElementVisitor(F& fun);
+    [[nodiscard]] static auto wrapElementVisitor(F& element_visitor);
 
     template < typename F >
-    [[nodiscard]] static auto wrapElementCVisitor(F& fun);
+    [[nodiscard]] static auto wrapElementCVisitor(F& element_visitor);
 };
 
 template < ElementTypes ELTYPE, types::el_o_t ELORDER >
@@ -238,10 +241,10 @@ public:
     DomainView& operator=(DomainView&&) = delete;
     DomainView(const Domain& domain_, types::el_id_t id_) : domain{domain_}, id{id_} {}
 
-    types::el_id_t getID() const { return id; }
-    types::dim_t   getDim() const { return domain.getDim(); }
-    size_t         getNElements() const { return domain.getNElements(); }
-    const Domain&  getDomainRef() const { return domain; }
+    [[nodiscard]] types::el_id_t getID() const { return id; }
+    [[nodiscard]] types::dim_t   getDim() const { return domain.getDim(); }
+    [[nodiscard]] size_t         getNElements() const { return domain.getNElements(); }
+    [[nodiscard]] const Domain&  getDomainRef() const { return domain; }
 
 private:
     const Domain&  domain;
@@ -250,4 +253,4 @@ private:
 
 } // namespace lstr::mesh
 
-#endif // L3STER_INCGUARD_MESH_DOMAIN_HPP
+#endif // L3STER_MESH_DOMAIN_HPP

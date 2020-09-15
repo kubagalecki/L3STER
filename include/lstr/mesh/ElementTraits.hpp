@@ -1,6 +1,8 @@
 #ifndef L3STER_MESH_ELEMENTTRAITS_HPP
 #define L3STER_MESH_ELEMENTTRAITS_HPP
 
+#include "lstr/mesh/ElementTypes.hpp"
+
 namespace lstr::mesh
 {
 template < ElementTypes ELTYPE, types::el_o_t ELORDER >

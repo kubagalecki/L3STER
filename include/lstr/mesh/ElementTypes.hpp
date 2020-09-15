@@ -1,7 +1,9 @@
 // Enumeration containing element types
 
-#ifndef L3STER_INCGUARD_MESH_ELEMENTTYPES_H
-#define L3STER_INCGUARD_MESH_ELEMENTTYPES_H
+#ifndef L3STER_MESH_ELEMENTTYPES_H
+#define L3STER_MESH_ELEMENTTYPES_H
+
+#include "lstr/mesh/Constants.hpp"
 
 #include <array>
 #include <utility>
@@ -44,4 +46,4 @@ struct ElementOrdersArray
 };
 } // namespace lstr::mesh
 
-#endif // end include guard
+#endif // L3STER_MESH_ELEMENTTYPES_H

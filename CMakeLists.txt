@@ -33,6 +33,13 @@ endif()
 message(STATUS "Creating L3STER interface target...")
 add_library(L3STER INTERFACE)
 target_include_directories(L3STER INTERFACE include/)
+file(GLOB_RECURSE L3STER_SOURCES
+    LIST_DIRECTORIES false
+    RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+    CONFIGURE_DEPENDS
+    include/*
+)
+target_sources(L3STER INTERFACE ${L3STER_SOURCES})
 set_target_properties(L3STER PROPERTIES
     INTERFACE_COMPILE_FEATURES cxx_std_17
 )

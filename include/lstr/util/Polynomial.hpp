@@ -4,8 +4,12 @@
  * p(x) = sum[i = 0 : N] ( ai * x^i ), where N is the order of the polynomial
  */
 
-#ifndef L3STER_INCGUARD_UTIL_POLYNOMIAL_HPP
-#define L3STER_INCGUARD_UTIL_POLYNOMIAL_HPP
+#ifndef L3STER_UTIL_POLYNOMIAL_HPP
+#define L3STER_UTIL_POLYNOMIAL_HPP
+
+#include "Eigen/Dense"
+
+#include "lstr/defs/Typedefs.h"
 
 #include <algorithm>
 #include <array>
@@ -16,9 +20,7 @@
 #include <string>
 #include <type_traits>
 
-namespace lstr
-{
-namespace util
+namespace lstr::util
 {
 //////////////////////////////////////////////////////////////////////////////////////////////
 //                                      POLYNOMIAL CLASS                                    //
@@ -253,7 +255,7 @@ public:
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////
-//                                          FUNTIONS                                        //
+//                                          FUNCTIONS                                       //
 //////////////////////////////////////////////////////////////////////////////////////////////
 // Lagrange interpolation
 /*
@@ -280,7 +282,6 @@ Polynomial< N > lagrangeFit(const T& x, const T& y)
     std::copy(ret_coefs.cbegin(), ret_coefs.cend(), ret_val.data());
     return ret_val;
 }
-} // namespace util
-} // namespace lstr
+} // namespace lstr::util
 
-#endif // end include guard
+#endif // L3STER_UTIL_POLYNOMIAL_HPP

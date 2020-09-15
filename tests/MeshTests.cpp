@@ -89,7 +89,8 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::mesh::Mesh, const lstr:
     // Flag to prevent non-const member functions from being tested on const object
     constexpr bool is_const = std::is_same_v< TestType, const lstr::mesh::Mesh >;
 
-    TestType mesh = lstr::mesh::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(mesh_ascii4.msh), lstr::mesh::gmsh_tag);
+    TestType mesh = lstr::mesh::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(mesh_ascii4.msh),
+                                         lstr::mesh::gmsh_tag);
 
     REQUIRE(mesh.getPartitions().size() == 1);
 
@@ -97,7 +98,7 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::mesh::Mesh, const lstr:
     const auto& nodes    = mesh.getNodes();
 
     REQUIRE(nodes.size() == 121);
-    
+
     // Const visitors
     auto element_counter = topology.cvisitAllElements(ElementCounter{});
 

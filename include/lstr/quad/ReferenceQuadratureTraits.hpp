@@ -1,6 +1,9 @@
 #ifndef L3STER_QUADRATURE_REFERENCEQUADRATURETRAITS_HPP
 #define L3STER_QUADRATURE_REFERENCEQUADRATURETRAITS_HPP
 
+#include "lstr/defs/Typedefs.h"
+#include "lstr/quad/QuadratureTypes.h"
+
 namespace lstr::quad
 {
 template < QuadratureTypes, types::q_o_t >

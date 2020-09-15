@@ -1,5 +1,9 @@
-#ifndef L3STER_DEFINITIONS_ALIASES_HPP
-#define L3STER_DEFINITIONS_ALIASES_HPP
+#ifndef L3STER_MESH_ALIASES_HPP
+#define L3STER_MESH_ALIASES_HPP
+
+#include "lstr/defs/Typedefs.h"
+#include "lstr/mesh/ElementTypes.hpp"
+#include "lstr/util/Meta.hpp"
 
 #include <functional>
 #include <variant>
@@ -60,4 +64,4 @@ inline constexpr bool is_invocable_r_on_all_elements_v =
 
 } // namespace lstr::mesh
 
-#endif // L3STER_DEFINITIONS_ALIASES_HPP
+#endif // L3STER_MESH_ALIASES_HPP

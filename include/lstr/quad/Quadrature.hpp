@@ -1,6 +1,8 @@
 #ifndef L3STER_QUAD_QUADRATURE_HPP
 #define L3STER_QUAD_QUADRATURE_HPP
 
+#include "lstr/defs/Typedefs.h"
+
 #include <array>
 
 namespace lstr::quad

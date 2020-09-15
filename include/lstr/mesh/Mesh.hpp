@@ -1,5 +1,8 @@
-#ifndef L3STER_INCGUARD_MESH_MESH_HPP
-#define L3STER_INCGUARD_MESH_MESH_HPP
+#ifndef L3STER_MESH_MESH_HPP
+#define L3STER_MESH_MESH_HPP
+
+#include "lstr/mesh/MeshPartition.hpp"
+#include "lstr/mesh/Node.hpp"
 
 #include <utility>
 #include <vector>
@@ -45,4 +48,4 @@ inline Mesh::Mesh(std::vector< Node< 3 > >&& nodes_, std::vector< MeshPartition 
 {}
 } // namespace lstr::mesh
 
-#endif // L3STER_INCGUARD_MESH_MESH_HPP
+#endif // L3STER_MESH_MESH_HPP

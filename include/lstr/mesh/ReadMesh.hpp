@@ -1,5 +1,7 @@
-#ifndef L3STER_INCGUARD_MESH_READMESH_HPP
-#define L3STER_INCGUARD_MESH_READMESH_HPP
+#ifndef L3STER_MESH_READMESH_HPP
+#define L3STER_MESH_READMESH_HPP
+
+#include "lstr/mesh/Mesh.hpp"
 
 #include <algorithm>
 #include <array>
@@ -13,8 +15,6 @@
 #include <tuple>
 #include <unordered_map>
 #include <utility>
-
-#include <iostream>
 
 namespace lstr::mesh
 {
@@ -424,4 +424,4 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
 } // namespace lstr::mesh
 } // namespace lstr::mesh
 
-#endif // L3STER_INCGUARD_MESH_READMESH_HPP
+#endif // L3STER_MESH_READMESH_HPP

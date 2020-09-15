@@ -1,5 +1,8 @@
-#ifndef L3STER_DEFINITIONS_CONSTANTS_HPP
-#define L3STER_DEFINITIONS_CONSTANTS_HPP
+#ifndef L3STER_MESH_CONSTANTS_HPP
+#define L3STER_MESH_CONSTANTS_HPP
+
+#include "lstr/defs/Typedefs.h"
+#include "lstr/util/Meta.hpp"
 
 #include <array>
 
@@ -24,4 +27,4 @@ using parametrize_over_dims_t = typename util::meta::
     apply_valseq< T, U, typename util::meta::array_to_valseq< MeshDimensionsArray >::type >::type;
 } // namespace lstr::mesh
 
-#endif // L3STER_DEFINITIONS_CONSTANTS_HPP
+#endif // L3STER_MESH_CONSTANTS_HPP

@@ -1,6 +1,9 @@
 #ifndef L3STER_MESH_BOUNDARYVIEW_HPP
 #define L3STER_MESH_BOUNDARYVIEW_HPP
 
+#include "lstr/mesh/BoundaryElementView.hpp"
+#include "lstr/mesh/MeshPartition.hpp"
+
 namespace lstr::mesh
 {
 class BoundaryView

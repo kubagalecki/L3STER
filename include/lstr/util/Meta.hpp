@@ -1,7 +1,7 @@
 // Meta-programming helper classes
 
-#ifndef L3STER_INCGUARD_UTIL_META_HPP
-#define L3STER_INCGUARD_UTIL_META_HPP
+#ifndef L3STER_UTIL_META_HPP
+#define L3STER_UTIL_META_HPP
 
 #include <array>
 #include <tuple>
@@ -268,4 +268,4 @@ inline constexpr bool and_pack_v = and_pack< V... >::value;
 
 } // namespace lstr::util::meta
 
-#endif // end include guard
+#endif // L3STER_UTIL_META_HPP

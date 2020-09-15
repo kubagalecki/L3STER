@@ -1,6 +1,9 @@
 #ifndef L3STER_MESH_BOUNDARYELEMENTVIEW_HPP
 #define L3STER_MESH_BOUNDARYELEMENTVIEW_HPP
 
+#include "lstr/mesh/Element.hpp"
+#include "lstr/mesh/Aliases.hpp"
+
 namespace lstr::mesh
 {
 template < ElementTypes ELTYPE, types::el_o_t ELORDER >

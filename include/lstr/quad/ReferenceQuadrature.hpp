@@ -1,6 +1,11 @@
 #ifndef L3STER_QUADRATURE_REFERENCEQUADRATURE_HPP
 #define L3STER_QUADRATURE_REFERENCEQUADRATURE_HPP
 
+#include "Eigen/Dense"
+
+#include "lstr/quad/Quadrature.hpp"
+#include "lstr/quad/ReferenceQuadratureTraits.hpp"
+
 #include <cmath>
 
 namespace lstr::quad

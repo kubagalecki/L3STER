@@ -1,7 +1,9 @@
 // Data type representing a physical element
 
-#ifndef L3STER_INCGUARD_MESH_ELEMENT_HPP
-#define L3STER_INCGUARD_MESH_ELEMENT_HPP
+#ifndef L3STER_MESH_ELEMENT_HPP
+#define L3STER_MESH_ELEMENT_HPP
+
+#include "lstr/mesh/ElementTraits.hpp"
 
 #include <algorithm>
 #include <array>
@@ -58,4 +60,4 @@ Element< ELTYPE, ELORDER >::Element(
 }
 } // namespace lstr::mesh
 
-#endif // L3STER_INCGUARD_MESH_ELEMENT_HPP
+#endif // L3STER_MESH_ELEMENT_HPP

@@ -1,7 +1,7 @@
 // Definition of data types used in L3STER
 
-#ifndef L3STER_INCGUARD_DEFINITIONS_TYPEDEFS_H
-#define L3STER_INCGUARD_DEFINITIONS_TYPEDEFS_H
+#ifndef L3STER_DEFS_TYPEDEFS_H
+#define L3STER_DEFS_TYPEDEFS_H
 
 #include <cstddef>
 #include <cstdint>
@@ -28,4 +28,4 @@ using q_l_t       = uint_fast64_t; // quadrature length type
 using poly_o_t    = uint_fast64_t; // polynomial order type
 } // namespace lstr::types
 
-#endif // L3STER_INCGUARD_DEFINITIONS_TYPEDEFS_H
+#endif // L3STER_DEFS_TYPEDEFS_H
