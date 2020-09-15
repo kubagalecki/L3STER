@@ -43,14 +43,27 @@ message(STATUS "Creating L3STER interface target... DONE")
 
 if(L3STER_ENABLE_TESTS)
     message(STATUS "Creating L3STER test target...")
-    set(L3STER_TESTS_DATA_PATH ${CMAKE_CURRENT_SOURCE_DIR}/tests/data CACHE STRING "Path to test data folder")
-    configure_file(tests/TestDataPath.h.in TestDataPath.h)
     add_executable(L3STER_tests
         tests/TestsMain.cpp
         tests/QuadratureTests.cpp
 	    tests/MeshTests.cpp
     )
+    set(L3STER_TESTS_DATA_PATH ${CMAKE_CURRENT_SOURCE_DIR}/tests/data CACHE STRING "Path to test data folder")
+    configure_file(tests/TestDataPath.h.in TestDataPath.h)
     target_include_directories(L3STER_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    target_compile_options(L3STER_tests PUBLIC
+        -Wall
+        -Wextra
+        -Wpedantic
+        -Wshadow
+        -fprofile-arcs
+        -ftest-coverage
+        -fPIC
+    )
+    target_link_options(L3STER_tests PUBLIC
+        -lgcov
+        --coverage
+    )
     target_link_libraries(L3STER_tests
         L3STER
         Catch2::Catch2
