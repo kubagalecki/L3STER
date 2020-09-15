@@ -3,39 +3,38 @@
 
 // This header includes the entire L3STER library
 
-// First, include dependencies
-#include "../eigen/Eigen/Dense"
+#include "Eigen/Dense"
 
 // Meta-programming utility functions
-#include "../src/utility/Meta.hpp"
+#include "utility/Meta.hpp"
 
 // Type definitions for entire library
-#include "../src/definitions/Typedefs.h"
-#include "../src/definitions/Constants.hpp"
-#include "../src/mesh/ElementTypes.hpp"
-#include "../src/definitions/Aliases.hpp"
-#include "../src/quadrature/QuadratureTypes.h"
+#include "definitions/Typedefs.h"
+#include "definitions/Constants.hpp"
+#include "mesh/ElementTypes.hpp"
+#include "definitions/Aliases.hpp"
+#include "quadrature/QuadratureTypes.h"
 
 // Library-wide utilities
-#include "../src/utility/Polynomial.hpp"
+#include "utility/Polynomial.hpp"
 
 // Node is independent of the Element hierarchy
-#include "../src/mesh/Node.hpp"
+#include "mesh/Node.hpp"
 
 // Element hierarchy
-#include "../src/mesh/ElementTraits.hpp"
-#include "../src/mesh/Element.hpp"
-#include "../src/mesh/Domain.hpp"
-#include "../src/mesh/MeshPartition.hpp"
-#include "../src/mesh/Mesh.hpp"
-#include "../src/mesh/ReadMesh.hpp"
-#include "../src/mesh/BoundaryElementView.hpp"
-#include "../src/mesh/BoundaryView.hpp"
+#include "mesh/ElementTraits.hpp"
+#include "mesh/Element.hpp"
+#include "mesh/Domain.hpp"
+#include "mesh/MeshPartition.hpp"
+#include "mesh/Mesh.hpp"
+#include "mesh/ReadMesh.hpp"
+#include "mesh/BoundaryElementView.hpp"
+#include "mesh/BoundaryView.hpp"
 
 // Quadratures, dependent on elements
-#include "../src/quadrature/Quadrature.hpp"
-#include "../src/quadrature/ReferenceQuadratureTraits.hpp"
-#include "../src/quadrature/ReferenceQuadrature.hpp"
-#include "../src/quadrature/QuadratureGenerator.hpp"
+#include "quadrature/Quadrature.hpp"
+#include "quadrature/ReferenceQuadratureTraits.hpp"
+#include "quadrature/ReferenceQuadrature.hpp"
+#include "quadrature/QuadratureGenerator.hpp"
 
 #endif // L3STER_HPP

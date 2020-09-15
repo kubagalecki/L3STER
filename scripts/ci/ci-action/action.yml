@@ -1,0 +1,11 @@
+name: tests
+description: build and run tests
+
+inputs:
+  codecov_token:
+    description: codecov authentification token to upload coverage results
+    required: true
+
+runs:
+  using: 'docker'
+  image: '../../../Dockerfile'

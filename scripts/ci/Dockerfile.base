@@ -1,0 +1,30 @@
+###############################################################
+# Dockerfile.base gets cached on Docker Hub.
+# This way dependencies don't need to be rebuilt every CI run.
+###############################################################
+
+FROM    ubuntu:latest
+
+RUN     apt update
+RUN     apt upgrade -y
+
+# Install tzdata separately to skip user input
+RUN     DEBIAN_FRONTEND="noninteractive" apt-get -y install tzdata
+
+# Install build utilities etc.
+RUN     apt-get install -y \
+            gcc \
+            g++ \
+            gcovr \
+            make \
+            cmake \
+            git \
+            curl \
+            openmpi-bin \
+            libtbb-dev
+
+# Install Catch
+RUN     git clone https://github.com/catchorg/Catch2.git \
+        &&  cd Catch2 \
+        &&  cmake -Bbuild -H. -DBUILD_TESTING=OFF \
+        &&  cmake --build build/ --target install

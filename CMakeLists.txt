@@ -1,25 +1,65 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 3.15)
+cmake_minimum_required(VERSION 3.13)
 
-PROJECT(L3STER)
+project(L3STER LANGUAGES CXX VERSION 0.1.0)
 
-set(CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_BUILD_TYPE DEBUG)
+###  Find dependencies  ###
+# Find Eigen
+find_package (Eigen3 3.3 REQUIRED NO_MODULE)
 
-if (UNIX)
-    add_compile_options(-Wall -Wextra -Wpedantic -Wshadow)
-elseif(MSVC)
-    add_compile_options(/Wall /experimental:newLambdaProcessor)
+# Detect if tests are to be built, if yes then try to find Catch2
+if(L3STER_ENABLE_TESTS)
+    message(STATUS "Tests are enabled. Finding Catch2...")
+
+    # Try to find if installed
+    message(STATUS "Looking for Catch2 using find_package...")
+    find_package(Catch2)
+
+    if(TARGET Catch2::Catch2)
+        message(STATUS "Looking for Catch2 using find_package... FOUND")
+    else()
+        message(STATUS "Looking for Catch2 using find_package... NOT FOUND")
+
+        message(STATUS "Looking for Catch2 in the source directory...")
+        if((EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/Catch2) AND (IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/Catch2))
+            message(STATUS "Looking for Catch2 in the source directory... FOUND")
+            add_subdirectory(Catch2)
+        else()
+            message(STATUS "Looking for Catch2 in the source directory... NOT FOUND")
+            message(FATAL_ERROR "Could not find Catch2")
+        endif()
+    endif()
 endif()
 
-# set up clang-tidy
-# set(CMAKE_CXX_CLANG_TIDY 
-#   clang-tidy;
-#   -header-filter=.*\.hpp;
-#   -checks=-*,performance-*;)
+message(STATUS "Creating L3STER interface target...")
+add_library(L3STER INTERFACE)
+target_include_directories(L3STER INTERFACE include/)
+set_target_properties(L3STER PROPERTIES
+    INTERFACE_COMPILE_FEATURES cxx_std_17
+)
+target_link_libraries(L3STER INTERFACE
+    Eigen3::Eigen
+)
+message(STATUS "Creating L3STER interface target... DONE")
 
-# SRC
-include_directories(${CMAKE_SOURCE_DIR}/include/)
+if(L3STER_ENABLE_TESTS)
+    message(STATUS "Creating L3STER test target...")
+    set(L3STER_TESTS_DATA_PATH ${CMAKE_CURRENT_SOURCE_DIR}/tests/data CACHE STRING "Path to test data folder")
+    configure_file(tests/TestDataPath.h.in TestDataPath.h)
+    add_executable(L3STER_tests
+        tests/TestsMain.cpp
+        tests/QuadratureTests.cpp
+	    tests/MeshTests.cpp
+    )
+    target_include_directories(L3STER_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    target_link_libraries(L3STER_tests
+        L3STER
+        Catch2::Catch2
+    )
+    message(STATUS "Creating L3STER test target... DONE")
 
-add_executable(main
-        ${CMAKE_SOURCE_DIR}/main.cpp)
+    message(STATUS "Registering tests with CTest...")
+    include(CTest)
+    include(Catch)
+    catch_discover_tests(L3STER_tests)
+    message(STATUS "Registering tests with CTest... DONE")
+endif()
