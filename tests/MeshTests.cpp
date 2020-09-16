@@ -1,7 +1,6 @@
-#include "catch2/catch.hpp"
-#include "l3ster.hpp"
-
 #include "TestDataPath.h"
+#include "catch2/catch.hpp"
+#include "lstr/l3ster.hpp"
 
 #include <algorithm>
 #include <vector>
