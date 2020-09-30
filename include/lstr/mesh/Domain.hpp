@@ -233,21 +233,23 @@ inline size_t Domain::getNElements() const
 
 class DomainView
 {
+    using domain_ref_t = std::reference_wrapper< const Domain >;
+
 public:
     DomainView()                  = delete;
     DomainView(const DomainView&) = default;
     DomainView(DomainView&&)      = default;
     DomainView& operator=(const DomainView&) = delete;
     DomainView& operator=(DomainView&&) = delete;
-    DomainView(const Domain& domain_, types::el_id_t id_) : domain{domain_}, id{id_} {}
+    DomainView(const Domain& domain_, types::el_id_t id_) : domain{std::cref(domain_)}, id{id_} {}
 
     [[nodiscard]] types::el_id_t getID() const { return id; }
-    [[nodiscard]] types::dim_t   getDim() const { return domain.getDim(); }
-    [[nodiscard]] size_t         getNElements() const { return domain.getNElements(); }
-    [[nodiscard]] const Domain&  getDomainRef() const { return domain; }
+    [[nodiscard]] types::dim_t   getDim() const { return domain.get().getDim(); }
+    [[nodiscard]] size_t         getNElements() const { return domain.get().getNElements(); }
+    [[nodiscard]] domain_ref_t   getDomainRef() const { return domain.get(); }
 
 private:
-    const Domain&  domain;
+    domain_ref_t   domain;
     types::el_id_t id;
 };
 

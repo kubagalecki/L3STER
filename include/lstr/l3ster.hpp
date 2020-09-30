@@ -3,7 +3,6 @@
 
 // This header includes the entire L3STER library
 
-#include "lstr/mesh/BoundaryView.hpp"
 #include "lstr/mesh/ReadMesh.hpp"
 #include "lstr/quad/QuadratureGenerator.hpp"
 

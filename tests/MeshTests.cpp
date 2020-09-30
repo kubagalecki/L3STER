@@ -172,7 +172,7 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::mesh::Mesh, const lstr:
     std::vector< lstr::mesh::BoundaryView > boundaries;
     boundaries.reserve(4);
     for (int i = 2; i <= 5; ++i)
-        boundaries.emplace_back(mesh.getPartitions()[0], i);
+        boundaries.push_back(mesh.getPartitions()[0].getBoundaryView(i));
 
     CHECK(boundaries[0].size() == 10);
     CHECK(boundaries[1].size() == 10);
