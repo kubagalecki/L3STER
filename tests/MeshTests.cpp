@@ -154,6 +154,34 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::mesh::Mesh, const lstr:
         ConstructionTracker::resetCount();
         element_counter.counter = 0;
     }
+    else
+    {
+        element_counter = topology.cvisitAllElements(std::move(element_counter));
+
+        REQUIRE(element_counter.counter == 140);
+        CHECK(ConstructionTracker::defaults == 0);
+        CHECK(ConstructionTracker::copies == 0);
+        CHECK(ConstructionTracker::cp_asgn == 0);
+        CHECK(ConstructionTracker::moves <= 1);
+        CHECK(ConstructionTracker::mv_asgn <= 1);
+
+        ConstructionTracker::resetCount();
+        element_counter.counter = 0;
+
+        element_counter = topology.cvisitDomainIf(
+            std::move(element_counter),
+            [](const lstr::mesh::DomainView& dv) { return dv.getDim() == 2; });
+
+        CHECK(element_counter.counter == 100);
+        CHECK(ConstructionTracker::defaults == 0);
+        CHECK(ConstructionTracker::copies == 0);
+        CHECK(ConstructionTracker::cp_asgn == 0);
+        CHECK(ConstructionTracker::moves <= 1);
+        CHECK(ConstructionTracker::mv_asgn <= 1);
+
+        ConstructionTracker::resetCount();
+        element_counter.counter = 0;
+    }
 
     // Find (both const and non-const)
     const auto predicate = ElementFinder(std::vector< lstr::types::n_id_t >({54, 55, 64, 62}));

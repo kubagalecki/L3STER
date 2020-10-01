@@ -20,7 +20,7 @@ public:
     MeshPartition& operator=(const MeshPartition&) = delete;
     MeshPartition& operator=(MeshPartition&&) = default;
 
-    explicit MeshPartition(MeshPartition::domain_map_t&& domains_) : domains(domains_) {}
+    explicit MeshPartition(MeshPartition::domain_map_t domains_) : domains{std::move(domains_)} {}
 
     // Visit domains
     template < typename F >
@@ -74,11 +74,10 @@ public:
         return DomainView(domains.at(id), id);
     }
 
-    inline void pushDomain(types::d_id_t, Domain&&);
-    inline void pushDomain(types::d_id_t, const Domain&);
+    inline void pushDomain(types::d_id_t, Domain);
     inline void popDomain(types::d_id_t);
 
-    inline BoundaryView getBoundaryView(const types::d_id_t&) const;
+    [[nodiscard]] inline BoundaryView getBoundaryView(const types::d_id_t&) const;
 
 private:
     domain_map_t domains;
@@ -219,7 +218,7 @@ std::optional< element_ref_variant_t > MeshPartition::findElementIfDomain(const 
             if (ret_val)
                 break;
         }
-    };
+    }
 
     return ret_val;
 }
@@ -230,7 +229,7 @@ MeshPartition::findElementIfDomain(const F& predicate, const D& domain_predicate
 {
     std::optional< element_cref_variant_t > ret_val;
 
-    for (auto& domain_map_entry : domains)
+    for (const auto& domain_map_entry : domains)
     {
         if (domain_predicate(DomainView{domain_map_entry.second, domain_map_entry.first}))
         {
@@ -239,19 +238,14 @@ MeshPartition::findElementIfDomain(const F& predicate, const D& domain_predicate
             if (ret_val)
                 break;
         }
-    };
+    }
 
     return ret_val;
 }
 
-void MeshPartition::pushDomain(types::d_id_t id, Domain&& d)
+void MeshPartition::pushDomain(types::d_id_t id, Domain d)
 {
     domains[id] = std::move(d);
-}
-
-void MeshPartition::pushDomain(types::d_id_t id, const Domain& d)
-{
-    domains[id] = d;
 }
 
 void MeshPartition::popDomain(types::d_id_t id)

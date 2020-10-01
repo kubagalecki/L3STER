@@ -52,10 +52,10 @@ private:
     types::dim_t                    dim = 0;
 
     template < typename F >
-    [[nodiscard]] static auto wrapElementVisitor(F& element_visitor);
+    [[nodiscard]] static auto wrapElementVisitor(F&& element_visitor);
 
     template < typename F >
-    [[nodiscard]] static auto wrapElementCVisitor(F& element_visitor);
+    [[nodiscard]] static auto wrapCElementVisitor(F&& element_visitor);
 };
 
 template < ElementTypes ELTYPE, types::el_o_t ELORDER >
@@ -201,7 +201,7 @@ std::optional< element_cref_variant_t > Domain::findElement(const F& predicate) 
 }
 
 template < typename F >
-auto Domain::wrapElementVisitor(F& element_visitor)
+auto Domain::wrapElementVisitor(F&& element_visitor)
 {
     static_assert(is_invocable_on_all_elements_v< F >);
 
@@ -211,7 +211,7 @@ auto Domain::wrapElementVisitor(F& element_visitor)
 }
 
 template < typename F >
-auto Domain::wrapElementCVisitor(F& element_visitor)
+auto Domain::wrapCElementVisitor(F&& element_visitor)
 {
     static_assert(is_invocable_on_all_elements_v< F >);
 
