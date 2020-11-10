@@ -39,7 +39,7 @@ out/
 
 # Build
 build/
-cmake-build-debug/
+cmake-build-*/
 
 # KDevelop projects
 *.kdev4
