@@ -15,7 +15,9 @@ RUN     DEBIAN_FRONTEND="noninteractive" apt -y install tzdata
 RUN     apt install -y \
             gcc \
             g++ \
+            gfortran \
             gcovr \
+            build-essential \
             make \
             cmake \
             git \
