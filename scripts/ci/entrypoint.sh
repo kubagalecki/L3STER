@@ -1,9 +1,8 @@
 #!/bin/sh -l
 
 echo "Starting CI build..."
-/spack/bin/spack load trilinos
-echo $PATH
-ls -l /
+. /spack/share/spack/setup-env.sh
+spack load trilinos
 mkdir build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Debug -DL3STER_ENABLE_TESTS=ON ..
