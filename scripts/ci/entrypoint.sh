@@ -1,6 +1,7 @@
 #!/bin/sh -l
 
 echo "Starting CI build..."
+spack/bin/spack load trilinos
 mkdir build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Debug -DL3STER_ENABLE_TESTS=ON ..
