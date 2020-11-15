@@ -1,0 +1,61 @@
+# ---  detect_eigen  ---
+# Try to find Eigen, display friendly error if it cannot be found
+#
+function(detect_eigen Verbosity EigenPath L3STERPath)
+    if (Verbosity)
+        message(STATUS "Detecting Eigen")
+        list(APPEND CMAKE_MESSAGE_INDENT "  ")
+        message(STATUS "Looking for Eigen using the value of `Eigen3_DIR`")
+    endif ()
+
+    find_file(EigenPath "Eigen" PATHS ${EigenPath} NO_DEFAULT_PATH)
+    if (EigenPath)
+        add_library(INTERFACE L3STER_Eigen)
+        target_include_directories(L3STER_Eigen INTERFACE "${EigenPath}/..")
+        add_library(Eigen3::Eigen ALIAS L3STER_Eigen)
+        if (Verbosity)
+            message(STATUS "Looking for Eigen using the value of `Eigen3_DIR` - found")
+        endif ()
+    else ()
+        if (Verbosity)
+            message(STATUS "Looking for Eigen using the value of `Eigen3_DIR` - not found")
+            message(STATUS "Looking for Eigen in the L3STER directory")
+        endif ()
+        if (EXISTS "${L3STERPath}/eigen")
+            if (Verbosity)
+                message(STATUS "Looking for Eigen in the L3STER directory - found")
+            endif ()
+            add_library(INTERFACE L3STER_Eigen)
+            target_include_directories(L3STER_Eigen INTERFACE "${L3STERPath}/eigen")
+            add_library(Eigen3::Eigen ALIAS L3STER_Eigen)
+        else ()
+            if (Verbosity)
+                message(STATUS "Looking for Eigen in the L3STER directory - not found")
+                message(STATUS "Checking if Eigen was installed on the system")
+            endif ()
+            find_package(Eigen3 3.3 NO_MODULE)
+            if (TARGET Eigen3::Eigen)
+                message(STATUS "Checking if Eigen was installed on the system - found")
+            else ()
+                message(STATUS "Checking if Eigen was installed on the system - not found")
+            endif ()
+        endif ()
+    endif ()
+
+    if (Verbosity)
+        list(POP_BACK CMAKE_MESSAGE_INDENT)
+        if (TARGET Eigen3::Eigen)
+            message(STATUS "Detecting Eigen - found")
+        endif ()
+    endif ()
+
+    if (NOT TARGET Eigen3::Eigen)
+        message(SEND_ERROR "Could not locate the Eigen library (v3.3 or later). "
+                "If you have downloaded it, please set the value of the `Eigen3_DIR` variable "
+                "to the absolute path of the top-level directory of Eigen.\n"
+                "If you don't have Eigen, you can simply clone the Eigen repository "
+                "into the top level directory of L3STER.")
+    endif ()
+endfunction()
+
+detect_eigen(${L3STER_Verbosity} "${Eigen_DIR}" ${L3STER_DIR})
