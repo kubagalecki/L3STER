@@ -3,9 +3,13 @@
 #ifndef L3STER_UTIL_META_HPP
 #define L3STER_UTIL_META_HPP
 
+#include <algorithm>
 #include <array>
+#include <numeric>
 #include <tuple>
 #include <utility>
+
+#include "lstr/util/Concepts.hpp"
 
 /*Comments:
  *  naming convention conforming to the standard library
@@ -14,257 +18,169 @@
 
 namespace lstr::util::meta
 {
-
-// Helper class - determines if T is a static array or std::array type
-template < typename T >
-struct is_array : std::false_type
-{};
-
-template < typename T, std::size_t N >
-struct is_array< T[N] > : std::true_type
-{};
-
-template < typename T, std::size_t N >
-struct is_array< const std::array< T, N > > : std::true_type
-{};
-
-template < typename T >
-struct array;
-
-template < typename T, std::size_t N >
-struct array< T[N] >
-{
-    static constexpr size_t size = N;
-    using type                   = T;
-};
-
-template < typename T, std::size_t N >
-struct array< const std::array< T, N > >
-{
-    static constexpr size_t size = N;
-    using type                   = T;
-};
-
-// This class is essentially std::integer_sequence, but extended to all NTTP
-template < typename T, T... Vals >
-struct value_sequence
-{
-    using value_type = T;
-
-    static constexpr size_t size = sizeof...(Vals);
-};
-
-// lift constexpr array to value_sequence
-// ArrayClass should have a public static constexpr member 'values'
-template < typename, typename >
-struct convert_to_val_seq;
-
-template < typename ArrayClass, size_t... Vals >
-struct convert_to_val_seq< ArrayClass, std::index_sequence< Vals... > >
-{
-    using type = value_sequence< typename array< decltype(ArrayClass::values) >::type,
-                                 ArrayClass::values[Vals]... >;
-};
-
-template < typename ArrayClass >
-struct array_to_valseq
-{
-    static_assert(is_array< decltype(ArrayClass::values) >::value,
-                  "ArrayClass template parameter must have member 'array'");
-
-    using type = typename convert_to_val_seq<
-        ArrayClass,
-        std::make_index_sequence< array< decltype(ArrayClass::values) >::size > >::type;
-};
-
-// Get nth element of value_sequence
-template < typename, auto >
-struct get_valseq_n;
-
-template < size_t I, typename T, T... Vals >
-struct get_valseq_n< value_sequence< T, Vals... >, I >
-{
-    static constexpr T value = std::array< T, sizeof...(Vals) >{Vals...}[I];
-};
-
-// convert value_sequence to constexpr array
-template < typename T, T... Vals >
-constexpr auto valseq_to_array(value_sequence< T, Vals... >)
-{
-    return std::array< T, sizeof...(Vals) >{Vals...};
-}
-
-// Add value to value_sequence
-template < auto, typename >
-struct add_to_valseq;
-
-template < auto I, typename T, T... Vals >
-struct add_to_valseq< I, value_sequence< T, Vals... > >
-{
-    using type = value_sequence< T, Vals..., I >;
-};
-
-// Repeat value to form value_sequence
-template < auto I, size_t N >
-struct rep_val
-{
-    using type = typename add_to_valseq< I, typename rep_val< I, N - 1 >::type >::type;
-};
-
-template < auto I >
-struct rep_val< I, 0 >
-{
-    using type = value_sequence< decltype(I) >;
-};
-
-// Concatenate multiple value_sequence into one
-template < typename... >
-struct cat_valseq;
-
-template < typename T, T... Vals >
-struct cat_valseq< value_sequence< T, Vals... > >
-{
-    using type = value_sequence< T, Vals... >;
-};
-
-template < typename T, typename U, T... Vals >
-struct cat_valseq< value_sequence< T, Vals... >, value_sequence< U > >
-{
-    static_assert(std::is_same_v< T, U >, "Concatenated integer sequences must share integer type");
-    using type = value_sequence< T, Vals... >;
-};
-
-template < typename T, typename U, U Vals >
-struct cat_valseq< T, value_sequence< U, Vals > >
-{
-    using type = typename add_to_valseq< Vals, T >::type;
-};
-
-template < typename T, typename U, U Val1, U... Vals >
-struct cat_valseq< T, value_sequence< U, Val1, Vals... > >
-{
-    using type = typename cat_valseq< typename add_to_valseq< Val1, T >::type,
-                                      value_sequence< U, Vals... > >::type;
-};
-
-template < typename T, typename U, typename... V >
-struct cat_valseq< T, U, V... >
-{
-    using type = typename cat_valseq< typename cat_valseq< T, U >::type, V... >::type;
-};
-
-// Stretch value_sequence
-template < typename, size_t N >
-struct stretch_valseq;
-
-template < typename T, T... Vals, size_t N >
-struct stretch_valseq< value_sequence< T, Vals... >, N >
-{
-    using type = typename cat_valseq< typename rep_val< Vals, N >::type... >::type;
-};
-
-// Repeat value_sequence N times
-template < typename T, size_t N >
-struct repeat_valseq
-{
-    using type = typename cat_valseq< typename repeat_valseq< T, N - 1 >::type, T >::type;
-};
-
-template < typename T, T... Vals >
-struct repeat_valseq< value_sequence< T, Vals... >, 0 >
-{
-    using type = value_sequence< T >;
-};
-
-// Repeat value_sequence of length N N times
-template < typename >
-struct rep_valseq;
-
-template < typename T, T... Vals >
-struct rep_valseq< value_sequence< T, Vals... > >
-{
-    using type = typename repeat_valseq< value_sequence< T, Vals... >, sizeof...(Vals) >::type;
-};
-
-template < template < typename... > typename,
-           template < auto, auto >
-           typename,
-           typename,
-           typename,
-           typename >
-struct combine2_helper;
-
-template < template < typename... > typename M,
-           template < auto, auto >
-           typename C,
-           typename I1,
-           typename I2,
-           typename D,
-           D... Ints >
-struct combine2_helper< M, C, I1, I2, std::integer_sequence< D, Ints... > >
-{
-    using type = M< C< get_valseq_n< I1, Ints >::value, get_valseq_n< I2, Ints >::value >... >;
-};
-
-template < template < typename... > typename M,
-           template < auto, auto >
-           typename C,
-           typename I1,
-           typename I2 >
-struct combine2
-{
-    using type =
-        typename combine2_helper< M, C, I1, I2, std::make_index_sequence< I1::size > >::type;
-};
-
-template < template < typename... > typename T, template < auto > typename U, typename A >
-struct apply_valseq;
-
-template < template < typename... > typename M,
-           template < auto, auto >
-           typename C,
-           typename I1,
-           typename I2 >
-struct cartesian_product
+template < array auto A >
+requires std::totally_ordered< typename decltype(A)::value_type > struct unique_els
 {
 private:
-    using I1_i = typename array_to_valseq< I1 >::type;
-    using I2_i = typename array_to_valseq< I2 >::type;
+    using A_t       = decltype(A);
+    using A_value_t = A_t::value_type;
+
+    static constexpr A_t A_sorted = [] {
+        auto A_cp = A;
+        std::sort(A_cp.begin(), A_cp.end());
+        return A_cp;
+    }();
 
 public:
-    using type = typename combine2< M,
-                                    C,
-                                    typename stretch_valseq< I1_i, I2_i::size >::type,
-                                    typename repeat_valseq< I2_i, I1_i::size >::type >::type;
+    static constexpr size_t size = [] {
+        auto A_temp = A_sorted;
+        return std::distance(A_temp.begin(), std::unique(A_temp.begin(), A_temp.end()));
+    }();
+
+    static constexpr std::array< A_value_t, size > value = [] {
+        std::array< A_value_t, size > ret;
+        std::unique_copy(A_sorted.cbegin(), A_sorted.cend(), ret.begin());
+        return ret;
+    }();
 };
 
-template < typename... V >
-struct and_pack
+template < array auto A >
+constexpr inline auto unique_els_v = unique_els< A >::value;
+
+template < array auto... A >
+requires((A.size() == std::get< 0 >(std::tie(A...)).size()) && ...) struct tuplify
 {
-    static constexpr bool value = (V::value && ...);
+    static constexpr size_t N = (A.size(), ...);
+    using tuple_t             = std::tuple< typename decltype(A)::value_type... >;
+    using value_type          = std::array< tuple_t, N >;
+
+private:
+    template < size_t I >
+    struct tuplify_index
+    {
+        static constexpr tuple_t value{std::make_tuple(std::get< I >(A)...)};
+    };
+
+    template < size_t... I >
+    static consteval auto tuplify_indices(std::index_sequence< I... >)
+    {
+        return value_type{tuplify_index< I >::value...};
+    }
+
+public:
+    static constexpr auto value = tuplify_indices(std::make_index_sequence< N >{});
 };
 
-/////////////////////////////////////////////////////////////////////////////
-template < template < typename... > typename M,
-           template < auto, auto >
-           typename C,
-           typename I1,
-           typename I2 >
-using cartesian_product_t = typename cartesian_product< M, C, I1, I2 >::type;
-
-template < template < typename... > typename T,
-           template < auto >
-           typename U,
-           typename A_t,
-           A_t... vals >
-struct apply_valseq< T, U, value_sequence< A_t, vals... > >
+template < array auto... A >
+    requires(std::totally_ordered< typename decltype(A)::value_type >&&...) &&
+    ((A.size() > 0) && ...) struct all_combinations
 {
-    using type = T< U< vals >... >;
+    static constexpr auto unique_A = std::make_tuple(unique_els_v< A >...);
+    static constexpr auto size     = (unique_els< A >::size * ...);
+
+private:
+    static constexpr auto unique_A_sizes = std::array{unique_els< A >::size...};
+    static constexpr auto reps           = [] {
+        std::array< size_t, sizeof...(A) > ret;
+        ret.back() = 1;
+        std::partial_sum(unique_A_sizes.crbegin(),
+                         unique_A_sizes.crend() - 1,
+                         ret.rbegin() + 1,
+                         std::multiplies<>{});
+        return ret;
+    }();
+
+    template < size_t I >
+    static consteval auto extend_array()
+    {
+        std::array< typename std::tuple_element_t< I, decltype(unique_A) >::value_type, size > ret;
+        std::generate(ret.begin(), ret.end(), [rep_ind = 0u, arr_ind = 0u]() mutable {
+            constexpr auto& current_array = std::get< I >(unique_A);
+            auto            ret_v         = current_array[arr_ind];
+            ++rep_ind;
+            if (rep_ind == reps[I])
+            {
+                rep_ind = 0;
+                ++arr_ind;
+                if (arr_ind == current_array.size())
+                    arr_ind = 0;
+            }
+            return ret_v;
+        });
+        return ret;
+    }
+
+    template < size_t... I >
+    static consteval auto compute(std::index_sequence< I... >)
+    {
+        return tuplify< extend_array< I >()... >::value;
+    }
+
+public:
+    static constexpr auto value = compute(std::make_index_sequence< sizeof...(A) >{});
 };
 
-template < typename... V >
-inline constexpr bool and_pack_v = and_pack< V... >::value;
-/////////////////////////////////////////////////////////////////////////////
+template < template < typename... > typename T, tuple Params >
+struct apply_types
+{
+private:
+    template < typename >
+    struct deduction_helper;
+    template < size_t... I >
+    struct deduction_helper< std::index_sequence< I... > >
+    {
+        using type = T< std::tuple_element_t< I, Params >... >;
+    };
+
+public:
+    using type = deduction_helper< std::make_index_sequence< std::tuple_size_v< Params > > >::type;
+};
+
+template < template < typename... > typename T, tuple Params >
+using apply_types_t = apply_types< T, Params >::type;
+
+template < template < auto... > typename Inner,
+           template < typename... >
+           typename Outer,
+           tuple_like auto... Params >
+struct parametrize_over_combinations
+{
+private:
+    static constexpr auto combinations     = all_combinations< Params... >::value;
+    static constexpr auto combination_size = all_combinations< Params... >::size;
+
+    template < size_t I >
+    struct apply_inner
+    {
+        template < typename >
+        struct deduction_helper;
+        template < size_t... Idx >
+        struct deduction_helper< std::index_sequence< Idx... > >
+        {
+            using type = Inner< std::get< Idx >(combinations[I])... >;
+        };
+
+        using type = deduction_helper< std::make_index_sequence< sizeof...(Params) > >::type;
+    };
+
+    template < typename >
+    struct deduction_helper;
+    template < size_t... I >
+    struct deduction_helper< std::index_sequence< I... > >
+    {
+        using type = apply_types_t< Outer, std::tuple< typename apply_inner< I >::type... > >;
+    };
+
+public:
+    using type = deduction_helper< std::make_index_sequence< combination_size > >::type;
+};
+
+template < template < auto... > typename Inner,
+           template < typename... >
+           typename Outer,
+           tuple_like auto... Params >
+using parametrize_over_combinations_t =
+    parametrize_over_combinations< Inner, Outer, Params... >::type;
 
 } // namespace lstr::util::meta
 

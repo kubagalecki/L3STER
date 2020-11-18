@@ -21,29 +21,13 @@ enum class ElementTypes
     Count // value for tracking number of Element Types
 };
 
-namespace helpers
-{
-// Constexpr array of element types
-template < size_t... Ints >
-constexpr auto makeElementTypeArray(std::index_sequence< Ints... >)
-{
-    return std::array< ElementTypes, sizeof...(Ints) >{static_cast< ElementTypes >(Ints)...};
-}
-
-} // namespace helpers
-
 // Array containing all defined element types
-struct ElementTypesArray
+inline constexpr auto element_types = []< size_t... I >(std::index_sequence< I... >)
 {
-    static constexpr auto values = helpers::makeElementTypeArray(
-        std::make_index_sequence< static_cast< size_t >(ElementTypes::Count) >{});
-};
+    return std::array{static_cast< ElementTypes >(I)...};
+}
+(std::make_index_sequence< static_cast< size_t >(ElementTypes::Count) >{});
 
-// Array containing all possible element orders.
-struct ElementOrdersArray
-{
-    static constexpr std::array values = allowed_orders;
-};
 } // namespace lstr::mesh
 
 #endif // L3STER_MESH_ELEMENTTYPES_H

@@ -38,7 +38,7 @@ public:
     template < typename F >
     void cvisit(F& element_visitor) const;
 
-    template < typename F >
+    template < typename  F >
     [[nodiscard]] std::optional< element_ref_variant_t > findElement(const F& predicate);
 
     template < typename F >
@@ -142,8 +142,6 @@ void Domain::cvisit(F& element_visitor) const
 template < typename F >
 std::optional< element_ref_variant_t > Domain::findElement(const F& predicate)
 {
-    static_assert(is_invocable_r_on_all_elements_v< F, bool >);
-
     std::optional< element_ref_variant_t > ret_val;
 
     const auto element_vector_visitor = [&ret_val, &predicate](const auto& element_vector) {
@@ -203,8 +201,6 @@ std::optional< element_cref_variant_t > Domain::findElement(const F& predicate) 
 template < typename F >
 auto Domain::wrapElementVisitor(F&& element_visitor)
 {
-    static_assert(is_invocable_on_all_elements_v< F >);
-
     return [&element_visitor](auto& element_vector) {
         std::for_each(element_vector.begin(), element_vector.end(), std::ref(element_visitor));
     };
@@ -213,8 +209,6 @@ auto Domain::wrapElementVisitor(F&& element_visitor)
 template < typename F >
 auto Domain::wrapCElementVisitor(F&& element_visitor)
 {
-    static_assert(is_invocable_on_all_elements_v< F >);
-
     return [&element_visitor](const auto& element_vector) {
         std::for_each(element_vector.cbegin(), element_vector.cend(), std::ref(element_visitor));
     };

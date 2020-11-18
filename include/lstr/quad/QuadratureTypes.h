@@ -11,4 +11,4 @@ enum class QuadratureTypes
 };
 } // namespace lstr::quad
 
-#endif // end include guard
+#endif // L3STER_INCGUARD_QUAD_QUADRATURETYPES_H

@@ -14,7 +14,7 @@ template < template < typename... > typename T,
            template < mesh::ElementTypes, types::el_o_t >
            typename U >
 using parametrize_type_over_element_types_and_orders_t =
-    util::meta::cartesian_product_t< T, U, ElementTypesArray, ElementOrdersArray >;
+    util::meta::parametrize_over_combinations_t< U, T, element_types, element_orders >;
 
 template < ElementTypes ELTYPE, types::el_o_t ELORDER >
 class Element;
@@ -33,34 +33,65 @@ using element_ref_variant_t =
 using element_cref_variant_t =
     parametrize_type_over_element_types_and_orders_t< std::variant, element_cref_t >;
 
+namespace detail
+{
 template < typename F >
-struct is_invocable_on_all_elements
+struct is_invocable_on_elements
 {
     template < ElementTypes ELTYPE, types::el_o_t ELORDER >
-    using is_invocable_on_element = std::is_invocable< F, Element< ELTYPE, ELORDER >& >;
+    struct invocable_on_element :
+        std::conditional_t< std::is_invocable_v< F, Element< ELTYPE, ELORDER > >,
+                            std::true_type,
+                            std::false_type >
+    {};
 
-    static constexpr bool value =
-        parametrize_type_over_element_types_and_orders_t< util::meta::and_pack,
-                                                          is_invocable_on_element >::value;
+    using invocability_tuple =
+        parametrize_type_over_element_types_and_orders_t< std::tuple, invocable_on_element >;
+
+    template < typename >
+    struct check_all;
+    template < typename... T >
+    struct check_all< std::tuple< T... > >
+    {
+        static constexpr bool value = (T::value && ...);
+    };
+
+    static constexpr bool value = check_all< invocability_tuple >::value;
 };
+} // namespace detail
 
-template < typename F >
-inline constexpr bool is_invocable_on_all_elements_v = is_invocable_on_all_elements< F >::value;
+template < typename T >
+concept invocable_on_elements = detail::is_invocable_on_elements< T >::value;
 
-template < typename F, typename R >
-struct is_invocable_r_on_all_elements
+namespace detail
+{
+template < typename R, typename F >
+struct is_invocable_r_on_elements
 {
     template < ElementTypes ELTYPE, types::el_o_t ELORDER >
-    using is_invocable_r_on_element = std::is_invocable_r< R, F, Element< ELTYPE, ELORDER >& >;
+    struct invocable_on_element :
+        std::conditional_t< std::is_invocable_v< R, F, Element< ELTYPE, ELORDER > >,
+                            std::true_type,
+                            std::false_type >
+    {};
 
-    static constexpr bool value =
-        parametrize_type_over_element_types_and_orders_t< util::meta::and_pack,
-                                                          is_invocable_r_on_element >::value;
+    using invocability_tuple =
+        parametrize_type_over_element_types_and_orders_t< std::tuple, invocable_on_element >;
+
+    template < typename >
+    struct check_all;
+    template < typename... T >
+    struct check_all< std::tuple< T... > >
+    {
+        static constexpr bool value = (T::value && ...);
+    };
+
+    static constexpr bool value = check_all< invocability_tuple >::value;
 };
+} // namespace detail
 
-template < typename F, typename R >
-inline constexpr bool is_invocable_r_on_all_elements_v =
-    is_invocable_r_on_all_elements< F, R >::value;
+template < typename T, typename R >
+concept invocable_on_elements_r = detail::is_invocable_r_on_elements< R, T >::value;
 
 } // namespace lstr::mesh
 
