@@ -30,7 +30,7 @@ struct MeshFormatTag
 
 constexpr inline MeshFormatTag gmsh_tag = MeshFormatTag< MeshFormat::Gmsh >{};
 
-namespace helpers
+namespace detail
 {
 template < ElementTypes ELTYPE >
 Element< ELTYPE, 1 > parse_element(std::ifstream& f)
@@ -53,7 +53,7 @@ Element< ELTYPE, 1 > parse_element(std::ifstream& f)
 
     return Element< ELTYPE, 1 >{nodes};
 }
-} // namespace helpers
+} // namespace detail
 
 inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
 {
@@ -347,10 +347,10 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
                     switch (element_type)
                     {
                     case 1:
-                        block_domain.pushBack(helpers::parse_element< ElementTypes::Line >(file));
+                        block_domain.pushBack(detail::parse_element< ElementTypes::Line >(file));
                         break;
                     case 3:
-                        block_domain.pushBack(helpers::parse_element< ElementTypes::Quad >(file));
+                        block_domain.pushBack(detail::parse_element< ElementTypes::Quad >(file));
                         break;
                     default:
                         std::stringstream err;

@@ -35,14 +35,18 @@ using element_cref_variant_t =
 
 namespace detail
 {
-template < typename F >
+template < typename F, bool CONSTNESS >
 struct is_invocable_on_elements
 {
     template < ElementTypes ELTYPE, types::el_o_t ELORDER >
     struct invocable_on_element :
-        std::conditional_t< std::is_invocable_v< F, Element< ELTYPE, ELORDER > >,
-                            std::true_type,
-                            std::false_type >
+        std::conditional_t<
+            std::is_invocable_v< F,
+                                 std::conditional_t< CONSTNESS,
+                                                     const Element< ELTYPE, ELORDER >&,
+                                                     Element< ELTYPE, ELORDER >& > >,
+            std::true_type,
+            std::false_type >
     {};
 
     using invocability_tuple =
@@ -61,18 +65,25 @@ struct is_invocable_on_elements
 } // namespace detail
 
 template < typename T >
-concept invocable_on_elements = detail::is_invocable_on_elements< T >::value;
+concept invocable_on_elements = detail::is_invocable_on_elements< T, false >::value;
+template < typename T >
+concept invocable_on_const_elements = detail::is_invocable_on_elements< T, true >::value;
 
 namespace detail
 {
-template < typename R, typename F >
+template < typename R, typename F, bool CONSTNESS >
 struct is_invocable_r_on_elements
 {
     template < ElementTypes ELTYPE, types::el_o_t ELORDER >
     struct invocable_on_element :
-        std::conditional_t< std::is_invocable_v< R, F, Element< ELTYPE, ELORDER > >,
-                            std::true_type,
-                            std::false_type >
+        std::conditional_t<
+            std::is_invocable_r_v< R,
+                                   F,
+                                   std::conditional_t< CONSTNESS,
+                                                       const Element< ELTYPE, ELORDER >&,
+                                                       Element< ELTYPE, ELORDER >& > >,
+            std::true_type,
+            std::false_type >
     {};
 
     using invocability_tuple =
@@ -91,7 +102,9 @@ struct is_invocable_r_on_elements
 } // namespace detail
 
 template < typename T, typename R >
-concept invocable_on_elements_r = detail::is_invocable_r_on_elements< R, T >::value;
+concept invocable_on_elements_r = detail::is_invocable_r_on_elements< R, T, false >::value;
+template < typename T, typename R >
+concept invocable_on_const_elements_r = detail::is_invocable_r_on_elements< R, T, true >::value;
 
 } // namespace lstr::mesh
 

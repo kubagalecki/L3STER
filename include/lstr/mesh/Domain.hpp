@@ -32,16 +32,16 @@ public:
     template < ElementTypes ELTYPE, types::el_o_t ELORDER >
     void reserve(size_t size);
 
-    template < typename F >
+    template < invocable_on_elements F >
     void visit(F& element_visitor);
 
-    template < typename F >
+    template < invocable_on_const_elements F >
     void cvisit(F& element_visitor) const;
 
-    template < typename  F >
+    template < invocable_on_elements_r< bool > F >
     [[nodiscard]] std::optional< element_ref_variant_t > findElement(const F& predicate);
 
-    template < typename F >
+    template < invocable_on_const_elements_r< bool > F >
     [[nodiscard]] std::optional< element_cref_variant_t > findElement(const F& predicate) const;
 
     [[nodiscard]] types::dim_t  getDim() const { return dim; };
@@ -120,7 +120,7 @@ void Domain::reserve(size_t size)
     }
 }
 
-template < typename F >
+template < invocable_on_elements F >
 void Domain::visit(F& element_visitor)
 {
     std::for_each(element_vectors.begin(),
@@ -129,7 +129,7 @@ void Domain::visit(F& element_visitor)
                       element_vector_variant_t& el_vec) mutable { std::visit(visitor, el_vec); });
 }
 
-template < typename F >
+template < invocable_on_const_elements F >
 void Domain::cvisit(F& element_visitor) const
 {
     std::for_each(
@@ -139,7 +139,7 @@ void Domain::cvisit(F& element_visitor) const
             const element_vector_variant_t& el_vec) mutable { std::visit(visitor, el_vec); });
 }
 
-template < typename F >
+template < invocable_on_elements_r< bool > F >
 std::optional< element_ref_variant_t > Domain::findElement(const F& predicate)
 {
     std::optional< element_ref_variant_t > ret_val;
@@ -173,7 +173,7 @@ std::optional< element_ref_variant_t > Domain::findElement(const F& predicate)
     return ret_val;
 }
 
-template < typename F >
+template < invocable_on_const_elements_r< bool > F >
 std::optional< element_cref_variant_t > Domain::findElement(const F& predicate) const
 {
     // The non-const version of findElement does not modify `this`, it merely returns a non-const

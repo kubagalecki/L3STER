@@ -253,7 +253,7 @@ void MeshPartition::popDomain(types::d_id_t id)
     domains.erase(id);
 }
 
-namespace helpers
+namespace detail
 {
 template < typename Element, size_t N, types::el_ns_t I >
 constexpr auto makeSideMatcher()
@@ -307,7 +307,7 @@ struct sideMatcher< Element, N, 0 >
         };
     }
 };
-} // namespace helpers
+} // namespace detail
 
 BoundaryView MeshPartition::getBoundaryView(const types::d_id_t& boundary_id) const
 {
@@ -335,7 +335,7 @@ BoundaryView MeshPartition::getBoundaryView(const types::d_id_t& boundary_id) co
                 constexpr auto n_sides = ElementTraits< domain_element_t >::n_sides;
 
                 constexpr auto matcher =
-                    helpers::sideMatcher< domain_element_t, boundary_size, n_sides - 1 >::get();
+                    detail::sideMatcher< domain_element_t, boundary_size, n_sides - 1 >::get();
 
                 const auto matched_side = matcher(domain_element, boundary_nodes);
                 side_index              = matched_side;
