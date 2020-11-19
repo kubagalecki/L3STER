@@ -88,7 +88,7 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::mesh::Mesh, const lstr:
     // Flag to prevent non-const member functions from being tested on const object
     constexpr bool is_const = std::is_same_v< TestType, const lstr::mesh::Mesh >;
 
-    TestType mesh = lstr::mesh::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(mesh_ascii4.msh),
+    TestType mesh = lstr::mesh::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_ascii4.msh),
                                          lstr::mesh::gmsh_tag);
 
     REQUIRE(mesh.getPartitions().size() == 1);
@@ -206,4 +206,17 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::mesh::Mesh, const lstr:
     CHECK(boundaries[1].size() == 10);
     CHECK(boundaries[2].size() == 10);
     CHECK(boundaries[3].size() == 10);
+}
+
+TEST_CASE("Unsupported mesh formats, mesh I/O error handling", "[mesh]")
+{
+    lstr::mesh::Mesh mesh;
+    REQUIRE_THROWS(mesh = lstr::mesh::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_ascii2.msh),
+                                               lstr::mesh::gmsh_tag));
+    REQUIRE_THROWS(mesh = lstr::mesh::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_bin2.msh),
+                                               lstr::mesh::gmsh_tag));
+    REQUIRE_THROWS(mesh = lstr::mesh::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_bin4.msh),
+                                               lstr::mesh::gmsh_tag));
+    REQUIRE_THROWS(mesh = lstr::mesh::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(nonexistent.msh),
+                                               lstr::mesh::gmsh_tag));
 }
