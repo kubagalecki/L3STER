@@ -19,6 +19,7 @@ public:
     MeshPartition(MeshPartition&&)      = default;
     MeshPartition& operator=(const MeshPartition&) = delete;
     MeshPartition& operator=(MeshPartition&&) = default;
+    ~MeshPartition()                          = default;
 
     explicit MeshPartition(MeshPartition::domain_map_t domains_) : domains{std::move(domains_)} {}
 

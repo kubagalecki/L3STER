@@ -25,12 +25,6 @@ public:
     using node_array_ref_t      = node_array_t&;
     using node_array_constref_t = const node_array_t&;
 
-    Element()                   = delete;
-    Element(const Element&)     = default;
-    Element(Element&&) noexcept = default;
-    Element& operator=(const Element&) = default;
-    Element& operator=(Element&&) noexcept = default;
-
     // Element is constructible from any unsigned array type
     template <
         typename UINT,

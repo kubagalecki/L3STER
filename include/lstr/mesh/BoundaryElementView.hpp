@@ -11,11 +11,6 @@ struct BoundaryElementView
 {
     using element_t = Element< ELTYPE, ELORDER >;
 
-    BoundaryElementView()                               = delete;
-    BoundaryElementView(const BoundaryElementView&)     = default;
-    BoundaryElementView(BoundaryElementView&&) noexcept = default;
-    BoundaryElementView& operator=(const BoundaryElementView&) = default;
-    BoundaryElementView& operator=(BoundaryElementView&&) noexcept = default;
     BoundaryElementView(const element_t& element_, const types::el_ns_t element_side_)
         : element{std::cref(element_)}, element_side{element_side_}
     {}

@@ -24,11 +24,7 @@ public:
     static constexpr types::q_l_t size = QLENGTH;
     static constexpr types::dim_t dim  = QDIM;
 
-    Quadrature()                      = default;
-    Quadrature(const Quadrature&)     = default;
-    Quadrature(Quadrature&&) noexcept = default;
-    Quadrature& operator=(const Quadrature&) = default;
-    Quadrature& operator=(Quadrature&&) noexcept = default;
+    Quadrature() = default;
     Quadrature(const q_points_t&, const weights_t&);
 
     const q_points_t& getQPoints() const { return q_points; }

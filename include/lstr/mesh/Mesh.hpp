@@ -23,6 +23,7 @@ public:
     Mesh(Mesh&&)      = default;
     Mesh& operator=(const Mesh&) = delete;
     Mesh& operator=(Mesh&&) = default;
+    ~Mesh()                 = default;
 
     inline Mesh(std::vector< Node< 3 > >&& nodes_, MeshPartition&& partition_);
     inline Mesh(std::vector< Node< 3 > >&& nodes_, std::vector< MeshPartition >&& partitions_);
