@@ -257,7 +257,7 @@ void MeshPartition::popDomain(types::d_id_t id)
 namespace detail
 {
 template < typename Element, size_t N, types::el_ns_t I >
-constexpr auto makeSideMatcher()
+consteval auto makeSideMatcher()
 {
     return [](const Element& element, const std::array< types::n_id_t, N >& sorted_side_nodes) {
         constexpr auto& side_inds = std::get< I >(ElementTraits< Element >::boundary_table);
@@ -284,7 +284,7 @@ constexpr auto makeSideMatcher()
 template < typename Element, size_t N, types::el_ns_t I >
 struct sideMatcher
 {
-    static constexpr auto get()
+    static consteval auto get()
     {
         return [](const Element& element, const std::array< types::n_id_t, N >& sorted_side_nodes) {
             if (makeSideMatcher< Element, N, I >()(element, sorted_side_nodes))
@@ -298,7 +298,7 @@ struct sideMatcher
 template < typename Element, size_t N >
 struct sideMatcher< Element, N, 0 >
 {
-    static constexpr auto get()
+    static consteval auto get()
     {
         return [](const Element& element, const std::array< types::n_id_t, N >& sorted_side_nodes) {
             if (makeSideMatcher< Element, N, 0 >()(element, sorted_side_nodes))
