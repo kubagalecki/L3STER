@@ -219,4 +219,7 @@ TEST_CASE("Unsupported mesh formats, mesh I/O error handling", "[mesh]")
                                                lstr::mesh::gmsh_tag));
     REQUIRE_THROWS(mesh = lstr::mesh::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(nonexistent.msh),
                                                lstr::mesh::gmsh_tag));
+    REQUIRE_THROWS(mesh = lstr::mesh::readMesh(
+                       L3STER_GENERATE_ABS_TEST_DATA_PATH(gmsh_triangle_mesh_ascii4.msh),
+                       lstr::mesh::gmsh_tag));
 }
