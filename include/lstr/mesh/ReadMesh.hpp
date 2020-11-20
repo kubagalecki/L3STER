@@ -2,18 +2,14 @@
 #define L3STER_MESH_READMESH_HPP
 
 #include "lstr/mesh/Mesh.hpp"
+#include "lstr/util/Meta.hpp"
 
 #include <algorithm>
 #include <array>
-#include <cstddef>
 #include <fstream>
-#include <functional>
 #include <map>
-#include <memory>
 #include <sstream>
 #include <stdexcept>
-#include <tuple>
-#include <unordered_map>
 #include <utility>
 
 namespace lstr::mesh
@@ -33,7 +29,7 @@ constexpr inline MeshFormatTag gmsh_tag = MeshFormatTag< MeshFormat::Gmsh >{};
 namespace detail
 {
 template < ElementTypes ELTYPE >
-Element< ELTYPE, 1 > parse_element(std::ifstream& f)
+Element< ELTYPE, 1 > parse_gmsh_element(std::ifstream& f)
 {
     constexpr auto n_nodes = ElementTraits< Element< ELTYPE, 1 > >::nodes_per_element;
     std::array< size_t, n_nodes > nodes{};
@@ -45,10 +41,6 @@ Element< ELTYPE, 1 > parse_element(std::ifstream& f)
     {
         std::swap(nodes[2], nodes[3]);
         std::rotate(nodes.begin(), nodes.begin() + 2, nodes.end());
-    }
-    else if constexpr (ELTYPE == ElementTypes::Line)
-    {
-        ;
     }
 
     return Element< ELTYPE, 1 >{nodes};
@@ -184,16 +176,14 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
                 file >> e;
 
             const auto parse_dim_entities = [&](const size_t dim) {
-                for (size_t entity = 0; entity < n_entities[dim]; entity++)
-                {
-                    int    entity_tag, physical_tag, skip;
+                const auto parse_entity = [&]() {
+                    int    entity_tag;
                     double coord;
-                    size_t n_physical_tags, n_bounding_entities;
+                    file >> entity_tag;
+                    for (size_t n_io = 0; n_io < 3 + ((dim > 0) * 3); ++n_io)
+                        file >> coord;
 
-                    file >> entity_tag >> coord >> coord >> coord;
-                    if (dim > 0)
-                        file >> coord >> coord >> coord;
-
+                    size_t n_physical_tags;
                     file >> n_physical_tags;
                     if (n_physical_tags > 1)
                     {
@@ -204,17 +194,23 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
                     }
                     else if (n_physical_tags == 1)
                     {
+                        int physical_tag;
                         file >> physical_tag;
                         entity_data[dim][entity_tag] = static_cast< types::d_id_t >(physical_tag);
                     }
 
                     if (dim > 0)
                     {
+                        size_t n_bounding_entities;
                         file >> n_bounding_entities;
+                        int skip;
                         for (size_t i = 0; i < n_bounding_entities; ++i)
                             file >> skip;
                     }
-                }
+                };
+
+                for (size_t entity = 0; entity < n_entities[dim]; entity++)
+                    parse_entity();
             };
 
             for (size_t dim = 0; dim < n_entity_types; ++dim)
@@ -339,24 +335,41 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
                     entity_data.first[entity_dim].at(entity_tag);
                 auto& block_domain = domain_map[block_physical_id];
 
-                for (size_t element = 0; element < block_size; ++element)
-                {
-                    size_t element_tag;
-                    file >> element_tag;
+                using lstr::util::meta::size_constant;
 
-                    switch (element_type)
+                // Translate gmsh element type into lstr::mesh::ElementType at compile time
+                constexpr auto lookup_eltype = []< size_t I >(size_constant< I >) {
+                    constexpr std::array elt_lookup_tab{std::pair{1, ElementTypes::Line},
+                                                        std::pair{3, ElementTypes::Quad}};
+                    return std::find_if(elt_lookup_tab.cbegin(),
+                                        elt_lookup_tab.cend(),
+                                        [](const auto& p) { return p.first == I; })
+                        ->second;
+                };
+
+                // push block of elements of type `I` to the domain
+                const auto push_elements = [&]< size_t I >(size_constant< I >) {
+                    for (size_t element = 0, element_tag; element < block_size; ++element)
                     {
-                    case 1:
-                        block_domain.pushBack(detail::parse_element< ElementTypes::Line >(file));
-                        break;
-                    case 3:
-                        block_domain.pushBack(detail::parse_element< ElementTypes::Quad >(file));
-                        break;
-                    default:
-                        std::stringstream err;
-                        err << "Unsupported element type: " << element_type;
-                        throw_error(err.str().c_str());
+                        file >> element_tag; // throw away tag
+                        block_domain.pushBack(
+                            detail::parse_gmsh_element< lookup_eltype(size_constant< I >{}) >(
+                                file));
                     }
+                };
+
+                switch (element_type)
+                {
+                case 1:
+                    push_elements(size_constant< 1 >{});
+                    break;
+                case 3:
+                    push_elements(size_constant< 3 >{});
+                    break;
+                default:
+                    std::stringstream err;
+                    err << "Unsupported element type: " << element_type;
+                    throw_error(err.str().c_str());
                 }
             };
 

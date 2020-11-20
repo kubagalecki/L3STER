@@ -18,6 +18,7 @@
 
 namespace lstr::util::meta
 {
+// Functionality related to parametrizing over all combinations of a pack of nttp arrays
 template < array auto A >
 requires std::totally_ordered< typename decltype(A)::value_type > struct unique_els
 {
@@ -181,6 +182,12 @@ template < template < auto... > typename Inner,
            tuple_like auto... Params >
 using parametrize_over_combinations_t =
     parametrize_over_combinations< Inner, Outer, Params... >::type;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Convenience alias
+template < size_t I >
+using size_constant = std::integral_constant< size_t, I >;
 
 } // namespace lstr::util::meta
 
