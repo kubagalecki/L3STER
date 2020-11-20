@@ -379,18 +379,18 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
             return domain_map;
         };
 
+        // Format has been checked previously, so it must be one of the 6 below
         switch (format_data)
         {
         case Format::ASCII_V4:
             parse_elements_asciiv4();
             break;
-        case Format::ASCII_V2:
-        case Format::BIN32_V2:
-        case Format::BIN64_V2:
-        case Format::BIN32_V4:
-        case Format::BIN64_V4:
-        default:
-            throw_error("Only the ASCII v4 gmsh format is currently supported [TO DO]");
+            // TO DO: other formats
+            // case Format::ASCII_V2:
+            // case Format::BIN32_V2:
+            // case Format::BIN64_V2:
+            // case Format::BIN32_V4:
+            // case Format::BIN64_V4:
         }
 
         skip_until_section("$EndElements");
