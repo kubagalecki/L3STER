@@ -24,10 +24,13 @@ public:
     using element_vector_variant_vector_t = std::vector< element_vector_variant_t >;
 
     template < ElementTypes ELTYPE, types::el_o_t ELORDER >
-    void pushBack(const Element< ELTYPE, ELORDER >& element);
+    void pushBack(Element< ELTYPE, ELORDER > element);
 
     template < ElementTypes ELTYPE, types::el_o_t ELORDER, typename... Args >
     void emplaceBack(Args&&... args);
+
+    template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+    auto getBackInserter();
 
     template < ElementTypes ELTYPE, types::el_o_t ELORDER >
     void reserve(size_t size);
@@ -51,6 +54,9 @@ private:
     element_vector_variant_vector_t element_vectors;
     types::dim_t                    dim = 0;
 
+    template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+    std::vector< Element< ELTYPE, ELORDER > >& retrieveElementVector();
+
     template < typename F >
     [[nodiscard]] static auto wrapElementVisitor(F&& element_visitor);
 
@@ -59,20 +65,13 @@ private:
 };
 
 template < ElementTypes ELTYPE, types::el_o_t ELORDER >
-void Domain::pushBack(const Element< ELTYPE, ELORDER >& element)
-{
-    emplaceBack< ELTYPE, ELORDER >(element);
-}
-
-template < ElementTypes ELTYPE, types::el_o_t ELORDER, typename... ArgTypes >
-void Domain::emplaceBack(ArgTypes&&... Args)
+std::vector< Element< ELTYPE, ELORDER > >& Domain::retrieveElementVector()
 {
     using el_vec_t = element_vector_t< ELTYPE, ELORDER >;
-
     if (!element_vectors.empty())
     {
         if (ElementTraits< Element< ELTYPE, ELORDER > >::native_dim != dim)
-            throw std::invalid_argument("Emplacing element in domain of different dimension");
+            throw std::invalid_argument("Element dimension incompatible with domain dimension");
     }
     else
         dim = ElementTraits< Element< ELTYPE, ELORDER > >::native_dim;
@@ -82,14 +81,27 @@ void Domain::emplaceBack(ArgTypes&&... Args)
             return std::holds_alternative< el_vec_t >(v);
         });
     if (vector_variant_it == element_vectors.end())
-    {
-        std::get< el_vec_t >(element_vectors.emplace_back(std::in_place_type< el_vec_t >))
-            .emplace_back(std::forward< ArgTypes >(Args)...);
-    }
+        return std::get< el_vec_t >(element_vectors.emplace_back(std::in_place_type< el_vec_t >));
     else
-    {
-        std::get< el_vec_t >(*vector_variant_it).emplace_back(std::forward< ArgTypes >(Args)...);
-    }
+        return std::get< el_vec_t >(*vector_variant_it);
+}
+
+template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+void Domain::pushBack(Element< ELTYPE, ELORDER > element)
+{
+    emplaceBack< ELTYPE, ELORDER >(std::move(element));
+}
+
+template < ElementTypes ELTYPE, types::el_o_t ELORDER, typename... ArgTypes >
+void Domain::emplaceBack(ArgTypes&&... Args)
+{
+    retrieveElementVector< ELTYPE, ELORDER >().emplace_back(std::forward< ArgTypes >(Args)...);
+}
+
+template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+auto Domain::getBackInserter()
+{
+    return std::back_inserter(retrieveElementVector< ELTYPE, ELORDER >());
 }
 
 template < ElementTypes ELTYPE, types::el_o_t ELORDER >

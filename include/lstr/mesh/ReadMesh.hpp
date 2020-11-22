@@ -28,6 +28,18 @@ constexpr inline MeshFormatTag gmsh_tag = MeshFormatTag< MeshFormat::Gmsh >{};
 
 namespace detail
 {
+inline constexpr std::array gmsh_elt_lookup_tab{std::pair{1u, ElementTypes::Line},
+                                                std::pair{3u, ElementTypes::Quad}};
+
+template < size_t I >
+consteval ElementTypes lookup_elt()
+{
+    return std::find_if(gmsh_elt_lookup_tab.cbegin(),
+                        gmsh_elt_lookup_tab.cend(),
+                        [](const auto& p) { return p.first == I; })
+        ->second;
+}
+
 template < ElementTypes ELTYPE >
 Element< ELTYPE, 1 > parse_gmsh_element(std::ifstream& f)
 {
@@ -337,25 +349,15 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
 
                 using lstr::util::meta::size_constant;
 
-                // Translate gmsh element type into lstr::mesh::ElementType at compile time
-                constexpr auto lookup_eltype = []< size_t I >(size_constant< I >) {
-                    constexpr std::array elt_lookup_tab{std::pair{1, ElementTypes::Line},
-                                                        std::pair{3, ElementTypes::Quad}};
-                    return std::find_if(elt_lookup_tab.cbegin(),
-                                        elt_lookup_tab.cend(),
-                                        [](const auto& p) { return p.first == I; })
-                        ->second;
-                };
-
                 // push block of elements of type `I` to the domain
                 const auto push_elements = [&]< size_t I >(size_constant< I >) {
-                    for (size_t element = 0, element_tag; element < block_size; ++element)
-                    {
-                        file >> element_tag; // throw away tag
-                        block_domain.pushBack(
-                            detail::parse_gmsh_element< lookup_eltype(size_constant< I >{}) >(
-                                file));
-                    }
+                    constexpr auto el_type = detail::lookup_elt< I >();
+                    std::generate_n(
+                        block_domain.getBackInserter< el_type, 1 >(), block_size, [&]() {
+                            size_t element_tag;
+                            file >> element_tag; // throw away tag
+                            return detail::parse_gmsh_element< el_type >(file);
+                        });
                 };
 
                 switch (element_type)
@@ -385,12 +387,14 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
         case Format::ASCII_V4:
             parse_elements_asciiv4();
             break;
-            // TO DO: other formats
-            // case Format::ASCII_V2:
-            // case Format::BIN32_V2:
-            // case Format::BIN64_V2:
-            // case Format::BIN32_V4:
-            // case Format::BIN64_V4:
+        // TO DO: other formats
+        case Format::ASCII_V2:
+        case Format::BIN32_V2:
+        case Format::BIN64_V2:
+        case Format::BIN32_V4:
+        case Format::BIN64_V4:
+        default:
+            break;
         }
 
         skip_until_section("$EndElements");
