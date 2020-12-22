@@ -42,5 +42,5 @@ RUN     git clone https://github.com/catchorg/Catch2.git \
 # Install Trilinos through spack
 RUN     git clone https://github.com/spack/spack.git \
         && . spack/share/spack/setup-env.sh \
-        && spack install trilinos cxxstd=17 -mumps +openmp +superlu +superlu-dist \
+        && spack install trilinos cxxstd=17 -mumps +openmp +superlu +hwloc \
         && spack load trilinos
