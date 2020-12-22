@@ -1,25 +1,25 @@
 name: tests
-on: [push]
+on: [ push ]
 jobs:
   CI:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
-    - uses: whoan/docker-build-with-cache-action@v5
-      id: docker-base-cache
-      with:
-        username: "${{ secrets.DOCKER_HUB_USERNAME }}"
-        password: "${{ secrets.DOCKER_HUB_TOKEN }}"
-        image_name: "${{ secrets.DOCKER_HUB_IMAGE }}" 
-        dockerfile: scripts/ci/Dockerfile.base
+      - uses: whoan/docker-build-with-cache-action@v5
+        id: docker-base-cache
+        with:
+          username: "${{ secrets.DOCKER_HUB_USERNAME }}"
+          password: "${{ secrets.DOCKER_HUB_TOKEN }}"
+          image_name: "${{ secrets.DOCKER_HUB_IMAGE }}"
+          dockerfile: scripts/ci/Dockerfile.base
 
-    - name: Append docker base
-      env:
-        DOCKER_BASE: "${{ steps.docker-base-cache.outputs.FULL_IMAGE_NAME }}"
-      run: |
+      - name: Append docker base
+        env:
+          DOCKER_BASE: "${{ steps.docker-base-cache.outputs.FULL_IMAGE_NAME }}"
+        run: |
           sed -i '1 i\FROM '"$DOCKER_BASE" $GITHUB_WORKSPACE/Dockerfile
 
-    - uses: ./scripts/ci/ci-action/
-      with:
-        codecov_token: "${{ secrets.CODECOV_TOKEN }}"
+      - uses: ./scripts/ci/ci-action/
+        with:
+          codecov_token: "${{ secrets.CODECOV_TOKEN }}"

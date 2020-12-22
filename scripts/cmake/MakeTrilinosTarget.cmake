@@ -14,54 +14,52 @@
 # Return values (i.e. variables set in parent scope):
 #   MissingPackages (list)   - semicolon-separated list of packages which were not found
 #
-function(detect_trilinos_packages Verbosity PackageList PackageNames)
+function( detect_trilinos_packages Verbosity PackageList PackageNames )
 
-    if (NOT PackageNames)
+    if ( NOT PackageNames )
         return()
     endif ()
 
-    if (Verbosity)
-        message(STATUS "Detecting required Trilinos packages")
-        list(APPEND CMAKE_MESSAGE_INDENT "  ")
+    if ( Verbosity )
+        message( STATUS "Detecting required Trilinos packages" )
+        list( APPEND CMAKE_MESSAGE_INDENT "  " )
     endif ()
 
-    unset(MissingPackages)
+    unset( MissingPackages )
 
-    string(TOLOWER "${PackageList}" PackageList)
+    string( TOLOWER "${PackageList}" PackageList )
 
-    foreach (pkg IN LISTS PackageNames)
-        if (Verbosity)
-            message(STATUS "Detecting ${pkg}")
+    foreach ( pkg IN LISTS PackageNames )
+        if ( Verbosity )
+            message( STATUS "Detecting ${pkg}" )
         endif ()
-        string(TOLOWER ${pkg} Name_LC)
-        list(FIND PackageList ${Name_LC} pkg_index)
-        if (NOT pkg_index EQUAL -1)
-            if (Verbosity)
-                message(STATUS "Detecting ${pkg} - found")
+        string( TOLOWER ${pkg} Name_LC )
+        list( FIND PackageList ${Name_LC} pkg_index )
+        if ( NOT pkg_index EQUAL -1 )
+            if ( Verbosity )
+                message( STATUS "Detecting ${pkg} - found" )
             endif ()
         else ()
-            list(APPEND MissingPackages ${pkg})
-            if (Verbosity)
-                message(STATUS "Detecting ${pkg} - not found")
+            list( APPEND MissingPackages ${pkg} )
+            if ( Verbosity )
+                message( STATUS "Detecting ${pkg} - not found" )
             endif ()
         endif ()
     endforeach ()
 
-    if (Verbosity)
-        list(POP_BACK CMAKE_MESSAGE_INDENT)
-        if (MissingPackages)
-            message(STATUS "Detecting required Trilinos packages - some not found")
+    if ( Verbosity )
+        list( POP_BACK CMAKE_MESSAGE_INDENT )
+        if ( MissingPackages )
+            message( STATUS "Detecting required Trilinos packages - some not found" )
         else ()
-            message(STATUS "Detecting required Trilinos packages - all found")
+            message( STATUS "Detecting required Trilinos packages - all found" )
         endif ()
     endif ()
 
-    set(MissingPackages "${MissingPackages}" PARENT_SCOPE)
+    set( MissingPackages "${MissingPackages}" PARENT_SCOPE )
 endfunction()
 
-
 ###################################################################################################
-
 
 # ---  make_trilinos_target  ---
 # Convert variables exported by the `find_package(Trilinos)` call into a linkable CMake target
@@ -93,58 +91,58 @@ endfunction()
 #                                        packages which were requested but not built, set only if
 #                                        at least one package was not found
 #
-function(make_trilinos_target Verbosity)
+function( make_trilinos_target Verbosity )
 
-    if (Verbosity)
-        message(STATUS "Detecting Trilinos")
-        list(APPEND CMAKE_MESSAGE_INDENT "  ")
+    if ( Verbosity )
+        message( STATUS "Detecting Trilinos" )
+        list( APPEND CMAKE_MESSAGE_INDENT "  " )
     endif ()
 
-    find_package(Trilinos REQUIRED)
+    find_package( Trilinos REQUIRED )
 
-    if (NOT ${Trilinos_CXX_COMPILER} STREQUAL ${CMAKE_CXX_COMPILER})
-        message(WARNING " Detected different C++ compiler than the one Trilinos was built with.\n"
-                " Detected compiler:               ${CMAKE_CXX_COMPILER}\n"
-                " Compiler used to build Trilinos: ${Trilinos_CXX_COMPILER}\n"
-                "Note: if the difference is e.g. `cxx` vs `mpicxx`, you can ignore this warning. "
-                "Trilinos includes MPI in the libraries it links against, so your application will "
-                "link against the same MPI by virtue of the transitive property.\n")
+    if ( NOT ${Trilinos_CXX_COMPILER} STREQUAL ${CMAKE_CXX_COMPILER} )
+        message( WARNING " Detected different C++ compiler than the one Trilinos was built with.\n"
+                 " Detected compiler:               ${CMAKE_CXX_COMPILER}\n"
+                 " Compiler used to build Trilinos: ${Trilinos_CXX_COMPILER}\n"
+                 "Note: if the difference is e.g. `cxx` vs `mpicxx`, you can ignore this warning. "
+                 "Trilinos includes MPI in the libraries it links against, so your application will "
+                 "link against the same MPI by virtue of the transitive property.\n" )
     endif ()
 
-    detect_trilinos_packages(${Verbosity} "${Trilinos_PACKAGE_LIST}" "${ARGN}")
-    if (MissingPackages)
-        string(REPLACE ";" "\n > " fmt_mp "${MissingPackages}")
-        message(SEND_ERROR " Trilinos was built without the following required packages: \n > ${fmt_mp}\n")
-        set(MissingTrilinosPackages "${MissingPackages}" PARENT_SCOPE)
+    detect_trilinos_packages( ${Verbosity} "${Trilinos_PACKAGE_LIST}" "${ARGN}" )
+    if ( MissingPackages )
+        string( REPLACE ";" "\n > " fmt_mp "${MissingPackages}" )
+        message( SEND_ERROR " Trilinos was built without the following required packages: \n > ${fmt_mp}\n" )
+        set( MissingTrilinosPackages "${MissingPackages}" PARENT_SCOPE )
     endif ()
 
-    if (Verbosity)
-        list(POP_BACK CMAKE_MESSAGE_INDENT)
-        message(STATUS "Detecting Trilinos - found")
+    if ( Verbosity )
+        list( POP_BACK CMAKE_MESSAGE_INDENT )
+        message( STATUS "Detecting Trilinos - found" )
     endif ()
 
-    add_library(Trilinos INTERFACE)
+    add_library( Trilinos INTERFACE )
 
-    string(STRIP ${Trilinos_CXX_COMPILER_FLAGS} Trilinos_CXX_COMPILER_FLAGS)
-    string(REPLACE " " ";" Trilinos_CXX_COMPILER_FLAGS ${Trilinos_CXX_COMPILER_FLAGS})
-    target_compile_options(Trilinos INTERFACE ${Trilinos_CXX_COMPILER_FLAGS})
+    string( STRIP ${Trilinos_CXX_COMPILER_FLAGS} Trilinos_CXX_COMPILER_FLAGS )
+    string( REPLACE " " ";" Trilinos_CXX_COMPILER_FLAGS ${Trilinos_CXX_COMPILER_FLAGS} )
+    target_compile_options( Trilinos INTERFACE ${Trilinos_CXX_COMPILER_FLAGS} )
 
-    string(STRIP ${Trilinos_EXTRA_LD_FLAGS} Trilinos_EXTRA_LD_FLAGS)
-    string(REPLACE " " ";" Trilinos_EXTRA_LD_FLAGS ${Trilinos_EXTRA_LD_FLAGS})
-    target_link_options(Trilinos INTERFACE ${Trilinos_EXTRA_LD_FLAGS})
+    string( STRIP ${Trilinos_EXTRA_LD_FLAGS} Trilinos_EXTRA_LD_FLAGS )
+    string( REPLACE " " ";" Trilinos_EXTRA_LD_FLAGS ${Trilinos_EXTRA_LD_FLAGS} )
+    target_link_options( Trilinos INTERFACE ${Trilinos_EXTRA_LD_FLAGS} )
 
-    target_include_directories(Trilinos INTERFACE
-            ${Trilinos_INCLUDE_DIRS}
-            ${Trilinos_TPL_INCLUDE_DIRS}
-            )
+    target_include_directories( Trilinos INTERFACE
+                                ${Trilinos_INCLUDE_DIRS}
+                                ${Trilinos_TPL_INCLUDE_DIRS}
+                                )
 
-    target_link_directories(Trilinos INTERFACE
-            ${Trilinos_LIBRARY_DIRS}
-            ${Trilinos_TPL_LIBRARY_DIRS}
-            )
+    target_link_directories( Trilinos INTERFACE
+                             ${Trilinos_LIBRARY_DIRS}
+                             ${Trilinos_TPL_LIBRARY_DIRS}
+                             )
 
-    target_link_libraries(Trilinos INTERFACE
-            ${Trilinos_LIBRARIES}
-            ${Trilinos_TPL_LIBRARIES}
-            )
+    target_link_libraries( Trilinos INTERFACE
+                           ${Trilinos_LIBRARIES}
+                           ${Trilinos_TPL_LIBRARIES}
+                           )
 endfunction()

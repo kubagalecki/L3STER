@@ -17,5 +17,5 @@ $TEST_STATUS || echo "Tests failed. Delaying error until after code coverage is 
 echo "Generating code coverage report and uploading to Codecov..."
 gcovr -x -r .. -e ../tests -o report.xml
 curl -s https://codecov.io/bash | bash -s -- -c -f report.xml -t "$INPUT_CODECOV_TOKEN"
-$TEST_STATUS && echo "All tests passed. Finishing..." && exit || \
+$TEST_STATUS && echo "All tests passed. Finishing..." && exit ||
   echo "Some tests failed. Error wil now be reported..." && exit 1

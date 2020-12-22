@@ -1,34 +1,34 @@
 # Register L3STER tests with CTest
-add_executable(L3STER_tests
-        ${L3STER_DIR}/tests/TestsMain.cpp
-        ${L3STER_DIR}/tests/QuadratureTests.cpp
-        ${L3STER_DIR}/tests/MeshTests.cpp
-        )
+add_executable( L3STER_tests
+                ${L3STER_DIR}/tests/TestsMain.cpp
+                ${L3STER_DIR}/tests/QuadratureTests.cpp
+                ${L3STER_DIR}/tests/MeshTests.cpp
+                )
 
-set(L3STER_TESTS_DATA_PATH "${L3STER_DIR}/tests/data" CACHE STRING "Path to test data directory")
+set( L3STER_TESTS_DATA_PATH "${L3STER_DIR}/tests/data" CACHE STRING "Path to test data directory" )
 
-configure_file(tests/TestDataPath.h.in TestDataPath.h)
+configure_file( ${L3STER_DIR}/tests/TestDataPath.h.in TestDataPath.h )
 
-target_include_directories(L3STER_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories( L3STER_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR} )
 
-target_compile_options(L3STER_tests PUBLIC
-        -Wall
-        -Wextra
-        -Wpedantic
-        -Wshadow
-        -fprofile-arcs
-        -ftest-coverage
-        -fPIC
-        )
+target_compile_options( L3STER_tests PUBLIC
+                        -Wall
+                        -Wextra
+                        -Wpedantic
+                        -Wshadow
+                        -fprofile-arcs
+                        -ftest-coverage
+                        -fPIC
+                        )
 
-target_link_options(L3STER_tests PUBLIC
-        -lgcov
-        --coverage
-        )
+target_link_options( L3STER_tests PUBLIC
+                     -lgcov
+                     --coverage
+                     )
 
-target_link_libraries(L3STER_tests
-        L3STER
-        Catch2::Catch2
-        )
+target_link_libraries( L3STER_tests
+                       L3STER
+                       Catch2::Catch2
+                       )
 
-catch_discover_tests(L3STER_tests)
+catch_discover_tests( L3STER_tests )
