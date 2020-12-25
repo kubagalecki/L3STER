@@ -1,7 +1,7 @@
 #ifndef L3STER_MESH_CONSTANTS_HPP
 #define L3STER_MESH_CONSTANTS_HPP
 
-#include "lstr/defs/Typedefs.h"
+#include "defs/Typedefs.h"
 
 #include <array>
 

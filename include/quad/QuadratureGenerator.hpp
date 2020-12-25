@@ -3,8 +3,8 @@
 #ifndef L3STER_QUAD_QUADRATUREGENERATOR_HPP
 #define L3STER_QUAD_QUADRATUREGENERATOR_HPP
 
-#include "lstr/mesh/Element.hpp"
-#include "lstr/quad/ReferenceQuadrature.hpp"
+#include "mesh/Element.hpp"
+#include "quad/ReferenceQuadrature.hpp"
 
 namespace lstr::quad
 {

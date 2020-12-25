@@ -1,8 +1,8 @@
 #ifndef L3STER_MESH_MESH_HPP
 #define L3STER_MESH_MESH_HPP
 
-#include "lstr/mesh/MeshPartition.hpp"
-#include "lstr/mesh/Node.hpp"
+#include "mesh/MeshPartition.hpp"
+#include "mesh/Node.hpp"
 
 #include <utility>
 #include <vector>

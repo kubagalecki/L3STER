@@ -3,7 +3,7 @@
 #ifndef L3STER_MESH_ELEMENT_HPP
 #define L3STER_MESH_ELEMENT_HPP
 
-#include "lstr/mesh/ElementTraits.hpp"
+#include "mesh/ElementTraits.hpp"
 
 #include <algorithm>
 #include <array>

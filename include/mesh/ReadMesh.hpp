@@ -1,8 +1,8 @@
 #ifndef L3STER_MESH_READMESH_HPP
 #define L3STER_MESH_READMESH_HPP
 
-#include "lstr/mesh/Mesh.hpp"
-#include "lstr/util/Meta.hpp"
+#include "mesh/Mesh.hpp"
+#include "util/Meta.hpp"
 
 #include <algorithm>
 #include <array>

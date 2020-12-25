@@ -3,8 +3,8 @@
 
 #include "Eigen/Dense"
 
-#include "lstr/quad/Quadrature.hpp"
-#include "lstr/quad/ReferenceQuadratureTraits.hpp"
+#include "quad/Quadrature.hpp"
+#include "quad/ReferenceQuadratureTraits.hpp"
 
 #include <cmath>
 

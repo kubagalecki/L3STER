@@ -9,7 +9,7 @@
 #include <tuple>
 #include <utility>
 
-#include "lstr/util/Concepts.hpp"
+#include "util/Concepts.hpp"
 
 /*Comments:
  *  naming convention conforming to the standard library

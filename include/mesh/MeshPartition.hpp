@@ -1,8 +1,8 @@
 #ifndef L3STER_MESH_MESHPARTITION_HPP
 #define L3STER_MESH_MESHPARTITION_HPP
 
-#include "lstr/mesh/BoundaryView.hpp"
-#include "lstr/mesh/Domain.hpp"
+#include "mesh/BoundaryView.hpp"
+#include "mesh/Domain.hpp"
 
 #include <map>
 #include <variant>

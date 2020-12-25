@@ -3,7 +3,7 @@
 
 #include <utility>
 
-#include "lstr/mesh/BoundaryElementView.hpp"
+#include "mesh/BoundaryElementView.hpp"
 
 namespace lstr::mesh
 {

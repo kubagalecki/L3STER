@@ -1,8 +1,8 @@
 #ifndef L3STER_MESH_DOMAIN_HPP
 #define L3STER_MESH_DOMAIN_HPP
 
-#include "lstr/mesh/Aliases.hpp"
-#include "lstr/mesh/Element.hpp"
+#include "mesh/Aliases.hpp"
+#include "mesh/Element.hpp"
 
 #include <algorithm>
 #include <functional>

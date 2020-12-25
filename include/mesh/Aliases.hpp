@@ -1,9 +1,9 @@
 #ifndef L3STER_MESH_ALIASES_HPP
 #define L3STER_MESH_ALIASES_HPP
 
-#include "lstr/defs/Typedefs.h"
-#include "lstr/mesh/ElementTypes.hpp"
-#include "lstr/util/Meta.hpp"
+#include "defs/Typedefs.h"
+#include "mesh/ElementTypes.hpp"
+#include "util/Meta.hpp"
 
 #include <functional>
 #include <variant>

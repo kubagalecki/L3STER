@@ -9,7 +9,7 @@
 
 #include "Eigen/Dense"
 
-#include "lstr/defs/Typedefs.h"
+#include "defs/Typedefs.h"
 
 #include <algorithm>
 #include <array>

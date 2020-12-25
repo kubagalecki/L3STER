@@ -3,7 +3,7 @@
 #ifndef L3STER_MESH_ELEMENTTYPES_H
 #define L3STER_MESH_ELEMENTTYPES_H
 
-#include "lstr/mesh/Constants.hpp"
+#include "mesh/Constants.hpp"
 
 #include <array>
 #include <utility>
