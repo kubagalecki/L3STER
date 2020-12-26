@@ -85,6 +85,18 @@ concept tuple_like = requires
     ->std::convertible_to< std::size_t >;
     typename detail::fold_tuple_gettable< T, std::make_index_sequence< std::tuple_size_v< T > > >;
 };
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+template < typename T, typename Domain, typename Range >
+concept mapping = requires(T f, Domain x)
+{
+    {
+        f(x)
+    }
+    ->std::convertible_to< Range >;
+};
+
 } // namespace lstr::util
 
 #endif // L3STER_UTIL_CONCEPTS_HPP

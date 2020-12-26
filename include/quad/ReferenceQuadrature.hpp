@@ -3,9 +3,11 @@
 
 #include "Eigen/Dense"
 
+#include "math/ComputeGaussRule.hpp"
 #include "quad/Quadrature.hpp"
 #include "quad/ReferenceQuadratureTraits.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 namespace lstr::quad
@@ -29,36 +31,24 @@ public:
 template < types::q_o_t QORDER >
 auto ReferenceQuadrature< QuadratureTypes::GLeg, QORDER >::compute()
 {
-    constexpr auto size = ReferenceQuadratureTraits< this_t >::size;
-
-    if constexpr (size == 1)
-        return quadrature_t{{0.}, {2.}};
-
-    using matrix_t = Eigen::Matrix< types::val_t, size, size >;
-
-    matrix_t coef_matrix = matrix_t::Zero();
-
-    for (size_t i = 0; i < size - 1; ++i)
-    {
-        const auto   i_inc1   = static_cast< types::val_t >(i + 1);
-        types::val_t val      = i_inc1 / sqrt(4. * i_inc1 * i_inc1 - 1.);
-        coef_matrix(i + 1, i) = val;
-        coef_matrix(i, i + 1) = val;
-    }
-
-    Eigen::SelfAdjointEigenSolver< matrix_t > eigen_solver;
-    eigen_solver.compute(coef_matrix);
-    const auto& eig_vals = eigen_solver.eigenvalues();
-    const auto& eig_vecs = eigen_solver.eigenvectors();
+    constexpr auto a = [](size_t x) {
+        return static_cast< types::val_t >(2u * x - 1u) / static_cast< types::val_t >(x);
+    };
+    constexpr auto b = [](size_t) {
+        return 0.;
+    };
+    constexpr auto c = [](size_t x) {
+        return static_cast< types::val_t >(x - 1u) / static_cast< types::val_t >(x);
+    };
+    const auto& [qp, w] =
+        math::computeGaussRule< ReferenceQuadratureTraits< this_t >::size >(a, b, c);
 
     typename quadrature_t::q_points_t q_points;
     typename quadrature_t::weights_t  weights;
 
-    for (size_t i = 0; i < size; ++i)
-    {
-        q_points[i][0] = eig_vals[i];
-        weights[i]     = 2. * eig_vecs(0, i) * eig_vecs(0, i);
-    }
+    std::transform(
+        qp.cbegin(), qp.cend(), q_points.begin(), [](types::val_t v) { return std::array{v}; });
+    std::copy(w.cbegin(), w.cend(), weights.begin());
 
     return quadrature_t{q_points, weights};
 }
