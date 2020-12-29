@@ -1,287 +1,188 @@
-// Utility for handling polynomials: computing roots, etc.
-/*
- * In the following, polynomials are assumed to be in the form of:
- * p(x) = sum[i = 0 : N] ( ai * x^i ), where N is the order of the polynomial
- */
-
 #ifndef L3STER_MATH_POLYNOMIAL_HPP
 #define L3STER_MATH_POLYNOMIAL_HPP
 
-#include "Eigen/Dense"
+#include "util/Concepts.hpp"
 
-#include "defs/Typedefs.h"
+#include "Eigen/Dense"
 
 #include <algorithm>
 #include <array>
-#include <exception>
-#include <initializer_list>
-#include <iterator>
+#include <concepts>
 #include <numeric>
-#include <string>
-#include <type_traits>
+#include <utility>
 
 namespace lstr::math
 {
-//////////////////////////////////////////////////////////////////////////////////////////////
-//                                      POLYNOMIAL CLASS                                    //
-//////////////////////////////////////////////////////////////////////////////////////////////
-/*
-Class containing the polynomial coefficients
-*/
-template < types::poly_o_t N >
-class Polynomial final
+template < std::floating_point T, size_t ORDER >
+struct Polynomial;
+
+template < std::floating_point T, size_t ORDER >
+struct PolynomialView
 {
-public:
-    template < types::poly_o_t I >
-    friend class Polynomial;
+    using value_type              = T;
+    static constexpr size_t order = ORDER;
 
-    // Aliases
-    using array_t = std::array< types::val_t, N + 1 >;
+    [[nodiscard]] constexpr T                                           evaluate(T x) const;
+    [[nodiscard]] constexpr Polynomial< T, ORDER + 1 >                  integral() const;
+    [[nodiscard]] constexpr Polynomial< T, ORDER == 0 ? 0 : ORDER - 1 > derivative() const;
+    [[nodiscard]] std::array< std::complex< T >, ORDER >                roots() const;
 
-    // Ctors & Dtors
-    Polynomial(std::initializer_list< types::val_t >);
-
-    template < typename... Types >
-    Polynomial(const Types&... args) : coefs(args...)
-    {}
-
-    // Access
-    types::val_t* data()
-    {
-        return coefs.data(); // access the underlying array
-    }
-
-    // Polynomial manipulations
-    // evaluate polynomial
-    types::val_t eval(const types::val_t&);
-
-    Polynomial< N - 1 > polyder();
-
-    Polynomial< N + 1 > polyint();
-
-    std::array< std::complex< types::val_t >, N > roots();
-
-    // Operators
-    Polynomial< N > operator+=(types::val_t _a)
-    {
-        coefs.front() += _a; // increment by cosntant
-        return *this;
-    }
-
-    Polynomial< N > operator*=(types::val_t);
-
-private:
-    array_t coefs;
+    std::reference_wrapper< const std::array< T, ORDER + 1u > > coefs;
 };
 
-// Forward declare specialization of template
-template <>
-class Polynomial< 0 >;
+template < util::array Arg >
+PolynomialView(const Arg&)
+    -> PolynomialView< typename Arg::value_type, std::tuple_size_v< Arg > - 1 >;
 
-// Initializer list constructor
-template < types::poly_o_t N >
-Polynomial< N >::Polynomial(std::initializer_list< types::val_t > init_list)
+template < std::floating_point T, size_t ORDER >
+struct Polynomial
 {
-    if (init_list.size() != N + 1)
+    using value_type              = T;
+    static constexpr size_t order = ORDER;
+
+    [[nodiscard]] constexpr T evaluate(T x) const
     {
-        throw(std::length_error(
-            "Incorrect number of coefficients for polynomial of specified order. Should be: " +
-            std::to_string(N + 1) + ", is: " + std::to_string(init_list.size()) + '\n'));
+        return PolynomialView{coefs}.evaluate(x);
+    }
+    [[nodiscard]] constexpr Polynomial< T, ORDER + 1 > integral() const
+    {
+        return PolynomialView{coefs}.integral();
+    }
+    [[nodiscard]] constexpr Polynomial< T, ORDER == 0 ? 0 : ORDER - 1 > derivative() const
+    {
+        return PolynomialView{coefs}.derivative();
+    }
+    [[nodiscard]] std::array< std::complex< T >, ORDER > roots() const
+    {
+        return PolynomialView{coefs}.roots();
     }
 
-    std::move(init_list.begin(), init_list.end(), coefs.begin());
-}
+    std::array< T, ORDER + 1u > coefs;
+};
 
-// Polynomial evaluation
-template < types::poly_o_t N >
-types::val_t Polynomial< N >::eval(const types::val_t& x)
+template < util::array Arg >
+Polynomial(const Arg&) -> Polynomial< typename Arg::value_type, std::tuple_size_v< Arg > - 1 >;
+
+template < std::floating_point T, size_t ORDER >
+[[nodiscard]] constexpr T PolynomialView< T, ORDER >::evaluate(T x) const
 {
-    // evaluate p(x)
-    auto ret_val     = coefs.front();
-    auto current_exp = x;
-
-    auto op = [&](types::val_t c) -> void {
-        ret_val += current_exp * c;
+    T ret         = coefs.get().back();
+    T current_exp = x;
+    std::for_each(coefs.get().crbegin() + 1, coefs.get().crend(), [&](T c) {
+        ret += c * current_exp;
         current_exp *= x;
-    };
+    });
+    return ret;
 
-    std::for_each(++coefs.begin(), --coefs.end(), op);
-
-    ret_val += current_exp * coefs.back();
-    return ret_val;
+    /*
+    T y = 0.;
+    std::for_each(coefs.get().crbegin(), coefs.get().crend(), [&, exponent = 0.](T a) mutable {
+        y += a * pow(x, exponent++);
+    });
+    return y;
+     */
 }
 
-// Polynomial dervative
-template < types::poly_o_t N >
-Polynomial< N - 1 > Polynomial< N >::polyder()
+template < std::floating_point T, size_t ORDER >
+[[nodiscard]] constexpr Polynomial< T, ORDER + 1 > PolynomialView< T, ORDER >::integral() const
 {
-    // Handle conversion to proxy type Polynomial<0>
-    if (N == 1)
-        return Polynomial< 0 >{coefs[1]};
-
-    auto ret_val = Polynomial< N - 1 >{};
-
-    auto current_exp = N;
-
-    auto op = [&](const typename array_t::value_type& a_old) {
-        return a_old * (current_exp--);
-    };
-
-    std::transform(coefs.crbegin(), std::prev(coefs.crend()), ret_val.coefs.rbegin(), op);
-
-    return ret_val;
+    std::array< T, ORDER + 1 > int_coefs;
+    std::generate(int_coefs.rbegin(), int_coefs.rend(), [i = 1u]() mutable {
+        return 1. / static_cast< T >(i++);
+    });
+    std::array< T, ORDER + 2 > ret;
+    ret.back() = 0.; // Integration constant = 0
+    std::transform(coefs.get().cbegin(),
+                   coefs.get().cend(),
+                   int_coefs.cbegin(),
+                   ret.begin(),
+                   std::multiplies{});
+    return Polynomial< T, ORDER + 1 >{ret};
 }
 
-// Polynomial integral, C = 0
-template < types::poly_o_t N >
-Polynomial< N + 1 > Polynomial< N >::polyint()
+template < std::floating_point T, size_t ORDER >
+[[nodiscard]] constexpr Polynomial< T, ORDER == 0 ? 0 : ORDER - 1 >
+PolynomialView< T, ORDER >::derivative() const
 {
-    auto ret_val          = Polynomial< N + 1 >{};
-    ret_val.coefs.front() = 0.;
-    auto current_exp      = 1;
-
-    auto op = [&](const typename array_t::value_type& a_old) {
-        return a_old / (current_exp++);
-    };
-
-    std::transform(coefs.begin(), coefs.end(), std::next(ret_val.coefs.begin()), op);
-    return ret_val;
+    using ret_t = Polynomial< T, ORDER == 0 ? 0 : ORDER - 1 >;
+    if constexpr (ORDER == 0)
+        return ret_t{{0.}};
+    else
+    {
+        std::array< T, ORDER > ret;
+        auto                   der_coefs = ret;
+        std::iota(der_coefs.rbegin(), der_coefs.rend(), 1);
+        std::transform(coefs.get().cbegin(),
+                       coefs.get().cend() - 1,
+                       der_coefs.cbegin(),
+                       ret.begin(),
+                       std::multiplies{});
+        return ret_t{ret};
+    }
 }
 
-// Polynomial roots (complex valued)
-template < types::poly_o_t N >
-std::array< std::complex< types::val_t >, N > Polynomial< N >::roots()
+template < std::floating_point T, size_t ORDER >
+[[nodiscard]] std::array< std::complex< T >, ORDER > PolynomialView< T, ORDER >::roots() const
 {
-    using complex_t = std::complex< types::val_t >;
+    using complex_t = std::complex< T >;
 
-    // If linear function, x0 = -b/a
-    if (N == 1)
-        return std::array< complex_t, N >{complex_t{coefs.front() / coefs.back(), 0.}};
+    if constexpr (ORDER == 0)
+        throw std::logic_error{"Cannot find roots of polynomial of order 0"};
+
+    if constexpr (ORDER == 1)
+        return std::array< complex_t, 1 >{complex_t{-coefs.get().back() / coefs.get().front(), 0.}};
 
     // Create and populate companion matrix
-    auto comp_mat = Eigen::Matrix< types::val_t, N, N >{};
-
-    for (auto i = 0; i < N; i++)
+    Eigen::Matrix< T, ORDER, ORDER > comp_mat = Eigen::Matrix< T, ORDER, ORDER >::Zero();
+    comp_mat(0, ORDER - 1)                    = -coefs.get().back() / coefs.get().front();
+    for (size_t i = 0; i < ORDER - 1; ++i)
     {
-        for (auto j = 0; j < N; j++)
-        {
-            if (i == j + 1)
-            {
-                comp_mat(i, j) = 1.;
-            }
-            else
-            {
-                if (j == N - 1)
-                {
-                    comp_mat(i, j) = -coefs[i] / coefs.back();
-                }
-                else
-                {
-                    comp_mat(i, j) = 0;
-                }
-            }
-        }
+        comp_mat(i + 1, i)         = 1.;
+        comp_mat(i + 1, ORDER - 1) = -coefs.get()[ORDER - 1 - i] / coefs.get().front();
     }
 
-    // Get Eigen::Vector of eigenvalues
     auto eig = comp_mat.eigenvalues();
+    auto ret = std::array< complex_t, ORDER >{};
+    std::copy(eig.begin(), eig.end(), ret.begin());
+    std::sort(ret.begin(), ret.end(), [](complex_t a, complex_t b) { return a.real() < b.real(); });
+    return ret;
+}
 
-    // Copy to the returned array
-    auto ret_val = std::array< complex_t, N >{};
-    std::copy(eig.begin(), eig.end(), ret_val.begin());
-
-    // Sort by absolute value
-    std::sort(ret_val.begin(), ret_val.end(), [](complex_t a, complex_t b) {
-        return std::abs(a) < std::abs(b);
+template < std::floating_point T, size_t O1, size_t O2 >
+constexpr Polynomial< T, O1 + O2 > operator*(const Polynomial< T, O1 >& a,
+                                             const Polynomial< T, O2 >& b)
+{
+    Polynomial< T, O1 + O2 > ret{};
+    ret.coefs.fill(0.);
+    std::for_each(a.cbegin(), a.cend(), [&, a_ind = 0](const T& ac) mutable {
+        std::for_each(b.coefs.cbegin(), b.coefs.cend(), [&, b_ind = 0u](const T& bc) mutable {
+            ret.coefs[a_ind + b_ind++] += ac * bc;
+        });
+        ++a_ind;
     });
-
-    return ret_val;
+    return ret;
 }
 
-// Scaling
-template < types::poly_o_t N >
-Polynomial< N > Polynomial< N >::operator*=(types::val_t _a)
+template < std::floating_point T, size_t O1, size_t O2 >
+constexpr Polynomial< T, std::max(O1, O2) > operator+(const Polynomial< T, O1 >& a,
+                                                      const Polynomial< T, O2 >& b)
 {
-    auto op = [&](types::val_t c) {
-        c *= _a;
+    constexpr auto   O_low    = std::min(O1, O2);
+    constexpr auto   O_high   = std::max(O1, O2);
+    constexpr size_t O_diff   = O_high - O_low;
+    constexpr auto   poly_sum = [&](const auto& poly_low, const auto& poly_high) {
+        Polynomial< T, O_high > ret;
+        std::copy(poly_high.coef.cbegin(), poly_high.coef.cbegin() + O_diff, ret.coef.begin());
+        std::transform(poly_low.coef.cbegin(),
+                       poly_low.coef.cend(),
+                       poly_high.coef.cbegin() + O_diff,
+                       ret.coef.begin() + O_diff,
+                       std::plus{});
     };
-    std::for_each(coefs.begin(), coefs.end(), op);
-    return *this;
-}
-
-// Specialization for order 0 polynomial
-template <>
-class Polynomial< 0 >
-{
-public:
-    // Ctors & Dtors
-    Polynomial() : a0(0) {}
-
-    Polynomial(const types::val_t& _a0) : a0(_a0) {}
-
-    // Access
-    types::val_t* data()
-    {
-        return &a0; // access the underlying coefficient
-    }
-
-    // Polynomial manipulations
-    types::val_t eval(const types::val_t&) { return a0; }
-
-    Polynomial< 0 > polyder() { return Polynomial< 0 >{0.}; }
-
-    Polynomial< 1 > polyint() { return Polynomial< 1 >{0., a0}; }
-
-    // Operators
-    Polynomial< 0 > operator+=(types::val_t _a)
-    {
-        a0 += _a;
-        return *this;
-    }
-
-    Polynomial< 0 > operator*=(types::val_t _a)
-    {
-        a0 *= _a;
-        return *this;
-    }
-
-private:
-    types::val_t a0;
-
-public:
-    // Although not used, empty coefs array is required for correct conversion
-    // This is a bit of a dirty hack
-    std::array< types::val_t, 0 > coefs = {};
-};
-
-//////////////////////////////////////////////////////////////////////////////////////////////
-//                                          FUNCTIONS                                       //
-//////////////////////////////////////////////////////////////////////////////////////////////
-// Lagrange interpolation
-/*
-Returns the polynomial p of order N, such that for all 0 <= i < N p(x[i]) = y[i]
-*/
-template < typename T, types::poly_o_t N = std::tuple_size< T >::value - 1 >
-Polynomial< N > lagrangeFit(const T& x, const T& y)
-{
-    auto A = Eigen::Matrix< types::val_t, N + 1, N + 1 >{};
-    auto b = Eigen::Matrix< types::val_t, N + 1, 1 >{};
-
-    for (size_t i = 0; i <= N; i++)
-    {
-        b[i]    = y[i];
-        A(i, 0) = 1.;
-
-        for (size_t j = 1; j <= N; j++)
-            A(i, j) = A(i, j - 1) * x[i];
-    }
-
-    Eigen::Matrix< types::val_t, N + 1, 1 > ret_coefs = A.colPivHouseholderQr().solve(b);
-
-    auto ret_val = Polynomial< N >{};
-    std::copy(ret_coefs.cbegin(), ret_coefs.cend(), ret_val.data());
-    return ret_val;
+    if constexpr (O1 < O2)
+        return poly_sum(a, b);
+    else
+        return poly_sum(b, a);
 }
 } // namespace lstr::math
-
 #endif // L3STER_MATH_POLYNOMIAL_HPP
