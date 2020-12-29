@@ -58,26 +58,17 @@ struct ElementFinder : ConstructionTracker
 {
     using nv_t = std::vector< lstr::types::n_id_t >;
 
-    ElementFinder()                         = default;
-    ElementFinder(const ElementFinder&)     = default;
-    ElementFinder(ElementFinder&&) noexcept = default;
-    ElementFinder& operator=(const ElementFinder&) = default;
-    ElementFinder& operator=(ElementFinder&&) noexcept = default;
-    explicit ElementFinder(nv_t&& nodes_) : ConstructionTracker{}, nodes{std::move(nodes_)} {}
+    explicit ElementFinder(nv_t&& nodes_) : ConstructionTracker{}, nodes{std::move(nodes_)}
+    {
+        std::ranges::sort(nodes);
+    }
 
     template < lstr::mesh::ElementTypes ET, lstr::types::el_o_t EO >
     bool operator()(const lstr::mesh::Element< ET, EO >& element) const
     {
-        const auto& element_nodes = element.getNodes();
-
-        const bool ret_val =
-            std::all_of(nodes.cbegin(), nodes.cend(), [&element_nodes](lstr::types::n_id_t n) {
-                return std::any_of(element_nodes.cbegin(),
-                                   element_nodes.cend(),
-                                   [&n](lstr::types::n_id_t en) { return en = n; });
-            });
-
-        return ret_val;
+        auto element_nodes = element.getNodes();
+        std::ranges::sort(element_nodes);
+        return std::ranges::equal(element_nodes, nodes);
     }
 
     nv_t nodes;
@@ -184,15 +175,23 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::mesh::Mesh, const lstr:
     }
 
     // Find (both const and non-const)
-    const auto predicate = ElementFinder(std::vector< lstr::types::n_id_t >({54, 55, 64, 62}));
+    const auto predicate = ElementFinder(std::vector< lstr::types::n_id_t >({54, 55, 64, 63}));
     const auto element1  = topology.findElement(predicate);
 
-    CHECK(element1.has_value() == true);
+    CHECK(element1);
     CHECK(ConstructionTracker::defaults == 1);
     CHECK(ConstructionTracker::copies == 0);
     CHECK(ConstructionTracker::cp_asgn == 0);
     CHECK(ConstructionTracker::moves == 0);
     CHECK(ConstructionTracker::mv_asgn == 0);
+
+    ConstructionTracker::resetCount();
+
+    // Check that find element fails safely
+    const auto predicate2 = ElementFinder(std::vector< lstr::types::n_id_t >({153, 213, 821, 372}));
+    const auto element2   = topology.findElement(predicate2);
+
+    CHECK_FALSE(element2);
 
     ConstructionTracker::resetCount();
 
@@ -206,6 +205,8 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::mesh::Mesh, const lstr:
     CHECK(boundaries[1].size() == 10);
     CHECK(boundaries[2].size() == 10);
     CHECK(boundaries[3].size() == 10);
+
+    CHECK_THROWS(mesh.getPartitions()[0].getBoundaryView(6));
 }
 
 TEST_CASE("Unsupported mesh formats, mesh I/O error handling", "[mesh]")

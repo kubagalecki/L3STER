@@ -2,7 +2,6 @@
 #include "l3ster.hpp"
 
 #include <array>
-#include <cmath>
 #include <numeric>
 #include <tuple>
 
