@@ -1,5 +1,6 @@
 #include "catch2/catch.hpp"
 #include "math/LagrangeInterpolation.hpp"
+#include "math/Legendre.hpp"
 
 #include <cmath>
 #include <random>
@@ -47,7 +48,7 @@ TEST_CASE("Polynomial evaluation", "[math]")
         return fabs(a - b) < tol;
     };
 
-    CHECK(std::equal(test_range.cbegin(), test_range.cend(), computed_range.cbegin(), approx));
+    CHECK(std::ranges::equal(test_range, computed_range, approx));
 }
 
 TEST_CASE("Polynomial integral", "[math]")
@@ -140,5 +141,23 @@ TEST_CASE("Lagrange interpolation", "[math]")
         constexpr double lagrange_tol = 2e-3;
         return fabs(a - b) < lagrange_tol;
     };
-    CHECK(std::equal(y.cbegin(), y.cend(), y_computed.cbegin(), approx));
+    CHECK(std::ranges::equal(y, y_computed, approx));
+}
+
+TEST_CASE("Legendre polynomials", "[math]")
+{
+    constexpr auto approx = [](const double a, const double b) {
+        return fabs(a - b) < tol;
+    };
+    constexpr auto lp2          = getLegendrePolynomial< double, 2 >();
+    constexpr auto lp2_expected = Polynomial{std::array{1.5, 0., -.5}};
+    CHECK(std::ranges::equal(lp2.coefs, lp2_expected.coefs, approx));
+
+    constexpr auto lp3          = getLegendrePolynomial< double, 3 >();
+    constexpr auto lp3_expected = Polynomial{std::array{2.5, 0., -1.5, 0.}};
+    CHECK(std::ranges::equal(lp3.coefs, lp3_expected.coefs, approx));
+
+    constexpr auto lp4          = getLegendrePolynomial< double, 4 >();
+    constexpr auto lp4_expected = Polynomial{std::array{4.375, 0., -3.75, 0., .375}};
+    CHECK(std::ranges::equal(lp4.coefs, lp4_expected.coefs, approx));
 }
