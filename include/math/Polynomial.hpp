@@ -40,10 +40,7 @@ struct Polynomial
     using value_type              = T;
     static constexpr size_t order = ORDER;
 
-    [[nodiscard]] constexpr T evaluate(T x) const
-    {
-        return PolynomialView{coefs}.evaluate(x);
-    }
+    [[nodiscard]] constexpr T evaluate(T x) const { return PolynomialView{coefs}.evaluate(x); }
     [[nodiscard]] constexpr Polynomial< T, ORDER + 1 > integral() const
     {
         return PolynomialView{coefs}.integral();
@@ -143,7 +140,7 @@ template < std::floating_point T, size_t ORDER >
 
     auto eig = comp_mat.eigenvalues();
     auto ret = std::array< complex_t, ORDER >{};
-    std::copy(eig.begin(), eig.end(), ret.begin());
+    std::copy(eig.data(), eig.data() + eig.size(), ret.begin());
     std::sort(ret.begin(), ret.end(), [](complex_t a, complex_t b) { return a.real() < b.real(); });
     return ret;
 }
