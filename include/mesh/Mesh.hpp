@@ -38,8 +38,7 @@ private:
     std::vector< Node< 3 > >     nodes;      // All meshes are assumed 3D
 };
 
-inline Mesh::Mesh(std::vector< Node< 3 > >&& nodes_, MeshPartition&& partition_)
-    : nodes(std::move(nodes_))
+inline Mesh::Mesh(std::vector< Node< 3 > >&& nodes_, MeshPartition&& partition_) : nodes(std::move(nodes_))
 {
     partitions.emplace_back(std::move(partition_));
 }

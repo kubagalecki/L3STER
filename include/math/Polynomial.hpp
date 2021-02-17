@@ -31,8 +31,7 @@ struct PolynomialView
 };
 
 template < util::array Arg >
-PolynomialView(const Arg&)
-    -> PolynomialView< typename Arg::value_type, std::tuple_size_v< Arg > - 1 >;
+PolynomialView(const Arg&) -> PolynomialView< typename Arg::value_type, std::tuple_size_v< Arg > - 1 >;
 
 template < std::floating_point T, size_t ORDER >
 struct Polynomial
@@ -40,19 +39,13 @@ struct Polynomial
     using value_type              = T;
     static constexpr size_t order = ORDER;
 
-    [[nodiscard]] constexpr T evaluate(T x) const { return PolynomialView{coefs}.evaluate(x); }
-    [[nodiscard]] constexpr Polynomial< T, ORDER + 1 > integral() const
-    {
-        return PolynomialView{coefs}.integral();
-    }
+    [[nodiscard]] constexpr T                          evaluate(T x) const { return PolynomialView{coefs}.evaluate(x); }
+    [[nodiscard]] constexpr Polynomial< T, ORDER + 1 > integral() const { return PolynomialView{coefs}.integral(); }
     [[nodiscard]] constexpr Polynomial< T, ORDER == 0 ? 0 : ORDER - 1 > derivative() const
     {
         return PolynomialView{coefs}.derivative();
     }
-    [[nodiscard]] std::array< std::complex< T >, ORDER > roots() const
-    {
-        return PolynomialView{coefs}.roots();
-    }
+    [[nodiscard]] std::array< std::complex< T >, ORDER > roots() const { return PolynomialView{coefs}.roots(); }
 
     std::array< T, ORDER + 1u > coefs;
 };
@@ -76,22 +69,15 @@ template < std::floating_point T, size_t ORDER >
 [[nodiscard]] constexpr Polynomial< T, ORDER + 1 > PolynomialView< T, ORDER >::integral() const
 {
     std::array< T, ORDER + 1 > int_coefs;
-    std::generate(int_coefs.rbegin(), int_coefs.rend(), [i = 1u]() mutable {
-        return 1. / static_cast< T >(i++);
-    });
+    std::generate(int_coefs.rbegin(), int_coefs.rend(), [i = 1u]() mutable { return 1. / static_cast< T >(i++); });
     std::array< T, ORDER + 2 > ret;
     ret.back() = 0.; // Integration constant = 0
-    std::transform(coefs.get().cbegin(),
-                   coefs.get().cend(),
-                   int_coefs.cbegin(),
-                   ret.begin(),
-                   std::multiplies{});
+    std::transform(coefs.get().cbegin(), coefs.get().cend(), int_coefs.cbegin(), ret.begin(), std::multiplies{});
     return Polynomial< T, ORDER + 1 >{ret};
 }
 
 template < std::floating_point T, size_t ORDER >
-[[nodiscard]] constexpr Polynomial< T, ORDER == 0 ? 0 : ORDER - 1 >
-PolynomialView< T, ORDER >::derivative() const
+[[nodiscard]] constexpr Polynomial< T, ORDER == 0 ? 0 : ORDER - 1 > PolynomialView< T, ORDER >::derivative() const
 {
     using ret_t = Polynomial< T, ORDER == 0 ? 0 : ORDER - 1 >;
     if constexpr (ORDER == 0)
@@ -101,11 +87,8 @@ PolynomialView< T, ORDER >::derivative() const
         std::array< T, ORDER > ret;
         auto                   der_coefs = ret;
         std::iota(der_coefs.rbegin(), der_coefs.rend(), 1);
-        std::transform(coefs.get().cbegin(),
-                       coefs.get().cend() - 1,
-                       der_coefs.cbegin(),
-                       ret.begin(),
-                       std::multiplies{});
+        std::transform(
+            coefs.get().cbegin(), coefs.get().cend() - 1, der_coefs.cbegin(), ret.begin(), std::multiplies{});
         return ret_t{ret};
     }
 }
@@ -138,8 +121,7 @@ template < std::floating_point T, size_t ORDER >
 }
 
 template < std::floating_point T, size_t O1, size_t O2 >
-constexpr Polynomial< T, O1 + O2 > operator*(const Polynomial< T, O1 >& a,
-                                             const Polynomial< T, O2 >& b)
+constexpr Polynomial< T, O1 + O2 > operator*(const Polynomial< T, O1 >& a, const Polynomial< T, O2 >& b)
 {
     Polynomial< T, O1 + O2 > ret{};
     ret.coefs.fill(0.);
@@ -153,8 +135,7 @@ constexpr Polynomial< T, O1 + O2 > operator*(const Polynomial< T, O1 >& a,
 }
 
 template < std::floating_point T, size_t O1, size_t O2 >
-constexpr Polynomial< T, std::max(O1, O2) > operator+(const Polynomial< T, O1 >& a,
-                                                      const Polynomial< T, O2 >& b)
+constexpr Polynomial< T, std::max(O1, O2) > operator+(const Polynomial< T, O1 >& a, const Polynomial< T, O2 >& b)
 {
     constexpr auto   O_low    = std::min(O1, O2);
     constexpr auto   O_high   = std::max(O1, O2);

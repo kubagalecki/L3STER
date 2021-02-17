@@ -39,11 +39,10 @@ constexpr Polynomial< T, N > getLegendrePolynomial()
             const size_t index = N - i;
             std::copy(P_n1.cbegin() + index, P_n1.cend(), P_n2.begin() + index);
             std::copy(coefs.cbegin() + index, coefs.cend(), P_n1.begin() + index);
-            std::transform(P_n1.cbegin() + index + 1u,
-                           P_n1.cend(),
-                           P_n2.cbegin() + index,
-                           coefs.begin() + index,
-                           [&](T c1, T c2) { return a(i) * c1 - c(i) * c2; });
+            std::transform(
+                P_n1.cbegin() + index + 1u, P_n1.cend(), P_n2.cbegin() + index, coefs.begin() + index, [&](T c1, T c2) {
+                    return a(i) * c1 - c(i) * c2;
+                });
             coefs.back() = -c(i) * P_n2.back();
         }
     }

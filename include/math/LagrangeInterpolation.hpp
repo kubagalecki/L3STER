@@ -10,8 +10,7 @@
 namespace lstr::math
 {
 template < std::floating_point T, size_t N >
-constexpr Polynomial< T, N - 1 > lagrangeInterp(const std::array< T, N >& x,
-                                                const std::array< T, N >& y)
+constexpr Polynomial< T, N - 1 > lagrangeInterp(const std::array< T, N >& x, const std::array< T, N >& y)
 {
     static_assert(N > 1, "At least two points are needed for interpolation");
 

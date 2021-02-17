@@ -40,14 +40,12 @@ auto ReferenceQuadrature< QuadratureTypes::GLeg, QORDER >::compute()
     constexpr auto c = [](size_t x) {
         return static_cast< types::val_t >(x - 1u) / static_cast< types::val_t >(x);
     };
-    const auto& [qp, w] =
-        math::computeGaussRule< ReferenceQuadratureTraits< this_t >::size >(a, b, c);
+    const auto& [qp, w] = math::computeGaussRule< ReferenceQuadratureTraits< this_t >::size >(a, b, c);
 
     typename quadrature_t::q_points_t q_points;
     typename quadrature_t::weights_t  weights;
 
-    std::transform(
-        qp.cbegin(), qp.cend(), q_points.begin(), [](types::val_t v) { return std::array{v}; });
+    std::transform(qp.cbegin(), qp.cend(), q_points.begin(), [](types::val_t v) { return std::array{v}; });
     std::copy(w.cbegin(), w.cend(), weights.begin());
 
     return quadrature_t{q_points, weights};

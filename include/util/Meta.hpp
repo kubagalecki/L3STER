@@ -84,10 +84,7 @@ private:
     static constexpr auto reps           = [] {
         std::array< size_t, sizeof...(A) > ret;
         ret.back() = 1;
-        std::partial_sum(unique_A_sizes.crbegin(),
-                         unique_A_sizes.crend() - 1,
-                         ret.rbegin() + 1,
-                         std::multiplies<>{});
+        std::partial_sum(unique_A_sizes.crbegin(), unique_A_sizes.crend() - 1, ret.rbegin() + 1, std::multiplies<>{});
         return ret;
     }();
 
@@ -140,10 +137,7 @@ public:
 template < template < typename... > typename T, tuple Params >
 using apply_types_t = apply_types< T, Params >::type;
 
-template < template < auto... > typename Inner,
-           template < typename... >
-           typename Outer,
-           tuple_like auto... Params >
+template < template < auto... > typename Inner, template < typename... > typename Outer, tuple_like auto... Params >
 struct parametrize_over_combinations
 {
 private:
@@ -176,12 +170,8 @@ public:
     using type = deduction_helper< std::make_index_sequence< combination_size > >::type;
 };
 
-template < template < auto... > typename Inner,
-           template < typename... >
-           typename Outer,
-           tuple_like auto... Params >
-using parametrize_over_combinations_t =
-    parametrize_over_combinations< Inner, Outer, Params... >::type;
+template < template < auto... > typename Inner, template < typename... > typename Outer, tuple_like auto... Params >
+using parametrize_over_combinations_t = parametrize_over_combinations< Inner, Outer, Params... >::type;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

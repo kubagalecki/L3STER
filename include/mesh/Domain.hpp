@@ -18,9 +18,8 @@ class Domain
 {
 public:
     template < ElementTypes ELTYPE, types::el_o_t ELORDER >
-    using element_vector_t = std::vector< Element< ELTYPE, ELORDER > >;
-    using element_vector_variant_t =
-        parametrize_type_over_element_types_and_orders_t< std::variant, element_vector_t >;
+    using element_vector_t         = std::vector< Element< ELTYPE, ELORDER > >;
+    using element_vector_variant_t = parametrize_type_over_element_types_and_orders_t< std::variant, element_vector_t >;
     using element_vector_variant_vector_t = std::vector< element_vector_variant_t >;
 
     template < ElementTypes ELTYPE, types::el_o_t ELORDER >
@@ -76,10 +75,9 @@ std::vector< Element< ELTYPE, ELORDER > >& Domain::retrieveElementVector()
     else
         dim = ElementTraits< Element< ELTYPE, ELORDER > >::native_dim;
 
-    const auto vector_variant_it =
-        std::find_if(element_vectors.begin(), element_vectors.end(), [](const auto& v) {
-            return std::holds_alternative< el_vec_t >(v);
-        });
+    const auto vector_variant_it = std::find_if(element_vectors.begin(), element_vectors.end(), [](const auto& v) {
+        return std::holds_alternative< el_vec_t >(v);
+    });
     if (vector_variant_it == element_vectors.end())
         return std::get< el_vec_t >(element_vectors.emplace_back(std::in_place_type< el_vec_t >));
     else
@@ -117,14 +115,12 @@ void Domain::reserve(size_t size)
     else
         dim = ElementTraits< Element< ELTYPE, ELORDER > >::native_dim;
 
-    const auto vector_variant_it =
-        std::find_if(element_vectors.begin(), element_vectors.end(), [](const auto& v) {
-            return std::holds_alternative< el_vec_t >(v);
-        });
+    const auto vector_variant_it = std::find_if(element_vectors.begin(), element_vectors.end(), [](const auto& v) {
+        return std::holds_alternative< el_vec_t >(v);
+    });
     if (vector_variant_it == element_vectors.end())
     {
-        std::get< el_vec_t >(element_vectors.emplace_back(std::in_place_type< el_vec_t >))
-            .reserve(size);
+        std::get< el_vec_t >(element_vectors.emplace_back(std::in_place_type< el_vec_t >)).reserve(size);
     }
     else
     {
@@ -137,18 +133,19 @@ void Domain::visit(F& element_visitor)
 {
     std::for_each(element_vectors.begin(),
                   element_vectors.end(),
-                  [visitor = wrapElementVisitor(element_visitor)](
-                      element_vector_variant_t& el_vec) mutable { std::visit(visitor, el_vec); });
+                  [visitor = wrapElementVisitor(element_visitor)](element_vector_variant_t& el_vec) mutable {
+                      std::visit(visitor, el_vec);
+                  });
 }
 
 template < invocable_on_const_elements F >
 void Domain::cvisit(F& element_visitor) const
 {
-    std::for_each(
-        element_vectors.cbegin(),
-        element_vectors.cend(),
-        [visitor = wrapElementVisitor(element_visitor)](
-            const element_vector_variant_t& el_vec) mutable { std::visit(visitor, el_vec); });
+    std::for_each(element_vectors.cbegin(),
+                  element_vectors.cend(),
+                  [visitor = wrapElementVisitor(element_visitor)](const element_vector_variant_t& el_vec) mutable {
+                      std::visit(visitor, el_vec);
+                  });
 }
 
 template < invocable_on_elements_r< bool > F >
@@ -157,16 +154,14 @@ std::optional< element_ref_variant_t > Domain::findElement(const F& predicate)
     std::optional< element_ref_variant_t > ret_val;
 
     const auto element_vector_visitor = [&ret_val, &predicate](const auto& element_vector) {
-        const auto found_iter =
-            std::find_if(element_vector.cbegin(), element_vector.cend(), std::cref(predicate));
+        const auto found_iter = std::find_if(element_vector.cbegin(), element_vector.cend(), std::cref(predicate));
 
         if (found_iter != element_vector.cend())
         {
             using element_t     = typename std::decay_t< decltype(element_vector) >::value_type;
             using element_ref_t = std::reference_wrapper< element_t >;
 
-            ret_val.emplace(std::in_place_type< element_ref_t >,
-                            std::ref(const_cast< element_t& >(*found_iter)));
+            ret_val.emplace(std::in_place_type< element_ref_t >, std::ref(const_cast< element_t& >(*found_iter)));
 
             // Note: const_cast is used correctly, because the underlying element is not const.
             // However, we need to pass it to the predicate as a const reference, since the
@@ -202,9 +197,7 @@ std::optional< element_cref_variant_t > Domain::findElement(const F& predicate) 
         constexpr auto element_order = ElementTraits< element_t >::element_order;
 
         return std::optional< element_cref_variant_t >{
-            std::in_place,
-            std::in_place_type< element_cref_t< element_type, element_order > >,
-            std::cref(element_ref)};
+            std::in_place, std::in_place_type< element_cref_t< element_type, element_order > >, std::cref(element_ref)};
     };
 
     return std::visit(const_qualify, *nonconst_ref_opt);
@@ -229,10 +222,7 @@ auto Domain::wrapCElementVisitor(F&& element_visitor)
 inline size_t Domain::getNElements() const
 {
     return std::accumulate(
-        element_vectors.cbegin(),
-        element_vectors.cend(),
-        0u,
-        [](size_t sum, const auto& el_vec_var) {
+        element_vectors.cbegin(), element_vectors.cend(), 0u, [](size_t sum, const auto& el_vec_var) {
             return sum + std::visit([](const auto& el_vec) { return el_vec.size(); }, el_vec_var);
         });
 }

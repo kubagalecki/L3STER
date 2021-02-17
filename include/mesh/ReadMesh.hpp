@@ -28,22 +28,20 @@ constexpr inline MeshFormatTag gmsh_tag = MeshFormatTag< MeshFormat::Gmsh >{};
 
 namespace detail
 {
-inline constexpr std::array gmsh_elt_lookup_tab{std::pair{1u, ElementTypes::Line},
-                                                std::pair{3u, ElementTypes::Quad}};
+inline constexpr std::array gmsh_elt_lookup_tab{std::pair{1u, ElementTypes::Line}, std::pair{3u, ElementTypes::Quad}};
 
 template < size_t I >
 consteval ElementTypes lookup_elt()
 {
-    return std::find_if(gmsh_elt_lookup_tab.cbegin(),
-                        gmsh_elt_lookup_tab.cend(),
-                        [](const auto& p) { return p.first == I; })
+    return std::find_if(
+               gmsh_elt_lookup_tab.cbegin(), gmsh_elt_lookup_tab.cend(), [](const auto& p) { return p.first == I; })
         ->second;
 }
 
 template < ElementTypes ELTYPE >
 Element< ELTYPE, 1 > parse_gmsh_element(std::ifstream& f)
 {
-    constexpr auto n_nodes = ElementTraits< Element< ELTYPE, 1 > >::nodes_per_element;
+    constexpr auto                n_nodes = ElementTraits< Element< ELTYPE, 1 > >::nodes_per_element;
     std::array< size_t, n_nodes > nodes{};
     for (auto& node : nodes)
         f >> node;
@@ -246,24 +244,20 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
         }
 
         const size_t n_physical_domains = [&]() {
-            const size_t n_physical_entities = std::transform_reduce(
-                entity_data.cbegin(), entity_data.cend(), 0u, std::plus<>{}, [](const auto& map) {
+            const size_t n_physical_entities =
+                std::transform_reduce(entity_data.cbegin(), entity_data.cend(), 0u, std::plus<>{}, [](const auto& map) {
                     return map.size();
                 });
             std::vector< types::d_id_t > unique_physical_ids;
             unique_physical_ids.reserve(n_physical_entities);
             auto upi_inserter = std::back_inserter(unique_physical_ids);
-            std::for_each(
-                entity_data.cbegin(), entity_data.cend(), [&upi_inserter](const auto& map) {
-                    std::transform(map.cbegin(),
-                                   map.cend(),
-                                   upi_inserter,
-                                   [](const auto& map_entry) { return map_entry.second; });
-                });
+            std::for_each(entity_data.cbegin(), entity_data.cend(), [&upi_inserter](const auto& map) {
+                std::transform(
+                    map.cbegin(), map.cend(), upi_inserter, [](const auto& map_entry) { return map_entry.second; });
+            });
             std::sort(unique_physical_ids.begin(), unique_physical_ids.end());
-            unique_physical_ids.erase(
-                std::unique(unique_physical_ids.begin(), unique_physical_ids.end()),
-                unique_physical_ids.end());
+            unique_physical_ids.erase(std::unique(unique_physical_ids.begin(), unique_physical_ids.end()),
+                                      unique_physical_ids.end());
             return unique_physical_ids.size();
         }();
 
@@ -343,21 +337,19 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
                 size_t block_size;
                 file >> entity_dim >> entity_tag >> element_type >> block_size;
 
-                const types::d_id_t block_physical_id =
-                    entity_data.first[entity_dim].at(entity_tag);
-                auto& block_domain = domain_map[block_physical_id];
+                const types::d_id_t block_physical_id = entity_data.first[entity_dim].at(entity_tag);
+                auto&               block_domain      = domain_map[block_physical_id];
 
                 using lstr::util::meta::size_constant;
 
                 // push block of elements of type `I` to the domain
                 const auto push_elements = [&]< size_t I >(size_constant< I >) {
                     constexpr auto el_type = detail::lookup_elt< I >();
-                    std::generate_n(
-                        block_domain.getBackInserter< el_type, 1 >(), block_size, [&]() {
-                            size_t element_tag;
-                            file >> element_tag; // throw away tag
-                            return detail::parse_gmsh_element< el_type >(file);
-                        });
+                    std::generate_n(block_domain.getBackInserter< el_type, 1 >(), block_size, [&]() {
+                        size_t element_tag;
+                        file >> element_tag; // throw away tag
+                        return detail::parse_gmsh_element< el_type >(file);
+                    });
                 };
 
                 switch (element_type)
@@ -403,22 +395,20 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
 
     const auto make_contiguous_mesh = [&](node_data_t& node_data, MeshPartition& part) {
         auto& [is_contiguous, node_vector] = node_data;
-        std::sort(node_vector.begin(), node_vector.end(), [](const auto& p1, const auto& p2) {
-            return p1.first < p2.first;
-        });
+        std::sort(
+            node_vector.begin(), node_vector.end(), [](const auto& p1, const auto& p2) { return p1.first < p2.first; });
         std::vector< Node< 3 > > nodes;
         if (is_contiguous)
         {
             auto node_inserter = std::back_inserter(nodes);
-            std::transform(node_vector.cbegin(),
-                           node_vector.cend(),
-                           node_inserter,
-                           [](const auto& node_data_entry) { return node_data_entry.second; });
+            std::transform(node_vector.cbegin(), node_vector.cend(), node_inserter, [](const auto& node_data_entry) {
+                return node_data_entry.second;
+            });
 
             part.visitAllElements([min_node_tag = node_vector.front().first](auto& element) {
-                std::for_each(element.getNodes().begin(),
-                              element.getNodes().end(),
-                              [&min_node_tag](auto& node) { node -= min_node_tag; });
+                std::for_each(element.getNodes().begin(), element.getNodes().end(), [&min_node_tag](auto& node) {
+                    node -= min_node_tag;
+                });
             });
         }
         else

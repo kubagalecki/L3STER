@@ -38,8 +38,7 @@ private:
 };
 
 template < types::q_l_t QLENGTH, types::dim_t QDIM >
-Quadrature< QLENGTH, QDIM >::Quadrature(const q_points_t& qpts, const weights_t& w)
-    : q_points(qpts), weights(w)
+Quadrature< QLENGTH, QDIM >::Quadrature(const q_points_t& qpts, const weights_t& w) : q_points(qpts), weights(w)
 {}
 } // namespace lstr::quad
 

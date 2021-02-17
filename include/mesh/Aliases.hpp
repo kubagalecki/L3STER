@@ -10,9 +10,7 @@
 
 namespace lstr::mesh
 {
-template < template < typename... > typename T,
-           template < mesh::ElementTypes, types::el_o_t >
-           typename U >
+template < template < typename... > typename T, template < mesh::ElementTypes, types::el_o_t > typename U >
 using parametrize_type_over_element_types_and_orders_t =
     util::meta::parametrize_over_combinations_t< U, T, element_types, element_orders >;
 
@@ -27,11 +25,9 @@ using element_ref_t = std::reference_wrapper< Element< ELTYPE, ELORDER > >;
 template < ElementTypes ELTYPE, types::el_o_t ELORDER >
 using element_cref_t = std::reference_wrapper< const Element< ELTYPE, ELORDER > >;
 
-using element_ref_variant_t =
-    parametrize_type_over_element_types_and_orders_t< std::variant, element_ref_t >;
+using element_ref_variant_t = parametrize_type_over_element_types_and_orders_t< std::variant, element_ref_t >;
 
-using element_cref_variant_t =
-    parametrize_type_over_element_types_and_orders_t< std::variant, element_cref_t >;
+using element_cref_variant_t = parametrize_type_over_element_types_and_orders_t< std::variant, element_cref_t >;
 
 namespace detail
 {
@@ -41,16 +37,14 @@ struct is_invocable_on_elements
     template < ElementTypes ELTYPE, types::el_o_t ELORDER >
     struct invocable_on_element :
         std::conditional_t<
-            std::is_invocable_v< F,
-                                 std::conditional_t< CONSTNESS,
-                                                     const Element< ELTYPE, ELORDER >&,
-                                                     Element< ELTYPE, ELORDER >& > >,
+            std::is_invocable_v<
+                F,
+                std::conditional_t< CONSTNESS, const Element< ELTYPE, ELORDER >&, Element< ELTYPE, ELORDER >& > >,
             std::true_type,
             std::false_type >
     {};
 
-    using invocability_tuple =
-        parametrize_type_over_element_types_and_orders_t< std::tuple, invocable_on_element >;
+    using invocability_tuple = parametrize_type_over_element_types_and_orders_t< std::tuple, invocable_on_element >;
 
     template < typename >
     struct check_all;
@@ -77,17 +71,15 @@ struct is_invocable_r_on_elements
     template < ElementTypes ELTYPE, types::el_o_t ELORDER >
     struct invocable_on_element :
         std::conditional_t<
-            std::is_invocable_r_v< R,
-                                   F,
-                                   std::conditional_t< CONSTNESS,
-                                                       const Element< ELTYPE, ELORDER >&,
-                                                       Element< ELTYPE, ELORDER >& > >,
+            std::is_invocable_r_v<
+                R,
+                F,
+                std::conditional_t< CONSTNESS, const Element< ELTYPE, ELORDER >&, Element< ELTYPE, ELORDER >& > >,
             std::true_type,
             std::false_type >
     {};
 
-    using invocability_tuple =
-        parametrize_type_over_element_types_and_orders_t< std::tuple, invocable_on_element >;
+    using invocability_tuple = parametrize_type_over_element_types_and_orders_t< std::tuple, invocable_on_element >;
 
     template < typename >
     struct check_all;
