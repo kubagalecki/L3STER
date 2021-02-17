@@ -63,21 +63,13 @@ Polynomial(const Arg&) -> Polynomial< typename Arg::value_type, std::tuple_size_
 template < std::floating_point T, size_t ORDER >
 [[nodiscard]] constexpr T PolynomialView< T, ORDER >::evaluate(T x) const
 {
-    T ret         = coefs.get().back();
-    T current_exp = x;
-    std::for_each(coefs.get().crbegin() + 1, coefs.get().crend(), [&](T c) {
-        ret += c * current_exp;
-        current_exp *= x;
-    });
+    T ret = 0;
+    for (const auto& c : coefs.get())
+    {
+        ret *= x;
+        ret += c;
+    }
     return ret;
-
-    /*
-    T y = 0.;
-    std::for_each(coefs.get().crbegin(), coefs.get().crend(), [&, exponent = 0.](T a) mutable {
-        y += a * pow(x, exponent++);
-    });
-    return y;
-     */
 }
 
 template < std::floating_point T, size_t ORDER >
