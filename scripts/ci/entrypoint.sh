@@ -1,21 +1,19 @@
 #!/bin/sh -l
 
-echo "Loading Trilinos from spack..."
 . /spack/share/spack/setup-env.sh
 spack load trilinos
 
-echo "Building L3STER tests..."
 mkdir build
-cd build || exit
-cmake -DCMAKE_BUILD_TYPE=Debug -DL3STER_ENABLE_TESTS=ON .. || exit
-cmake --build . || exit
+cd build
+cmake \
+  -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
+  -DCMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_PATH \
+  -DL3STER_ENABLE_TESTS=ON \
+  ..
+cmake --build . -- -j2
+ctest
 
-echo "Running L3STER tests..."
-ctest && TEST_STATUS=true || TEST_STATUS=false
-$TEST_STATUS || echo "Tests failed. Delaying error until after code coverage is reported..."
-
-echo "Generating code coverage report and uploading to Codecov..."
-gcovr -x -r .. -e ../tests -o report.xml
-curl -s https://codecov.io/bash | bash -s -- -c -f report.xml -t "$INPUT_CODECOV_TOKEN"
-$TEST_STATUS && echo "All tests passed. Finishing..." && exit ||
-  echo "Some tests failed. Error wil now be reported..." && exit 1
+if [ $REPORT_COVERAGE = true ]; then
+  gcovr -x -r .. -e ../tests -o report.xml
+  curl -s https://codecov.io/bash | bash -s -- -c -f report.xml -t "$INPUT_CODECOV_TOKEN"
+fi

@@ -1,15 +1,14 @@
 cmake_minimum_required( VERSION 3.13 )
-
 project( L3STER LANGUAGES CXX VERSION 0.1.0 )
-
 set( L3STER_DIR ${CMAKE_CURRENT_SOURCE_DIR} )
 
-###  Find dependencies  ###
-set( L3STER_Verbosity ON ) # Report dependency detection progress
-include( ${L3STER_DIR}/scripts/cmake/DetectDepends.cmake )
+if ( NOT ${CMAKE_SYSTEM_NAME} STREQUAL Linux )
+    message( FATAL_ERROR "Currently, L3STER is only supported on Linux" )
+endif ()
 
-include( ${L3STER_DIR}/scripts/cmake/MakeL3STERTarget.cmake )
-
+include( ${L3STER_DIR}/cmake/BuildOptions.cmake )
+include( ${L3STER_DIR}/cmake/DetectDepends.cmake )
+include( ${L3STER_DIR}/cmake/MakeL3STERTarget.cmake )
 if ( L3STER_ENABLE_TESTS )
-    include( ${L3STER_DIR}/scripts/cmake/MakeL3STERTestTarget.cmake )
+    include( ${L3STER_DIR}/cmake/MakeL3STERTestTarget.cmake )
 endif ()

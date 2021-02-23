@@ -4,6 +4,6 @@
 #   Missing dependencies will be reported in a clear and user-friendly way, with tips on how
 #   to obtain them.
 #
-include( "${L3STER_DIR}/scripts/cmake/DetectEigen.cmake" )
-include( "${L3STER_DIR}/scripts/cmake/DetectTrilinos.cmake" )
-include( "${L3STER_DIR}/scripts/cmake/DetectCatch2.cmake" )
+include( "${L3STER_DIR}/cmake/DetectEigen.cmake" )
+include( "${L3STER_DIR}/cmake/DetectTrilinos.cmake" )
+include( "${L3STER_DIR}/cmake/DetectCatch2.cmake" )
