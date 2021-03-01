@@ -91,7 +91,7 @@ endfunction()
 #                                        packages which were requested but not built, set only if
 #                                        at least one package was not found
 #
-function( make_trilinos_target Verbosity )
+function( define_trilinos_target Verbosity )
 
     if ( Verbosity )
         message( STATUS "Detecting Trilinos" )
@@ -104,9 +104,14 @@ function( make_trilinos_target Verbosity )
         message( WARNING " Detected different C++ compiler than the one Trilinos was built with.\n"
                  " Detected compiler:               ${CMAKE_CXX_COMPILER}\n"
                  " Compiler used to build Trilinos: ${Trilinos_CXX_COMPILER}\n"
-                 "Note: if the difference is e.g. `cxx` vs `mpicxx`, you can ignore this warning. "
-                 "Trilinos includes MPI in the libraries it links against, so your application will "
-                 "link against the same MPI by virtue of the transitive property.\n" )
+                 "You should likely be using an MPI compiler wrapper (e.g. mpic++) to compile L3STER applications. "
+                 "The wrapper is responsible for linking against MPI. If you have multiple versions of MPI installed, "
+                 "please make sure you are using the same one which was used to build Trilinos. Otherwise, you may get "
+                 "linker errors, or worse: hard to detect runtime breaks. This warning is here to ensure you are aware "
+                 "that you are responsible for ensuring compatibility. If you're uncertain of what this all means, "
+                 "it's probably safest to force CMake to configure using the compiler specified above by passing:\n"
+                 " -DCMAKE_CXX_COMPILER=${Trilinos_CXX_COMPILER}\n"
+                 "or setting the equivalent in a toolchain file.\n" )
     endif ()
 
     detect_trilinos_packages( ${Verbosity} "${Trilinos_PACKAGE_LIST}" "${ARGN}" )
@@ -126,6 +131,12 @@ function( make_trilinos_target Verbosity )
     string( STRIP ${Trilinos_CXX_COMPILER_FLAGS} Trilinos_CXX_COMPILER_FLAGS )
     string( REPLACE " " ";" Trilinos_CXX_COMPILER_FLAGS ${Trilinos_CXX_COMPILER_FLAGS} )
     target_compile_options( Trilinos INTERFACE ${Trilinos_CXX_COMPILER_FLAGS} )
+
+    if ( Trilinos_BUILD_SHARED_LIBS )
+        string( STRIP ${Trilinos_SHARED_LIB_RPATH_COMMAND} Trilinos_SHARED_LIB_RPATH_COMMAND )
+        string( REPLACE " " ";" Trilinos_SHARED_LIB_RPATH_COMMAND ${Trilinos_SHARED_LIB_RPATH_COMMAND} )
+        target_link_options( Trilinos INTERFACE ${Trilinos_SHARED_LIB_RPATH_COMMAND} )
+    endif ()
 
     string( STRIP ${Trilinos_EXTRA_LD_FLAGS} Trilinos_EXTRA_LD_FLAGS )
     string( REPLACE " " ";" Trilinos_EXTRA_LD_FLAGS ${Trilinos_EXTRA_LD_FLAGS} )
