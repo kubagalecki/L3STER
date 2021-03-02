@@ -4,11 +4,13 @@ target_include_directories( L3STER INTERFACE ${L3STER_DIR}/include )
 
 set_target_properties( L3STER PROPERTIES
                        INTERFACE_COMPILE_FEATURES cxx_std_20
+                       INTERFACE_LINK_OPTIONS -pthread
                        )
 
 target_link_libraries( L3STER INTERFACE
                        Eigen3::Eigen
                        Trilinos
+                       hwloc
                        )
 
 # Explicitly state L3STER sources

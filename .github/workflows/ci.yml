@@ -35,6 +35,7 @@ jobs:
     name: Sanitizers
     needs: unit_tests_and_static_analysis
     runs-on: ubuntu-latest
+    continue-on-error: true # TPLs may have leaks
     env:
       CMAKE_BUILD_TYPE: ${{ matrix.build_type }}
       CMAKE_TOOLCHAIN_PATH: "../cmake/toolchains/${{ matrix.sanitizer }}Sanitizer.cmake"

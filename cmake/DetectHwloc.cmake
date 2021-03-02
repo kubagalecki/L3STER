@@ -1,0 +1,37 @@
+# ---  detect_hwloc  ---
+# Find the hwloc library
+#
+function( detect_hwloc Verbosity )
+    if ( Verbosity )
+        message( STATUS "Detecting hwloc" )
+    endif ()
+    if ( hwloc_DIR )
+        find_path( hwloc_INCLUDE_DIR hwloc.h PATHS "${hwloc_DIR}" PATH_SUFFIXES include NO_DEFAULT_PATH )
+    endif ()
+    find_path( hwloc_INCLUDE_DIR hwloc.h )
+    if ( NOT hwloc_INCLUDE_DIR )
+        if ( Verbosity )
+            message( STATUS "Detecting hwloc - not found" )
+        endif ()
+        message( SEND_ERROR "Could not locate the hwloc header. Try setting the variable hwloc_DIR to indicate the "
+                 "install path" )
+        return()
+    endif ()
+    find_library( hwloc_LIBLRARY_PATH hwloc HINTS ${hwloc_INCLUDE_DIR}/.. PATH_SUFFIXES lib )
+    if ( NOT hwloc_LIBLRARY_PATH )
+        if ( Verbosity )
+            message( STATUS "Detecting hwloc - not found" )
+        endif ()
+        message( SEND_ERROR "Could not locate the hwloc library in the expected directory relative to the header file. "
+                 "Try setting the variable hwloc_DIR to indicate the correct install path" )
+        return()
+    endif ()
+    if ( Verbosity )
+        message( STATUS "Detecting hwloc - found" )
+    endif ()
+    add_library( hwloc UNKNOWN IMPORTED )
+    target_include_directories( hwloc INTERFACE ${hwloc_INCLUDE_DIR} )
+    set_target_properties( hwloc PROPERTIES IMPORTED_LOCATION ${hwloc_LIBLRARY_PATH} )
+endfunction()
+
+detect_hwloc( ${L3STER_ENABLE_VERBOSITY} )
