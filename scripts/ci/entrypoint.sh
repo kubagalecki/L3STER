@@ -11,7 +11,7 @@ cmake \
   -DL3STER_ENABLE_TESTS=ON \
   ..
 cmake --build . -- -j2
-ctest
+ctest --output-on-failure --repeat until-pass:2 --timeout 900 || exit 1 # allow 1 rerun
 
 if [ $REPORT_COVERAGE = true ]; then
   gcovr -x -r .. -e ../tests -o report.xml
