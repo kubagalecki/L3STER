@@ -1,6 +1,7 @@
-#include "catch2/catch.hpp"
 #include "math/LagrangeInterpolation.hpp"
 #include "math/Legendre.hpp"
+
+#include "catch2/catch.hpp"
 
 #include <cmath>
 #include <random>
@@ -38,9 +39,8 @@ TEST_CASE("Polynomial evaluation", "[math]")
 
     const auto computed_range = [&] {
         std::array< double, test_size > ret{};
-        std::transform(test_domain.cbegin(), test_domain.cend(), ret.begin(), [&](double x) {
-            return polynomial.evaluate(x);
-        });
+        std::transform(
+            test_domain.cbegin(), test_domain.cend(), ret.begin(), [&](double x) { return polynomial.evaluate(x); });
         return ret;
     }();
 
@@ -122,8 +122,7 @@ TEST_CASE("Lagrange interpolation", "[math]")
     const auto make_random_array = [&] {
         std::array< double, test_size > ret{};
         std::generate(ret.begin(), ret.end(), [&] {
-            return std::uniform_real_distribution< double >{argument_range,
-                                                            2 * argument_range}(prng);
+            return std::uniform_real_distribution< double >{argument_range, 2 * argument_range}(prng);
         });
         return ret;
     };
@@ -133,8 +132,7 @@ TEST_CASE("Lagrange interpolation", "[math]")
     const auto lag_poly   = lagrangeInterp(x, y);
     const auto y_computed = [&] {
         std::array< double, test_size > ret{};
-        std::transform(
-            x.cbegin(), x.cend(), ret.begin(), [&](double in) { return lag_poly.evaluate(in); });
+        std::transform(x.cbegin(), x.cend(), ret.begin(), [&](double in) { return lag_poly.evaluate(in); });
         return ret;
     }();
     constexpr auto approx = [](const double a, const double b) {

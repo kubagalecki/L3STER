@@ -5,8 +5,7 @@
 
 FROM    ubuntu:groovy
 
-RUN     apt update && \
-        apt upgrade -y
+RUN     apt update
 
 # Install tzdata separately to skip user input
 RUN     DEBIAN_FRONTEND="noninteractive" apt -y install tzdata
@@ -19,28 +18,30 @@ RUN     apt install -y \
             gcovr \
             build-essential \
             make \
-            cmake \
-            git \
             curl \
             python3
 
-# Install Eigen
-RUN     git clone https://gitlab.com/libeigen/eigen.git \
-        && cd eigen \
-        && mkdir build \
-        && cd build/ \
-        && cmake -DCMAKE_BUILD_TYPE=Release .. \
-        && make install -j4
-
-# Install Catch
-RUN     git clone https://github.com/catchorg/Catch2.git \
-        && cd Catch2 \
-        && git checkout tags/v2.13.3 -b v2-13-3 \
-        && cmake -Bbuild -H. -DBUILD_TESTING=OFF \
-        && cmake --build build/ --target install
-
-# Install Trilinos through spack
+# Set up spack
 RUN     git clone https://github.com/spack/spack.git \
-        && . spack/share/spack/setup-env.sh \
-        && spack install trilinos cxxstd=17 -mumps +openmp +superlu \
-        && spack load trilinos
+        && . spack/share/spack/setup-env.sh
+
+# Install Trilinos and collect garbage to save disc space
+RUN     spack install trilinos cxxstd=17 -mumps +openmp +superlu -anasazi -sacado && spack gc
+
+# Install TBB
+RUN     spack instal intel-tbb
+
+# Install Eigen
+RUN     spack install eigen
+
+# Install Catch2
+RUN     spack install catch2
+
+# Install cmake
+RUN     spack install cmake
+
+# spack garbage collection
+RUN     spack gc
+
+# load spack packages
+RUN     spack load trilinos intel-tbb catch2 eigen cmake

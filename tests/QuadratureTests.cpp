@@ -1,5 +1,6 @@
-#include "catch2/catch.hpp"
 #include "l3ster.hpp"
+
+#include "catch2/catch.hpp"
 
 #include <array>
 #include <numeric>
@@ -9,8 +10,7 @@ constexpr double tol = 1e-10;
 
 TEST_CASE("1D Gauss-Legendre quadrature, 1 point", "[quadrature]")
 {
-    const auto& ref_quad =
-        lstr::quad::ReferenceQuadrature< lstr::quad::QuadratureTypes::GLeg, 0 >::value;
+    const auto& ref_quad = lstr::quad::ReferenceQuadrature< lstr::quad::QuadratureTypes::GLeg, 0 >::value;
 
     REQUIRE(ref_quad.size == 1);
     REQUIRE(ref_quad.dim == 1);
@@ -24,8 +24,7 @@ TEST_CASE("1D Gauss-Legendre quadrature, 1 point", "[quadrature]")
 
 TEST_CASE("1D Gauss-Legendre quadrature, 2 point", "[quadrature]")
 {
-    const auto& ref_quad =
-        lstr::quad::ReferenceQuadrature< lstr::quad::QuadratureTypes::GLeg, 2 >::value;
+    const auto& ref_quad = lstr::quad::ReferenceQuadrature< lstr::quad::QuadratureTypes::GLeg, 2 >::value;
 
     REQUIRE(ref_quad.size == 2);
     REQUIRE(ref_quad.dim == 1);
@@ -42,8 +41,7 @@ TEST_CASE("1D Gauss-Legendre quadrature, 2 point", "[quadrature]")
 
 TEST_CASE("1D Gauss-Legendre quadrature, 3 point", "[quadrature]")
 {
-    const auto& ref_quad =
-        lstr::quad::ReferenceQuadrature< lstr::quad::QuadratureTypes::GLeg, 4 >::value;
+    const auto& ref_quad = lstr::quad::ReferenceQuadrature< lstr::quad::QuadratureTypes::GLeg, 4 >::value;
 
     REQUIRE(ref_quad.size == 3);
     REQUIRE(ref_quad.dim == 1);
@@ -129,15 +127,13 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
     const auto element = lstr::mesh::Element< lstr::mesh::ElementTypes::Quad, 1 >{{1, 2, 3, 4}};
 
     constexpr auto integrate_over_quad = [](const auto& quadrature, const auto& fun) {
-        return std::transform_reduce(
-            quadrature.getQPoints().cbegin(),
-            quadrature.getQPoints().cend(),
-            quadrature.getWeights().cbegin(),
-            0.,
-            std::plus<>{},
-            [&fun](const std::array< lstr::types::val_t, 2 >& qp, const lstr::types::val_t& w) {
-                return std::apply(fun, qp) * w;
-            });
+        return std::transform_reduce(quadrature.getQPoints().cbegin(),
+                                     quadrature.getQPoints().cend(),
+                                     quadrature.getWeights().cbegin(),
+                                     0.,
+                                     std::plus<>{},
+                                     [&fun](const std::array< lstr::types::val_t, 2 >& qp,
+                                            const lstr::types::val_t& w) { return std::apply(fun, qp) * w; });
     };
 
     constexpr auto o0_fun = [](const auto&, const auto&) {
@@ -156,21 +152,20 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
     Approx o2_int = Approx(10.66666666667).margin(tol);
 
     constexpr auto o3_fun = [](const auto& xi, const auto& eta) {
-        return 3. * xi * xi * xi + 2. * xi * xi + xi + 4. * eta * eta * eta + 3. * eta * eta +
-               2. * eta + 1.;
+        return 3. * xi * xi * xi + 2. * xi * xi + xi + 4. * eta * eta * eta + 3. * eta * eta + 2. * eta + 1.;
     };
     Approx o3_int = Approx(10.66666666667).margin(tol);
 
     constexpr auto o4_fun = [](const auto& xi, const auto& eta) {
-        return 4. * xi * xi * xi * xi + 3. * xi * xi * xi + 2. * xi * xi + xi +
-               5. * eta * eta * eta * eta + 4. * eta * eta * eta + 3. * eta * eta + 2. * eta + 1.;
+        return 4. * xi * xi * xi * xi + 3. * xi * xi * xi + 2. * xi * xi + xi + 5. * eta * eta * eta * eta +
+               4. * eta * eta * eta + 3. * eta * eta + 2. * eta + 1.;
     };
     Approx o4_int = Approx(17.86666666667).margin(tol);
 
     constexpr auto o5_fun = [](const auto& xi, const auto& eta) {
-        return 5. * xi * xi * xi * xi * xi + 4. * xi * xi * xi * xi + 3. * xi * xi * xi +
-               2. * xi * xi + xi + 6. * eta * eta * eta * eta * eta + 5. * eta * eta * eta * eta +
-               4. * eta * eta * eta + 3. * eta * eta + 2. * eta + 1.;
+        return 5. * xi * xi * xi * xi * xi + 4. * xi * xi * xi * xi + 3. * xi * xi * xi + 2. * xi * xi + xi +
+               6. * eta * eta * eta * eta * eta + 5. * eta * eta * eta * eta + 4. * eta * eta * eta + 3. * eta * eta +
+               2. * eta + 1.;
     };
     Approx o5_int = Approx(17.86666666667).margin(tol);
 
