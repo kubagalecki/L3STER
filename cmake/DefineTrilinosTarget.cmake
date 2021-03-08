@@ -128,19 +128,23 @@ function( define_trilinos_target Verbosity )
 
     add_library( Trilinos INTERFACE )
 
-    string( STRIP ${Trilinos_CXX_COMPILER_FLAGS} Trilinos_CXX_COMPILER_FLAGS )
-    string( REPLACE " " ";" Trilinos_CXX_COMPILER_FLAGS ${Trilinos_CXX_COMPILER_FLAGS} )
-    target_compile_options( Trilinos INTERFACE ${Trilinos_CXX_COMPILER_FLAGS} )
+    if ( Trilinos_CXX_COMPILER_FLAGS )
+        string( STRIP ${Trilinos_CXX_COMPILER_FLAGS} Trilinos_CXX_COMPILER_FLAGS )
+        string( REPLACE " " ";" Trilinos_CXX_COMPILER_FLAGS ${Trilinos_CXX_COMPILER_FLAGS} )
+        target_compile_options( Trilinos INTERFACE ${Trilinos_CXX_COMPILER_FLAGS} )
+    endif ()
 
-    if ( Trilinos_BUILD_SHARED_LIBS )
+    if ( Trilinos_BUILD_SHARED_LIBS AND Trilinos_SHARED_LIB_RPATH_COMMAND )
         string( STRIP ${Trilinos_SHARED_LIB_RPATH_COMMAND} Trilinos_SHARED_LIB_RPATH_COMMAND )
         string( REPLACE " " ";" Trilinos_SHARED_LIB_RPATH_COMMAND ${Trilinos_SHARED_LIB_RPATH_COMMAND} )
         target_link_options( Trilinos INTERFACE ${Trilinos_SHARED_LIB_RPATH_COMMAND} )
     endif ()
 
-    string( STRIP ${Trilinos_EXTRA_LD_FLAGS} Trilinos_EXTRA_LD_FLAGS )
-    string( REPLACE " " ";" Trilinos_EXTRA_LD_FLAGS ${Trilinos_EXTRA_LD_FLAGS} )
-    target_link_options( Trilinos INTERFACE ${Trilinos_EXTRA_LD_FLAGS} )
+    if ( Trilinos_EXTRA_LD_FLAGS )
+        string( STRIP ${Trilinos_EXTRA_LD_FLAGS} Trilinos_EXTRA_LD_FLAGS )
+        string( REPLACE " " ";" Trilinos_EXTRA_LD_FLAGS ${Trilinos_EXTRA_LD_FLAGS} )
+        target_link_options( Trilinos INTERFACE ${Trilinos_EXTRA_LD_FLAGS} )
+    endif ()
 
     target_include_directories( Trilinos INTERFACE
                                 ${Trilinos_INCLUDE_DIRS}

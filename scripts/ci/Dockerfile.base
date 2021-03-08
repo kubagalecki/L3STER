@@ -3,45 +3,12 @@
 # This way dependencies don't need to be rebuilt every CI run.
 ###############################################################
 
-FROM    ubuntu:groovy
+FROM ubuntu:groovy
 
-RUN     apt update
+RUN apt update && apt upgrade && apt autoremove -y
 
 # Install tzdata separately to skip user input
-RUN     DEBIAN_FRONTEND="noninteractive" apt -y install tzdata
+RUN DEBIAN_FRONTEND="noninteractive" apt -y install tzdata
 
-# Install build utilities etc.
-RUN     apt install -y \
-            gcc \
-            g++ \
-            gfortran \
-            gcovr \
-            build-essential \
-            make \
-            curl \
-            python3
-
-# Set up spack
-RUN     git clone https://github.com/spack/spack.git \
-        && . spack/share/spack/setup-env.sh
-
-# Install Trilinos and collect garbage to save disc space
-RUN     spack install trilinos cxxstd=17 -mumps +openmp +superlu -anasazi -sacado && spack gc
-
-# Install TBB
-RUN     spack instal intel-tbb
-
-# Install Eigen
-RUN     spack install eigen
-
-# Install Catch2
-RUN     spack install catch2
-
-# Install cmake
-RUN     spack install cmake
-
-# spack garbage collection
-RUN     spack gc
-
-# load spack packages
-RUN     spack load trilinos intel-tbb catch2 eigen cmake
+# Install build utilities and dependencies
+RUN apt install -y build-essential gcovr curl cmake catch2 libeigen3-dev hwloc trilinos-all-dev
