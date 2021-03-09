@@ -11,6 +11,7 @@ target_link_libraries( L3STER INTERFACE
                        Eigen3::Eigen
                        Trilinos
                        hwloc
+                       TBB::tbb
                        )
 
 # Explicitly state L3STER sources
