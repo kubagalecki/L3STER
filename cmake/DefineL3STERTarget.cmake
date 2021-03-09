@@ -9,8 +9,9 @@ set_target_properties( L3STER PROPERTIES
 
 target_link_libraries( L3STER INTERFACE
                        Eigen3::Eigen
-                       # Trilinos
+                       Trilinos
                        hwloc
+                       TBB::tbb
                        )
 
 # Explicitly state L3STER sources
