@@ -11,4 +11,4 @@ RUN apt update && apt upgrade && apt autoremove -y
 RUN DEBIAN_FRONTEND="noninteractive" apt -y install tzdata
 
 # Install build utilities and dependencies
-RUN apt install -y build-essential gcovr curl git cmake catch2 libeigen3-dev hwloc trilinos-all-dev
+RUN apt install -y build-essential gcovr curl git cmake catch2 libeigen3-dev hwloc libptscotch-dev trilinos-all-dev

@@ -5,6 +5,6 @@
 #   to obtain them.
 #
 include( "${L3STER_DIR}/cmake/DetectEigen.cmake" )
-# include( "${L3STER_DIR}/cmake/DetectTrilinos.cmake" )
+include( "${L3STER_DIR}/cmake/DetectTrilinos.cmake" )
 include( "${L3STER_DIR}/cmake/DetectCatch2.cmake" )
 include( "${L3STER_DIR}/cmake/DetectHwloc.cmake" )
