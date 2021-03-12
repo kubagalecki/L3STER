@@ -18,3 +18,7 @@ target_link_libraries( L3STER_tests
                        )
 
 catch_discover_tests( L3STER_tests )
+
+include( ${L3STER_DIR}/cmake/RegisterMpiTests.cmake )
+
+include( ${L3STER_DIR}/cmake/GenerateCoverageScript.cmake )

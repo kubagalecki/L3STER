@@ -19,7 +19,4 @@ TEST_CASE("Node allocation tests", "[hwloc]")
 
     std::pmr::unsynchronized_pool_resource res;
     CHECK_FALSE(alloc.is_equal(res));
-
-    lstr::NodeGlobalResource alloc2{&topo, 0};
-    CHECK(alloc.is_equal(alloc2));
 }

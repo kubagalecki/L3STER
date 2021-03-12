@@ -23,6 +23,7 @@ public:
     inline void                do_deallocate(void* p, size_t bytes, size_t alignment) final;
     [[nodiscard]] inline bool  do_is_equal(const memory_resource& other) const noexcept final;
 
+private:
     HwlocWrapper*                           topo_ptr;
     std::pmr::unsynchronized_pool_resource  internal_resource{};
     std::pmr::unordered_map< void*, void* > alloc_map{&internal_resource};
@@ -57,15 +58,7 @@ void NodeGlobalResource::do_deallocate(void* p, size_t bytes, size_t alignment)
 
 bool NodeGlobalResource::do_is_equal(const std::pmr::memory_resource& other) const noexcept
 {
-    try
-    {
-        const auto& other_downcast = dynamic_cast< const NodeGlobalResource& >(other);
-        return other_downcast.topo_ptr == topo_ptr;
-    }
-    catch (const std::bad_cast&)
-    {
-        return false;
-    }
+    return this == &other;
 }
 } // namespace lstr
 #endif // L3STER_NUMA_NODEGLOBAL_RESOURCE_HPP
