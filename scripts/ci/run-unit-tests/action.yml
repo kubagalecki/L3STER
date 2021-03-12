@@ -1,11 +1,5 @@
 name: test
 description: configure, build, and run tests using the toolchain, build type, etc. specified in env variables
-
-inputs:
-  codecov_token:
-    description: codecov authentification token to upload coverage results
-    required: false
-
 runs:
   using: docker
   image: ../../../Dockerfile

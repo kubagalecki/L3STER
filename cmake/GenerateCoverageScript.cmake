@@ -14,7 +14,7 @@ function( generate_coverage_script )
     foreach ( test ${L3STER_MPI_TESTS} )
         file( APPEND ${script_file} "-a ${CMAKE_CURRENT_BINARY_DIR}/${test}/${test}_report.json \\\n" )
     endforeach ()
-    file( APPEND ${script_file} "--json -o coverage_report.json" )
+    file( APPEND ${script_file} "--json -r ${L3STER_DIR} -o coverage_report.json" )
 endfunction()
 
 generate_coverage_script()
