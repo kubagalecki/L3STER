@@ -19,4 +19,5 @@ function( add_mpi_test source name nprocs )
     set( L3STER_MPI_TESTS ${L3STER_MPI_TESTS} PARENT_SCOPE )
 endfunction()
 
-add_mpi_test( "${L3STER_DIR}/tests/MpiCommTest.cpp" "MPI_initialization_test" "1;2" )
+add_mpi_test( "${L3STER_DIR}/tests/MpiBlockingCommunicationTest.cpp" "MPI_blocking_communication_test" "1;2;4" )
+add_mpi_test( "${L3STER_DIR}/tests/MpiAsyncCommunicationTest.cpp" "MPI_async_communication_test" "1;2;4" )
