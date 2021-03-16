@@ -17,5 +17,5 @@ if [ "$REPORT_COVERAGE" != "" ]; then
   ./generate_coverage_report.sh || exit 1
   curl -s https://codecov.io/bash >codecov.sh || exit 1
   chmod +x codecov.sh
-  ./codecov.sh -Z || exit 1
+  ./codecov.sh -Z -X gcov || exit 1
 fi
