@@ -10,9 +10,9 @@ cmake \
 cmake --build . -- -j || exit 1
 ctest --output-on-failure --repeat until-pass:2 --timeout 120 || exit 1
 if [ "$REPORT_COVERAGE" != "" ]; then
-  chmod +x generate_coverage_report.sh
-  ./generate_coverage_report.sh || exit 1
+  # chmod +x generate_coverage_report.sh
+  # ./generate_coverage_report.sh || exit 1
   curl -s https://codecov.io/bash >codecov.sh || exit 1
   chmod +x codecov.sh
-  ./codecov.sh -Z -f coverage_report.json || exit 1
+  ./codecov.sh -Z || exit 1
 fi
