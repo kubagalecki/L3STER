@@ -2,6 +2,8 @@ name: tests
 on: push
 env:
   DOCKER_BASE: "${{ secrets.DOCKER_HUB_USERNAME }}/${{ secrets.DOCKER_HUB_IMAGE }}:latest"
+  OMPI_ALLOW_RUN_AS_ROOT: 1
+  OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
 
 jobs:
   build_base_container:
@@ -24,7 +26,6 @@ jobs:
     env:
       CMAKE_BUILD_TYPE: Release
       CMAKE_TOOLCHAIN_PATH: ../cmake/toolchains/StaticAnalysis.cmake
-      REPORT_COVERAGE: false
     steps:
       - uses: actions/checkout@v2
       - name: Append docker base
@@ -39,11 +40,10 @@ jobs:
     env:
       CMAKE_BUILD_TYPE: ${{ matrix.build_type }}
       CMAKE_TOOLCHAIN_PATH: "../cmake/toolchains/${{ matrix.sanitizer }}Sanitizer.cmake"
-      REPORT_COVERAGE: false
     strategy:
       matrix:
         build_type: [ Debug, Release ]
-        sanitizer: [ Address, Leak, Thread, UndefinedBehavior ]
+        sanitizer: [ Address, Thread, UndefinedBehavior ]
     steps:
       - uses: actions/checkout@v2
       - name: Append docker base
@@ -58,10 +58,9 @@ jobs:
       CMAKE_BUILD_TYPE: Debug
       CMAKE_TOOLCHAIN_PATH: ../cmake/toolchains/Coverage.cmake
       REPORT_COVERAGE: true
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     steps:
       - uses: actions/checkout@v2
       - name: Append docker base
         run: sed -i '1 i\FROM '"$DOCKER_BASE" $GITHUB_WORKSPACE/Dockerfile
       - uses: ./scripts/ci/run-unit-tests
-        with:
-          codecov_token: "${{ secrets.CODECOV_TOKEN }}"

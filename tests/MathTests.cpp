@@ -136,7 +136,7 @@ TEST_CASE("Lagrange interpolation", "[math]")
         return ret;
     }();
     constexpr auto approx = [](const double a, const double b) {
-        constexpr double lagrange_tol = 2e-3;
+        constexpr double lagrange_tol = 5e-3;
         return fabs(a - b) < lagrange_tol;
     };
     CHECK(std::ranges::equal(y, y_computed, approx));
