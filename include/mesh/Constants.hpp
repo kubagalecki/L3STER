@@ -5,13 +5,13 @@
 
 #include <array>
 
-namespace lstr::mesh
+namespace lstr
 {
 // Define allowed spatial dimensions
-constexpr inline std::array< types::dim_t, 3 > space_dims = {1, 2, 3};
+constexpr inline std::array< dim_t, 3 > space_dims = {1, 2, 3};
 
 // Define allowed element orders
-constexpr inline std::array< types::el_o_t, 2 > element_orders = {1, 2};
-} // namespace lstr::mesh
+constexpr inline std::array< el_o_t, 2 > element_orders = {1, 2};
+} // namespace lstr
 
 #endif // L3STER_MESH_CONSTANTS_HPP

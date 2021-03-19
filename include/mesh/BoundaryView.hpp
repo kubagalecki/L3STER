@@ -5,7 +5,7 @@
 
 #include "mesh/BoundaryElementView.hpp"
 
-namespace lstr::mesh
+namespace lstr
 {
 class BoundaryView
 {
@@ -42,6 +42,6 @@ auto BoundaryView::visit(F&& visitor) const
 
     return boundary_visitor;
 }
-} // namespace lstr::mesh
+} // namespace lstr
 
 #endif // L3STER_MESH_BOUNDARYVIEW_HPP

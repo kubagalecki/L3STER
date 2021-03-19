@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-namespace lstr::mesh
+namespace lstr
 {
 //////////////////////////////////////////////////////////////////////////////////////////////
 //                                         MESH CLASS                                       //
@@ -46,6 +46,6 @@ inline Mesh::Mesh(std::vector< Node< 3 > >&& nodes_, MeshPartition&& partition_)
 inline Mesh::Mesh(std::vector< Node< 3 > >&& nodes_, std::vector< MeshPartition >&& partitions_)
     : partitions(std::move(partitions_)), nodes(std::move(nodes_))
 {}
-} // namespace lstr::mesh
+} // namespace lstr
 
 #endif // L3STER_MESH_MESH_HPP

@@ -12,7 +12,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace lstr::mesh
+namespace lstr
 {
 enum class MeshFormat
 {
@@ -178,7 +178,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
 
         constexpr size_t                     n_entity_types = 4;
         std::array< size_t, n_entity_types > n_entities{};
-        using entity_data_t = std::array< std::map< int, types::d_id_t >, n_entity_types >;
+        using entity_data_t = std::array< std::map< int, d_id_t >, n_entity_types >;
         entity_data_t entity_data{};
 
         const auto parse_entities_asciiv4 = [&]() {
@@ -206,7 +206,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
                     {
                         int physical_tag;
                         file >> physical_tag;
-                        entity_data[dim][entity_tag] = static_cast< types::d_id_t >(physical_tag);
+                        entity_data[dim][entity_tag] = static_cast< d_id_t >(physical_tag);
                     }
 
                     if (dim > 0)
@@ -248,7 +248,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
                 std::transform_reduce(entity_data.cbegin(), entity_data.cend(), 0u, std::plus<>{}, [](const auto& map) {
                     return map.size();
                 });
-            std::vector< types::d_id_t > unique_physical_ids;
+            std::vector< d_id_t > unique_physical_ids;
             unique_physical_ids.reserve(n_physical_entities);
             auto upi_inserter = std::back_inserter(unique_physical_ids);
             std::for_each(entity_data.cbegin(), entity_data.cend(), [&upi_inserter](const auto& map) {
@@ -337,10 +337,10 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
                 size_t block_size;
                 file >> entity_dim >> entity_tag >> element_type >> block_size;
 
-                const types::d_id_t block_physical_id = entity_data.first[entity_dim].at(entity_tag);
-                auto&               block_domain      = domain_map[block_physical_id];
+                const d_id_t block_physical_id = entity_data.first[entity_dim].at(entity_tag);
+                auto&        block_domain      = domain_map[block_physical_id];
 
-                using lstr::util::meta::size_constant;
+                using lstr::size_constant;
 
                 // push block of elements of type `I` to the domain
                 const auto push_elements = [&]< size_t I >(size_constant< I >) {
@@ -428,7 +428,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
     auto       element_data = parse_elements(format_data, entity_data);
 
     return make_contiguous_mesh(node_data, element_data);
-} // namespace lstr::mesh
-} // namespace lstr::mesh
+}
+} // namespace lstr
 
 #endif // L3STER_MESH_READMESH_HPP

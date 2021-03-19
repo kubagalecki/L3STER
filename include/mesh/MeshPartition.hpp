@@ -7,12 +7,12 @@
 #include <map>
 #include <variant>
 
-namespace lstr::mesh
+namespace lstr
 {
 class MeshPartition
 {
 public:
-    using domain_map_t = std::map< types::d_id_t, Domain >;
+    using domain_map_t = std::map< d_id_t, Domain >;
 
     MeshPartition()                     = default;
     MeshPartition(const MeshPartition&) = delete;
@@ -31,10 +31,10 @@ public:
     auto cvisitAllElements(F&& element_visitor) const;
 
     template < typename F >
-    auto visitSpecifiedDomains(F&& element_visitor, const std::vector< types::d_id_t >& domain_ids);
+    auto visitSpecifiedDomains(F&& element_visitor, const std::vector< d_id_t >& domain_ids);
 
     template < typename F >
-    auto cvisitSpecifiedDomains(F&& element_visitor, const std::vector< types::d_id_t >& domain_ids) const;
+    auto cvisitSpecifiedDomains(F&& element_visitor, const std::vector< d_id_t >& domain_ids) const;
 
     template < typename F, typename D >
     auto visitDomainIf(F&& element_visitor, D&& domain_predicate);
@@ -52,12 +52,12 @@ public:
     std::optional< element_cref_variant_t > findElement(const F& predicate) const;
 
     template < typename F >
-    std::optional< element_ref_variant_t >
-    findElementInSpecifiedDomains(const F& predicate, const std::vector< types::d_id_t >& domain_ids);
+    std::optional< element_ref_variant_t > findElementInSpecifiedDomains(const F&                     predicate,
+                                                                         const std::vector< d_id_t >& domain_ids);
 
     template < typename F >
     std::optional< element_cref_variant_t >
-    findElementInSpecifiedDomains(const F& predicate, const std::vector< types::d_id_t >& domain_ids) const;
+    findElementInSpecifiedDomains(const F& predicate, const std::vector< d_id_t >& domain_ids) const;
 
     template < typename F, typename D >
     std::optional< element_ref_variant_t > findElementIfDomain(const F& predicate, const D& domain_predicate);
@@ -65,12 +65,12 @@ public:
     template < typename F, typename D >
     std::optional< element_cref_variant_t > findElementIfDomain(const F& predicate, const D& domain_predicate) const;
 
-    [[nodiscard]] DomainView getDomainView(types::d_id_t id) const { return DomainView(domains.at(id), id); }
+    [[nodiscard]] DomainView getDomainView(d_id_t id) const { return DomainView(domains.at(id), id); }
 
-    inline void pushDomain(types::d_id_t, Domain);
-    inline void popDomain(types::d_id_t);
+    inline void pushDomain(d_id_t, Domain);
+    inline void popDomain(d_id_t);
 
-    [[nodiscard]] inline BoundaryView getBoundaryView(const types::d_id_t&) const;
+    [[nodiscard]] inline BoundaryView getBoundaryView(const d_id_t&) const;
 
 private:
     domain_map_t domains;
@@ -89,22 +89,20 @@ auto MeshPartition::cvisitAllElements(F&& element_visitor) const
 }
 
 template < typename F >
-auto MeshPartition::visitSpecifiedDomains(F&& element_visitor, const std::vector< types::d_id_t >& domain_ids)
+auto MeshPartition::visitSpecifiedDomains(F&& element_visitor, const std::vector< d_id_t >& domain_ids)
 {
     auto domain_predicate = [&domain_ids](const DomainView& d) {
-        return std::any_of(
-            domain_ids.cbegin(), domain_ids.cend(), [&d](const types::d_id_t& d1) { return d.getID() == d1; });
+        return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&d](const d_id_t& d1) { return d.getID() == d1; });
     };
 
     return visitDomainIf(std::forward< F >(element_visitor), std::move(domain_predicate));
 }
 
 template < typename F >
-auto MeshPartition::cvisitSpecifiedDomains(F&& element_visitor, const std::vector< types::d_id_t >& domain_ids) const
+auto MeshPartition::cvisitSpecifiedDomains(F&& element_visitor, const std::vector< d_id_t >& domain_ids) const
 {
     auto domain_predicate = [&domain_ids](const DomainView& d) {
-        return std::any_of(
-            domain_ids.cbegin(), domain_ids.cend(), [&d](const types::d_id_t& d1) { return d.getID() == d1; });
+        return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&d](const d_id_t& d1) { return d.getID() == d1; });
     };
 
     return cvisitDomainIf(std::forward< F >(element_visitor), std::move(domain_predicate));
@@ -165,23 +163,21 @@ std::optional< element_cref_variant_t > MeshPartition::findElement(const F& pred
 
 template < typename F >
 std::optional< element_ref_variant_t >
-MeshPartition::findElementInSpecifiedDomains(const F& predicate, const std::vector< types::d_id_t >& domain_ids)
+MeshPartition::findElementInSpecifiedDomains(const F& predicate, const std::vector< d_id_t >& domain_ids)
 {
     return findElementIfDomain(predicate, [&domain_ids](const auto& domain_view) {
-        return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&domain_view](types::d_id_t d) {
-            return d == domain_view.getID();
-        });
+        return std::any_of(
+            domain_ids.cbegin(), domain_ids.cend(), [&domain_view](d_id_t d) { return d == domain_view.getID(); });
     });
 }
 
 template < typename F >
 std::optional< element_cref_variant_t >
-MeshPartition::findElementInSpecifiedDomains(const F& predicate, const std::vector< types::d_id_t >& domain_ids) const
+MeshPartition::findElementInSpecifiedDomains(const F& predicate, const std::vector< d_id_t >& domain_ids) const
 {
     return findElementIfDomain(predicate, [&domain_ids](const auto& domain_view) {
-        return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&domain_view](types::d_id_t d) {
-            return d == domain_view.getID();
-        });
+        return std::any_of(
+            domain_ids.cbegin(), domain_ids.cend(), [&domain_view](d_id_t d) { return d == domain_view.getID(); });
     });
 }
 
@@ -224,30 +220,30 @@ std::optional< element_cref_variant_t > MeshPartition::findElementIfDomain(const
     return ret_val;
 }
 
-void MeshPartition::pushDomain(types::d_id_t id, Domain d)
+void MeshPartition::pushDomain(d_id_t id, Domain d)
 {
     domains[id] = std::move(d);
 }
 
-void MeshPartition::popDomain(types::d_id_t id)
+void MeshPartition::popDomain(d_id_t id)
 {
     domains.erase(id);
 }
 
 namespace detail
 {
-template < typename Element, size_t N, types::el_ns_t I >
+template < typename Element, size_t N, el_ns_t I >
 consteval auto makeSideMatcher()
 {
-    return [](const Element& element, const std::array< types::n_id_t, N >& sorted_side_nodes) {
+    return [](const Element& element, const std::array< n_id_t, N >& sorted_side_nodes) {
         constexpr auto& side_inds = std::get< I >(ElementTraits< Element >::boundary_table);
         if constexpr (std::tuple_size_v< std::decay_t< decltype(side_inds) > > == N)
         {
-            std::array< types::n_id_t, N > element_side_nodes;
+            std::array< n_id_t, N > element_side_nodes;
             std::transform(side_inds.cbegin(),
                            side_inds.cend(),
                            element_side_nodes.begin(),
-                           [&element_nodes = element.getNodes()](types::el_locind_t i) { return element_nodes[i]; });
+                           [&element_nodes = element.getNodes()](el_locind_t i) { return element_nodes[i]; });
 
             std::sort(element_side_nodes.begin(), element_side_nodes.end());
 
@@ -258,12 +254,12 @@ consteval auto makeSideMatcher()
     };
 }
 
-template < typename Element, size_t N, types::el_ns_t I >
+template < typename Element, size_t N, el_ns_t I >
 struct sideMatcher
 {
     static consteval auto get()
     {
-        return [](const Element& element, const std::array< types::n_id_t, N >& sorted_side_nodes) {
+        return [](const Element& element, const std::array< n_id_t, N >& sorted_side_nodes) {
             if (makeSideMatcher< Element, N, I >()(element, sorted_side_nodes))
                 return I;
             else
@@ -277,17 +273,17 @@ struct sideMatcher< Element, N, 0 >
 {
     static consteval auto get()
     {
-        return [](const Element& element, const std::array< types::n_id_t, N >& sorted_side_nodes) {
+        return [](const Element& element, const std::array< n_id_t, N >& sorted_side_nodes) {
             if (makeSideMatcher< Element, N, 0 >()(element, sorted_side_nodes))
-                return static_cast< types::el_ns_t >(0u);
+                return static_cast< el_ns_t >(0u);
             else
-                return std::numeric_limits< types::el_ns_t >::max();
+                return std::numeric_limits< el_ns_t >::max();
         };
     }
 };
 } // namespace detail
 
-BoundaryView MeshPartition::getBoundaryView(const types::d_id_t& boundary_id) const
+BoundaryView MeshPartition::getBoundaryView(const d_id_t& boundary_id) const
 {
     const auto boundary_domain_view = getDomainView(boundary_id);
     const auto boundary_dim         = boundary_domain_view.getDim();
@@ -302,7 +298,7 @@ BoundaryView MeshPartition::getBoundaryView(const types::d_id_t& boundary_id) co
             return bn;
         }();
 
-        types::el_ns_t side_index = 0;
+        el_ns_t side_index = 0;
 
         const auto is_domain_element = [&side_index, this, &boundary_nodes](const auto& domain_element) {
             constexpr size_t boundary_size = std::tuple_size_v< std::decay_t< decltype(boundary_nodes) > >;
@@ -313,7 +309,7 @@ BoundaryView MeshPartition::getBoundaryView(const types::d_id_t& boundary_id) co
 
             const auto matched_side = matcher(domain_element, boundary_nodes);
             side_index              = matched_side;
-            return matched_side != std::numeric_limits< types::el_ns_t >::max();
+            return matched_side != std::numeric_limits< el_ns_t >::max();
         };
 
         const auto domain_element_variant_opt = findElementIfDomain(
@@ -338,6 +334,6 @@ BoundaryView MeshPartition::getBoundaryView(const types::d_id_t& boundary_id) co
     return BoundaryView{std::move(boundary_elements)};
 }
 
-} // namespace lstr::mesh
+} // namespace lstr
 
 #endif // L3STER_MESH_MESHPARTITION_HPP

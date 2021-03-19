@@ -10,10 +10,7 @@ namespace lstr
 {
 using std::ptrdiff_t;
 using std::size_t;
-} // namespace lstr
 
-namespace lstr::types
-{
 using val_t       = double;        // floating point value type
 using coord_t     = double;        // floating point coordinate type
 using dim_t       = uint_fast8_t;  // spatial dimension type
@@ -26,6 +23,6 @@ using d_id_t      = uint_fast8_t;  // domain id type
 using q_o_t       = uint_fast8_t;  // quadrature order type
 using q_l_t       = uint_fast64_t; // quadrature length type
 using poly_o_t    = uint_fast64_t; // polynomial order type
-} // namespace lstr::types
+} // namespace lstr
 
 #endif // L3STER_DEFS_TYPEDEFS_H

@@ -7,7 +7,7 @@
 
 #include <array>
 
-namespace lstr::mesh
+namespace lstr
 {
 //////////////////////////////////////////////////////////////////////////////////////////////
 //                                       NODE CLASS                                         //
@@ -15,11 +15,11 @@ namespace lstr::mesh
 /*
 Node class - aggregate of node dimensions
 */
-template < types::dim_t DIM >
+template < dim_t DIM >
 struct Node
 {
-    std::array< types::val_t, DIM > coords;
+    std::array< val_t, DIM > coords;
 };
-} // namespace lstr::mesh
+} // namespace lstr
 
 #endif // end include guard

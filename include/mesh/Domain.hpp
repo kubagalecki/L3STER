@@ -12,26 +12,26 @@
 #include <variant>
 #include <vector>
 
-namespace lstr::mesh
+namespace lstr
 {
 class Domain
 {
 public:
-    template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+    template < ElementTypes ELTYPE, el_o_t ELORDER >
     using element_vector_t         = std::vector< Element< ELTYPE, ELORDER > >;
     using element_vector_variant_t = parametrize_type_over_element_types_and_orders_t< std::variant, element_vector_t >;
     using element_vector_variant_vector_t = std::vector< element_vector_variant_t >;
 
-    template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+    template < ElementTypes ELTYPE, el_o_t ELORDER >
     void pushBack(Element< ELTYPE, ELORDER > element);
 
-    template < ElementTypes ELTYPE, types::el_o_t ELORDER, typename... Args >
+    template < ElementTypes ELTYPE, el_o_t ELORDER, typename... Args >
     void emplaceBack(Args&&... args);
 
-    template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+    template < ElementTypes ELTYPE, el_o_t ELORDER >
     auto getBackInserter();
 
-    template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+    template < ElementTypes ELTYPE, el_o_t ELORDER >
     void reserve(size_t size);
 
     template < invocable_on_elements F >
@@ -46,14 +46,14 @@ public:
     template < invocable_on_const_elements_r< bool > F >
     [[nodiscard]] std::optional< element_cref_variant_t > findElement(const F& predicate) const;
 
-    [[nodiscard]] types::dim_t  getDim() const { return dim; };
+    [[nodiscard]] dim_t         getDim() const { return dim; };
     [[nodiscard]] inline size_t getNElements() const;
 
 private:
     element_vector_variant_vector_t element_vectors;
-    types::dim_t                    dim = 0;
+    dim_t                           dim = 0;
 
-    template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+    template < ElementTypes ELTYPE, el_o_t ELORDER >
     std::vector< Element< ELTYPE, ELORDER > >& retrieveElementVector();
 
     template < typename F >
@@ -63,7 +63,7 @@ private:
     [[nodiscard]] static auto wrapCElementVisitor(F&& element_visitor);
 };
 
-template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+template < ElementTypes ELTYPE, el_o_t ELORDER >
 std::vector< Element< ELTYPE, ELORDER > >& Domain::retrieveElementVector()
 {
     using el_vec_t = element_vector_t< ELTYPE, ELORDER >;
@@ -84,25 +84,25 @@ std::vector< Element< ELTYPE, ELORDER > >& Domain::retrieveElementVector()
         return std::get< el_vec_t >(*vector_variant_it);
 }
 
-template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+template < ElementTypes ELTYPE, el_o_t ELORDER >
 void Domain::pushBack(Element< ELTYPE, ELORDER > element)
 {
     emplaceBack< ELTYPE, ELORDER >(std::move(element));
 }
 
-template < ElementTypes ELTYPE, types::el_o_t ELORDER, typename... ArgTypes >
+template < ElementTypes ELTYPE, el_o_t ELORDER, typename... ArgTypes >
 void Domain::emplaceBack(ArgTypes&&... Args)
 {
     retrieveElementVector< ELTYPE, ELORDER >().emplace_back(std::forward< ArgTypes >(Args)...);
 }
 
-template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+template < ElementTypes ELTYPE, el_o_t ELORDER >
 auto Domain::getBackInserter()
 {
     return std::back_inserter(retrieveElementVector< ELTYPE, ELORDER >());
 }
 
-template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+template < ElementTypes ELTYPE, el_o_t ELORDER >
 void Domain::reserve(size_t size)
 {
     using el_vec_t = element_vector_t< ELTYPE, ELORDER >;
@@ -237,18 +237,18 @@ public:
     DomainView(DomainView&&)      = default;
     DomainView& operator=(const DomainView&) = delete;
     DomainView& operator=(DomainView&&) = delete;
-    DomainView(const Domain& domain_, types::el_id_t id_) : domain{std::cref(domain_)}, id{id_} {}
+    DomainView(const Domain& domain_, el_id_t id_) : domain{std::cref(domain_)}, id{id_} {}
 
-    [[nodiscard]] types::el_id_t getID() const { return id; }
-    [[nodiscard]] types::dim_t   getDim() const { return domain.get().getDim(); }
-    [[nodiscard]] size_t         getNElements() const { return domain.get().getNElements(); }
-    [[nodiscard]] domain_ref_t   getDomainRef() const { return domain.get(); }
+    [[nodiscard]] el_id_t      getID() const { return id; }
+    [[nodiscard]] dim_t        getDim() const { return domain.get().getDim(); }
+    [[nodiscard]] size_t       getNElements() const { return domain.get().getNElements(); }
+    [[nodiscard]] domain_ref_t getDomainRef() const { return domain.get(); }
 
 private:
-    domain_ref_t   domain;
-    types::el_id_t id;
+    domain_ref_t domain;
+    el_id_t      id;
 };
 
-} // namespace lstr::mesh
+} // namespace lstr
 
 #endif // L3STER_MESH_DOMAIN_HPP

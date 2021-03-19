@@ -6,7 +6,7 @@
 #include <tuple>
 #include <utility>
 
-namespace lstr::util
+namespace lstr
 {
 namespace detail
 {
@@ -97,6 +97,6 @@ concept mapping = requires(T f, Domain x)
     ->std::convertible_to< Range >;
 };
 
-} // namespace lstr::util
+} // namespace lstr
 
 #endif // L3STER_UTIL_CONCEPTS_HPP

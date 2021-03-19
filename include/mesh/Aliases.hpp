@@ -8,21 +8,21 @@
 #include <functional>
 #include <variant>
 
-namespace lstr::mesh
+namespace lstr
 {
-template < template < typename... > typename T, template < mesh::ElementTypes, types::el_o_t > typename U >
+template < template < typename... > typename T, template < ElementTypes, el_o_t > typename U >
 using parametrize_type_over_element_types_and_orders_t =
-    util::meta::parametrize_over_combinations_t< U, T, element_types, element_orders >;
+    parametrize_over_combinations_t< U, T, element_types, element_orders >;
 
-template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+template < ElementTypes ELTYPE, el_o_t ELORDER >
 class Element;
 
 using element_variant_t = parametrize_type_over_element_types_and_orders_t< std::variant, Element >;
 
-template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+template < ElementTypes ELTYPE, el_o_t ELORDER >
 using element_ref_t = std::reference_wrapper< Element< ELTYPE, ELORDER > >;
 
-template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+template < ElementTypes ELTYPE, el_o_t ELORDER >
 using element_cref_t = std::reference_wrapper< const Element< ELTYPE, ELORDER > >;
 
 using element_ref_variant_t = parametrize_type_over_element_types_and_orders_t< std::variant, element_ref_t >;
@@ -34,7 +34,7 @@ namespace detail
 template < typename F, bool CONSTNESS >
 struct is_invocable_on_elements
 {
-    template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+    template < ElementTypes ELTYPE, el_o_t ELORDER >
     struct invocable_on_element :
         std::conditional_t<
             std::is_invocable_v<
@@ -68,7 +68,7 @@ namespace detail
 template < typename R, typename F, bool CONSTNESS >
 struct is_invocable_r_on_elements
 {
-    template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+    template < ElementTypes ELTYPE, el_o_t ELORDER >
     struct invocable_on_element :
         std::conditional_t<
             std::is_invocable_r_v<
@@ -98,6 +98,6 @@ concept invocable_on_elements_r = detail::is_invocable_r_on_elements< R, T, fals
 template < typename T, typename R >
 concept invocable_on_const_elements_r = detail::is_invocable_r_on_elements< R, T, true >::value;
 
-} // namespace lstr::mesh
+} // namespace lstr
 
 #endif // L3STER_MESH_ALIASES_HPP

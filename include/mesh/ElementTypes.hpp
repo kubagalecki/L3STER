@@ -8,7 +8,7 @@
 #include <array>
 #include <utility>
 
-namespace lstr::mesh
+namespace lstr
 {
 enum class ElementTypes
 {
@@ -28,6 +28,6 @@ inline constexpr auto element_types = []< size_t... I >(std::index_sequence< I..
 }
 (std::make_index_sequence< static_cast< size_t >(ElementTypes::Count) >{});
 
-} // namespace lstr::mesh
+} // namespace lstr
 
 #endif // L3STER_MESH_ELEMENTTYPES_H

@@ -5,7 +5,7 @@
 
 #include <array>
 
-namespace lstr::quad
+namespace lstr
 {
 //////////////////////////////////////////////////////////////////////////////////////////////
 //                                      QUADRATURE CLASS                                    //
@@ -14,15 +14,15 @@ namespace lstr::quad
 This class holds quadrature points and weights for a given element type and order
 */
 
-template < types::q_l_t QLENGTH, types::dim_t QDIM >
+template < q_l_t QLENGTH, dim_t QDIM >
 class Quadrature
 {
 public:
-    using q_points_t = std::array< std::array< types::val_t, QDIM >, QLENGTH >;
-    using weights_t  = std::array< types::val_t, QLENGTH >;
+    using q_points_t = std::array< std::array< val_t, QDIM >, QLENGTH >;
+    using weights_t  = std::array< val_t, QLENGTH >;
 
-    static constexpr types::q_l_t size = QLENGTH;
-    static constexpr types::dim_t dim  = QDIM;
+    static constexpr q_l_t size = QLENGTH;
+    static constexpr dim_t dim  = QDIM;
 
     Quadrature() = default;
     Quadrature(const q_points_t&, const weights_t&);
@@ -37,9 +37,9 @@ private:
     weights_t  weights;
 };
 
-template < types::q_l_t QLENGTH, types::dim_t QDIM >
+template < q_l_t QLENGTH, dim_t QDIM >
 Quadrature< QLENGTH, QDIM >::Quadrature(const q_points_t& qpts, const weights_t& w) : q_points(qpts), weights(w)
 {}
-} // namespace lstr::quad
+} // namespace lstr
 
 #endif // L3STER_QUAD_QUADRATURE_HPP

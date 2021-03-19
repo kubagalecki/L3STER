@@ -4,19 +4,19 @@
 #include "defs/Typedefs.h"
 #include "quad/QuadratureTypes.h"
 
-namespace lstr::quad
+namespace lstr
 {
-template < QuadratureTypes, types::q_o_t >
+template < QuadratureTypes, q_o_t >
 struct ReferenceQuadrature;
 
 template < typename >
 struct ReferenceQuadratureTraits;
 
-template < types::q_o_t QORDER >
+template < q_o_t QORDER >
 struct ReferenceQuadratureTraits< ReferenceQuadrature< QuadratureTypes::GLeg, QORDER > >
 {
-    static constexpr types::q_l_t size = QORDER / 2 + 1;
+    static constexpr q_l_t size = QORDER / 2 + 1;
 };
-} // namespace lstr::quad
+} // namespace lstr
 
 #endif // L3STER_QUADRATURE_REFERENCEQUADRATURETRAITS_HPP

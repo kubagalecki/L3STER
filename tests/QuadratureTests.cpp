@@ -10,7 +10,7 @@ constexpr double tol = 1e-10;
 
 TEST_CASE("1D Gauss-Legendre quadrature, 1 point", "[quadrature]")
 {
-    const auto& ref_quad = lstr::quad::ReferenceQuadrature< lstr::quad::QuadratureTypes::GLeg, 0 >::value;
+    const auto& ref_quad = lstr::ReferenceQuadrature< lstr::QuadratureTypes::GLeg, 0 >::value;
 
     REQUIRE(ref_quad.size == 1);
     REQUIRE(ref_quad.dim == 1);
@@ -24,7 +24,7 @@ TEST_CASE("1D Gauss-Legendre quadrature, 1 point", "[quadrature]")
 
 TEST_CASE("1D Gauss-Legendre quadrature, 2 point", "[quadrature]")
 {
-    const auto& ref_quad = lstr::quad::ReferenceQuadrature< lstr::quad::QuadratureTypes::GLeg, 2 >::value;
+    const auto& ref_quad = lstr::ReferenceQuadrature< lstr::QuadratureTypes::GLeg, 2 >::value;
 
     REQUIRE(ref_quad.size == 2);
     REQUIRE(ref_quad.dim == 1);
@@ -41,7 +41,7 @@ TEST_CASE("1D Gauss-Legendre quadrature, 2 point", "[quadrature]")
 
 TEST_CASE("1D Gauss-Legendre quadrature, 3 point", "[quadrature]")
 {
-    const auto& ref_quad = lstr::quad::ReferenceQuadrature< lstr::quad::QuadratureTypes::GLeg, 4 >::value;
+    const auto& ref_quad = lstr::ReferenceQuadrature< lstr::QuadratureTypes::GLeg, 4 >::value;
 
     REQUIRE(ref_quad.size == 3);
     REQUIRE(ref_quad.dim == 1);
@@ -63,12 +63,12 @@ TEST_CASE("1D Gauss-Legendre quadrature, 3 point", "[quadrature]")
 
 TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 {
-    const auto element = lstr::mesh::Element< lstr::mesh::ElementTypes::Line, 1 >{{1, 2}};
+    const auto element = lstr::Element< lstr::ElementTypes::Line, 1 >{{1, 2}};
 
     SECTION("1 point quadrature")
     {
-        const lstr::quad::QuadratureGenerator< lstr::quad::QuadratureTypes::GLeg, 1 > quad_gen;
-        const auto& quadrature = quad_gen.get(element);
+        const lstr::QuadratureGenerator< lstr::QuadratureTypes::GLeg, 1 > quad_gen;
+        const auto&                                                       quadrature = quad_gen.get(element);
 
         REQUIRE(quadrature.size == 1);
         REQUIRE(quadrature.dim == 1);
@@ -82,8 +82,8 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 
     SECTION("2 point quadrature")
     {
-        const lstr::quad::QuadratureGenerator< lstr::quad::QuadratureTypes::GLeg, 3 > quad_gen;
-        const auto& quadrature = quad_gen.get(element);
+        const lstr::QuadratureGenerator< lstr::QuadratureTypes::GLeg, 3 > quad_gen;
+        const auto&                                                       quadrature = quad_gen.get(element);
 
         REQUIRE(quadrature.size == 2);
         REQUIRE(quadrature.dim == 1);
@@ -100,8 +100,8 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 
     SECTION("3 point quadrature")
     {
-        const lstr::quad::QuadratureGenerator< lstr::quad::QuadratureTypes::GLeg, 5 > quad_gen;
-        const auto& quadrature = quad_gen.get(element);
+        const lstr::QuadratureGenerator< lstr::QuadratureTypes::GLeg, 5 > quad_gen;
+        const auto&                                                       quadrature = quad_gen.get(element);
 
         REQUIRE(quadrature.size == 3);
         REQUIRE(quadrature.dim == 1);
@@ -124,16 +124,16 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 
 TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]")
 {
-    const auto element = lstr::mesh::Element< lstr::mesh::ElementTypes::Quad, 1 >{{1, 2, 3, 4}};
+    const auto element = lstr::Element< lstr::ElementTypes::Quad, 1 >{{1, 2, 3, 4}};
 
     constexpr auto integrate_over_quad = [](const auto& quadrature, const auto& fun) {
-        return std::transform_reduce(quadrature.getQPoints().cbegin(),
-                                     quadrature.getQPoints().cend(),
-                                     quadrature.getWeights().cbegin(),
-                                     0.,
-                                     std::plus<>{},
-                                     [&fun](const std::array< lstr::types::val_t, 2 >& qp,
-                                            const lstr::types::val_t& w) { return std::apply(fun, qp) * w; });
+        return std::transform_reduce(
+            quadrature.getQPoints().cbegin(),
+            quadrature.getQPoints().cend(),
+            quadrature.getWeights().cbegin(),
+            0.,
+            std::plus<>{},
+            [&fun](const std::array< lstr::val_t, 2 >& qp, const lstr::val_t& w) { return std::apply(fun, qp) * w; });
     };
 
     constexpr auto o0_fun = [](const auto&, const auto&) {
@@ -171,8 +171,8 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
     SECTION("1 point quadrature")
     {
-        const lstr::quad::QuadratureGenerator< lstr::quad::QuadratureTypes::GLeg, 1 > quad_gen;
-        const auto& quadrature = quad_gen.get(element);
+        const lstr::QuadratureGenerator< lstr::QuadratureTypes::GLeg, 1 > quad_gen;
+        const auto&                                                       quadrature = quad_gen.get(element);
 
         REQUIRE(quadrature.size == 1);
         REQUIRE(quadrature.dim == 2);
@@ -186,8 +186,8 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
     SECTION("4 point quadrature")
     {
-        const lstr::quad::QuadratureGenerator< lstr::quad::QuadratureTypes::GLeg, 3 > quad_gen;
-        const auto& quadrature = quad_gen.get(element);
+        const lstr::QuadratureGenerator< lstr::QuadratureTypes::GLeg, 3 > quad_gen;
+        const auto&                                                       quadrature = quad_gen.get(element);
 
         REQUIRE(quadrature.size == 4);
         REQUIRE(quadrature.dim == 2);
@@ -200,8 +200,8 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
     SECTION("9 point quadrature")
     {
-        const lstr::quad::QuadratureGenerator< lstr::quad::QuadratureTypes::GLeg, 5 > quad_gen;
-        const auto& quadrature = quad_gen.get(element);
+        const lstr::QuadratureGenerator< lstr::QuadratureTypes::GLeg, 5 > quad_gen;
+        const auto&                                                       quadrature = quad_gen.get(element);
 
         REQUIRE(quadrature.size == 9);
         REQUIRE(quadrature.dim == 2);

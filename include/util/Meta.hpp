@@ -16,7 +16,7 @@
  *  value_sequence introduced because std::integer_sequence does not support enums (in msvc)
  */
 
-namespace lstr::util::meta
+namespace lstr
 {
 // Functionality related to parametrizing over all combinations of a pack of nttp arrays
 template < array auto A >
@@ -179,6 +179,6 @@ using parametrize_over_combinations_t = parametrize_over_combinations< Inner, Ou
 template < size_t I >
 using size_constant = std::integral_constant< size_t, I >;
 
-} // namespace lstr::util::meta
+} // namespace lstr
 
 #endif // L3STER_UTIL_META_HPP

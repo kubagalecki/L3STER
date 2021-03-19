@@ -9,7 +9,7 @@
 #include <cmath>
 #include <utility>
 
-namespace lstr::math
+namespace lstr
 {
 /*
 usage: const auto& [qp, w] = computeGaussRule<N>(a, b, c)
@@ -22,26 +22,23 @@ Reference:
 Golub, G. H., & Welsch, J. H. (1969). Calculation of Gauss quadrature rules.
 Mathematics of Computation, 23(106), 221–221. https://doi.org/10.1090/s0025-5718-69-99647-1
 */
-template < size_t                                ORDER,
-           util::mapping< size_t, types::val_t > A,
-           util::mapping< size_t, types::val_t > B,
-           util::mapping< size_t, types::val_t > C >
+template < size_t ORDER, mapping< size_t, val_t > A, mapping< size_t, val_t > B, mapping< size_t, val_t > C >
 auto computeGaussRule(A&& a, B&& b, C&& c)
 {
     static_assert(ORDER > 0u);
-    using matrix_t = Eigen::Matrix< types::val_t, ORDER, ORDER >;
+    using matrix_t = Eigen::Matrix< val_t, ORDER, ORDER >;
 
     // Note: variable names follow the reference
     matrix_t J = matrix_t::Zero();
 
     for (size_t ind = 0; ind < ORDER - 1; ++ind)
     {
-        const auto         n     = ind + 1;
-        const types::val_t alpha = -b(n) / a(n);
-        const types::val_t beta  = sqrt(c(n + 1u) / (a(n) * a(n + 1u)));
-        J(ind, ind)              = alpha;
-        J(ind + 1, ind)          = beta;
-        J(ind, ind + 1)          = beta;
+        const auto  n     = ind + 1;
+        const val_t alpha = -b(n) / a(n);
+        const val_t beta  = sqrt(c(n + 1u) / (a(n) * a(n + 1u)));
+        J(ind, ind)       = alpha;
+        J(ind + 1, ind)   = beta;
+        J(ind, ind + 1)   = beta;
     }
     J(ORDER - 1, ORDER - 1) = -b(ORDER) / a(ORDER);
 
@@ -50,8 +47,8 @@ auto computeGaussRule(A&& a, B&& b, C&& c)
     const auto& eig_vals = eigen_solver.eigenvalues();
     const auto& eig_vecs = eigen_solver.eigenvectors();
 
-    std::array< types::val_t, ORDER > points;
-    std::array< types::val_t, ORDER > weights;
+    std::array< val_t, ORDER > points;
+    std::array< val_t, ORDER > weights;
 
     for (size_t i = 0; i < ORDER; ++i)
     {
@@ -61,6 +58,6 @@ auto computeGaussRule(A&& a, B&& b, C&& c)
 
     return std::make_pair(points, weights);
 }
-} // namespace lstr::math
+} // namespace lstr
 
 #endif // L3STER_MATH_COMPUTEGAUSSRULE_HPP

@@ -6,29 +6,29 @@
 #include "mesh/Element.hpp"
 #include "quad/ReferenceQuadrature.hpp"
 
-namespace lstr::quad
+namespace lstr
 {
-template < QuadratureTypes QTYPE, types::q_o_t QORDER >
+template < QuadratureTypes QTYPE, q_o_t QORDER >
 class QuadratureGenerator
 {
 public:
-    template < types::el_o_t ELORDER >
-    [[nodiscard]] const auto& get(const mesh::Element< mesh::ElementTypes::Line, ELORDER >&) const;
+    template < el_o_t ELORDER >
+    [[nodiscard]] const auto& get(const Element< ElementTypes::Line, ELORDER >&) const;
 
-    template < types::el_o_t ELORDER >
-    [[nodiscard]] const auto& get(const mesh::Element< mesh::ElementTypes::Quad, ELORDER >&) const;
+    template < el_o_t ELORDER >
+    [[nodiscard]] const auto& get(const Element< ElementTypes::Quad, ELORDER >&) const;
 };
 
-template < QuadratureTypes QTYPE, types::q_o_t QORDER >
-template < types::el_o_t ELORDER >
-const auto& QuadratureGenerator< QTYPE, QORDER >::get(const mesh::Element< mesh::ElementTypes::Line, ELORDER >&) const
+template < QuadratureTypes QTYPE, q_o_t QORDER >
+template < el_o_t ELORDER >
+const auto& QuadratureGenerator< QTYPE, QORDER >::get(const Element< ElementTypes::Line, ELORDER >&) const
 {
     return ReferenceQuadrature< QTYPE, QORDER >::value;
 }
 
-template < QuadratureTypes QTYPE, types::q_o_t QORDER >
-template < types::el_o_t ELORDER >
-const auto& QuadratureGenerator< QTYPE, QORDER >::get(const mesh::Element< mesh::ElementTypes::Quad, ELORDER >&) const
+template < QuadratureTypes QTYPE, q_o_t QORDER >
+template < el_o_t ELORDER >
+const auto& QuadratureGenerator< QTYPE, QORDER >::get(const Element< ElementTypes::Quad, ELORDER >&) const
 {
     static const auto quad = [] {
         using ref_quadrature_t  = ReferenceQuadrature< QTYPE, QORDER >;
@@ -57,6 +57,6 @@ const auto& QuadratureGenerator< QTYPE, QORDER >::get(const mesh::Element< mesh:
 
     return quad;
 }
-} // namespace lstr::quad
+} // namespace lstr
 
 #endif // L3STER_QUAD_QUADRATUREGENERATOR_HPP
