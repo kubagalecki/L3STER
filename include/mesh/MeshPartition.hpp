@@ -167,13 +167,13 @@ requires std::is_invocable_v< F, DomainView > decltype(auto) MeshPartition::visi
 template < typename F >
 std::optional< element_ref_variant_t > MeshPartition::findElement(const F& predicate)
 {
-    return findElementIfDomain(predicate, [](const auto&) { return true; });
+    return findElementIfDomain(predicate, [](const DomainView&) { return true; });
 }
 
 template < typename F >
 std::optional< element_cref_variant_t > MeshPartition::findElement(const F& predicate) const
 {
-    return findElementIfDomain(predicate, [](const auto&) { return true; });
+    return findElementIfDomain(predicate, [](const DomainView&) { return true; });
 }
 
 template < typename F >
