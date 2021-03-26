@@ -23,7 +23,7 @@ public:
     using element_vector_variant_vector_t = std::vector< element_vector_variant_t >;
 
     template < ElementTypes ELTYPE, el_o_t ELORDER >
-    void pushBack(Element< ELTYPE, ELORDER > element);
+    void pushBack(const Element< ELTYPE, ELORDER >& element);
 
     template < ElementTypes ELTYPE, el_o_t ELORDER, typename... Args >
     void emplaceBack(Args&&... args);
@@ -35,10 +35,10 @@ public:
     void reserve(size_t size);
 
     template < invocable_on_elements F >
-    void visit(F& element_visitor);
+    void visit(F&& element_visitor);
 
     template < invocable_on_const_elements F >
-    void cvisit(F& element_visitor) const;
+    void cvisit(F&& element_visitor) const;
 
     template < invocable_on_elements_r< bool > F >
     [[nodiscard]] std::optional< element_ref_variant_t > findElement(const F& predicate);
@@ -50,21 +50,21 @@ public:
     [[nodiscard]] inline size_t getNElements() const;
 
 private:
+    template < ElementTypes ELTYPE, el_o_t ELORDER >
+    std::vector< Element< ELTYPE, ELORDER > >& getElementVector();
+
+    template < typename F >
+    [[nodiscard]] static auto wrapElementVisitor(F& element_visitor);
+
+    template < typename F >
+    [[nodiscard]] static auto wrapCElementVisitor(F& element_visitor);
+
     element_vector_variant_vector_t element_vectors;
     dim_t                           dim = 0;
-
-    template < ElementTypes ELTYPE, el_o_t ELORDER >
-    std::vector< Element< ELTYPE, ELORDER > >& retrieveElementVector();
-
-    template < typename F >
-    [[nodiscard]] static auto wrapElementVisitor(F&& element_visitor);
-
-    template < typename F >
-    [[nodiscard]] static auto wrapCElementVisitor(F&& element_visitor);
 };
 
 template < ElementTypes ELTYPE, el_o_t ELORDER >
-std::vector< Element< ELTYPE, ELORDER > >& Domain::retrieveElementVector()
+std::vector< Element< ELTYPE, ELORDER > >& Domain::getElementVector()
 {
     using el_vec_t = element_vector_t< ELTYPE, ELORDER >;
     if (!element_vectors.empty())
@@ -85,21 +85,21 @@ std::vector< Element< ELTYPE, ELORDER > >& Domain::retrieveElementVector()
 }
 
 template < ElementTypes ELTYPE, el_o_t ELORDER >
-void Domain::pushBack(Element< ELTYPE, ELORDER > element)
+void Domain::pushBack(const Element< ELTYPE, ELORDER >& element)
 {
-    emplaceBack< ELTYPE, ELORDER >(std::move(element));
+    emplaceBack< ELTYPE, ELORDER >(element);
 }
 
 template < ElementTypes ELTYPE, el_o_t ELORDER, typename... ArgTypes >
 void Domain::emplaceBack(ArgTypes&&... Args)
 {
-    retrieveElementVector< ELTYPE, ELORDER >().emplace_back(std::forward< ArgTypes >(Args)...);
+    getElementVector< ELTYPE, ELORDER >().emplace_back(std::forward< ArgTypes >(Args)...);
 }
 
 template < ElementTypes ELTYPE, el_o_t ELORDER >
 auto Domain::getBackInserter()
 {
-    return std::back_inserter(retrieveElementVector< ELTYPE, ELORDER >());
+    return std::back_inserter(getElementVector< ELTYPE, ELORDER >());
 }
 
 template < ElementTypes ELTYPE, el_o_t ELORDER >
@@ -115,9 +115,8 @@ void Domain::reserve(size_t size)
     else
         dim = ElementTraits< Element< ELTYPE, ELORDER > >::native_dim;
 
-    const auto vector_variant_it = std::find_if(element_vectors.begin(), element_vectors.end(), [](const auto& v) {
-        return std::holds_alternative< el_vec_t >(v);
-    });
+    const auto vector_variant_it =
+        std::ranges::find_if(element_vectors, [](const auto& v) { return std::holds_alternative< el_vec_t >(v); });
     if (vector_variant_it == element_vectors.end())
     {
         std::get< el_vec_t >(element_vectors.emplace_back(std::in_place_type< el_vec_t >)).reserve(size);
@@ -129,23 +128,19 @@ void Domain::reserve(size_t size)
 }
 
 template < invocable_on_elements F >
-void Domain::visit(F& element_visitor)
+void Domain::visit(F&& element_visitor)
 {
-    std::for_each(element_vectors.begin(),
-                  element_vectors.end(),
-                  [visitor = wrapElementVisitor(element_visitor)](element_vector_variant_t& el_vec) mutable {
-                      std::visit(visitor, el_vec);
-                  });
+    auto visitor = wrapElementVisitor(element_visitor);
+    std::ranges::for_each(element_vectors, [&](element_vector_variant_t& el_vec) { std::visit(visitor, el_vec); });
 }
 
 template < invocable_on_const_elements F >
-void Domain::cvisit(F& element_visitor) const
+void Domain::cvisit(F&& element_visitor) const
 {
-    std::for_each(element_vectors.cbegin(),
-                  element_vectors.cend(),
-                  [visitor = wrapElementVisitor(element_visitor)](const element_vector_variant_t& el_vec) mutable {
-                      std::visit(visitor, el_vec);
-                  });
+    auto visitor = wrapCElementVisitor(element_visitor);
+    std::for_each(element_vectors.cbegin(), element_vectors.cend(), [&](const element_vector_variant_t& el_vec) {
+        std::visit(visitor, el_vec);
+    });
 }
 
 template < invocable_on_elements_r< bool > F >
@@ -204,22 +199,22 @@ std::optional< element_cref_variant_t > Domain::findElement(const F& predicate) 
 }
 
 template < typename F >
-auto Domain::wrapElementVisitor(F&& element_visitor)
+auto Domain::wrapElementVisitor(F& element_visitor)
 {
     return [&element_visitor](auto& element_vector) {
-        std::for_each(element_vector.begin(), element_vector.end(), std::ref(element_visitor));
+        std::ranges::for_each(element_vector, std::ref(element_visitor));
     };
 }
 
 template < typename F >
-auto Domain::wrapCElementVisitor(F&& element_visitor)
+auto Domain::wrapCElementVisitor(F& element_visitor)
 {
     return [&element_visitor](const auto& element_vector) {
         std::for_each(element_vector.cbegin(), element_vector.cend(), std::ref(element_visitor));
     };
 }
 
-inline size_t Domain::getNElements() const
+size_t Domain::getNElements() const
 {
     return std::accumulate(
         element_vectors.cbegin(), element_vectors.cend(), 0u, [](size_t sum, const auto& el_vec_var) {
@@ -232,21 +227,16 @@ class DomainView
     using domain_ref_t = std::reference_wrapper< const Domain >;
 
 public:
-    DomainView()                  = delete;
-    DomainView(const DomainView&) = default;
-    DomainView(DomainView&&)      = default;
-    DomainView& operator=(const DomainView&) = delete;
-    DomainView& operator=(DomainView&&) = delete;
-    DomainView(const Domain& domain_, el_id_t id_) : domain{std::cref(domain_)}, id{id_} {}
+    DomainView(const Domain& domain_, d_id_t id_) : domain{std::cref(domain_)}, id{id_} {}
 
-    [[nodiscard]] el_id_t      getID() const { return id; }
-    [[nodiscard]] dim_t        getDim() const { return domain.get().getDim(); }
-    [[nodiscard]] size_t       getNElements() const { return domain.get().getNElements(); }
-    [[nodiscard]] domain_ref_t getDomainRef() const { return domain.get(); }
+    [[nodiscard]] d_id_t getID() const { return id; }
+    [[nodiscard]] dim_t  getDim() const { return domain.get().getDim(); }
+    [[nodiscard]] size_t getNElements() const { return domain.get().getNElements(); }
+
+    domain_ref_t domain;
 
 private:
-    domain_ref_t domain;
-    el_id_t      id;
+    d_id_t id;
 };
 
 } // namespace lstr

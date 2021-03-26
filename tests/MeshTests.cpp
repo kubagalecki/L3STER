@@ -90,7 +90,7 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::Mesh, const lstr::Mesh)
     REQUIRE(nodes.size() == 121);
 
     // Const visitors
-    auto element_counter = topology.cvisitAllElements(ElementCounter{});
+    auto element_counter = topology.cvisit(ElementCounter{});
 
     REQUIRE(element_counter.counter == 140);
     CHECK(ConstructionTracker::defaults == 1);
@@ -102,8 +102,8 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::Mesh, const lstr::Mesh)
     ConstructionTracker::resetCount();
     element_counter.counter = 0;
 
-    element_counter = topology.cvisitDomainIf(std::move(element_counter),
-                                              [](const lstr::DomainView& dv) { return dv.getDim() == 2; });
+    element_counter =
+        topology.cvisit(std::move(element_counter), [](const lstr::DomainView& dv) { return dv.getDim() == 2; });
 
     CHECK(element_counter.counter == 100);
     CHECK(ConstructionTracker::defaults == 0);
@@ -118,7 +118,7 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::Mesh, const lstr::Mesh)
     // Non-const visitors
     if constexpr (!is_const)
     {
-        element_counter = topology.visitAllElements(std::move(element_counter));
+        element_counter = topology.visit(std::move(element_counter));
 
         REQUIRE(element_counter.counter == 140);
         CHECK(ConstructionTracker::defaults == 0);
@@ -130,8 +130,8 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::Mesh, const lstr::Mesh)
         ConstructionTracker::resetCount();
         element_counter.counter = 0;
 
-        element_counter = topology.visitDomainIf(std::move(element_counter),
-                                                 [](const lstr::DomainView& dv) { return dv.getDim() == 2; });
+        element_counter =
+            topology.visit(std::move(element_counter), [](const lstr::DomainView& dv) { return dv.getDim() == 2; });
 
         CHECK(element_counter.counter == 100);
         CHECK(ConstructionTracker::defaults == 0);
@@ -145,7 +145,7 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::Mesh, const lstr::Mesh)
     }
     else
     {
-        element_counter = topology.cvisitAllElements(std::move(element_counter));
+        element_counter = topology.cvisit(std::move(element_counter));
 
         REQUIRE(element_counter.counter == 140);
         CHECK(ConstructionTracker::defaults == 0);
@@ -157,8 +157,8 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::Mesh, const lstr::Mesh)
         ConstructionTracker::resetCount();
         element_counter.counter = 0;
 
-        element_counter = topology.cvisitDomainIf(std::move(element_counter),
-                                                  [](const lstr::DomainView& dv) { return dv.getDim() == 2; });
+        element_counter =
+            topology.cvisit(std::move(element_counter), [](const lstr::DomainView& dv) { return dv.getDim() == 2; });
 
         CHECK(element_counter.counter == 100);
         CHECK(ConstructionTracker::defaults == 0);
@@ -215,4 +215,13 @@ TEST_CASE("Unsupported mesh formats, mesh I/O error handling", "[mesh]")
     REQUIRE_THROWS(mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(nonexistent.msh), lstr::gmsh_tag));
     REQUIRE_THROWS(
         mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmsh_triangle_mesh_ascii4.msh), lstr::gmsh_tag));
+}
+
+TEST_CASE("Serial mesh partitioning", "[mesh]")
+{
+    constexpr auto n_parts = 2u;
+    auto           mesh    = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_ascii4.msh), lstr::gmsh_tag);
+    lstr::partitionMesh(mesh, n_parts, {});
+    REQUIRE(mesh.getPartitions().size() == n_parts);
+    CHECK(mesh.getPartitions()[0].getNElements() == Approx(mesh.getPartitions()[1].getNElements()).epsilon(.1));
 }

@@ -102,6 +102,8 @@ public:
     requires std::is_arithmetic_v< T > [[nodiscard]] Request
     receiveAsync(T* buf, size_t count, int source, int tag = 0);
 
+    [[nodiscard]] MPI_Comm& get() { return comm; }
+
 private:
     MPI_Comm comm = MPI_COMM_WORLD;
 };

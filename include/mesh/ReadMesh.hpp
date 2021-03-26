@@ -405,7 +405,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
                 return node_data_entry.second;
             });
 
-            part.visitAllElements([min_node_tag = node_vector.front().first](auto& element) {
+            part.visit([min_node_tag = node_vector.front().first](auto& element) {
                 std::for_each(element.getNodes().begin(), element.getNodes().end(), [&min_node_tag](auto& node) {
                     node -= min_node_tag;
                 });

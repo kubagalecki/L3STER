@@ -31,7 +31,7 @@ using element_cref_variant_t = parametrize_type_over_element_types_and_orders_t<
 
 namespace detail
 {
-template < typename F, bool CONSTNESS >
+template < typename F, bool CONSTNESS, typename... Args >
 struct is_invocable_on_elements
 {
     template < ElementTypes ELTYPE, el_o_t ELORDER >
@@ -39,22 +39,23 @@ struct is_invocable_on_elements
         std::conditional_t<
             std::is_invocable_v<
                 F,
-                std::conditional_t< CONSTNESS, const Element< ELTYPE, ELORDER >&, Element< ELTYPE, ELORDER >& > >,
+                std::conditional_t< CONSTNESS, const Element< ELTYPE, ELORDER >&, Element< ELTYPE, ELORDER >& >,
+                Args... >,
             std::true_type,
             std::false_type >
     {};
 
-    using invocability_tuple = parametrize_type_over_element_types_and_orders_t< std::tuple, invocable_on_element >;
+    using invocability_set = parametrize_type_over_element_types_and_orders_t< type_set, invocable_on_element >;
 
     template < typename >
     struct check_all;
     template < typename... T >
-    struct check_all< std::tuple< T... > >
+    struct check_all< type_set< T... > >
     {
         static constexpr bool value = (T::value && ...);
     };
 
-    static constexpr bool value = check_all< invocability_tuple >::value;
+    static constexpr bool value = check_all< invocability_set >::value;
 };
 } // namespace detail
 
@@ -62,10 +63,14 @@ template < typename T >
 concept invocable_on_elements = detail::is_invocable_on_elements< T, false >::value;
 template < typename T >
 concept invocable_on_const_elements = detail::is_invocable_on_elements< T, true >::value;
+template < typename T, typename... Args >
+concept invocable_on_elements_and = detail::is_invocable_on_elements< T, false, Args... >::value;
+template < typename T, typename... Args >
+concept invocable_on_const_elements_and = detail::is_invocable_on_elements< T, true, Args... >::value;
 
 namespace detail
 {
-template < typename R, typename F, bool CONSTNESS >
+template < typename R, typename F, bool CONSTNESS, typename... Args >
 struct is_invocable_r_on_elements
 {
     template < ElementTypes ELTYPE, el_o_t ELORDER >
@@ -74,22 +79,23 @@ struct is_invocable_r_on_elements
             std::is_invocable_r_v<
                 R,
                 F,
-                std::conditional_t< CONSTNESS, const Element< ELTYPE, ELORDER >&, Element< ELTYPE, ELORDER >& > >,
+                std::conditional_t< CONSTNESS, const Element< ELTYPE, ELORDER >&, Element< ELTYPE, ELORDER >& >,
+                Args... >,
             std::true_type,
             std::false_type >
     {};
 
-    using invocability_tuple = parametrize_type_over_element_types_and_orders_t< std::tuple, invocable_on_element >;
+    using invocability_set = parametrize_type_over_element_types_and_orders_t< type_set, invocable_on_element >;
 
     template < typename >
     struct check_all;
     template < typename... T >
-    struct check_all< std::tuple< T... > >
+    struct check_all< type_set< T... > >
     {
         static constexpr bool value = (T::value && ...);
     };
 
-    static constexpr bool value = check_all< invocability_tuple >::value;
+    static constexpr bool value = check_all< invocability_set >::value;
 };
 } // namespace detail
 
@@ -97,6 +103,10 @@ template < typename T, typename R >
 concept invocable_on_elements_r = detail::is_invocable_r_on_elements< R, T, false >::value;
 template < typename T, typename R >
 concept invocable_on_const_elements_r = detail::is_invocable_r_on_elements< R, T, true >::value;
+template < typename T, typename R, typename... Args >
+concept invocable_on_elements_r_and = detail::is_invocable_r_on_elements< R, T, false, Args... >::value;
+template < typename T, typename R, typename... Args >
+concept invocable_on_const_elements_r_and = detail::is_invocable_r_on_elements< R, T, true, Args... >::value;
 
 } // namespace lstr
 
