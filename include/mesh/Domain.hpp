@@ -24,25 +24,20 @@ public:
 
     template < ElementTypes ELTYPE, el_o_t ELORDER >
     void pushBack(const Element< ELTYPE, ELORDER >& element);
-
     template < ElementTypes ELTYPE, el_o_t ELORDER, typename... Args >
     void emplaceBack(Args&&... args);
-
     template < ElementTypes ELTYPE, el_o_t ELORDER >
     auto getBackInserter();
-
     template < ElementTypes ELTYPE, el_o_t ELORDER >
     void reserve(size_t size);
 
     template < invocable_on_elements F >
     void visit(F&& element_visitor);
-
     template < invocable_on_const_elements F >
     void cvisit(F&& element_visitor) const;
 
     template < invocable_on_elements_r< bool > F >
     [[nodiscard]] std::optional< element_ref_variant_t > findElement(const F& predicate);
-
     template < invocable_on_const_elements_r< bool > F >
     [[nodiscard]] std::optional< element_cref_variant_t > findElement(const F& predicate) const;
 

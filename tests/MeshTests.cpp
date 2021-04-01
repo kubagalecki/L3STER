@@ -173,7 +173,7 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::Mesh, const lstr::Mesh)
 
     // Find (both const and non-const)
     const auto predicate = ElementFinder(std::vector< lstr::n_id_t >({54, 55, 64, 63}));
-    const auto element1  = topology.findElement(predicate);
+    const auto element1  = topology.find(predicate);
 
     CHECK(element1);
     CHECK(ConstructionTracker::defaults == 1);
@@ -186,7 +186,7 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::Mesh, const lstr::Mesh)
 
     // Check that find element fails safely
     const auto predicate2 = ElementFinder(std::vector< lstr::n_id_t >({153, 213, 821, 372}));
-    const auto element2   = topology.findElement(predicate2);
+    const auto element2   = topology.find(predicate2);
 
     CHECK_FALSE(element2);
 
@@ -219,9 +219,14 @@ TEST_CASE("Unsupported mesh formats, mesh I/O error handling", "[mesh]")
 
 TEST_CASE("Serial mesh partitioning", "[mesh]")
 {
-    constexpr auto n_parts = 2u;
-    auto           mesh    = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_ascii4.msh), lstr::gmsh_tag);
-    lstr::partitionMesh(mesh, n_parts, {});
+    constexpr auto n_parts    = 2u;
+    auto           mesh       = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_ascii4.msh), lstr::gmsh_tag);
+    const auto     n_elements = mesh.getPartitions()[0].getNElements();
+    lstr::partitionMesh(mesh, n_parts, {2, 3, 4, 5});
     REQUIRE(mesh.getPartitions().size() == n_parts);
+    REQUIRE(std::accumulate(
+                mesh.getPartitions().cbegin(), mesh.getPartitions().cend(), 0u, [](size_t size, const auto& part) {
+                    return size + part.getNElements();
+                }) == n_elements);
     CHECK(mesh.getPartitions()[0].getNElements() == Approx(mesh.getPartitions()[1].getNElements()).epsilon(.1));
 }

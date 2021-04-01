@@ -39,7 +39,7 @@ consteval ElementTypes lookup_elt()
 }
 
 template < ElementTypes ELTYPE >
-Element< ELTYPE, 1 > parse_gmsh_element(std::ifstream& f)
+Element< ELTYPE, 1 > parse_gmsh_element(std::ifstream& f, size_t id)
 {
     constexpr auto                n_nodes = ElementTraits< Element< ELTYPE, 1 > >::nodes_per_element;
     std::array< size_t, n_nodes > nodes{};
@@ -52,8 +52,7 @@ Element< ELTYPE, 1 > parse_gmsh_element(std::ifstream& f)
         std::swap(nodes[2], nodes[3]);
         std::rotate(nodes.begin(), nodes.begin() + 2, nodes.end());
     }
-
-    return Element< ELTYPE, 1 >{nodes};
+    return Element< ELTYPE, 1 >{nodes, id};
 }
 } // namespace detail
 
@@ -329,7 +328,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
         typename MeshPartition::domain_map_t domain_map;
 
         const auto parse_elements_asciiv4 = [&]() {
-            size_t n_blocks, n_elements, min_element_tag, max_element_tag;
+            size_t n_blocks, n_elements, min_element_tag, max_element_tag, element_id = 0;
             file >> n_blocks >> n_elements >> min_element_tag >> max_element_tag;
 
             const auto parse_block = [&]() {
@@ -348,7 +347,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
                     std::generate_n(block_domain.getBackInserter< el_type, 1 >(), block_size, [&]() {
                         size_t element_tag;
                         file >> element_tag; // throw away tag
-                        return detail::parse_gmsh_element< el_type >(file);
+                        return detail::parse_gmsh_element< el_type >(file, element_id++);
                     });
                 };
 

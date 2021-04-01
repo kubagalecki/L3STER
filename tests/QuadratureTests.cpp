@@ -63,7 +63,7 @@ TEST_CASE("1D Gauss-Legendre quadrature, 3 point", "[quadrature]")
 
 TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 {
-    const auto element = lstr::Element< lstr::ElementTypes::Line, 1 >{{1, 2}};
+    const auto element = lstr::Element< lstr::ElementTypes::Line, 1 >{{1, 2}, 0};
 
     SECTION("1 point quadrature")
     {
@@ -124,7 +124,7 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 
 TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]")
 {
-    const auto element = lstr::Element< lstr::ElementTypes::Quad, 1 >{{1, 2, 3, 4}};
+    const auto element = lstr::Element< lstr::ElementTypes::Quad, 1 >{{1, 2, 3, 4}, 0};
 
     constexpr auto integrate_over_quad = [](const auto& quadrature, const auto& fun) {
         return std::transform_reduce(

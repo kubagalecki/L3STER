@@ -22,14 +22,16 @@ class Element
 public:
     using node_array_t = std::array< n_id_t, ElementTraits< Element< ELTYPE, ELORDER > >::nodes_per_element >;
 
-    explicit Element(const node_array_t& nodes_) : nodes{nodes_} {}
+    explicit Element(const node_array_t& nodes_, el_id_t id_) : nodes{nodes_}, id{id_} {}
 
     [[nodiscard]] const node_array_t& getNodes() const noexcept { return nodes; }
     [[nodiscard]] node_array_t&       getNodes() noexcept { return nodes; }
+    [[nodiscard]] el_id_t             getId() const noexcept { return id; }
 
 private:
     node_array_t                                                      nodes;
     typename ElementTraits< Element< ELTYPE, ELORDER > >::ElementData data{};
+    el_id_t                                                           id;
 };
 } // namespace lstr
 #endif // L3STER_MESH_ELEMENT_HPP
