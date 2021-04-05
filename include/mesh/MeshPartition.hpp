@@ -9,32 +9,44 @@
 
 namespace lstr
 {
+namespace detail
+{
+template < typename T >
+concept domain_predicate = requires(T op, const DomainView dv)
+{
+    {
+        op(dv)
+    }
+    ->std::convertible_to< bool >;
+};
+} // namespace detail
+
 class MeshPartition
 {
 public:
     using domain_map_t = std::map< d_id_t, Domain >;
+    using node_vec_t   = std::vector< n_id_t >;
 
-    MeshPartition()                     = default;
-    MeshPartition(const MeshPartition&) = delete;
-    MeshPartition(MeshPartition&&)      = default;
+    MeshPartition()                         = default;
+    MeshPartition(const MeshPartition&)     = delete;
+    MeshPartition(MeshPartition&&) noexcept = default;
     MeshPartition& operator=(const MeshPartition&) = delete;
-    MeshPartition& operator=(MeshPartition&&) = default;
-    ~MeshPartition()                          = default;
+    MeshPartition& operator=(MeshPartition&&) noexcept = default;
+    ~MeshPartition()                                   = default;
 
-    explicit MeshPartition(MeshPartition::domain_map_t domains_) : domains{std::move(domains_)} {}
+    inline explicit MeshPartition(domain_map_t domains_);
+    MeshPartition(domain_map_t domains_, node_vec_t nodes_, node_vec_t ghost_nodes_)
+        : domains{std::move(domains_)}, nodes{std::move(nodes_)}, ghost_nodes{std::move(ghost_nodes_)}
+    {}
 
-    template < invocable_on_elements F, typename D >
-    requires std::is_invocable_r_v< bool, D, const DomainView > decltype(auto) visit(F&& element_visitor,
-                                                                                     D&& domain_predicate);
-    template < invocable_on_const_elements F, typename D >
-    requires std::is_invocable_r_v< bool, D, const DomainView > decltype(auto) cvisit(F&& element_visitor,
-                                                                                      D&& domain_predicate) const;
-    template < invocable_on_elements_and< const DomainView > F, typename D >
-    requires std::is_invocable_r_v< bool, D, const DomainView > decltype(auto) visit(F&& element_visitor,
-                                                                                     D&& domain_predicate);
-    template < invocable_on_const_elements_and< const DomainView > F, typename D >
-    requires std::is_invocable_r_v< bool, D, const DomainView > decltype(auto) cvisit(F&& element_visitor,
-                                                                                      D&& domain_predicate) const;
+    template < invocable_on_elements F, detail::domain_predicate D >
+    decltype(auto) visit(F&& element_visitor, D&& domain_predicate);
+    template < invocable_on_const_elements F, detail::domain_predicate D >
+    decltype(auto) cvisit(F&& element_visitor, D&& domain_predicate) const;
+    template < invocable_on_elements_and< const DomainView > F, detail::domain_predicate D >
+    decltype(auto) visit(F&& element_visitor, D&& domain_predicate);
+    template < invocable_on_const_elements_and< const DomainView > F, detail::domain_predicate D >
+    decltype(auto) cvisit(F&& element_visitor, D&& domain_predicate) const;
     template < invocable_on_elements F >
     decltype(auto) visit(F&& element_visitor);
     template < invocable_on_const_elements F >
@@ -51,9 +63,6 @@ public:
     decltype(auto) visit(F&& element_visitor, const std::vector< d_id_t >& domain_ids);
     template < invocable_on_const_elements_and< const DomainView > F >
     decltype(auto) cvisit(F&& element_visitor, const std::vector< d_id_t >& domain_ids) const;
-
-    template < typename F >
-    requires std::is_invocable_v< F, DomainView > decltype(auto) visit(F&& domain_visitor) const;
 
     // Note on finding elements: Elements are not ordered; if the predicate returns true for multiple elements, the
     // reference to any one of them may be returned
@@ -82,13 +91,17 @@ public:
     template < ElementTypes T, el_o_t O >
     void pushElement(const Element< T, O >& el, d_id_t d);
 
+    [[nodiscard]] const node_vec_t& getNodes() const noexcept { return nodes; }
+    [[nodiscard]] const node_vec_t& getGhostNodes() const noexcept { return ghost_nodes; }
+
 private:
     domain_map_t domains;
+    node_vec_t   nodes{};
+    node_vec_t   ghost_nodes{};
 };
 
-template < invocable_on_elements F, typename D >
-requires std::is_invocable_r_v< bool, D, const DomainView > decltype(auto) MeshPartition::visit(F&& element_visitor,
-                                                                                                D&& domain_predicate)
+template < invocable_on_elements F, detail::domain_predicate D >
+decltype(auto) MeshPartition::visit(F&& element_visitor, D&& domain_predicate)
 {
     std::ranges::for_each(domains, [&](domain_map_t::value_type& domain) {
         if (domain_predicate(DomainView{domain.second, domain.first}))
@@ -97,9 +110,8 @@ requires std::is_invocable_r_v< bool, D, const DomainView > decltype(auto) MeshP
     return std::forward< F >(element_visitor);
 }
 
-template < invocable_on_const_elements F, typename D >
-requires std::is_invocable_r_v< bool, D, const DomainView > decltype(auto)
-MeshPartition::cvisit(F&& element_visitor, D&& domain_predicate) const
+template < invocable_on_const_elements F, detail::domain_predicate D >
+decltype(auto) MeshPartition::cvisit(F&& element_visitor, D&& domain_predicate) const
 {
     std::for_each(domains.cbegin(), domains.cend(), [&](const domain_map_t::value_type& domain) {
         if (domain_predicate(DomainView{domain.second, domain.first}))
@@ -108,9 +120,8 @@ MeshPartition::cvisit(F&& element_visitor, D&& domain_predicate) const
     return std::forward< F >(element_visitor);
 }
 
-template < invocable_on_elements_and< const DomainView > F, typename D >
-requires std::is_invocable_r_v< bool, D, const DomainView > decltype(auto) MeshPartition::visit(F&& element_visitor,
-                                                                                                D&& domain_predicate)
+template < invocable_on_elements_and< const DomainView > F, detail::domain_predicate D >
+decltype(auto) MeshPartition::visit(F&& element_visitor, D&& domain_predicate)
 {
     Domain     dummy;
     DomainView current_view{dummy, 0};
@@ -122,9 +133,8 @@ requires std::is_invocable_r_v< bool, D, const DomainView > decltype(auto) MeshP
     return std::forward< F >(element_visitor);
 }
 
-template < invocable_on_const_elements_and< const DomainView > F, typename D >
-requires std::is_invocable_r_v< bool, D, const DomainView > decltype(auto)
-MeshPartition::cvisit(F&& element_visitor, D&& domain_predicate) const
+template < invocable_on_const_elements_and< const DomainView > F, detail::domain_predicate D >
+decltype(auto) MeshPartition::cvisit(F&& element_visitor, D&& domain_predicate) const
 {
     Domain     dummy;
     DomainView current_view{dummy, 0};
@@ -194,13 +204,6 @@ decltype(auto) MeshPartition::cvisit(F&& element_visitor, const std::vector< d_i
         return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&](const d_id_t& d1) { return d.getID() == d1; });
     };
     return cvisit(std::forward< F >(element_visitor), domain_predicate);
-}
-
-template < typename F >
-requires std::is_invocable_v< F, DomainView > decltype(auto) MeshPartition::visit(F&& domain_visitor) const
-{
-    std::ranges::for_each(domains, [&](const auto& d) { domain_visitor(DomainView{d.second, d.first}); });
-    return std::forward< F >(domain_visitor);
 }
 
 template < invocable_on_const_elements_r< bool > F >
@@ -374,6 +377,18 @@ template < ElementTypes T, el_o_t O >
 void MeshPartition::pushElement(const Element< T, O >& el, d_id_t d)
 {
     domains[d].pushBack(el);
+}
+
+MeshPartition::MeshPartition(MeshPartition::domain_map_t domains_) : domains{std::move(domains_)}
+{
+    constexpr size_t n_nodes_estimate_factor = 4;
+    nodes.reserve(getNElements() * n_nodes_estimate_factor);
+    visit([&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
+        std::ranges::for_each(element.getNodes(), [&](n_id_t n) { nodes.push_back(n); });
+    });
+    std::ranges::sort(nodes);
+    nodes.erase(std::ranges::unique(nodes).begin(), nodes.end());
+    nodes.shrink_to_fit();
 }
 } // namespace lstr
 #endif // L3STER_MESH_MESHPARTITION_HPP

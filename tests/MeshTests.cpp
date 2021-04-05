@@ -85,9 +85,11 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::Mesh, const lstr::Mesh)
     REQUIRE(mesh.getPartitions().size() == 1);
 
     auto&       topology = mesh.getPartitions()[0];
-    const auto& nodes    = mesh.getNodes();
+    const auto& nodes    = mesh.getVertices();
 
     REQUIRE(nodes.size() == 121);
+    REQUIRE(nodes.size() == topology.getNodes().size());
+    REQUIRE(topology.getGhostNodes().size() == 0);
 
     // Const visitors
     auto element_counter = topology.cvisit(ElementCounter{});
@@ -222,11 +224,21 @@ TEST_CASE("Serial mesh partitioning", "[mesh]")
     constexpr auto n_parts    = 2u;
     auto           mesh       = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_ascii4.msh), lstr::gmsh_tag);
     const auto     n_elements = mesh.getPartitions()[0].getNElements();
+    REQUIRE_NOTHROW(lstr::partitionMesh(mesh, 1, {}));
     lstr::partitionMesh(mesh, n_parts, {2, 3, 4, 5});
     REQUIRE(mesh.getPartitions().size() == n_parts);
     REQUIRE(std::accumulate(
                 mesh.getPartitions().cbegin(), mesh.getPartitions().cend(), 0u, [](size_t size, const auto& part) {
                     return size + part.getNElements();
                 }) == n_elements);
-    CHECK(mesh.getPartitions()[0].getNElements() == Approx(mesh.getPartitions()[1].getNElements()).epsilon(.1));
+    auto& p1 = mesh.getPartitions()[0];
+    auto& p2 = mesh.getPartitions()[1];
+    CHECK(p1.getNElements() == Approx(p2.getNElements()).epsilon(.1));
+    std::vector< lstr::n_id_t > intersects;
+    std::ranges::set_intersection(p1.getNodes(), p2.getNodes(), std::back_inserter(intersects));
+    CHECK(intersects.empty());
+    intersects.clear();
+    std::ranges::set_intersection(p1.getGhostNodes(), p2.getGhostNodes(), std::back_inserter(intersects));
+    CHECK(intersects.empty());
+    REQUIRE_THROWS(lstr::partitionMesh(mesh, 42, {}));
 }

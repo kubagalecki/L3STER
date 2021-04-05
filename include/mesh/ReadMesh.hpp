@@ -264,7 +264,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
     };
     using entity_data_t = std::invoke_result_t< decltype(parse_entities), const format_data_t& >;
 
-    using node_data_t      = std::pair< bool, std::vector< std::pair< size_t, Node< 3 > > > >;
+    using node_data_t      = std::pair< bool, std::vector< std::pair< size_t, Vertex< 3 > > > >;
     const auto parse_nodes = [&](const format_data_t& format_data) -> node_data_t {
         skip_until_section("$Nodes", "'Node' section not found");
 
@@ -396,7 +396,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
         auto& [is_contiguous, node_vector] = node_data;
         std::sort(
             node_vector.begin(), node_vector.end(), [](const auto& p1, const auto& p2) { return p1.first < p2.first; });
-        std::vector< Node< 3 > > nodes;
+        std::vector< Vertex< 3 > > nodes;
         if (is_contiguous)
         {
             auto node_inserter = std::back_inserter(nodes);
