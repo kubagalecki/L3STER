@@ -3,24 +3,24 @@
 
 #include "mesh/ElementTypes.hpp"
 
-namespace lstr::mesh
+namespace lstr
 {
-template < ElementTypes ELTYPE, types::el_o_t ELORDER >
+template < ElementTypes ELTYPE, el_o_t ELORDER >
 class Element;
 
 template < typename Element >
 struct ElementTraits;
 
-template < types::el_o_t ELORDER >
+template < el_o_t ELORDER >
 struct ElementTraits< Element< ElementTypes::Quad, ELORDER > >
 {
-    static constexpr ElementTypes   element_type      = ElementTypes::Quad;
-    static constexpr types::el_o_t  element_order     = ELORDER;
-    static constexpr types::n_id_t  nodes_per_element = (ELORDER + 1) * (ELORDER + 1);
-    static constexpr types::dim_t   native_dim        = 2;
-    static constexpr types::el_ns_t n_sides           = 4;
+    static constexpr ElementTypes element_type      = ElementTypes::Quad;
+    static constexpr el_o_t       element_order     = ELORDER;
+    static constexpr n_id_t       nodes_per_element = (ELORDER + 1) * (ELORDER + 1);
+    static constexpr dim_t        native_dim        = 2;
+    static constexpr el_ns_t      n_sides           = 4;
 
-    using boundary_table_t = std::array< std::array< types::el_locind_t, ELORDER + 1 >, n_sides >;
+    using boundary_table_t = std::array< std::array< el_locind_t, ELORDER + 1 >, n_sides >;
 
 private:
     static constexpr boundary_table_t makeBoundaryTable()
@@ -44,36 +44,36 @@ public:
 
     struct ElementData
     {
-        types::val_t a;
-        types::val_t b;
-        types::val_t c;
-        types::val_t alphax;
-        types::val_t alphay;
-        types::val_t betax;
-        types::val_t betay;
-        types::val_t gammax;
-        types::val_t gammay;
+        val_t a;
+        val_t b;
+        val_t c;
+        val_t alphax;
+        val_t alphay;
+        val_t betax;
+        val_t betay;
+        val_t gammax;
+        val_t gammay;
     };
 };
 
-template < types::el_o_t ELORDER >
+template < el_o_t ELORDER >
 struct ElementTraits< Element< ElementTypes::Line, ELORDER > >
 {
-    static constexpr ElementTypes   element_type      = ElementTypes::Line;
-    static constexpr types::el_o_t  element_order     = ELORDER;
-    static constexpr types::n_id_t  nodes_per_element = (ELORDER + 1);
-    static constexpr types::dim_t   native_dim        = 1;
-    static constexpr types::el_ns_t n_sides           = 2;
+    static constexpr ElementTypes element_type      = ElementTypes::Line;
+    static constexpr el_o_t       element_order     = ELORDER;
+    static constexpr n_id_t       nodes_per_element = (ELORDER + 1);
+    static constexpr dim_t        native_dim        = 1;
+    static constexpr el_ns_t      n_sides           = 2;
 
-    using boundary_table_t = std::array< std::array< types::el_locind_t, 1 >, n_sides >;
+    using boundary_table_t = std::array< std::array< el_locind_t, 1 >, n_sides >;
 
     static constexpr boundary_table_t boundary_table = {{{0}, {ELORDER}}};
 
     struct ElementData
     {
-        types::val_t L;
+        val_t L;
     };
 };
-} // namespace lstr::mesh
+} // namespace lstr
 
 #endif // L3STER_MESH_ELEMENTTRAITS_HPP

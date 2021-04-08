@@ -6,7 +6,7 @@
 #include <cmath>
 #include <random>
 
-using namespace lstr::math;
+using namespace lstr;
 
 constexpr double tol = 1e-10;
 

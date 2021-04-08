@@ -11,16 +11,19 @@
 
 #include "util/Concepts.hpp"
 
-/*Comments:
- *  naming convention conforming to the standard library
- *  value_sequence introduced because std::integer_sequence does not support enums (in msvc)
- */
-
-namespace lstr::util::meta
+namespace lstr
 {
+template < size_t I >
+using size_constant = std::integral_constant< size_t, I >;
+
+template < typename... T >
+struct type_set
+{};
+
 // Functionality related to parametrizing over all combinations of a pack of nttp arrays
 template < array auto A >
-requires std::totally_ordered< typename decltype(A)::value_type > struct unique_els
+requires std::totally_ordered< typename decltype(A)::value_type >
+struct unique_els
 {
 private:
     using A_t       = decltype(A);
@@ -73,7 +76,7 @@ public:
 };
 
 template < array auto... A >
-    requires(std::totally_ordered< typename decltype(A)::value_type >&&...) &&
+requires(std::totally_ordered< typename decltype(A)::value_type >&&...) &&
     ((A.size() > 0) && ...) struct all_combinations
 {
     static constexpr auto unique_A = std::make_tuple(unique_els_v< A >...);
@@ -172,13 +175,6 @@ public:
 
 template < template < auto... > typename Inner, template < typename... > typename Outer, tuple_like auto... Params >
 using parametrize_over_combinations_t = parametrize_over_combinations< Inner, Outer, Params... >::type;
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-
-// Convenience alias
-template < size_t I >
-using size_constant = std::integral_constant< size_t, I >;
-
-} // namespace lstr::util::meta
+} // namespace lstr
 
 #endif // L3STER_UTIL_META_HPP

@@ -46,8 +46,8 @@ size_t ConstructionTracker::mv_asgn  = 0;
 
 struct ElementCounter : ConstructionTracker
 {
-    template < lstr::mesh::ElementTypes ET, lstr::types::el_o_t EO >
-    void operator()(const lstr::mesh::Element< ET, EO >&)
+    template < lstr::ElementTypes ET, lstr::el_o_t EO >
+    void operator()(const lstr::Element< ET, EO >&)
     {
         ++counter;
     }
@@ -57,15 +57,15 @@ struct ElementCounter : ConstructionTracker
 
 struct ElementFinder : ConstructionTracker
 {
-    using nv_t = std::vector< lstr::types::n_id_t >;
+    using nv_t = std::vector< lstr::n_id_t >;
 
     explicit ElementFinder(nv_t&& nodes_) : ConstructionTracker{}, nodes{std::move(nodes_)}
     {
         std::ranges::sort(nodes);
     }
 
-    template < lstr::mesh::ElementTypes ET, lstr::types::el_o_t EO >
-    bool operator()(const lstr::mesh::Element< ET, EO >& element) const
+    template < lstr::ElementTypes ET, lstr::el_o_t EO >
+    bool operator()(const lstr::Element< ET, EO >& element) const
     {
         auto element_nodes = element.getNodes();
         std::ranges::sort(element_nodes);
@@ -75,22 +75,24 @@ struct ElementFinder : ConstructionTracker
     nv_t nodes;
 };
 
-TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::mesh::Mesh, const lstr::mesh::Mesh)
+TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::Mesh, const lstr::Mesh)
 {
     // Flag to prevent non-const member functions from being tested on const object
-    constexpr bool is_const = std::is_same_v< TestType, const lstr::mesh::Mesh >;
+    constexpr bool is_const = std::is_same_v< TestType, const lstr::Mesh >;
 
-    TestType mesh = lstr::mesh::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_ascii4.msh), lstr::mesh::gmsh_tag);
+    TestType mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_ascii4.msh), lstr::gmsh_tag);
 
     REQUIRE(mesh.getPartitions().size() == 1);
 
     auto&       topology = mesh.getPartitions()[0];
-    const auto& nodes    = mesh.getNodes();
+    const auto& nodes    = mesh.getVertices();
 
     REQUIRE(nodes.size() == 121);
+    REQUIRE(nodes.size() == topology.getNodes().size());
+    REQUIRE(topology.getGhostNodes().size() == 0);
 
     // Const visitors
-    auto element_counter = topology.cvisitAllElements(ElementCounter{});
+    auto element_counter = topology.cvisit(ElementCounter{});
 
     REQUIRE(element_counter.counter == 140);
     CHECK(ConstructionTracker::defaults == 1);
@@ -102,8 +104,8 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::mesh::Mesh, const lstr:
     ConstructionTracker::resetCount();
     element_counter.counter = 0;
 
-    element_counter = topology.cvisitDomainIf(std::move(element_counter),
-                                              [](const lstr::mesh::DomainView& dv) { return dv.getDim() == 2; });
+    element_counter =
+        topology.cvisit(std::move(element_counter), [](const lstr::DomainView& dv) { return dv.getDim() == 2; });
 
     CHECK(element_counter.counter == 100);
     CHECK(ConstructionTracker::defaults == 0);
@@ -118,7 +120,7 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::mesh::Mesh, const lstr:
     // Non-const visitors
     if constexpr (!is_const)
     {
-        element_counter = topology.visitAllElements(std::move(element_counter));
+        element_counter = topology.visit(std::move(element_counter));
 
         REQUIRE(element_counter.counter == 140);
         CHECK(ConstructionTracker::defaults == 0);
@@ -130,8 +132,8 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::mesh::Mesh, const lstr:
         ConstructionTracker::resetCount();
         element_counter.counter = 0;
 
-        element_counter = topology.visitDomainIf(std::move(element_counter),
-                                                 [](const lstr::mesh::DomainView& dv) { return dv.getDim() == 2; });
+        element_counter =
+            topology.visit(std::move(element_counter), [](const lstr::DomainView& dv) { return dv.getDim() == 2; });
 
         CHECK(element_counter.counter == 100);
         CHECK(ConstructionTracker::defaults == 0);
@@ -145,7 +147,7 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::mesh::Mesh, const lstr:
     }
     else
     {
-        element_counter = topology.cvisitAllElements(std::move(element_counter));
+        element_counter = topology.cvisit(std::move(element_counter));
 
         REQUIRE(element_counter.counter == 140);
         CHECK(ConstructionTracker::defaults == 0);
@@ -157,8 +159,8 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::mesh::Mesh, const lstr:
         ConstructionTracker::resetCount();
         element_counter.counter = 0;
 
-        element_counter = topology.cvisitDomainIf(std::move(element_counter),
-                                                  [](const lstr::mesh::DomainView& dv) { return dv.getDim() == 2; });
+        element_counter =
+            topology.cvisit(std::move(element_counter), [](const lstr::DomainView& dv) { return dv.getDim() == 2; });
 
         CHECK(element_counter.counter == 100);
         CHECK(ConstructionTracker::defaults == 0);
@@ -172,8 +174,8 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::mesh::Mesh, const lstr:
     }
 
     // Find (both const and non-const)
-    const auto predicate = ElementFinder(std::vector< lstr::types::n_id_t >({54, 55, 64, 63}));
-    const auto element1  = topology.findElement(predicate);
+    const auto predicate = ElementFinder(std::vector< lstr::n_id_t >({54, 55, 64, 63}));
+    const auto element1  = topology.find(predicate);
 
     CHECK(element1);
     CHECK(ConstructionTracker::defaults == 1);
@@ -185,15 +187,15 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::mesh::Mesh, const lstr:
     ConstructionTracker::resetCount();
 
     // Check that find element fails safely
-    const auto predicate2 = ElementFinder(std::vector< lstr::types::n_id_t >({153, 213, 821, 372}));
-    const auto element2   = topology.findElement(predicate2);
+    const auto predicate2 = ElementFinder(std::vector< lstr::n_id_t >({153, 213, 821, 372}));
+    const auto element2   = topology.find(predicate2);
 
     CHECK_FALSE(element2);
 
     ConstructionTracker::resetCount();
 
     // BoundaryView
-    std::vector< lstr::mesh::BoundaryView > boundaries;
+    std::vector< lstr::BoundaryView > boundaries;
     boundaries.reserve(4);
     for (int i = 2; i <= 5; ++i)
         boundaries.push_back(mesh.getPartitions()[0].getBoundaryView(i));
@@ -208,15 +210,35 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::mesh::Mesh, const lstr:
 
 TEST_CASE("Unsupported mesh formats, mesh I/O error handling", "[mesh]")
 {
-    lstr::mesh::Mesh mesh;
+    lstr::Mesh mesh;
+    REQUIRE_THROWS(mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_ascii2.msh), lstr::gmsh_tag));
+    REQUIRE_THROWS(mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_bin2.msh), lstr::gmsh_tag));
+    REQUIRE_THROWS(mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_bin4.msh), lstr::gmsh_tag));
+    REQUIRE_THROWS(mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(nonexistent.msh), lstr::gmsh_tag));
     REQUIRE_THROWS(
-        mesh = lstr::mesh::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_ascii2.msh), lstr::mesh::gmsh_tag));
-    REQUIRE_THROWS(mesh =
-                       lstr::mesh::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_bin2.msh), lstr::mesh::gmsh_tag));
-    REQUIRE_THROWS(mesh =
-                       lstr::mesh::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_bin4.msh), lstr::mesh::gmsh_tag));
-    REQUIRE_THROWS(mesh =
-                       lstr::mesh::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(nonexistent.msh), lstr::mesh::gmsh_tag));
-    REQUIRE_THROWS(mesh = lstr::mesh::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmsh_triangle_mesh_ascii4.msh),
-                                               lstr::mesh::gmsh_tag));
+        mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmsh_triangle_mesh_ascii4.msh), lstr::gmsh_tag));
+}
+
+TEST_CASE("Serial mesh partitioning", "[mesh]")
+{
+    constexpr auto n_parts    = 2u;
+    auto           mesh       = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_ascii4.msh), lstr::gmsh_tag);
+    const auto     n_elements = mesh.getPartitions()[0].getNElements();
+    REQUIRE_NOTHROW(lstr::partitionMesh(mesh, 1, {}));
+    lstr::partitionMesh(mesh, n_parts, {2, 3, 4, 5});
+    REQUIRE(mesh.getPartitions().size() == n_parts);
+    REQUIRE(std::accumulate(
+                mesh.getPartitions().cbegin(), mesh.getPartitions().cend(), 0u, [](size_t size, const auto& part) {
+                    return size + part.getNElements();
+                }) == n_elements);
+    auto& p1 = mesh.getPartitions()[0];
+    auto& p2 = mesh.getPartitions()[1];
+    CHECK(p1.getNElements() == Approx(p2.getNElements()).epsilon(.1));
+    std::vector< lstr::n_id_t > intersects;
+    std::ranges::set_intersection(p1.getNodes(), p2.getNodes(), std::back_inserter(intersects));
+    CHECK(intersects.empty());
+    intersects.clear();
+    std::ranges::set_intersection(p1.getGhostNodes(), p2.getGhostNodes(), std::back_inserter(intersects));
+    CHECK(intersects.empty());
+    REQUIRE_THROWS(lstr::partitionMesh(mesh, 42, {}));
 }

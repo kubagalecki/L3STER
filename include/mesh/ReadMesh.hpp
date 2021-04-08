@@ -12,7 +12,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace lstr::mesh
+namespace lstr
 {
 enum class MeshFormat
 {
@@ -39,7 +39,7 @@ consteval ElementTypes lookup_elt()
 }
 
 template < ElementTypes ELTYPE >
-Element< ELTYPE, 1 > parse_gmsh_element(std::ifstream& f)
+Element< ELTYPE, 1 > parse_gmsh_element(std::ifstream& f, size_t id)
 {
     constexpr auto                n_nodes = ElementTraits< Element< ELTYPE, 1 > >::nodes_per_element;
     std::array< size_t, n_nodes > nodes{};
@@ -52,8 +52,7 @@ Element< ELTYPE, 1 > parse_gmsh_element(std::ifstream& f)
         std::swap(nodes[2], nodes[3]);
         std::rotate(nodes.begin(), nodes.begin() + 2, nodes.end());
     }
-
-    return Element< ELTYPE, 1 >{nodes};
+    return Element< ELTYPE, 1 >{nodes, id};
 }
 } // namespace detail
 
@@ -178,7 +177,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
 
         constexpr size_t                     n_entity_types = 4;
         std::array< size_t, n_entity_types > n_entities{};
-        using entity_data_t = std::array< std::map< int, types::d_id_t >, n_entity_types >;
+        using entity_data_t = std::array< std::map< int, d_id_t >, n_entity_types >;
         entity_data_t entity_data{};
 
         const auto parse_entities_asciiv4 = [&]() {
@@ -206,7 +205,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
                     {
                         int physical_tag;
                         file >> physical_tag;
-                        entity_data[dim][entity_tag] = static_cast< types::d_id_t >(physical_tag);
+                        entity_data[dim][entity_tag] = static_cast< d_id_t >(physical_tag);
                     }
 
                     if (dim > 0)
@@ -248,7 +247,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
                 std::transform_reduce(entity_data.cbegin(), entity_data.cend(), 0u, std::plus<>{}, [](const auto& map) {
                     return map.size();
                 });
-            std::vector< types::d_id_t > unique_physical_ids;
+            std::vector< d_id_t > unique_physical_ids;
             unique_physical_ids.reserve(n_physical_entities);
             auto upi_inserter = std::back_inserter(unique_physical_ids);
             std::for_each(entity_data.cbegin(), entity_data.cend(), [&upi_inserter](const auto& map) {
@@ -265,7 +264,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
     };
     using entity_data_t = std::invoke_result_t< decltype(parse_entities), const format_data_t& >;
 
-    using node_data_t      = std::pair< bool, std::vector< std::pair< size_t, Node< 3 > > > >;
+    using node_data_t      = std::pair< bool, std::vector< std::pair< size_t, Vertex< 3 > > > >;
     const auto parse_nodes = [&](const format_data_t& format_data) -> node_data_t {
         skip_until_section("$Nodes", "'Node' section not found");
 
@@ -329,7 +328,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
         typename MeshPartition::domain_map_t domain_map;
 
         const auto parse_elements_asciiv4 = [&]() {
-            size_t n_blocks, n_elements, min_element_tag, max_element_tag;
+            size_t n_blocks, n_elements, min_element_tag, max_element_tag, element_id = 0;
             file >> n_blocks >> n_elements >> min_element_tag >> max_element_tag;
 
             const auto parse_block = [&]() {
@@ -337,10 +336,10 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
                 size_t block_size;
                 file >> entity_dim >> entity_tag >> element_type >> block_size;
 
-                const types::d_id_t block_physical_id = entity_data.first[entity_dim].at(entity_tag);
-                auto&               block_domain      = domain_map[block_physical_id];
+                const d_id_t block_physical_id = entity_data.first[entity_dim].at(entity_tag);
+                auto&        block_domain      = domain_map[block_physical_id];
 
-                using lstr::util::meta::size_constant;
+                using lstr::size_constant;
 
                 // push block of elements of type `I` to the domain
                 const auto push_elements = [&]< size_t I >(size_constant< I >) {
@@ -348,7 +347,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
                     std::generate_n(block_domain.getBackInserter< el_type, 1 >(), block_size, [&]() {
                         size_t element_tag;
                         file >> element_tag; // throw away tag
-                        return detail::parse_gmsh_element< el_type >(file);
+                        return detail::parse_gmsh_element< el_type >(file, element_id++);
                     });
                 };
 
@@ -397,7 +396,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
         auto& [is_contiguous, node_vector] = node_data;
         std::sort(
             node_vector.begin(), node_vector.end(), [](const auto& p1, const auto& p2) { return p1.first < p2.first; });
-        std::vector< Node< 3 > > nodes;
+        std::vector< Vertex< 3 > > nodes;
         if (is_contiguous)
         {
             auto node_inserter = std::back_inserter(nodes);
@@ -405,7 +404,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
                 return node_data_entry.second;
             });
 
-            part.visitAllElements([min_node_tag = node_vector.front().first](auto& element) {
+            part.visit([min_node_tag = node_vector.front().first](auto& element) {
                 std::for_each(element.getNodes().begin(), element.getNodes().end(), [&min_node_tag](auto& node) {
                     node -= min_node_tag;
                 });
@@ -428,7 +427,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
     auto       element_data = parse_elements(format_data, entity_data);
 
     return make_contiguous_mesh(node_data, element_data);
-} // namespace lstr::mesh
-} // namespace lstr::mesh
+}
+} // namespace lstr
 
 #endif // L3STER_MESH_READMESH_HPP

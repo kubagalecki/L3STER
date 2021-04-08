@@ -39,8 +39,8 @@ private:
     inline void groupCpus();
 
     template < typename F >
-    requires std::is_invocable_r_v< bool, F, hwloc_cpuset_t > [[nodiscard]] std::pair< size_t, size_t >
-    findCpuIf(const F&) const noexcept;
+    requires std::is_invocable_r_v< bool, F, hwloc_cpuset_t >
+    [[nodiscard]] std::pair< size_t, size_t > findCpuIf(const F&) const noexcept;
 
     std::vector< std::vector< hwloc_cpuset_t > > cpu_masks{};
     std::vector< hwloc_nodeset_t >               node_masks{};
@@ -65,7 +65,8 @@ struct HwlocBitmapRaiiWrapper
 };
 
 template < typename F >
-requires std::is_invocable_v< F, hwloc_bitmap_t > void hwlocBitmapForEachWrapper(hwloc_bitmap_t bitmap, const F& fun)
+requires std::is_invocable_v< F, hwloc_bitmap_t >
+void hwlocBitmapForEachWrapper(hwloc_bitmap_t bitmap, const F& fun)
 {
     HwlocBitmapRaiiWrapper helper{};
     size_t                 index;
@@ -78,8 +79,8 @@ requires std::is_invocable_v< F, hwloc_bitmap_t > void hwlocBitmapForEachWrapper
 }
 
 template < typename F >
-requires std::is_invocable_v< F, hwloc_const_bitmap_t > void hwlocBitmapForEachWrapper(hwloc_const_bitmap_t bitmap,
-                                                                                       const F&             fun)
+requires std::is_invocable_v< F, hwloc_const_bitmap_t >
+void hwlocBitmapForEachWrapper(hwloc_const_bitmap_t bitmap, const F& fun)
 {
     HwlocBitmapRaiiWrapper helper{};
     size_t                 index;
@@ -182,7 +183,8 @@ inline void HwlocWrapper::groupCpus()
 
 template < typename F >
 requires std::is_invocable_r_v< bool, F, hwloc_cpuset_t > std::pair< size_t, size_t >
-                                                          HwlocWrapper::findCpuIf(const F& fun) const noexcept
+                                                          HwlocWrapper::findCpuIf(const F& fun)
+const noexcept
 {
     std::pair< size_t, size_t > ret;
     const size_t                node_dist = std::distance(

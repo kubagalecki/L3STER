@@ -3,7 +3,7 @@
 
 #include "math/Polynomial.hpp"
 
-namespace lstr::math
+namespace lstr
 {
 template < std::floating_point T, size_t N >
 constexpr Polynomial< T, N > getLegendrePolynomial()
@@ -48,6 +48,6 @@ constexpr Polynomial< T, N > getLegendrePolynomial()
     }
     return Polynomial{coefs};
 }
-} // namespace lstr::math
+} // namespace lstr
 
 #endif // L3STER_MATH_LEGENDRE_HPP

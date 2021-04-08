@@ -20,3 +20,4 @@ function( detect_TBB Verbosity )
 endfunction()
 
 detect_TBB( ${L3STER_ENABLE_VERBOSITY} )
+list( APPEND L3STER_DEPENDENCY_LIST TBB::tbb )

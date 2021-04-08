@@ -7,250 +7,277 @@
 #include <map>
 #include <variant>
 
-namespace lstr::mesh
+namespace lstr
 {
+namespace detail
+{
+template < typename T >
+concept domain_predicate = requires(T op, const DomainView dv)
+{
+    {
+        op(dv)
+        } -> std::convertible_to< bool >;
+};
+} // namespace detail
+
 class MeshPartition
 {
 public:
-    using domain_map_t = std::map< types::d_id_t, Domain >;
+    using domain_map_t = std::map< d_id_t, Domain >;
+    using node_vec_t   = std::vector< n_id_t >;
 
-    MeshPartition()                     = default;
-    MeshPartition(const MeshPartition&) = delete;
-    MeshPartition(MeshPartition&&)      = default;
+    MeshPartition()                         = default;
+    MeshPartition(const MeshPartition&)     = delete;
+    MeshPartition(MeshPartition&&) noexcept = default;
     MeshPartition& operator=(const MeshPartition&) = delete;
-    MeshPartition& operator=(MeshPartition&&) = default;
-    ~MeshPartition()                          = default;
+    MeshPartition& operator=(MeshPartition&&) noexcept = default;
+    ~MeshPartition()                                   = default;
 
-    explicit MeshPartition(MeshPartition::domain_map_t domains_) : domains{std::move(domains_)} {}
+    inline explicit MeshPartition(domain_map_t domains_);
+    MeshPartition(domain_map_t domains_, node_vec_t nodes_, node_vec_t ghost_nodes_)
+        : domains{std::move(domains_)}, nodes{std::move(nodes_)}, ghost_nodes{std::move(ghost_nodes_)}
+    {}
 
-    // Visit domains
-    template < typename F >
-    auto visitAllElements(F&& element_visitor);
+    template < invocable_on_elements F, detail::domain_predicate D >
+    decltype(auto) visit(F&& element_visitor, D&& domain_predicate);
+    template < invocable_on_const_elements F, detail::domain_predicate D >
+    decltype(auto) cvisit(F&& element_visitor, D&& domain_predicate) const;
+    template < invocable_on_elements_and< const DomainView > F, detail::domain_predicate D >
+    decltype(auto) visit(F&& element_visitor, D&& domain_predicate);
+    template < invocable_on_const_elements_and< const DomainView > F, detail::domain_predicate D >
+    decltype(auto) cvisit(F&& element_visitor, D&& domain_predicate) const;
+    template < invocable_on_elements F >
+    decltype(auto) visit(F&& element_visitor);
+    template < invocable_on_const_elements F >
+    decltype(auto) cvisit(F&& element_visitor) const;
+    template < invocable_on_elements_and< const DomainView > F >
+    decltype(auto) visit(F&& element_visitor);
+    template < invocable_on_const_elements_and< const DomainView > F >
+    decltype(auto) cvisit(F&& element_visitor) const;
+    template < invocable_on_elements F >
+    decltype(auto) visit(F&& element_visitor, const std::vector< d_id_t >& domain_ids);
+    template < invocable_on_const_elements F >
+    decltype(auto) cvisit(F&& element_visitor, const std::vector< d_id_t >& domain_ids) const;
+    template < invocable_on_elements_and< const DomainView > F >
+    decltype(auto) visit(F&& element_visitor, const std::vector< d_id_t >& domain_ids);
+    template < invocable_on_const_elements_and< const DomainView > F >
+    decltype(auto) cvisit(F&& element_visitor, const std::vector< d_id_t >& domain_ids) const;
 
-    template < typename F >
-    auto cvisitAllElements(F&& element_visitor) const;
-
-    template < typename F >
-    auto visitSpecifiedDomains(F&& element_visitor, const std::vector< types::d_id_t >& domain_ids);
-
-    template < typename F >
-    auto cvisitSpecifiedDomains(F&& element_visitor, const std::vector< types::d_id_t >& domain_ids) const;
-
-    template < typename F, typename D >
-    auto visitDomainIf(F&& element_visitor, D&& domain_predicate);
-
-    template < typename F, typename D >
-    auto cvisitDomainIf(F&& element_visitor, D&& domain_predicate) const;
-
-    // Find element
-    // Note: Elements are not ordered; if predicate returns true for multiple elements, the
+    // Note on finding elements: Elements are not ordered; if the predicate returns true for multiple elements, the
     // reference to any one of them may be returned
-    template < typename F >
-    std::optional< element_ref_variant_t > findElement(const F& predicate);
+    using opt_el_ref  = std::optional< element_ref_variant_t >;
+    using opt_el_cref = std::optional< element_cref_variant_t >;
+    template < invocable_on_const_elements_r< bool > F >
+    [[nodiscard]] opt_el_ref find(const F& predicate);
+    template < invocable_on_const_elements_r< bool > F >
+    [[nodiscard]] opt_el_cref find(const F& predicate) const;
+    template < invocable_on_const_elements_r< bool > F >
+    [[nodiscard]] opt_el_ref find(const F& predicate, const std::vector< d_id_t >& domain_ids);
+    template < invocable_on_const_elements_r< bool > F >
+    [[nodiscard]] opt_el_cref find(const F& predicate, const std::vector< d_id_t >& domain_ids) const;
+    template < invocable_on_const_elements_r< bool > F, typename D >
+    [[nodiscard]] opt_el_ref find(const F& predicate, const D& domain_predicate);
+    template < invocable_on_const_elements_r< bool > F, typename D >
+    [[nodiscard]] opt_el_cref find(const F& predicate, const D& domain_predicate) const;
 
-    template < typename F >
-    std::optional< element_cref_variant_t > findElement(const F& predicate) const;
+    template < ElementTypes T, el_o_t O >
+    [[nodiscard]] auto                getElementBoundaryView(const Element< T, O >& el, d_id_t d) const;
+    [[nodiscard]] inline BoundaryView getBoundaryView(d_id_t) const;
 
-    template < typename F >
-    std::optional< element_ref_variant_t >
-    findElementInSpecifiedDomains(const F& predicate, const std::vector< types::d_id_t >& domain_ids);
+    [[nodiscard]] DomainView    getDomainView(d_id_t id) const { return DomainView(domains.at(id), id); }
+    [[nodiscard]] inline size_t getNElements() const;
 
-    template < typename F >
-    std::optional< element_cref_variant_t >
-    findElementInSpecifiedDomains(const F& predicate, const std::vector< types::d_id_t >& domain_ids) const;
-
-    template < typename F, typename D >
-    std::optional< element_ref_variant_t > findElementIfDomain(const F& predicate, const D& domain_predicate);
-
-    template < typename F, typename D >
-    std::optional< element_cref_variant_t > findElementIfDomain(const F& predicate, const D& domain_predicate) const;
-
-    [[nodiscard]] DomainView getDomainView(types::d_id_t id) const { return DomainView(domains.at(id), id); }
-
-    inline void pushDomain(types::d_id_t, Domain);
-    inline void popDomain(types::d_id_t);
-
-    [[nodiscard]] inline BoundaryView getBoundaryView(const types::d_id_t&) const;
+    [[nodiscard]] const node_vec_t& getNodes() const noexcept { return nodes; }
+    [[nodiscard]] const node_vec_t& getGhostNodes() const noexcept { return ghost_nodes; }
 
 private:
     domain_map_t domains;
+    node_vec_t   nodes{};
+    node_vec_t   ghost_nodes{};
 };
 
-template < typename F >
-auto MeshPartition::visitAllElements(F&& element_visitor)
+template < invocable_on_elements F, detail::domain_predicate D >
+decltype(auto) MeshPartition::visit(F&& element_visitor, D&& domain_predicate)
 {
-    return visitDomainIf(std::forward< F >(element_visitor), [](const DomainView&) { return true; });
-}
-
-template < typename F >
-auto MeshPartition::cvisitAllElements(F&& element_visitor) const
-{
-    return cvisitDomainIf(std::forward< F >(element_visitor), [](const DomainView&) { return true; });
-}
-
-template < typename F >
-auto MeshPartition::visitSpecifiedDomains(F&& element_visitor, const std::vector< types::d_id_t >& domain_ids)
-{
-    auto domain_predicate = [&domain_ids](const DomainView& d) {
-        return std::any_of(
-            domain_ids.cbegin(), domain_ids.cend(), [&d](const types::d_id_t& d1) { return d.getID() == d1; });
-    };
-
-    return visitDomainIf(std::forward< F >(element_visitor), std::move(domain_predicate));
-}
-
-template < typename F >
-auto MeshPartition::cvisitSpecifiedDomains(F&& element_visitor, const std::vector< types::d_id_t >& domain_ids) const
-{
-    auto domain_predicate = [&domain_ids](const DomainView& d) {
-        return std::any_of(
-            domain_ids.cbegin(), domain_ids.cend(), [&d](const types::d_id_t& d1) { return d.getID() == d1; });
-    };
-
-    return cvisitDomainIf(std::forward< F >(element_visitor), std::move(domain_predicate));
-}
-
-template < typename F, typename D >
-auto MeshPartition::visitDomainIf(F&& element_visitor, D&& domain_predicate)
-{
-    static_assert(std::is_invocable_r_v< bool, D, DomainView& >);
-
-    auto visitor   = std::forward< F >(element_visitor);
-    auto predicate = std::forward< D >(domain_predicate);
-
-    const auto domain_visitor = [&visitor](domain_map_t::value_type& domain) {
-        domain.second.visit(visitor);
-    };
-
-    std::for_each(domains.begin(), domains.end(), [&domain_visitor, &predicate](domain_map_t::value_type& domain) {
-        if (predicate(DomainView{domain.second, domain.first}))
-            domain_visitor(domain);
+    std::ranges::for_each(domains, [&](domain_map_t::value_type& domain) {
+        if (domain_predicate(DomainView{domain.second, domain.first}))
+            domain.second.visit(element_visitor);
     });
-
-    return visitor;
+    return std::forward< F >(element_visitor);
 }
 
-template < typename F, typename D >
-auto MeshPartition::cvisitDomainIf(F&& element_visitor, D&& domain_predicate) const
+template < invocable_on_const_elements F, detail::domain_predicate D >
+decltype(auto) MeshPartition::cvisit(F&& element_visitor, D&& domain_predicate) const
 {
-    static_assert(std::is_invocable_r_v< bool, D, DomainView& >);
+    std::for_each(domains.cbegin(), domains.cend(), [&](const domain_map_t::value_type& domain) {
+        if (domain_predicate(DomainView{domain.second, domain.first}))
+            domain.second.cvisit(element_visitor);
+    });
+    return std::forward< F >(element_visitor);
+}
 
-    auto visitor   = std::forward< F >(element_visitor);
-    auto predicate = std::forward< D >(domain_predicate);
+template < invocable_on_elements_and< const DomainView > F, detail::domain_predicate D >
+decltype(auto) MeshPartition::visit(F&& element_visitor, D&& domain_predicate)
+{
+    Domain     dummy;
+    DomainView current_view{dummy, 0};
+    visit([&](auto& element) { element_visitor(element, current_view); },
+          [&](const DomainView& d) {
+              current_view = d;
+              return domain_predicate(d);
+          });
+    return std::forward< F >(element_visitor);
+}
 
-    const auto domain_visitor = [&visitor](const domain_map_t::value_type& domain) {
-        domain.second.cvisit(visitor);
+template < invocable_on_const_elements_and< const DomainView > F, detail::domain_predicate D >
+decltype(auto) MeshPartition::cvisit(F&& element_visitor, D&& domain_predicate) const
+{
+    Domain     dummy;
+    DomainView current_view{dummy, 0};
+    cvisit([&](const auto& element) { element_visitor(element, current_view); },
+           [&](const DomainView& d) {
+               current_view = d;
+               return domain_predicate(d);
+           });
+    return std::forward< F >(element_visitor);
+}
+
+template < invocable_on_elements F >
+decltype(auto) MeshPartition::visit(F&& element_visitor)
+{
+    return visit(std::forward< F >(element_visitor), [](const DomainView&) { return true; });
+}
+
+template < invocable_on_const_elements F >
+decltype(auto) MeshPartition::cvisit(F&& element_visitor) const
+{
+    return cvisit(std::forward< F >(element_visitor), [](const DomainView&) { return true; });
+}
+
+template < invocable_on_elements_and< const DomainView > F >
+decltype(auto) MeshPartition::visit(F&& element_visitor)
+{
+    return visit(std::forward< F >(element_visitor), [](const DomainView&) { return true; });
+}
+
+template < invocable_on_const_elements_and< const DomainView > F >
+decltype(auto) MeshPartition::cvisit(F&& element_visitor) const
+{
+    return cvisit(std::forward< F >(element_visitor), [](const DomainView&) { return true; });
+}
+
+template < invocable_on_elements F >
+decltype(auto) MeshPartition::visit(F&& element_visitor, const std::vector< d_id_t >& domain_ids)
+{
+    const auto domain_predicate = [&domain_ids](const DomainView& d) {
+        return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&d](const d_id_t& d1) { return d.getID() == d1; });
     };
-
-    std::for_each(
-        domains.cbegin(), domains.cend(), [&domain_visitor, &predicate](const domain_map_t::value_type& domain) {
-            if (predicate(DomainView{domain.second, domain.first}))
-                domain_visitor(domain);
-        });
-
-    return visitor;
+    return visit(std::forward< F >(element_visitor), domain_predicate);
 }
 
-template < typename F >
-std::optional< element_ref_variant_t > MeshPartition::findElement(const F& predicate)
+template < invocable_on_const_elements F >
+decltype(auto) MeshPartition::cvisit(F&& element_visitor, const std::vector< d_id_t >& domain_ids) const
 {
-    return findElementIfDomain(predicate, [](const auto&) { return true; });
+    const auto domain_predicate = [&](const DomainView& d) {
+        return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&](const d_id_t& d1) { return d.getID() == d1; });
+    };
+    return cvisit(std::forward< F >(element_visitor), domain_predicate);
 }
 
-template < typename F >
-std::optional< element_cref_variant_t > MeshPartition::findElement(const F& predicate) const
+template < invocable_on_elements_and< const DomainView > F >
+decltype(auto) MeshPartition::visit(F&& element_visitor, const std::vector< d_id_t >& domain_ids)
 {
-    return findElementIfDomain(predicate, [](const auto&) { return true; });
+    const auto domain_predicate = [&domain_ids](const DomainView& d) {
+        return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&d](const d_id_t& d1) { return d.getID() == d1; });
+    };
+    return visit(std::forward< F >(element_visitor), domain_predicate);
 }
 
-template < typename F >
-std::optional< element_ref_variant_t >
-MeshPartition::findElementInSpecifiedDomains(const F& predicate, const std::vector< types::d_id_t >& domain_ids)
+template < invocable_on_const_elements_and< const DomainView > F >
+decltype(auto) MeshPartition::cvisit(F&& element_visitor, const std::vector< d_id_t >& domain_ids) const
 {
-    return findElementIfDomain(predicate, [&domain_ids](const auto& domain_view) {
-        return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&domain_view](types::d_id_t d) {
-            return d == domain_view.getID();
-        });
+    const auto domain_predicate = [&](const DomainView& d) {
+        return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&](const d_id_t& d1) { return d.getID() == d1; });
+    };
+    return cvisit(std::forward< F >(element_visitor), domain_predicate);
+}
+
+template < invocable_on_const_elements_r< bool > F >
+std::optional< element_ref_variant_t > MeshPartition::find(const F& predicate)
+{
+    return find(predicate, [](const DomainView&) { return true; });
+}
+
+template < invocable_on_const_elements_r< bool > F >
+std::optional< element_cref_variant_t > MeshPartition::find(const F& predicate) const
+{
+    return find(predicate, [](const DomainView&) { return true; });
+}
+
+template < invocable_on_const_elements_r< bool > F >
+std::optional< element_ref_variant_t > MeshPartition::find(const F& predicate, const std::vector< d_id_t >& domain_ids)
+{
+    return find(predicate, [&](const auto& domain_view) {
+        return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&](d_id_t d) { return d == domain_view.getID(); });
     });
 }
 
-template < typename F >
-std::optional< element_cref_variant_t >
-MeshPartition::findElementInSpecifiedDomains(const F& predicate, const std::vector< types::d_id_t >& domain_ids) const
+template < invocable_on_const_elements_r< bool > F >
+std::optional< element_cref_variant_t > MeshPartition::find(const F&                     predicate,
+                                                            const std::vector< d_id_t >& domain_ids) const
 {
-    return findElementIfDomain(predicate, [&domain_ids](const auto& domain_view) {
-        return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&domain_view](types::d_id_t d) {
-            return d == domain_view.getID();
-        });
+    return find(predicate, [&](const auto& domain_view) {
+        return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&](d_id_t d) { return d == domain_view.getID(); });
     });
 }
 
-template < typename F, typename D >
-std::optional< element_ref_variant_t > MeshPartition::findElementIfDomain(const F& predicate, const D& domain_predicate)
+template < invocable_on_const_elements_r< bool > F, typename D >
+std::optional< element_ref_variant_t > MeshPartition::find(const F& predicate, const D& domain_predicate)
 {
     std::optional< element_ref_variant_t > ret_val;
-
     for (auto& domain_map_entry : domains)
     {
         if (domain_predicate(DomainView{domain_map_entry.second, domain_map_entry.first}))
         {
             ret_val = domain_map_entry.second.findElement(predicate);
-
             if (ret_val)
                 break;
         }
     }
-
     return ret_val;
 }
 
-template < typename F, typename D >
-std::optional< element_cref_variant_t > MeshPartition::findElementIfDomain(const F& predicate,
-                                                                           const D& domain_predicate) const
+template < invocable_on_const_elements_r< bool > F, typename D >
+std::optional< element_cref_variant_t > MeshPartition::find(const F& predicate, const D& domain_predicate) const
 {
     std::optional< element_cref_variant_t > ret_val;
-
     for (const auto& domain_map_entry : domains)
     {
         if (domain_predicate(DomainView{domain_map_entry.second, domain_map_entry.first}))
         {
             ret_val = domain_map_entry.second.findElement(predicate);
-
             if (ret_val)
                 break;
         }
     }
-
     return ret_val;
-}
-
-void MeshPartition::pushDomain(types::d_id_t id, Domain d)
-{
-    domains[id] = std::move(d);
-}
-
-void MeshPartition::popDomain(types::d_id_t id)
-{
-    domains.erase(id);
 }
 
 namespace detail
 {
-template < typename Element, size_t N, types::el_ns_t I >
+template < typename Element, size_t N, el_ns_t I >
 consteval auto makeSideMatcher()
 {
-    return [](const Element& element, const std::array< types::n_id_t, N >& sorted_side_nodes) {
+    return [](const Element& element, const std::array< n_id_t, N >& sorted_side_nodes) {
         constexpr auto& side_inds = std::get< I >(ElementTraits< Element >::boundary_table);
         if constexpr (std::tuple_size_v< std::decay_t< decltype(side_inds) > > == N)
         {
-            std::array< types::n_id_t, N > element_side_nodes;
+            std::array< n_id_t, N > element_side_nodes{};
             std::transform(side_inds.cbegin(),
                            side_inds.cend(),
                            element_side_nodes.begin(),
-                           [&element_nodes = element.getNodes()](types::el_locind_t i) { return element_nodes[i]; });
-
-            std::sort(element_side_nodes.begin(), element_side_nodes.end());
-
+                           [&element_nodes = element.getNodes()](el_locind_t i) { return element_nodes[i]; });
+            std::ranges::sort(element_side_nodes);
             return std::equal(element_side_nodes.cbegin(), element_side_nodes.cend(), sorted_side_nodes.cbegin());
         }
         else
@@ -258,72 +285,70 @@ consteval auto makeSideMatcher()
     };
 }
 
-template < typename Element, size_t N, types::el_ns_t I >
-struct sideMatcher
+template < typename Element, size_t N, el_ns_t I >
+struct SideMatcher
 {
     static consteval auto get()
     {
-        return [](const Element& element, const std::array< types::n_id_t, N >& sorted_side_nodes) {
+        return [](const Element& element, const std::array< n_id_t, N >& sorted_side_nodes) {
             if (makeSideMatcher< Element, N, I >()(element, sorted_side_nodes))
                 return I;
             else
-                return sideMatcher< Element, N, I - 1 >::get()(element, sorted_side_nodes);
+                return SideMatcher< Element, N, I - 1 >::get()(element, sorted_side_nodes);
         };
     }
 };
 
 template < typename Element, size_t N >
-struct sideMatcher< Element, N, 0 >
+struct SideMatcher< Element, N, 0 >
 {
     static consteval auto get()
     {
-        return [](const Element& element, const std::array< types::n_id_t, N >& sorted_side_nodes) {
+        return [](const Element& element, const std::array< n_id_t, N >& sorted_side_nodes) {
             if (makeSideMatcher< Element, N, 0 >()(element, sorted_side_nodes))
-                return static_cast< types::el_ns_t >(0u);
+                return static_cast< el_ns_t >(0u);
             else
-                return std::numeric_limits< types::el_ns_t >::max();
+                return std::numeric_limits< el_ns_t >::max();
         };
     }
 };
 } // namespace detail
 
-BoundaryView MeshPartition::getBoundaryView(const types::d_id_t& boundary_id) const
+template < ElementTypes T, el_o_t O >
+auto MeshPartition::getElementBoundaryView(const Element< T, O >& el, d_id_t d) const
 {
-    const auto boundary_domain_view = getDomainView(boundary_id);
-    const auto boundary_dim         = boundary_domain_view.getDim();
-    const auto n_boundary_parts     = boundary_domain_view.getNElements();
+    const auto boundary_nodes = [&]() {
+        auto bn = el.getNodes();
+        std::ranges::sort(bn);
+        return bn;
+    }();
+    el_ns_t    side_index        = 0;
+    const auto is_domain_element = [&](const auto& domain_element) {
+        constexpr size_t boundary_size = std::tuple_size_v< std::decay_t< decltype(boundary_nodes) > >;
+        using domain_element_t         = std::decay_t< decltype(domain_element) >;
+        constexpr auto n_sides         = ElementTraits< domain_element_t >::n_sides;
+        constexpr auto matcher         = detail::SideMatcher< domain_element_t, boundary_size, n_sides - 1 >::get();
 
+        side_index = matcher(domain_element, boundary_nodes);
+        return side_index != std::numeric_limits< el_ns_t >::max();
+    };
+    return std::make_pair(
+        find(is_domain_element, [&](const DomainView& dv) { return dv.getDim() == getDomainView(d).getDim() + 1; }),
+        side_index);
+}
+
+BoundaryView MeshPartition::getBoundaryView(d_id_t boundary_id) const
+{
     BoundaryView::boundary_element_view_variant_vector_t boundary_elements;
-    boundary_elements.reserve(n_boundary_parts);
+    boundary_elements.reserve(getDomainView(boundary_id).getNElements());
 
-    const auto insert_boundary_element_view = [this, &boundary_dim, &boundary_elements](const auto& boundary_element) {
-        const auto boundary_nodes = [bn = boundary_element.getNodes()]() mutable {
-            std::sort(bn.begin(), bn.end());
-            return bn;
-        }();
-
-        types::el_ns_t side_index = 0;
-
-        const auto is_domain_element = [&side_index, this, &boundary_nodes](const auto& domain_element) {
-            constexpr size_t boundary_size = std::tuple_size_v< std::decay_t< decltype(boundary_nodes) > >;
-            using domain_element_t         = std::decay_t< decltype(domain_element) >;
-            constexpr auto n_sides         = ElementTraits< domain_element_t >::n_sides;
-
-            constexpr auto matcher = detail::sideMatcher< domain_element_t, boundary_size, n_sides - 1 >::get();
-
-            const auto matched_side = matcher(domain_element, boundary_nodes);
-            side_index              = matched_side;
-            return matched_side != std::numeric_limits< types::el_ns_t >::max();
-        };
-
-        const auto domain_element_variant_opt = findElementIfDomain(
-            is_domain_element, [&boundary_dim](const DomainView& d) { return d.getDim() == boundary_dim + 1; });
-
+    const auto insert_boundary_element_view = [&](const auto& boundary_element) {
+        const auto& [domain_element_variant_opt, side_index] = getElementBoundaryView(boundary_element, boundary_id);
         if (!domain_element_variant_opt)
             throw std::logic_error{"BoundaryView could not be constructed because some of the boundary elements are "
                                    "not edges/faces of any of the domain elements in the specified partition"};
 
-        const auto emplace_element = [this, &side_index, &boundary_elements](const auto& domain_element_ref) {
+        const auto emplace_element = [&, side_index = side_index](const auto& domain_element_ref) {
             using element_t        = std::decay_t< typename std::decay_t< decltype(domain_element_ref) >::type >;
             using element_traits_t = ElementTraits< element_t >;
             using boundary_element_t =
@@ -334,10 +359,25 @@ BoundaryView MeshPartition::getBoundaryView(const types::d_id_t& boundary_id) co
         std::visit(emplace_element, *domain_element_variant_opt);
     };
 
-    cvisitSpecifiedDomains(insert_boundary_element_view, {boundary_id});
+    cvisit(insert_boundary_element_view, {boundary_id});
     return BoundaryView{std::move(boundary_elements)};
 }
 
-} // namespace lstr::mesh
+size_t MeshPartition::getNElements() const
+{
+    return std::accumulate(
+        domains.cbegin(), domains.cend(), 0, [](size_t s, const auto& d) { return s + d.second.getNElements(); });
+}
 
+MeshPartition::MeshPartition(MeshPartition::domain_map_t domains_) : domains{std::move(domains_)}
+{
+    constexpr size_t n_nodes_estimate_factor = 4;
+    nodes.reserve(getNElements() * n_nodes_estimate_factor);
+    visit(
+        [&](const auto& element) { std::ranges::for_each(element.getNodes(), [&](n_id_t n) { nodes.push_back(n); }); });
+    std::ranges::sort(nodes);
+    nodes.erase(std::ranges::unique(nodes).begin(), nodes.end());
+    nodes.shrink_to_fit();
+}
+} // namespace lstr
 #endif // L3STER_MESH_MESHPARTITION_HPP

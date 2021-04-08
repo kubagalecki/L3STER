@@ -92,15 +92,19 @@ public:
     [[nodiscard]] int getSize() const;
 
     template < typename T >
-    requires std::is_arithmetic_v< T > void send(const T* buf, size_t count, int dest, int tag = 0);
+    requires std::is_arithmetic_v< T >
+    void send(const T* buf, size_t count, int dest, int tag = 0);
     template < typename T >
-    requires std::is_arithmetic_v< T > [[nodiscard]] Request
-    sendAsync(const T* buf, size_t count, int dest, int tag = 0);
+    requires std::is_arithmetic_v< T >
+    [[nodiscard]] Request sendAsync(const T* buf, size_t count, int dest, int tag = 0);
     template < typename T >
-    requires std::is_arithmetic_v< T > void receive(T* buf, size_t count, int source, int tag = 0);
+    requires std::is_arithmetic_v< T >
+    void receive(T* buf, size_t count, int source, int tag = 0);
     template < typename T >
-    requires std::is_arithmetic_v< T > [[nodiscard]] Request
-    receiveAsync(T* buf, size_t count, int source, int tag = 0);
+    requires std::is_arithmetic_v< T >
+    [[nodiscard]] Request receiveAsync(T* buf, size_t count, int source, int tag = 0);
+
+    [[nodiscard]] MPI_Comm& get() { return comm; }
 
 private:
     MPI_Comm comm = MPI_COMM_WORLD;
@@ -128,7 +132,8 @@ bool MpiComm::Request::test()
 }
 
 template < typename T >
-requires std::is_arithmetic_v< T > void MpiComm::send(const T* buf, size_t count, int dest, int tag)
+requires std::is_arithmetic_v< T >
+void MpiComm::send(const T* buf, size_t count, int dest, int tag)
 {
     if (MPI_Send(buf, count, detail::MpiType< T >::value(), dest, tag, comm))
         throw std::runtime_error{"MPI send failed"};
@@ -144,7 +149,8 @@ requires std::is_arithmetic_v< T > MpiComm::Request MpiComm::sendAsync(const T* 
 }
 
 template < typename T >
-requires std::is_arithmetic_v< T > void MpiComm::receive(T* buf, size_t count, int source, int tag)
+requires std::is_arithmetic_v< T >
+void MpiComm::receive(T* buf, size_t count, int source, int tag)
 {
     if (MPI_Recv(buf, count, detail::MpiType< T >::value(), source, tag, comm, MPI_STATUS_IGNORE))
         throw std::runtime_error{"MPI receive failed"};

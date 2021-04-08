@@ -2,19 +2,13 @@
 #define L3STER_MESH_MESH_HPP
 
 #include "mesh/MeshPartition.hpp"
-#include "mesh/Node.hpp"
+#include "mesh/Vertex.hpp"
 
 #include <utility>
 #include <vector>
 
-namespace lstr::mesh
+namespace lstr
 {
-//////////////////////////////////////////////////////////////////////////////////////////////
-//                                         MESH CLASS                                       //
-//////////////////////////////////////////////////////////////////////////////////////////////
-/*
-Mesh - top level interface
-*/
 class Mesh
 {
 public:
@@ -25,27 +19,27 @@ public:
     Mesh& operator=(Mesh&&) = default;
     ~Mesh()                 = default;
 
-    inline Mesh(std::vector< Node< 3 > >&& nodes_, MeshPartition&& partition_);
-    inline Mesh(std::vector< Node< 3 > >&& nodes_, std::vector< MeshPartition >&& partitions_);
+    inline Mesh(std::vector< Vertex< 3 > >&& nodes_, MeshPartition&& partition_);
+    inline Mesh(std::vector< Vertex< 3 > >&& nodes_, std::vector< MeshPartition >&& partitions_);
 
     [[nodiscard]] const std::vector< MeshPartition >& getPartitions() const { return partitions; }
-    [[nodiscard]] const std::vector< Node< 3 > >&     getNodes() const { return nodes; }
     [[nodiscard]] std::vector< MeshPartition >&       getPartitions() { return partitions; }
-    [[nodiscard]] std::vector< Node< 3 > >&           getNodes() { return nodes; }
+    [[nodiscard]] const std::vector< Vertex< 3 > >&   getVertices() const { return vertices; }
+    [[nodiscard]] std::vector< Vertex< 3 > >&         getVertices() { return vertices; }
 
 private:
-    std::vector< MeshPartition > partitions; // Mesh = multiple partitions
-    std::vector< Node< 3 > >     nodes;      // All meshes are assumed 3D
+    std::vector< MeshPartition > partitions;
+    std::vector< Vertex< 3 > >   vertices;
 };
 
-inline Mesh::Mesh(std::vector< Node< 3 > >&& nodes_, MeshPartition&& partition_) : nodes(std::move(nodes_))
+inline Mesh::Mesh(std::vector< Vertex< 3 > >&& nodes_, MeshPartition&& partition_) : vertices(std::move(nodes_))
 {
     partitions.emplace_back(std::move(partition_));
 }
 
-inline Mesh::Mesh(std::vector< Node< 3 > >&& nodes_, std::vector< MeshPartition >&& partitions_)
-    : partitions(std::move(partitions_)), nodes(std::move(nodes_))
+inline Mesh::Mesh(std::vector< Vertex< 3 > >&& nodes_, std::vector< MeshPartition >&& partitions_)
+    : partitions(std::move(partitions_)), vertices(std::move(nodes_))
 {}
-} // namespace lstr::mesh
+} // namespace lstr
 
 #endif // L3STER_MESH_MESH_HPP

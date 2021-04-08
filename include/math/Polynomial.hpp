@@ -11,7 +11,7 @@
 #include <numeric>
 #include <utility>
 
-namespace lstr::math
+namespace lstr
 {
 template < std::floating_point T, size_t ORDER >
 struct Polynomial;
@@ -30,7 +30,7 @@ struct PolynomialView
     std::reference_wrapper< const std::array< T, ORDER + 1u > > coefs;
 };
 
-template < util::array Arg >
+template < array Arg >
 PolynomialView(const Arg&) -> PolynomialView< typename Arg::value_type, std::tuple_size_v< Arg > - 1 >;
 
 template < std::floating_point T, size_t ORDER >
@@ -50,7 +50,7 @@ struct Polynomial
     std::array< T, ORDER + 1u > coefs;
 };
 
-template < util::array Arg >
+template < array Arg >
 Polynomial(const Arg&) -> Polynomial< typename Arg::value_type, std::tuple_size_v< Arg > - 1 >;
 
 template < std::floating_point T, size_t ORDER >
@@ -154,5 +154,5 @@ constexpr Polynomial< T, std::max(O1, O2) > operator+(const Polynomial< T, O1 >&
     else
         return poly_sum(b, a);
 }
-} // namespace lstr::math
+} // namespace lstr
 #endif // L3STER_MATH_POLYNOMIAL_HPP

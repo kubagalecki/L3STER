@@ -1,7 +1,7 @@
 function( add_mpi_test source name nprocs )
     get_filename_component( test_target ${source} NAME_WE )
     add_executable( ${test_target} ${source} )
-    target_compile_options( ${test_target} PRIVATE -fno-sanitize=all )
+    target_compile_options( ${test_target} PRIVATE -fno-sanitize=all -Wno-error )
     target_link_options( ${test_target} PRIVATE -fno-sanitize=all )
     target_link_libraries( ${test_target} L3STER )
     if ( ${ARGC} EQUAL 4 )

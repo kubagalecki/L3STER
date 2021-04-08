@@ -3,3 +3,4 @@
 #
 include( ${L3STER_DIR}/cmake/DefineTrilinosTarget.cmake )
 define_trilinos_target( ${L3STER_ENABLE_VERBOSITY} Tpetra Belos MueLu )
+list( APPEND L3STER_DEPENDENCY_LIST Trilinos )
