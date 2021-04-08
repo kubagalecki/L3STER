@@ -22,7 +22,8 @@ struct type_set
 
 // Functionality related to parametrizing over all combinations of a pack of nttp arrays
 template < array auto A >
-requires std::totally_ordered< typename decltype(A)::value_type > struct unique_els
+requires std::totally_ordered< typename decltype(A)::value_type >
+struct unique_els
 {
 private:
     using A_t       = decltype(A);
@@ -75,7 +76,7 @@ public:
 };
 
 template < array auto... A >
-    requires(std::totally_ordered< typename decltype(A)::value_type >&&...) &&
+requires(std::totally_ordered< typename decltype(A)::value_type >&&...) &&
     ((A.size() > 0) && ...) struct all_combinations
 {
     static constexpr auto unique_A = std::make_tuple(unique_els_v< A >...);

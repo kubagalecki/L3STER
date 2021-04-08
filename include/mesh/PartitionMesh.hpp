@@ -117,7 +117,7 @@ auto distributeDomainElements(const MeshPartition&                      part,
     std::vector< MeshPartition::domain_map_t > new_domain_maps(n_parts);
     part.cvisit([&, index = 0u](const auto& element, const DomainView& dv) mutable {
         if (domain_predicate(dv))
-            new_domain_maps[epart[index++]][dv.getID()].pushBack(element);
+            new_domain_maps[epart[index++]][dv.getID()].push(element);
     });
     return new_domain_maps;
 }
@@ -165,7 +165,7 @@ inline void assignBoundaryElements(const MeshPartition&                        p
             const auto domain_el = part.getElementBoundaryView(boundary_el, dv.getID()).first;
             const auto domain_part =
                 lookup_el_part(std::visit([](const auto& el) { return el.get().getId(); }, *domain_el));
-            new_domain_maps[domain_part][dv.getID()].pushBack(boundary_el);
+            new_domain_maps[domain_part][dv.getID()].push(boundary_el);
         },
         boundaries);
 }

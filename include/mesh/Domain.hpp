@@ -23,7 +23,7 @@ public:
     using element_vector_variant_vector_t = std::vector< element_vector_variant_t >;
 
     template < ElementTypes ELTYPE, el_o_t ELORDER >
-    void pushBack(const Element< ELTYPE, ELORDER >& element);
+    void push(const Element< ELTYPE, ELORDER >& element);
     template < ElementTypes ELTYPE, el_o_t ELORDER, typename... Args >
     void emplaceBack(Args&&... args);
     template < ElementTypes ELTYPE, el_o_t ELORDER >
@@ -80,7 +80,7 @@ std::vector< Element< ELTYPE, ELORDER > >& Domain::getElementVector()
 }
 
 template < ElementTypes ELTYPE, el_o_t ELORDER >
-void Domain::pushBack(const Element< ELTYPE, ELORDER >& element)
+void Domain::push(const Element< ELTYPE, ELORDER >& element)
 {
     emplaceBack< ELTYPE, ELORDER >(element);
 }

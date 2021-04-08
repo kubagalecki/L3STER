@@ -16,8 +16,7 @@ concept domain_predicate = requires(T op, const DomainView dv)
 {
     {
         op(dv)
-    }
-    ->std::convertible_to< bool >;
+        } -> std::convertible_to< bool >;
 };
 } // namespace detail
 
@@ -87,9 +86,6 @@ public:
 
     [[nodiscard]] DomainView    getDomainView(d_id_t id) const { return DomainView(domains.at(id), id); }
     [[nodiscard]] inline size_t getNElements() const;
-
-    template < ElementTypes T, el_o_t O >
-    void pushElement(const Element< T, O >& el, d_id_t d);
 
     [[nodiscard]] const node_vec_t& getNodes() const noexcept { return nodes; }
     [[nodiscard]] const node_vec_t& getGhostNodes() const noexcept { return ghost_nodes; }
@@ -276,7 +272,7 @@ consteval auto makeSideMatcher()
         constexpr auto& side_inds = std::get< I >(ElementTraits< Element >::boundary_table);
         if constexpr (std::tuple_size_v< std::decay_t< decltype(side_inds) > > == N)
         {
-            std::array< n_id_t, N > element_side_nodes;
+            std::array< n_id_t, N > element_side_nodes{};
             std::transform(side_inds.cbegin(),
                            side_inds.cend(),
                            element_side_nodes.begin(),
@@ -290,7 +286,7 @@ consteval auto makeSideMatcher()
 }
 
 template < typename Element, size_t N, el_ns_t I >
-struct sideMatcher
+struct SideMatcher
 {
     static consteval auto get()
     {
@@ -298,13 +294,13 @@ struct sideMatcher
             if (makeSideMatcher< Element, N, I >()(element, sorted_side_nodes))
                 return I;
             else
-                return sideMatcher< Element, N, I - 1 >::get()(element, sorted_side_nodes);
+                return SideMatcher< Element, N, I - 1 >::get()(element, sorted_side_nodes);
         };
     }
 };
 
 template < typename Element, size_t N >
-struct sideMatcher< Element, N, 0 >
+struct SideMatcher< Element, N, 0 >
 {
     static consteval auto get()
     {
@@ -331,7 +327,7 @@ auto MeshPartition::getElementBoundaryView(const Element< T, O >& el, d_id_t d) 
         constexpr size_t boundary_size = std::tuple_size_v< std::decay_t< decltype(boundary_nodes) > >;
         using domain_element_t         = std::decay_t< decltype(domain_element) >;
         constexpr auto n_sides         = ElementTraits< domain_element_t >::n_sides;
-        constexpr auto matcher         = detail::sideMatcher< domain_element_t, boundary_size, n_sides - 1 >::get();
+        constexpr auto matcher         = detail::SideMatcher< domain_element_t, boundary_size, n_sides - 1 >::get();
 
         side_index = matcher(domain_element, boundary_nodes);
         return side_index != std::numeric_limits< el_ns_t >::max();
@@ -373,19 +369,12 @@ size_t MeshPartition::getNElements() const
         domains.cbegin(), domains.cend(), 0, [](size_t s, const auto& d) { return s + d.second.getNElements(); });
 }
 
-template < ElementTypes T, el_o_t O >
-void MeshPartition::pushElement(const Element< T, O >& el, d_id_t d)
-{
-    domains[d].pushBack(el);
-}
-
 MeshPartition::MeshPartition(MeshPartition::domain_map_t domains_) : domains{std::move(domains_)}
 {
     constexpr size_t n_nodes_estimate_factor = 4;
     nodes.reserve(getNElements() * n_nodes_estimate_factor);
-    visit([&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
-        std::ranges::for_each(element.getNodes(), [&](n_id_t n) { nodes.push_back(n); });
-    });
+    visit(
+        [&](const auto& element) { std::ranges::for_each(element.getNodes(), [&](n_id_t n) { nodes.push_back(n); }); });
     std::ranges::sort(nodes);
     nodes.erase(std::ranges::unique(nodes).begin(), nodes.end());
     nodes.shrink_to_fit();
