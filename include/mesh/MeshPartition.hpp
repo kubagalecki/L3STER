@@ -65,8 +65,8 @@ public:
 
     // Note on finding elements: Elements are not ordered; if the predicate returns true for multiple elements, the
     // reference to any one of them may be returned
-    using opt_el_ref  = std::optional< element_ref_variant_t >;
-    using opt_el_cref = std::optional< element_cref_variant_t >;
+    using opt_el_ref  = std::optional< element_ptr_variant_t >;
+    using opt_el_cref = std::optional< element_cptr_variant_t >;
     template < invocable_on_const_elements_r< bool > F >
     [[nodiscard]] opt_el_ref find(const F& predicate);
     template < invocable_on_const_elements_r< bool > F >
@@ -203,19 +203,19 @@ decltype(auto) MeshPartition::cvisit(F&& element_visitor, const std::vector< d_i
 }
 
 template < invocable_on_const_elements_r< bool > F >
-std::optional< element_ref_variant_t > MeshPartition::find(const F& predicate)
+std::optional< element_ptr_variant_t > MeshPartition::find(const F& predicate)
 {
     return find(predicate, [](const DomainView&) { return true; });
 }
 
 template < invocable_on_const_elements_r< bool > F >
-std::optional< element_cref_variant_t > MeshPartition::find(const F& predicate) const
+std::optional< element_cptr_variant_t > MeshPartition::find(const F& predicate) const
 {
     return find(predicate, [](const DomainView&) { return true; });
 }
 
 template < invocable_on_const_elements_r< bool > F >
-std::optional< element_ref_variant_t > MeshPartition::find(const F& predicate, const std::vector< d_id_t >& domain_ids)
+std::optional< element_ptr_variant_t > MeshPartition::find(const F& predicate, const std::vector< d_id_t >& domain_ids)
 {
     return find(predicate, [&](const auto& domain_view) {
         return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&](d_id_t d) { return d == domain_view.getID(); });
@@ -223,7 +223,7 @@ std::optional< element_ref_variant_t > MeshPartition::find(const F& predicate, c
 }
 
 template < invocable_on_const_elements_r< bool > F >
-std::optional< element_cref_variant_t > MeshPartition::find(const F&                     predicate,
+std::optional< element_cptr_variant_t > MeshPartition::find(const F&                     predicate,
                                                             const std::vector< d_id_t >& domain_ids) const
 {
     return find(predicate, [&](const auto& domain_view) {
@@ -232,9 +232,9 @@ std::optional< element_cref_variant_t > MeshPartition::find(const F&            
 }
 
 template < invocable_on_const_elements_r< bool > F, typename D >
-std::optional< element_ref_variant_t > MeshPartition::find(const F& predicate, const D& domain_predicate)
+std::optional< element_ptr_variant_t > MeshPartition::find(const F& predicate, const D& domain_predicate)
 {
-    std::optional< element_ref_variant_t > ret_val;
+    std::optional< element_ptr_variant_t > ret_val;
     for (auto& domain_map_entry : domains)
     {
         if (domain_predicate(DomainView{domain_map_entry.second, domain_map_entry.first}))
@@ -248,9 +248,9 @@ std::optional< element_ref_variant_t > MeshPartition::find(const F& predicate, c
 }
 
 template < invocable_on_const_elements_r< bool > F, typename D >
-std::optional< element_cref_variant_t > MeshPartition::find(const F& predicate, const D& domain_predicate) const
+std::optional< element_cptr_variant_t > MeshPartition::find(const F& predicate, const D& domain_predicate) const
 {
-    std::optional< element_cref_variant_t > ret_val;
+    std::optional< element_cptr_variant_t > ret_val;
     for (const auto& domain_map_entry : domains)
     {
         if (domain_predicate(DomainView{domain_map_entry.second, domain_map_entry.first}))
@@ -322,12 +322,12 @@ auto MeshPartition::getElementBoundaryView(const Element< T, O >& el, d_id_t d) 
         std::ranges::sort(bn);
         return bn;
     }();
+    constexpr size_t boundary_size = std::tuple_size_v< std::decay_t< decltype(boundary_nodes) > >;
+
     el_ns_t    side_index        = 0;
-    const auto is_domain_element = [&](const auto& domain_element) {
-        constexpr size_t boundary_size = std::tuple_size_v< std::decay_t< decltype(boundary_nodes) > >;
-        using domain_element_t         = std::decay_t< decltype(domain_element) >;
-        constexpr auto n_sides         = ElementTraits< domain_element_t >::n_sides;
-        constexpr auto matcher         = detail::SideMatcher< domain_element_t, boundary_size, n_sides - 1 >::get();
+    const auto is_domain_element = [&]< ElementTypes DT, el_o_t DO >(const Element< DT, DO >& domain_element) {
+        constexpr auto n_sides = ElementTraits< Element< DT, DO > >::n_sides;
+        constexpr auto matcher = detail::SideMatcher< Element< DT, DO >, boundary_size, n_sides - 1 >::get();
 
         side_index = matcher(domain_element, boundary_nodes);
         return side_index != std::numeric_limits< el_ns_t >::max();
@@ -348,14 +348,11 @@ BoundaryView MeshPartition::getBoundaryView(d_id_t boundary_id) const
             throw std::logic_error{"BoundaryView could not be constructed because some of the boundary elements are "
                                    "not edges/faces of any of the domain elements in the specified partition"};
 
-        const auto emplace_element = [&, side_index = side_index](const auto& domain_element_ref) {
-            using element_t        = std::decay_t< typename std::decay_t< decltype(domain_element_ref) >::type >;
-            using element_traits_t = ElementTraits< element_t >;
-            using boundary_element_t =
-                BoundaryElementView< element_traits_t::element_type, element_traits_t::element_order >;
-
-            boundary_elements.emplace_back(std::in_place_type< boundary_element_t >, domain_element_ref, side_index);
-        };
+        const auto emplace_element =
+            [&, side_index = side_index]< ElementTypes T, el_o_t O >(const Element< T, O >* domain_element_ptr) {
+                boundary_elements.emplace_back(
+                    std::in_place_type< BoundaryElementView< T, O > >, *domain_element_ptr, side_index);
+            };
         std::visit(emplace_element, *domain_element_variant_opt);
     };
 

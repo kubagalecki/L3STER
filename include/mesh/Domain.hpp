@@ -37,9 +37,9 @@ public:
     void cvisit(F&& element_visitor) const;
 
     template < invocable_on_elements_r< bool > F >
-    [[nodiscard]] std::optional< element_ref_variant_t > findElement(const F& predicate);
+    [[nodiscard]] std::optional< element_ptr_variant_t > findElement(const F& predicate);
     template < invocable_on_const_elements_r< bool > F >
-    [[nodiscard]] std::optional< element_cref_variant_t > findElement(const F& predicate) const;
+    [[nodiscard]] std::optional< element_cptr_variant_t > findElement(const F& predicate) const;
 
     [[nodiscard]] dim_t         getDim() const { return dim; };
     [[nodiscard]] inline size_t getNElements() const;
@@ -139,39 +139,27 @@ void Domain::cvisit(F&& element_visitor) const
 }
 
 template < invocable_on_elements_r< bool > F >
-std::optional< element_ref_variant_t > Domain::findElement(const F& predicate)
+std::optional< element_ptr_variant_t > Domain::findElement(const F& predicate)
 {
-    std::optional< element_ref_variant_t > ret_val;
+    std::optional< element_ptr_variant_t > ret_val;
 
     const auto element_vector_visitor = [&ret_val, &predicate](const auto& element_vector) {
-        const auto found_iter = std::find_if(element_vector.cbegin(), element_vector.cend(), std::cref(predicate));
-
-        if (found_iter != element_vector.cend())
-        {
-            using element_t     = typename std::decay_t< decltype(element_vector) >::value_type;
-            using element_ref_t = std::reference_wrapper< element_t >;
-
-            ret_val.emplace(std::in_place_type< element_ref_t >, std::ref(const_cast< element_t& >(*found_iter)));
-
-            // Note: const_cast is used correctly, because the underlying element is not const.
-            // However, we need to pass it to the predicate as a const reference, since the
-            // predicate is not allowed to modify the element.
-        }
+        const auto el_it = std::ranges::find_if(element_vector, std::cref(predicate));
+        using element_t  = std::remove_cvref_t< decltype(*el_it) >;
+        if (el_it != element_vector.cend())
+            ret_val.emplace(const_cast< element_t* >(&*el_it));
     };
-
     for (const auto& element_vector_variant : element_vectors)
     {
         std::visit(element_vector_visitor, element_vector_variant);
-
         if (ret_val)
             break;
     }
-
     return ret_val;
 }
 
 template < invocable_on_const_elements_r< bool > F >
-std::optional< element_cref_variant_t > Domain::findElement(const F& predicate) const
+std::optional< element_cptr_variant_t > Domain::findElement(const F& predicate) const
 {
     // The non-const version of findElement does not modify `this`, it merely returns a non-const
     // reference to the underlying data. For this reason, we can call it as const, as long as we
@@ -179,17 +167,11 @@ std::optional< element_cref_variant_t > Domain::findElement(const F& predicate) 
     auto nonconst_ref_opt = const_cast< Domain* >(this)->findElement(predicate);
 
     if (!nonconst_ref_opt)
-        return std::optional< element_cref_variant_t >{};
+        return std::optional< element_cptr_variant_t >{};
 
-    const auto const_qualify = [](const auto& element_ref) {
-        using element_t              = typename std::decay_t< decltype(element_ref) >::type;
-        constexpr auto element_type  = ElementTraits< element_t >::element_type;
-        constexpr auto element_order = ElementTraits< element_t >::element_order;
-
-        return std::optional< element_cref_variant_t >{
-            std::in_place, std::in_place_type< element_cref_t< element_type, element_order > >, std::cref(element_ref)};
+    constexpr auto const_qualify = []< ElementTypes T, el_o_t O >(const Element< T, O >* element_ptr) {
+        return std::optional< element_cptr_variant_t >{element_ptr};
     };
-
     return std::visit(const_qualify, *nonconst_ref_opt);
 }
 

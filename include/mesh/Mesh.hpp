@@ -41,5 +41,4 @@ inline Mesh::Mesh(std::vector< Vertex< 3 > >&& nodes_, std::vector< MeshPartitio
     : partitions(std::move(partitions_)), vertices(std::move(nodes_))
 {}
 } // namespace lstr
-
 #endif // L3STER_MESH_MESH_HPP
