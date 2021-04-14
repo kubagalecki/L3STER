@@ -8,9 +8,6 @@ cmake \
   -DL3STER_ENABLE_TESTS=ON \
   -DL3STER_ENABLE_VERBOSITY=ON \
   .. || exit 1
-if [ "$REPORT_COVERAGE" != "" ]; then
-  export GMON_OUT_PREFIX=profile_data
-fi
 cmake --build . -- -j || exit 1
 ctest --output-on-failure --repeat until-pass:2 --timeout 120 || exit 1
 if [ "$REPORT_COVERAGE" != "" ]; then

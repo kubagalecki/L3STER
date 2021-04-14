@@ -4,6 +4,8 @@ function( add_mpi_test source name nprocs )
     target_compile_options( ${test_target} PRIVATE -fno-sanitize=all -Wno-error )
     target_link_options( ${test_target} PRIVATE -fno-sanitize=all )
     target_link_libraries( ${test_target} L3STER )
+    set( test_env GMON_OUT_PREFIX=profile_data )
+    set( test_driver mpiexec )
     if ( ${ARGC} EQUAL 4 )
         set( args ${ARGV4} )
     endif ()
@@ -14,9 +16,10 @@ function( add_mpi_test source name nprocs )
         file( MAKE_DIRECTORY ${test_dir} )
         list( APPEND L3STER_MPI_TESTS ${test_name} )
         add_test( NAME ${test_name}
-                  COMMAND mpiexec ${test_params}
+                  COMMAND ${test_driver} ${test_params}
                   WORKING_DIRECTORY ${test_dir}
                   )
+        set_tests_properties( ${test_name} PROPERTIES ENVIRONMENT ${test_env} )
     endforeach ()
     set( L3STER_MPI_TESTS ${L3STER_MPI_TESTS} PARENT_SCOPE )
 endfunction()
