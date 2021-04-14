@@ -1,9 +1,6 @@
 codecov:
   require_ci_to_pass: yes
 
-fixes:
-  - "::/L3STER/"
-
 coverage:
   precision: 2
   round: down
