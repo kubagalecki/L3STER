@@ -3,6 +3,8 @@
 
 #include "mesh/BoundaryView.hpp"
 #include "mesh/Domain.hpp"
+#include "mesh/ElementSideMatching.hpp"
+#include "util/Algorithm.hpp"
 
 #include <map>
 #include <variant>
@@ -263,75 +265,17 @@ std::optional< element_cptr_variant_t > MeshPartition::find(const F& predicate, 
     return ret_val;
 }
 
-namespace detail
-{
-template < typename Element, size_t N, el_ns_t I >
-consteval auto makeSideMatcher()
-{
-    return [](const Element& element, const std::array< n_id_t, N >& sorted_side_nodes) {
-        constexpr auto& side_inds = std::get< I >(ElementTraits< Element >::boundary_table);
-        if constexpr (std::tuple_size_v< std::decay_t< decltype(side_inds) > > == N)
-        {
-            std::array< n_id_t, N > element_side_nodes{};
-            std::transform(side_inds.cbegin(),
-                           side_inds.cend(),
-                           element_side_nodes.begin(),
-                           [&element_nodes = element.getNodes()](el_locind_t i) { return element_nodes[i]; });
-            std::ranges::sort(element_side_nodes);
-            return std::equal(element_side_nodes.cbegin(), element_side_nodes.cend(), sorted_side_nodes.cbegin());
-        }
-        else
-            return false;
-    };
-}
-
-template < typename Element, size_t N, el_ns_t I >
-struct SideMatcher
-{
-    static consteval auto get()
-    {
-        return [](const Element& element, const std::array< n_id_t, N >& sorted_side_nodes) {
-            if (makeSideMatcher< Element, N, I >()(element, sorted_side_nodes))
-                return I;
-            else
-                return SideMatcher< Element, N, I - 1 >::get()(element, sorted_side_nodes);
-        };
-    }
-};
-
-template < typename Element, size_t N >
-struct SideMatcher< Element, N, 0 >
-{
-    static consteval auto get()
-    {
-        return [](const Element& element, const std::array< n_id_t, N >& sorted_side_nodes) {
-            if (makeSideMatcher< Element, N, 0 >()(element, sorted_side_nodes))
-                return static_cast< el_ns_t >(0u);
-            else
-                return std::numeric_limits< el_ns_t >::max();
-        };
-    }
-};
-} // namespace detail
-
 template < ElementTypes T, el_o_t O >
 auto MeshPartition::getElementBoundaryView(const Element< T, O >& el, d_id_t d) const
 {
-    const auto boundary_nodes = [&]() {
-        auto bn = el.getNodes();
-        std::ranges::sort(bn);
-        return bn;
-    }();
-    constexpr size_t boundary_size = std::tuple_size_v< std::decay_t< decltype(boundary_nodes) > >;
+    const auto boundary_nodes = getSortedArray(el.getNodes());
+    el_ns_t    side_index     = 0;
 
-    el_ns_t    side_index        = 0;
     const auto is_domain_element = [&]< ElementTypes DT, el_o_t DO >(const Element< DT, DO >& domain_element) {
-        constexpr auto n_sides = ElementTraits< Element< DT, DO > >::n_sides;
-        constexpr auto matcher = detail::SideMatcher< Element< DT, DO >, boundary_size, n_sides - 1 >::get();
-
-        side_index = matcher(domain_element, boundary_nodes);
+        side_index = detail::matchBoundaryNodesToElement(domain_element, boundary_nodes);
         return side_index != std::numeric_limits< el_ns_t >::max();
     };
+
     return std::make_pair(
         find(is_domain_element, [&](const DomainView& dv) { return dv.getDim() == getDomainView(d).getDim() + 1; }),
         side_index);

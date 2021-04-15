@@ -94,6 +94,16 @@ concept mapping = requires(T f, Domain x)
         } -> std::convertible_to< Range >;
 };
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+template < typename T, template < typename > typename Predicate >
+concept predicate_trait_specialized = requires
+{
+    {
+        Predicate< T >::value
+        } -> std::convertible_to< bool >;
+};
+
 } // namespace lstr
 
 #endif // L3STER_UTIL_CONCEPTS_HPP

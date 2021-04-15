@@ -25,7 +25,7 @@ public:
     static constexpr dim_t dim  = QDIM;
 
     Quadrature() = default;
-    Quadrature(const q_points_t&, const weights_t&);
+    Quadrature(const q_points_t& qpts, const weights_t& w) : q_points(qpts), weights(w) {}
 
     const q_points_t& getQPoints() const { return q_points; }
     const weights_t&  getWeights() const { return weights; }
@@ -36,10 +36,6 @@ private:
     q_points_t q_points;
     weights_t  weights;
 };
-
-template < q_l_t QLENGTH, dim_t QDIM >
-Quadrature< QLENGTH, QDIM >::Quadrature(const q_points_t& qpts, const weights_t& w) : q_points(qpts), weights(w)
-{}
 } // namespace lstr
 
 #endif // L3STER_QUAD_QUADRATURE_HPP

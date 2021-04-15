@@ -2,8 +2,7 @@
 #define L3STER_MESH_PARTITIONMESH_HPP
 #include "mesh/Mesh.hpp"
 #include "util/Algorithm.hpp"
-
-#include "metis.h"
+#include "util/MetisUtils.hpp"
 
 #include <vector>
 
@@ -78,19 +77,6 @@ inline int invokeMetis(idx_t&                n_elements,
                                &objval,
                                epart.data(),
                                npart.data());
-}
-
-inline void handleMetisErrorCode(int error)
-{
-    switch (error)
-    {
-    case METIS_OK:
-        break;
-    case METIS_ERROR_MEMORY:
-        throw std::bad_alloc{};
-    default:
-        throw std::runtime_error{"Metis failed to partition the mesh"};
-    }
 }
 
 template < std::invocable< const DomainView > F >

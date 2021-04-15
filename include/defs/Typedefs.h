@@ -23,5 +23,4 @@ using q_o_t       = uint_fast8_t;  // quadrature order type
 using q_l_t       = uint_fast64_t; // quadrature length type
 using poly_o_t    = uint_fast64_t; // polynomial order type
 } // namespace lstr
-
 #endif // L3STER_DEFS_TYPEDEFS_H
