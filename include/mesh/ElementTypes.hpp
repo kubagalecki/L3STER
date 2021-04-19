@@ -1,5 +1,3 @@
-// Enumeration containing element types
-
 #ifndef L3STER_MESH_ELEMENTTYPES_H
 #define L3STER_MESH_ELEMENTTYPES_H
 
@@ -12,12 +10,10 @@ namespace lstr
 {
 enum class ElementTypes
 {
+    Hex,  // Hexahedral elements (geometrically linear)
     Quad, // Quadrilateral elements (geometrically linear)
     Line, // line segment (2 nodes, geometrically linear)
-
-    //////////////////////////////////////////////////////////////////////////////
-    //////////          NEW ELEMENT TYPES BEFORE THIS LINE              //////////
-    //////////////////////////////////////////////////////////////////////////////
+    // !!! NEW ELEMENT TYPES BEFORE THIS LINE !!!
     Count // value for tracking number of Element Types
 };
 
@@ -29,5 +25,4 @@ inline constexpr auto element_types = []< size_t... I >(std::index_sequence< I..
 (std::make_index_sequence< static_cast< size_t >(ElementTypes::Count) >{});
 
 } // namespace lstr
-
 #endif // L3STER_MESH_ELEMENTTYPES_H

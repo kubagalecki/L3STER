@@ -80,7 +80,7 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::Mesh, const lstr::Mesh)
     // Flag to prevent non-const member functions from being tested on const object
     constexpr bool is_const = std::is_same_v< TestType, const lstr::Mesh >;
 
-    TestType mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_ascii4.msh), lstr::gmsh_tag);
+    TestType mesh = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmesh_ascii4.msh), lstr::gmsh_tag);
 
     REQUIRE(mesh.getPartitions().size() == 1);
 
@@ -208,21 +208,36 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::Mesh, const lstr::Mesh)
     CHECK_THROWS(mesh.getPartitions()[0].getBoundaryView(6));
 }
 
+TEST_CASE("3D mesh import", "[mesh]")
+{
+    const auto mesh = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), lstr::gmsh_tag);
+
+    constexpr size_t expected_nvertices = 5885;
+    constexpr size_t expected_nelements = 5664;
+    CHECK(mesh.getVertices().size() == expected_nvertices);
+    CHECK(mesh.getPartitions()[0].getNElements() == expected_nelements);
+
+    for (int i = 2; i <= 7; ++i)
+        CHECK_NOTHROW(mesh.getPartitions()[0].getBoundaryView(i));
+
+    CHECK_THROWS(mesh.getPartitions()[0].getBoundaryView(42));
+}
+
 TEST_CASE("Unsupported mesh formats, mesh I/O error handling", "[mesh]")
 {
-    lstr::Mesh mesh;
-    REQUIRE_THROWS(mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_ascii2.msh), lstr::gmsh_tag));
-    REQUIRE_THROWS(mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_bin2.msh), lstr::gmsh_tag));
-    REQUIRE_THROWS(mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_bin4.msh), lstr::gmsh_tag));
-    REQUIRE_THROWS(mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(nonexistent.msh), lstr::gmsh_tag));
-    REQUIRE_THROWS(
-        mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmsh_triangle_mesh_ascii4.msh), lstr::gmsh_tag));
+    using lstr::gmsh_tag;
+    using lstr::readMesh;
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmesh_ascii2.msh), gmsh_tag));
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmesh_bin2.msh), gmsh_tag));
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmesh_bin4.msh), gmsh_tag));
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(nonexistent.msh), gmsh_tag));
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_triangle_mesh.msh), gmsh_tag));
 }
 
 TEST_CASE("Serial mesh partitioning", "[mesh]")
 {
     constexpr auto n_parts    = 2u;
-    auto           mesh       = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_ascii4.msh), lstr::gmsh_tag);
+    auto           mesh       = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmesh_ascii4.msh), lstr::gmsh_tag);
     const auto     n_elements = mesh.getPartitions()[0].getNElements();
     REQUIRE_NOTHROW(lstr::partitionMesh(mesh, 1, {}));
     lstr::partitionMesh(mesh, n_parts, {2, 3, 4, 5});

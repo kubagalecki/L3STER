@@ -22,8 +22,9 @@ private:
     static auto compute();
 
 public:
-    using this_t       = ReferenceQuadrature< QuadratureTypes::GLeg, QORDER >;
-    using quadrature_t = Quadrature< ReferenceQuadratureTraits< this_t >::size, 1 >;
+    using this_t               = ReferenceQuadrature< QuadratureTypes::GLeg, QORDER >;
+    static constexpr auto size = ReferenceQuadratureTraits< this_t >::size;
+    using quadrature_t         = Quadrature< size, 1 >;
 
     static inline const quadrature_t value = compute();
 };
@@ -40,16 +41,15 @@ auto ReferenceQuadrature< QuadratureTypes::GLeg, QORDER >::compute()
     constexpr auto c = [](size_t x) {
         return static_cast< val_t >(x - 1u) / static_cast< val_t >(x);
     };
-    const auto& [qp, w] = computeGaussRule< ReferenceQuadratureTraits< this_t >::size >(a, b, c);
+    const auto& [qp, w] = computeGaussRule< size >(a, b, c);
 
     typename quadrature_t::q_points_t q_points;
     typename quadrature_t::weights_t  weights;
 
-    std::transform(qp.cbegin(), qp.cend(), q_points.begin(), [](val_t v) { return std::array{v}; });
-    std::copy(w.cbegin(), w.cend(), weights.begin());
+    std::ranges::transform(qp, q_points.begin(), [](val_t v) { return std::array{v}; });
+    std::ranges::copy(w, weights.begin());
 
     return quadrature_t{q_points, weights};
 }
 } // namespace lstr
-
 #endif // L3STER_QUADRATURE_REFERENCEQUADRATURE_HPP

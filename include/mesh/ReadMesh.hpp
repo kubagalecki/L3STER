@@ -6,10 +6,12 @@
 
 #include <algorithm>
 #include <array>
+#include <filesystem>
 #include <fstream>
 #include <map>
 #include <sstream>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
 
 namespace lstr
@@ -28,35 +30,42 @@ constexpr inline MeshFormatTag gmsh_tag = MeshFormatTag< MeshFormat::Gmsh >{};
 
 namespace detail
 {
-inline constexpr std::array gmsh_elt_lookup_tab{std::pair{1u, ElementTypes::Line}, std::pair{3u, ElementTypes::Quad}};
+inline constexpr std::array gmsh_elt_lookup_tab{
+    std::pair{1u, ElementTypes::Line}, std::pair{3u, ElementTypes::Quad}, std::pair{5u, ElementTypes::Hex}};
 
 template < size_t I >
-consteval ElementTypes lookup_elt()
+consteval ElementTypes lookupElt()
 {
     return std::find_if(
                gmsh_elt_lookup_tab.cbegin(), gmsh_elt_lookup_tab.cend(), [](const auto& p) { return p.first == I; })
         ->second;
 }
 
+template < ElementTypes T >
+void reorderNodes(auto& nodes)
+{
+    if constexpr (T == ElementTypes::Quad)
+        std::swap(nodes[2], nodes[3]);
+    else if constexpr (T == ElementTypes::Hex)
+    {
+        std::swap(nodes[2], nodes[3]);
+        std::swap(nodes[6], nodes[7]);
+    }
+}
+
 template < ElementTypes ELTYPE >
-Element< ELTYPE, 1 > parse_gmsh_element(std::ifstream& f, size_t id)
+Element< ELTYPE, 1 > parseGmshElement(std::ifstream& f, size_t id)
 {
     constexpr auto                n_nodes = ElementTraits< Element< ELTYPE, 1 > >::nodes_per_element;
     std::array< size_t, n_nodes > nodes{};
     for (auto& node : nodes)
         f >> node;
-
-    // Reorder nodes if needed
-    if constexpr (ELTYPE == ElementTypes::Quad)
-    {
-        std::swap(nodes[2], nodes[3]);
-        std::rotate(nodes.begin(), nodes.begin() + 2, nodes.end());
-    }
+    reorderNodes< ELTYPE >(nodes);
     return Element< ELTYPE, 1 >{nodes, id};
 }
 } // namespace detail
 
-inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
+inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh >)
 {
     // Define parsing lambdas
     const auto throw_error = [&file_path](const char* message) {
@@ -115,64 +124,58 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
 
         skip_until_section("$EndMeshFormat");
 
-        Format f = [&]() -> Format {
-            Format ret_value = Format::BIN32_V2;
-
-            if (version >= 4.0 && version < 5.0)
+        Format format;
+        if (version >= 4.0 && version < 5.0)
+        {
+            if (bin)
+            {
+                switch (size)
+                {
+                case 4:
+                    format = Format::BIN32_V4;
+                    break;
+                case 8:
+                    format = Format::BIN64_V4;
+                    break;
+                default:
+                    throw_error("Unsupported size of size_t in the format section");
+                }
+            }
+            else
+                format = Format::ASCII_V4;
+        }
+        else
+        {
+            if (version >= 2.0 && version < 3.0)
             {
                 if (bin)
                 {
                     switch (size)
                     {
                     case 4:
-                        ret_value = Format::BIN32_V4;
+                        format = Format::BIN32_V2;
                         break;
                     case 8:
-                        ret_value = Format::BIN64_V4;
+                        format = Format::BIN64_V2;
                         break;
                     default:
                         throw_error("Unsupported size of size_t in the format section");
                     }
                 }
                 else
-                    ret_value = Format::ASCII_V4;
+                    format = Format::ASCII_V2;
             }
             else
-            {
-                if (version >= 2.0 && version < 3.0)
-                {
-                    if (bin)
-                    {
-                        switch (size)
-                        {
-                        case 4:
-                            ret_value = Format::BIN32_V2;
-                            break;
-                        case 8:
-                            ret_value = Format::BIN64_V2;
-                            break;
-                        default:
-                            throw_error("Unsupported size of size_t in the format section");
-                        }
-                    }
-                    else
-                        ret_value = Format::ASCII_V2;
-                }
-                else
-                    throw_error("Unsupported .msh format version");
-            }
+                throw_error("Unsupported .msh format version");
+        }
 
-            return ret_value;
-        }();
-
-        if (f != Format::ASCII_V4)
+        if (format != Format::ASCII_V4)
             throw_error("Only the ASCII v4 gmsh format is currently supported [TO DO]");
 
-        return f;
+        return format;
     };
-    using format_data_t = Format;
 
-    const auto parse_entities = [&](const format_data_t& format_data) {
+    const auto parse_entities = [&](const Format&) {
         skip_until_section("$Entities");
 
         constexpr size_t                     n_entity_types = 4;
@@ -228,7 +231,9 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
             skip_until_section("$EndEntities");
         };
 
-        switch (format_data)
+        parse_entities_asciiv4();
+        /* In the future: switch over formats, currently only ASCII v4 is supported
+        switch (format)
         {
         case Format::ASCII_V4:
             parse_entities_asciiv4();
@@ -238,9 +243,8 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
         case Format::BIN64_V2:
         case Format::BIN32_V4:
         case Format::BIN64_V4:
-        default:
-            throw_error("Only the ASCII v4 gmsh format is currently supported [TO DO]");
-        }
+            break;
+        }*/
 
         const size_t n_physical_domains = [&]() {
             const size_t n_physical_entities =
@@ -262,10 +266,10 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
 
         return std::make_pair(entity_data, n_physical_domains);
     };
-    using entity_data_t = std::invoke_result_t< decltype(parse_entities), const format_data_t& >;
+    using entity_data_t = decltype(parse_entities(parse_format()));
 
     using node_data_t      = std::pair< bool, std::vector< std::pair< size_t, Vertex< 3 > > > >;
-    const auto parse_nodes = [&](const format_data_t& format_data) -> node_data_t {
+    const auto parse_nodes = [&](const Format& format_data) -> node_data_t {
         skip_until_section("$Nodes", "'Node' section not found");
 
         node_data_t node_data{};
@@ -321,8 +325,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
         return node_data;
     };
 
-    const auto parse_elements = [&](const format_data_t& format_data,
-                                    const entity_data_t& entity_data) -> MeshPartition {
+    const auto parse_elements = [&](const Format&, const entity_data_t& entity_data) -> MeshPartition {
         skip_until_section("$Elements", "'Elements' section not found");
 
         typename MeshPartition::domain_map_t domain_map;
@@ -343,11 +346,11 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
 
                 // push block of elements of type `I` to the domain
                 const auto push_elements = [&]< size_t I >(size_constant< I >) {
-                    constexpr auto el_type = detail::lookup_elt< I >();
+                    constexpr auto el_type = detail::lookupElt< I >();
                     std::generate_n(block_domain.getBackInserter< el_type, 1 >(), block_size, [&]() {
                         size_t element_tag;
                         file >> element_tag; // throw away tag
-                        return detail::parse_gmsh_element< el_type >(file, element_id++);
+                        return detail::parseGmshElement< el_type >(file, element_id++);
                     });
                 };
 
@@ -358,6 +361,9 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
                     break;
                 case 3:
                     push_elements(size_constant< 3 >{});
+                    break;
+                case 5:
+                    push_elements(size_constant< 5 >{});
                     break;
                 default:
                     std::stringstream err;
@@ -372,21 +378,20 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
             return domain_map;
         };
 
-        // Format has been checked previously, so it must be one of the 6 below
-        switch (format_data)
+        parse_elements_asciiv4();
+        /* In the future: switch over formats, currently only ASCII v4 is supported
+        switch (format)
         {
         case Format::ASCII_V4:
             parse_elements_asciiv4();
             break;
-        // TO DO: other formats
         case Format::ASCII_V2:
         case Format::BIN32_V2:
         case Format::BIN64_V2:
         case Format::BIN32_V4:
         case Format::BIN64_V4:
-        default:
             break;
-        }
+        }*/
 
         skip_until_section("$EndElements");
         return MeshPartition{std::move(domain_map)};
@@ -417,7 +422,7 @@ inline Mesh readMesh(const char* file_path, MeshFormatTag< MeshFormat::Gmsh >)
     };
 
     // Parse
-    file.open(file_path);
+    file.open(std::filesystem::path{file_path});
     if (!file.is_open())
         throw_error("Could not open gmsh mesh file");
 
