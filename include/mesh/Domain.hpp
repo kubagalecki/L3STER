@@ -36,10 +36,10 @@ public:
     template < invocable_on_const_elements F >
     void cvisit(F&& element_visitor) const;
 
-    template < invocable_on_elements_r< bool > F >
-    [[nodiscard]] std::optional< element_ptr_variant_t > findElement(const F& predicate);
     template < invocable_on_const_elements_r< bool > F >
-    [[nodiscard]] std::optional< element_cptr_variant_t > findElement(const F& predicate) const;
+    [[nodiscard]] std::optional< element_ptr_variant_t > find(F&& predicate);
+    template < invocable_on_const_elements_r< bool > F >
+    [[nodiscard]] std::optional< element_cptr_variant_t > find(F&& predicate) const;
 
     [[nodiscard]] dim_t         getDim() const { return dim; };
     [[nodiscard]] inline size_t getNElements() const;
@@ -133,46 +133,39 @@ template < invocable_on_const_elements F >
 void Domain::cvisit(F&& element_visitor) const
 {
     auto visitor = wrapCElementVisitor(element_visitor);
-    std::for_each(element_vectors.cbegin(), element_vectors.cend(), [&](const element_vector_variant_t& el_vec) {
-        std::visit(visitor, el_vec);
-    });
-}
-
-template < invocable_on_elements_r< bool > F >
-std::optional< element_ptr_variant_t > Domain::findElement(const F& predicate)
-{
-    std::optional< element_ptr_variant_t > ret_val;
-
-    const auto element_vector_visitor = [&ret_val, &predicate](const auto& element_vector) {
-        const auto el_it = std::ranges::find_if(element_vector, std::cref(predicate));
-        using element_t  = std::remove_cvref_t< decltype(*el_it) >;
-        if (el_it != element_vector.cend())
-            ret_val.emplace(const_cast< element_t* >(&*el_it));
-    };
-    for (const auto& element_vector_variant : element_vectors)
-    {
-        std::visit(element_vector_visitor, element_vector_variant);
-        if (ret_val)
-            break;
-    }
-    return ret_val;
+    std::ranges::for_each(element_vectors,
+                          [&](const element_vector_variant_t& el_vec) { std::visit(visitor, el_vec); });
 }
 
 template < invocable_on_const_elements_r< bool > F >
-std::optional< element_cptr_variant_t > Domain::findElement(const F& predicate) const
+std::optional< element_ptr_variant_t > Domain::find(F&& predicate)
 {
-    // The non-const version of findElement does not modify `this`, it merely returns a non-const
-    // reference to the underlying data. For this reason, we can call it as const, as long as we
-    // const-qualify the returned value. Therefore, the following line of code does NOT invoke UB.
-    auto nonconst_ref_opt = const_cast< Domain* >(this)->findElement(predicate);
-
-    if (!nonconst_ref_opt)
-        return std::optional< element_cptr_variant_t >{};
-
-    constexpr auto const_qualify = []< ElementTypes T, el_o_t O >(const Element< T, O >* element_ptr) {
-        return std::optional< element_cptr_variant_t >{element_ptr};
+    std::optional< element_ptr_variant_t > opt_el_ptr_variant;
+    const auto vector_visitor = [&]< ElementTypes T, el_o_t O >(const element_vector_t< T, O >& el_vec) {
+        const auto el_it = std::ranges::find_if(el_vec, std::ref(predicate));
+        if (el_it != el_vec.cend())
+        {
+            // const_cast is used because we don't want to allow the predicate to alter the elements
+            opt_el_ptr_variant.emplace(const_cast< Element< T, O >* >(&*el_it));
+            return true;
+        }
+        else
+            return false;
     };
-    return std::visit(const_qualify, *nonconst_ref_opt);
+    const auto vector_variant_visitor = [&](const element_vector_variant_t& var) {
+        return std::visit(vector_visitor, var);
+    };
+    std::ranges::find_if(element_vectors, vector_variant_visitor);
+    return opt_el_ptr_variant;
+}
+
+template < invocable_on_const_elements_r< bool > F >
+std::optional< element_cptr_variant_t > Domain::find(F&& predicate) const
+{
+    const auto nonconst_ptr_opt = const_cast< Domain* >(this)->find(predicate);
+    if (!nonconst_ptr_opt)
+        return {};
+    return constifyVariant(*nonconst_ptr_opt);
 }
 
 template < typename F >
@@ -186,8 +179,8 @@ auto Domain::wrapElementVisitor(F& element_visitor)
 template < typename F >
 auto Domain::wrapCElementVisitor(F& element_visitor)
 {
-    return [&element_visitor](const auto& element_vector) {
-        std::for_each(element_vector.cbegin(), element_vector.cend(), std::ref(element_visitor));
+    return [&](const auto& element_vector) {
+        std::ranges::for_each(element_vector, std::ref(element_visitor));
     };
 }
 

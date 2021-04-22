@@ -241,7 +241,7 @@ std::optional< element_ptr_variant_t > MeshPartition::find(const F& predicate, c
     {
         if (domain_predicate(DomainView{domain_map_entry.second, domain_map_entry.first}))
         {
-            ret_val = domain_map_entry.second.findElement(predicate);
+            ret_val = domain_map_entry.second.find(predicate);
             if (ret_val)
                 break;
         }
@@ -257,7 +257,7 @@ std::optional< element_cptr_variant_t > MeshPartition::find(const F& predicate, 
     {
         if (domain_predicate(DomainView{domain_map_entry.second, domain_map_entry.first}))
         {
-            ret_val = domain_map_entry.second.findElement(predicate);
+            ret_val = domain_map_entry.second.find(predicate);
             if (ret_val)
                 break;
         }

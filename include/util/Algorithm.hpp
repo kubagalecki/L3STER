@@ -54,7 +54,7 @@ constexpr std::array< T, N > getSortedArray(const std::array< T, N >& array)
     return sorted;
 }
 
-template < typename T, size_t SIZE, size_t TRIMMED_SIZE >
+template < size_t TRIMMED_SIZE, typename T, size_t SIZE >
 requires(SIZE >= TRIMMED_SIZE) constexpr auto trimArray(const std::array< T, SIZE >& a)
 {
     if constexpr (SIZE == TRIMMED_SIZE)
@@ -69,35 +69,20 @@ requires(SIZE >= TRIMMED_SIZE) constexpr auto trimArray(const std::array< T, SIZ
 
 namespace detail
 {
-template < template < typename > typename Predicate, tuple Aggregate, tuple_like Appended >
-constexpr auto appendTupleIf(Aggregate&& aggregate, Appended&& appended)
+template < template < typename > typename TraitsPredicate, typename T >
+constexpr auto tuplifyIf(T&& arg)
 {
-    if constexpr (Predicate< Appended >::value)
-        return std::tuple_cat(std::forward< Aggregate >(aggregate),
-                              std::make_tuple(std::forward< Appended >(appended)));
+    if constexpr (TraitsPredicate< std::decay_t< T > >::value)
+        return std::make_tuple(std::forward< T >(arg));
     else
-        return std::forward< Aggregate >(aggregate);
-}
-
-template < template < typename > typename, tuple T >
-struct ConditionAndTuple
-{
-    T tuple;
-};
-
-template < template < typename > typename Predicate, tuple T, tuple_like A >
-constexpr auto operator<<(const ConditionAndTuple< Predicate, T >& aggregate, A&& appended)
-{
-    return ConditionAndTuple< Predicate, decltype(appendTupleIf< Predicate >(aggregate.tuple, appended)) >{
-        appendTupleIf< Predicate >(aggregate.tuple, appended)};
+        return std::tuple<>{};
 }
 } // namespace detail
 
-template < template < typename > typename Predicate, predicate_trait_specialized< Predicate >... T >
-constexpr auto tuplifyIf(T&&... tup)
+template < template < typename > typename TraitsPredicate, predicate_trait_specialized< TraitsPredicate >... T >
+constexpr auto makeTupleIf(T&&... arg)
 {
-    detail::ConditionAndTuple< Predicate, std::tuple<> > empty;
-    return (empty << ... << std::forward< T >(tup)).tuple;
+    return std::tuple_cat(detail::tuplifyIf< TraitsPredicate >(std::forward< T >(arg))...);
 }
 } // namespace lstr
 #endif // L3STER_UTIL_ALGORITHM_HPP

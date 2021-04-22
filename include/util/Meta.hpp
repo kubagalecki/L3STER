@@ -8,6 +8,7 @@
 #include <numeric>
 #include <tuple>
 #include <utility>
+#include <variant>
 
 #include "util/Concepts.hpp"
 
@@ -19,6 +20,59 @@ using size_constant = std::integral_constant< size_t, I >;
 template < typename... T >
 struct type_set
 {};
+
+namespace detail
+{
+template < std::integral T, T first, T last >
+requires(first <= last) constexpr auto make_interval_array()
+{
+    std::array< T, last - first + 1 > interval;
+    std::iota(interval.begin(), interval.end(), first);
+    return interval;
+}
+
+template < array auto A >
+requires std::integral< typename decltype(A)::value_type >
+constexpr auto int_seq_from_array()
+{
+    return []< size_t... I >(std::index_sequence< I... >)
+    {
+        return std::integer_sequence< typename decltype(A)::value_type, A[I]... >{};
+    }
+    (std::make_index_sequence< A.size() >{});
+}
+
+template < std::integral T, T first, T last >
+requires(first <= last) using int_seq_interval =
+    decltype(detail::int_seq_from_array< detail::make_interval_array< T, first, last >() >());
+} // namespace detail
+
+template < typename... T >
+struct OverloadSet : T...
+{
+    using T::operator()...;
+};
+template < typename... T >
+OverloadSet(const T&...) -> OverloadSet< T... >;
+
+namespace detail
+{
+template < typename T >
+struct Constify
+{
+    const T operator()(const T& in) requires(!std::is_pointer_v< T >) { return in; } // NOLINT
+    const std::pointer_traits< T >::element_type* operator()(T in) requires(std::is_pointer_v< T >) { return in; }
+    using type = decltype(std::declval< Constify< T > >()(std::declval< T >()));
+};
+} // namespace detail
+
+// assumes types in pack T are unique; TO DO: write concept which checks this assumption
+template < typename... T >
+constexpr auto constifyVariant(const std::variant< T... >& v)
+{
+    using const_variant_t = std::variant< typename detail::Constify< T >::type... >;
+    return std::visit< const_variant_t >(OverloadSet{detail::Constify< T >{}...}, v);
+}
 
 // Functionality related to parametrizing over all combinations of a pack of nttp arrays
 template < array auto A >

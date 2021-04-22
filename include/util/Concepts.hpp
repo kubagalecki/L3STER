@@ -100,7 +100,7 @@ template < typename T, template < typename > typename Predicate >
 concept predicate_trait_specialized = requires
 {
     {
-        Predicate< T >::value
+        Predicate< std::decay_t< T > >::value
         } -> std::convertible_to< bool >;
 };
 
