@@ -1,5 +1,5 @@
 name: tests
-on: push
+on: [ push, pull_request ]
 env:
   DOCKER_BASE: "${{ secrets.DOCKER_HUB_USERNAME }}/${{ secrets.DOCKER_HUB_IMAGE }}:latest"
   OMPI_ALLOW_RUN_AS_ROOT: 1
