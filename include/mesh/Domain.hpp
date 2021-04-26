@@ -21,6 +21,8 @@ public:
     using element_vector_t         = std::vector< Element< ELTYPE, ELORDER > >;
     using element_vector_variant_t = parametrize_type_over_element_types_and_orders_t< std::variant, element_vector_t >;
     using element_vector_variant_vector_t = std::vector< element_vector_variant_t >;
+    using find_result_t                   = std::optional< element_ptr_variant_t >;
+    using const_find_result_t             = std::optional< element_cptr_variant_t >;
 
     template < ElementTypes ELTYPE, el_o_t ELORDER >
     void push(const Element< ELTYPE, ELORDER >& element);
@@ -37,9 +39,11 @@ public:
     void cvisit(F&& element_visitor) const;
 
     template < invocable_on_const_elements_r< bool > F >
-    [[nodiscard]] std::optional< element_ptr_variant_t > find(F&& predicate);
+    [[nodiscard]] find_result_t find(F&& predicate);
     template < invocable_on_const_elements_r< bool > F >
-    [[nodiscard]] std::optional< element_cptr_variant_t > find(F&& predicate) const;
+    [[nodiscard]] const_find_result_t        find(F&& predicate) const;
+    [[nodiscard]] inline find_result_t       find(el_id_t id);
+    [[nodiscard]] inline const_find_result_t find(el_id_t id) const;
 
     [[nodiscard]] dim_t         getDim() const { return dim; };
     [[nodiscard]] inline size_t getNElements() const;
@@ -49,10 +53,11 @@ private:
     std::vector< Element< ELTYPE, ELORDER > >& getElementVector();
 
     template < typename F >
-    [[nodiscard]] static auto wrapElementVisitor(F& element_visitor);
-
+    static auto wrapElementVisitor(F& element_visitor);
     template < typename F >
-    [[nodiscard]] static auto wrapCElementVisitor(F& element_visitor);
+    static auto wrapCElementVisitor(F& element_visitor);
+
+    static inline const_find_result_t constifyFound(const find_result_t& f);
 
     element_vector_variant_vector_t element_vectors;
     dim_t                           dim = 0;
@@ -85,10 +90,18 @@ void Domain::push(const Element< ELTYPE, ELORDER >& element)
     emplaceBack< ELTYPE, ELORDER >(element);
 }
 
-template < ElementTypes ELTYPE, el_o_t ELORDER, typename... ArgTypes >
+template < ElementTypes T, el_o_t O, typename... ArgTypes >
 void Domain::emplaceBack(ArgTypes&&... Args)
 {
-    getElementVector< ELTYPE, ELORDER >().emplace_back(std::forward< ArgTypes >(Args)...);
+    using el_t   = Element< T, O >;
+    auto& vector = getElementVector< T, O >();
+    vector.emplace_back(std::forward< ArgTypes >(Args)...);
+    if (vector.size() == 1 or vector.back().getId() > (vector.crbegin() + 1)->getId()) [[likely]]
+        return;
+    else [[unlikely]]
+        std::inplace_merge(vector.begin(), vector.end() - 1, vector.end(), [](const el_t& el1, const el_t& el2) {
+            return el1.getId() < el2.getId();
+        });
 }
 
 template < ElementTypes ELTYPE, el_o_t ELORDER >
@@ -138,7 +151,7 @@ void Domain::cvisit(F&& element_visitor) const
 }
 
 template < invocable_on_const_elements_r< bool > F >
-std::optional< element_ptr_variant_t > Domain::find(F&& predicate)
+Domain::find_result_t Domain::find(F&& predicate)
 {
     std::optional< element_ptr_variant_t > opt_el_ptr_variant;
     const auto vector_visitor = [&]< ElementTypes T, el_o_t O >(const element_vector_t< T, O >& el_vec) {
@@ -160,12 +173,48 @@ std::optional< element_ptr_variant_t > Domain::find(F&& predicate)
 }
 
 template < invocable_on_const_elements_r< bool > F >
-std::optional< element_cptr_variant_t > Domain::find(F&& predicate) const
+Domain::const_find_result_t Domain::find(F&& predicate) const
 {
-    const auto nonconst_ptr_opt = const_cast< Domain* >(this)->find(predicate);
-    if (!nonconst_ptr_opt)
-        return {};
-    return constifyVariant(*nonconst_ptr_opt);
+    return constifyFound(const_cast< Domain* >(this)->find(predicate));
+}
+
+Domain::find_result_t Domain::find(el_id_t id)
+{
+    std::optional< element_ptr_variant_t > opt_el_ptr_variant;
+    const auto vector_visitor = [&]< ElementTypes T, el_o_t O >(element_vector_t< T, O >& el_vec) -> bool {
+        if (el_vec.empty())
+            return false;
+
+        const auto front_id = el_vec.front().getId();
+        const auto back_id  = el_vec.back().getId();
+
+        if (id < front_id or id > back_id)
+            return false;
+
+        // optimization for contiguous case
+        if (back_id - front_id + 1u == el_vec.size())
+        {
+            opt_el_ptr_variant.emplace(&el_vec[id - front_id]);
+            return true;
+        }
+
+        const auto it = std::ranges::lower_bound(el_vec, id, {}, [](const Element< T, O >& el) { return el.getId(); });
+        if (it == end(el_vec) or it->getId() != id)
+            return false;
+
+        opt_el_ptr_variant.emplace(&*it);
+        return true;
+    };
+    const auto vector_variant_visitor = [&](element_vector_variant_t& var) {
+        return std::visit< bool >(vector_visitor, var);
+    };
+    std::ranges::find_if(element_vectors, vector_variant_visitor);
+    return opt_el_ptr_variant;
+}
+
+Domain::const_find_result_t Domain::find(el_id_t id) const
+{
+    return constifyFound(const_cast< Domain* >(this)->find(id));
 }
 
 template < typename F >
@@ -182,6 +231,13 @@ auto Domain::wrapCElementVisitor(F& element_visitor)
     return [&](const auto& element_vector) {
         std::ranges::for_each(element_vector, std::ref(element_visitor));
     };
+}
+
+Domain::const_find_result_t Domain::constifyFound(const Domain::find_result_t& f)
+{
+    if (not f)
+        return {};
+    return constifyVariant(*f);
 }
 
 size_t Domain::getNElements() const

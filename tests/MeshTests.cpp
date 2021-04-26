@@ -75,7 +75,7 @@ struct ElementFinder : ConstructionTracker
     nv_t nodes;
 };
 
-TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::Mesh, const lstr::Mesh)
+TEMPLATE_TEST_CASE("2D mesh import", "[mesh]", lstr::Mesh, const lstr::Mesh)
 {
     // Flag to prevent non-const member functions from being tested on const object
     constexpr bool is_const = std::is_same_v< TestType, const lstr::Mesh >;
@@ -232,6 +232,34 @@ TEST_CASE("Unsupported mesh formats, mesh I/O error handling", "[mesh]")
     CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmesh_bin4.msh), gmsh_tag));
     CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(nonexistent.msh), gmsh_tag));
     CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_triangle_mesh.msh), gmsh_tag));
+}
+
+TEST_CASE("Element lookup by ID", "[mesh]")
+{
+    lstr::Domain d;
+    CHECK_FALSE(d.find(1));
+
+    std::array< lstr::n_id_t, 2 > nodes{1, 2};
+    lstr::el_id_t                 id = 1;
+    d.emplaceBack< lstr::ElementTypes::Line, 1 >(nodes, id++);
+    CHECK_FALSE(d.find(0));
+    CHECK(d.find(1));
+
+    const auto next = [&]() -> std::array< lstr::n_id_t, 2 >& {
+        std::ranges::for_each(nodes, [](auto& n) { ++n; });
+        return nodes;
+    };
+
+    for (size_t i = 0; i < 10; ++i)
+        d.emplaceBack< lstr::ElementTypes::Line, 1 >(next(), id++);
+    CHECK(d.find(10));
+
+    d.emplaceBack< lstr::ElementTypes::Line, 1 >(next(), 0);
+    CHECK(d.find(0));
+
+    d.emplaceBack< lstr::ElementTypes::Line, 1 >(next(), id *= 2);
+    CHECK(d.find(id));
+    CHECK_FALSE(d.find(id + 1));
 }
 
 TEST_CASE("Serial mesh partitioning", "[mesh]")
