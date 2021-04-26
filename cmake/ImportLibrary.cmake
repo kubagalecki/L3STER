@@ -31,7 +31,7 @@ function( importLibrary header verbosity )
 
     unset( lib_include_dir CACHE )
     unset( lib_path CACHE )
-    if ( ${${lib_name}_DIR} )
+    if ( ${lib_name}_DIR )
         find_path( lib_include_dir ${header} PATHS ${${lib_name}_DIR} PATH_SUFFIXES include NO_DEFAULT_PATH )
     endif ()
     find_path( lib_include_dir ${header} )
