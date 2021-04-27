@@ -48,6 +48,8 @@ public:
     [[nodiscard]] dim_t         getDim() const { return dim; };
     [[nodiscard]] inline size_t getNElements() const;
 
+    static inline const_find_result_t constifyFound(const find_result_t& f);
+
 private:
     template < ElementTypes ELTYPE, el_o_t ELORDER >
     std::vector< Element< ELTYPE, ELORDER > >& getElementVector();
@@ -57,11 +59,19 @@ private:
     template < typename F >
     static auto wrapCElementVisitor(F& element_visitor);
 
-    static inline const_find_result_t constifyFound(const find_result_t& f);
-
     element_vector_variant_vector_t element_vectors;
     dim_t                           dim = 0;
 };
+
+namespace detail
+{
+inline Domain::const_find_result_t constifyFound(const Domain::find_result_t& f)
+{
+    if (not f)
+        return {};
+    return constifyVariant(*f);
+}
+} // namespace detail
 
 template < ElementTypes ELTYPE, el_o_t ELORDER >
 std::vector< Element< ELTYPE, ELORDER > >& Domain::getElementVector()
@@ -175,7 +185,7 @@ Domain::find_result_t Domain::find(F&& predicate)
 template < invocable_on_const_elements_r< bool > F >
 Domain::const_find_result_t Domain::find(F&& predicate) const
 {
-    return constifyFound(const_cast< Domain* >(this)->find(predicate));
+    return detail::constifyFound(const_cast< Domain* >(this)->find(predicate));
 }
 
 Domain::find_result_t Domain::find(el_id_t id)
@@ -214,7 +224,7 @@ Domain::find_result_t Domain::find(el_id_t id)
 
 Domain::const_find_result_t Domain::find(el_id_t id) const
 {
-    return constifyFound(const_cast< Domain* >(this)->find(id));
+    return detail::constifyFound(const_cast< Domain* >(this)->find(id));
 }
 
 template < typename F >
@@ -231,13 +241,6 @@ auto Domain::wrapCElementVisitor(F& element_visitor)
     return [&](const auto& element_vector) {
         std::ranges::for_each(element_vector, std::ref(element_visitor));
     };
-}
-
-Domain::const_find_result_t Domain::constifyFound(const Domain::find_result_t& f)
-{
-    if (not f)
-        return {};
-    return constifyVariant(*f);
 }
 
 size_t Domain::getNElements() const

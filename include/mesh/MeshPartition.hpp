@@ -65,22 +65,23 @@ public:
     template < invocable_on_const_elements_and< const DomainView > F >
     decltype(auto) cvisit(F&& element_visitor, const std::vector< d_id_t >& domain_ids) const;
 
-    // Note on finding elements: Elements are not ordered; if the predicate returns true for multiple elements, the
-    // reference to any one of them may be returned
-    using opt_el_ref  = std::optional< element_ptr_variant_t >;
-    using opt_el_cref = std::optional< element_cptr_variant_t >;
+    // Note: if the predicate returns true for multiple elements, the reference to any one of them may be returned
+    using opt_el_ptr  = std::optional< element_ptr_variant_t >;
+    using opt_el_cptr = std::optional< element_cptr_variant_t >;
     template < invocable_on_const_elements_r< bool > F >
-    [[nodiscard]] opt_el_ref find(const F& predicate);
+    [[nodiscard]] opt_el_ptr find(F&& predicate);
     template < invocable_on_const_elements_r< bool > F >
-    [[nodiscard]] opt_el_cref find(const F& predicate) const;
+    [[nodiscard]] opt_el_cptr find(F&& predicate) const;
     template < invocable_on_const_elements_r< bool > F >
-    [[nodiscard]] opt_el_ref find(const F& predicate, const std::vector< d_id_t >& domain_ids);
+    [[nodiscard]] opt_el_ptr find(F&& predicate, const std::vector< d_id_t >& domain_ids);
     template < invocable_on_const_elements_r< bool > F >
-    [[nodiscard]] opt_el_cref find(const F& predicate, const std::vector< d_id_t >& domain_ids) const;
+    [[nodiscard]] opt_el_cptr find(F&& predicate, const std::vector< d_id_t >& domain_ids) const;
     template < invocable_on_const_elements_r< bool > F, typename D >
-    [[nodiscard]] opt_el_ref find(const F& predicate, const D& domain_predicate);
+    [[nodiscard]] opt_el_ptr find(F&& predicate, D&& domain_predicate);
     template < invocable_on_const_elements_r< bool > F, typename D >
-    [[nodiscard]] opt_el_cref find(const F& predicate, const D& domain_predicate) const;
+    [[nodiscard]] opt_el_cptr        find(F&& predicate, D&& domain_predicate) const;
+    [[nodiscard]] inline opt_el_ptr  find(el_id_t id);
+    [[nodiscard]] inline opt_el_cptr find(el_id_t id) const;
 
     template < ElementTypes T, el_o_t O >
     [[nodiscard]] auto                getElementBoundaryView(const Element< T, O >& el, d_id_t d) const;
@@ -205,64 +206,68 @@ decltype(auto) MeshPartition::cvisit(F&& element_visitor, const std::vector< d_i
 }
 
 template < invocable_on_const_elements_r< bool > F >
-std::optional< element_ptr_variant_t > MeshPartition::find(const F& predicate)
+std::optional< element_ptr_variant_t > MeshPartition::find(F&& predicate)
 {
-    return find(predicate, [](const DomainView&) { return true; });
+    return find(std::forward< F >(predicate), [](const DomainView&) { return true; });
 }
 
 template < invocable_on_const_elements_r< bool > F >
-std::optional< element_cptr_variant_t > MeshPartition::find(const F& predicate) const
+std::optional< element_cptr_variant_t > MeshPartition::find(F&& predicate) const
 {
-    return find(predicate, [](const DomainView&) { return true; });
+    return detail::constifyFound(const_cast< MeshPartition* >(this)->find(std::forward< F >(predicate)));
 }
 
 template < invocable_on_const_elements_r< bool > F >
-std::optional< element_ptr_variant_t > MeshPartition::find(const F& predicate, const std::vector< d_id_t >& domain_ids)
+std::optional< element_ptr_variant_t > MeshPartition::find(F&& predicate, const std::vector< d_id_t >& domain_ids)
 {
-    return find(predicate, [&](const auto& domain_view) {
-        return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&](d_id_t d) { return d == domain_view.getID(); });
+    return find(std::forward< F >(predicate), [&](const auto& domain_view) {
+        return std::ranges::any_of(domain_ids, [&](d_id_t d) { return d == domain_view.getID(); });
     });
 }
 
 template < invocable_on_const_elements_r< bool > F >
-std::optional< element_cptr_variant_t > MeshPartition::find(const F&                     predicate,
+std::optional< element_cptr_variant_t > MeshPartition::find(F&&                          predicate,
                                                             const std::vector< d_id_t >& domain_ids) const
 {
-    return find(predicate, [&](const auto& domain_view) {
-        return std::any_of(domain_ids.cbegin(), domain_ids.cend(), [&](d_id_t d) { return d == domain_view.getID(); });
-    });
+    return detail::constifyFound(const_cast< MeshPartition* >(this)->find(std::forward< F >(predicate), domain_ids));
 }
 
 template < invocable_on_const_elements_r< bool > F, typename D >
-std::optional< element_ptr_variant_t > MeshPartition::find(const F& predicate, const D& domain_predicate)
+std::optional< element_ptr_variant_t > MeshPartition::find(F&& predicate, D&& domain_predicate)
 {
-    std::optional< element_ptr_variant_t > ret_val;
     for (auto& domain_map_entry : domains)
     {
         if (domain_predicate(DomainView{domain_map_entry.second, domain_map_entry.first}))
         {
-            ret_val = domain_map_entry.second.find(predicate);
-            if (ret_val)
-                break;
+            const auto found_result = domain_map_entry.second.find(predicate);
+            if (found_result)
+                return found_result;
         }
     }
-    return ret_val;
+    return {};
 }
 
 template < invocable_on_const_elements_r< bool > F, typename D >
-std::optional< element_cptr_variant_t > MeshPartition::find(const F& predicate, const D& domain_predicate) const
+std::optional< element_cptr_variant_t > MeshPartition::find(F&& predicate, D&& domain_predicate) const
 {
-    std::optional< element_cptr_variant_t > ret_val;
-    for (const auto& domain_map_entry : domains)
+    return detail::constifyFound(
+        const_cast< MeshPartition* >(this)->find(std::forward< F >(predicate), std::forward< D >(domain_predicate)));
+}
+
+MeshPartition::opt_el_ptr MeshPartition::find(el_id_t id)
+{
+    for (auto& domain_map_entry : domains)
     {
-        if (domain_predicate(DomainView{domain_map_entry.second, domain_map_entry.first}))
-        {
-            ret_val = domain_map_entry.second.find(predicate);
-            if (ret_val)
-                break;
-        }
+        const auto found_result = domain_map_entry.second.find(id);
+        if (found_result)
+            return found_result;
     }
-    return ret_val;
+    return {};
+}
+
+MeshPartition::opt_el_cptr MeshPartition::find(el_id_t id) const
+{
+    return detail::constifyFound(const_cast< MeshPartition* >(this)->find(id));
 }
 
 template < ElementTypes T, el_o_t O >
