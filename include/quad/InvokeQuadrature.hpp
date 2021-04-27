@@ -7,7 +7,7 @@
 
 namespace lstr
 {
-// TO DO: write this concept
+// TODO: write this concept
 template < typename T, typename Q >
 concept quadrature_integrable = true;
 

@@ -66,7 +66,7 @@ struct Constify
 };
 } // namespace detail
 
-// assumes types in pack T are unique; TO DO: write concept which checks this assumption
+// assumes types in pack T are unique; TODO: write concept which checks this assumption
 template < typename... T >
 constexpr auto constifyVariant(const std::variant< T... >& v)
 {
