@@ -87,6 +87,8 @@ TEMPLATE_TEST_CASE("2D mesh import", "[mesh]", lstr::Mesh, const lstr::Mesh)
     auto&       topology = mesh.getPartitions()[0];
     const auto& nodes    = mesh.getVertices();
 
+    CHECK_THROWS(topology.getDualGraph());
+
     REQUIRE(nodes.size() == 121);
     REQUIRE(nodes.size() == topology.getNodes().size());
     REQUIRE(topology.getGhostNodes().size() == 0);
@@ -195,6 +197,8 @@ TEMPLATE_TEST_CASE("2D mesh import", "[mesh]", lstr::Mesh, const lstr::Mesh)
     ConstructionTracker::resetCount();
 
     // BoundaryView
+    if constexpr (!is_const)
+        topology.initDualGraph();
     std::vector< lstr::BoundaryView > boundaries;
     boundaries.reserve(4);
     for (int i = 2; i <= 5; ++i)
@@ -210,17 +214,19 @@ TEMPLATE_TEST_CASE("2D mesh import", "[mesh]", lstr::Mesh, const lstr::Mesh)
 
 TEST_CASE("3D mesh import", "[mesh]")
 {
-    const auto mesh = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), lstr::gmsh_tag);
+    auto  mesh = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), lstr::gmsh_tag);
+    auto& part = mesh.getPartitions()[0];
+    part.initDualGraph();
 
     constexpr size_t expected_nvertices = 5885;
     constexpr size_t expected_nelements = 5664;
     CHECK(mesh.getVertices().size() == expected_nvertices);
-    CHECK(mesh.getPartitions()[0].getNElements() == expected_nelements);
+    CHECK(part.getNElements() == expected_nelements);
 
     for (int i = 2; i <= 7; ++i)
-        CHECK_NOTHROW(mesh.getPartitions()[0].getBoundaryView(i));
+        CHECK_NOTHROW(part.getBoundaryView(i));
 
-    CHECK_THROWS(mesh.getPartitions()[0].getBoundaryView(42));
+    CHECK_THROWS(part.getBoundaryView(42));
 }
 
 TEST_CASE("Unsupported mesh formats, mesh I/O error handling", "[mesh]")

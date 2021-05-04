@@ -2,11 +2,43 @@
 #define L3STER_UTIL_METISUTILS_HPP
 #include "metis.h"
 
-#include "mesh/Mesh.hpp"
-
 #include <memory>
+#include <span>
 
-namespace lstr::detail
+namespace lstr
+{
+class MetisGraphWrapper
+{
+    struct Deleter // defining explicitly, gcc warns about anonymous namespaces when using a lambda
+    {
+        void operator()(idx_t* ptr) const noexcept { METIS_Free(ptr); }
+    };
+    using array_t = std::unique_ptr< idx_t[], Deleter >;
+
+public:
+    using span_t = std::span< const idx_t >;
+
+    MetisGraphWrapper(idx_t* xa, idx_t* adj, size_t nv) : xadj{xa}, adjncy{adj}, nvert{nv} {}
+
+    [[nodiscard]] span_t getXadj() const { return {xadj.get(), nvert + 1}; }
+    [[nodiscard]] span_t getAdjncy() const { return {adjncy.get(), static_cast< size_t >(getXadj().back())}; }
+
+    [[nodiscard]] inline span_t getElementAdjacent(size_t el_id) const;
+
+private:
+    array_t xadj, adjncy;
+    size_t  nvert;
+};
+
+MetisGraphWrapper::span_t MetisGraphWrapper::getElementAdjacent(size_t el_id) const
+{
+    const auto adjncy_begin_ind = getXadj()[el_id];
+    const auto adjncy_end_ind   = getXadj()[el_id + 1];
+    const auto adjncy_size      = adjncy_end_ind - adjncy_begin_ind;
+    return getAdjncy().subspan(adjncy_begin_ind, adjncy_size);
+}
+
+namespace detail
 {
 inline void handleMetisErrorCode(int error)
 {
@@ -21,42 +53,6 @@ inline void handleMetisErrorCode(int error)
     }
 }
 
-inline auto convertMeshToMetisFormat(const MeshPartition& partition)
-{
-    std::vector< idx_t > eind, eptr;
-    size_t               topo_size = 0;
-    partition.cvisit([&](const auto& element) { topo_size += element.getNodes().size(); });
-    eind.reserve(topo_size);
-    eptr.reserve(partition.getNElements() + 1);
-    eptr.push_back(0);
-    partition.cvisit([&](const auto& element) {
-        std::ranges::for_each(element.getNodes(), [&](auto n) { eind.push_back(n); });
-        eptr.push_back(element.getNodes().size());
-    });
-    return std::make_pair(std::move(eptr), std::move(eind));
-}
-
-inline auto getMeshDualGraph(const MeshPartition& part)
-{
-    auto mesh_in_metis_format = detail::convertMeshToMetisFormat(part);
-    auto& [eptr, eind]        = mesh_in_metis_format;
-
-    auto  ne      = static_cast< idx_t >(part.getNElements());
-    auto  nn      = static_cast< idx_t >(part.getNodes().size());
-    idx_t ncommon = 2;
-    idx_t numflag = 0;
-
-    idx_t* xadj;
-    idx_t* adjncy;
-
-    const auto error = METIS_MeshToDual(&ne, &nn, eptr.data(), eind.data(), &ncommon, &numflag, &xadj, &adjncy);
-    detail::handleMetisErrorCode(error);
-
-    constexpr auto deleter = [](idx_t* ptr) {
-        METIS_Free(ptr);
-    };
-    std::unique_ptr< idx_t[], decltype(deleter) > E_inds{xadj, deleter}, E{adjncy, deleter};
-    return std::make_pair(std::move(E_inds), std::move(E));
-}
-} // namespace lstr::detail
+} // namespace detail
+} // namespace lstr
 #endif // L3STER_UTIL_METISUTILS_HPP

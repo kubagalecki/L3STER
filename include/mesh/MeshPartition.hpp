@@ -5,6 +5,7 @@
 #include "mesh/Domain.hpp"
 #include "mesh/ElementSideMatching.hpp"
 #include "util/Algorithm.hpp"
+#include "util/MetisUtils.hpp"
 
 #include <map>
 #include <variant>
@@ -39,6 +40,11 @@ public:
     MeshPartition(domain_map_t domains_, node_vec_t nodes_, node_vec_t ghost_nodes_)
         : domains{std::move(domains_)}, nodes{std::move(nodes_)}, ghost_nodes{std::move(ghost_nodes_)}
     {}
+
+    inline const MetisGraphWrapper& initDualGraph();
+    void                            deleteDualGraph() noexcept { dual_graph.reset(); }
+    [[nodiscard]] bool              isDualGraphInitialized() const noexcept { return dual_graph.has_value(); }
+    [[nodiscard]] inline const MetisGraphWrapper& getDualGraph() const;
 
     template < invocable_on_elements F, detail::domain_predicate D >
     decltype(auto) visit(F&& element_visitor, D&& domain_predicate);
@@ -83,8 +89,16 @@ public:
     [[nodiscard]] inline opt_el_ptr  find(el_id_t id);
     [[nodiscard]] inline opt_el_cptr find(el_id_t id) const;
 
+private:
+    using el_boundary_view_result_t = std::pair< opt_el_cptr, el_ns_t >;
     template < ElementTypes T, el_o_t O >
-    [[nodiscard]] auto                getElementBoundaryView(const Element< T, O >& el, d_id_t d) const;
+    el_boundary_view_result_t getElementBoundaryViewImpl(const Element< T, O >& el) const;
+    template < ElementTypes T, el_o_t O >
+    el_boundary_view_result_t getElementBoundaryViewFallback(const Element< T, O >& el, d_id_t d) const;
+
+public:
+    template < ElementTypes T, el_o_t O >
+    el_boundary_view_result_t         getElementBoundaryView(const Element< T, O >& el, d_id_t d) const;
     [[nodiscard]] inline BoundaryView getBoundaryView(d_id_t) const;
 
     [[nodiscard]] DomainView    getDomainView(d_id_t id) const { return DomainView(domains.at(id), id); }
@@ -94,10 +108,27 @@ public:
     [[nodiscard]] const node_vec_t& getGhostNodes() const noexcept { return ghost_nodes; }
 
 private:
-    domain_map_t domains;
-    node_vec_t   nodes{};
-    node_vec_t   ghost_nodes{};
+    [[nodiscard]] inline auto              convertToMetisFormat() const;
+    [[nodiscard]] inline MetisGraphWrapper makeMetisDualGraph() const;
+
+    domain_map_t                       domains;
+    node_vec_t                         nodes;
+    node_vec_t                         ghost_nodes;
+    std::optional< MetisGraphWrapper > dual_graph;
 };
+
+const MetisGraphWrapper& MeshPartition::initDualGraph()
+{
+    return dual_graph ? *dual_graph : dual_graph.emplace(makeMetisDualGraph());
+}
+
+const MetisGraphWrapper& MeshPartition::getDualGraph() const
+{
+    if (dual_graph)
+        return *dual_graph;
+    else
+        throw std::runtime_error{"Attempting to access dual graph before initialization"};
+}
 
 template < invocable_on_elements F, detail::domain_predicate D >
 decltype(auto) MeshPartition::visit(F&& element_visitor, D&& domain_predicate)
@@ -271,7 +302,35 @@ MeshPartition::opt_el_cptr MeshPartition::find(el_id_t id) const
 }
 
 template < ElementTypes T, el_o_t O >
-auto MeshPartition::getElementBoundaryView(const Element< T, O >& el, d_id_t d) const
+MeshPartition::el_boundary_view_result_t MeshPartition::getElementBoundaryViewImpl(const Element< T, O >& el) const
+{
+    constexpr auto miss       = std::numeric_limits< el_ns_t >::max();
+    constexpr auto el_dim     = ElementTraits< Element< T, O > >::native_dim;
+    constexpr auto matchElDim = []< ElementTypes T_, el_o_t O_ >(const Element< T_, O_ >*) {
+        return ElementTraits< Element< T_, O_ > >::native_dim - 1 == el_dim;
+    };
+
+    const auto boundary_nodes = getSortedArray(el.getNodes());
+    const auto match_side     = [&]< ElementTypes T_, el_o_t D_ >(const Element< T_, D_ >* domain_element) {
+        return detail::matchBoundaryNodesToElement(*domain_element, boundary_nodes);
+    };
+
+    const auto adjacent_elems = dual_graph->getElementAdjacent(el.getId());
+    for (el_id_t adj_id : adjacent_elems)
+    {
+        const auto adj_el = find(adj_id);
+        if (!std::visit(matchElDim, *adj_el))
+            continue;
+        const auto side_index = std::visit(match_side, *adj_el);
+        if (side_index != miss)
+            return std::make_pair(adj_el, side_index);
+    }
+    return {{}, miss};
+}
+
+template < ElementTypes T, el_o_t O >
+MeshPartition::el_boundary_view_result_t MeshPartition::getElementBoundaryViewFallback(const Element< T, O >& el,
+                                                                                       d_id_t                 d) const
 {
     const auto boundary_nodes = getSortedArray(el.getNodes());
     el_ns_t    side_index     = 0;
@@ -284,6 +343,16 @@ auto MeshPartition::getElementBoundaryView(const Element< T, O >& el, d_id_t d) 
     return std::make_pair(
         find(is_domain_element, [&](const DomainView& dv) { return dv.getDim() == getDomainView(d).getDim() + 1; }),
         side_index);
+}
+
+template < ElementTypes T, el_o_t O >
+MeshPartition::el_boundary_view_result_t MeshPartition::getElementBoundaryView(const Element< T, O >& el,
+                                                                               d_id_t                 d) const
+{
+    if (isDualGraphInitialized())
+        return getElementBoundaryViewImpl(el);
+    else
+        return getElementBoundaryViewFallback(el, d);
 }
 
 BoundaryView MeshPartition::getBoundaryView(d_id_t boundary_id) const
@@ -317,13 +386,54 @@ size_t MeshPartition::getNElements() const
 
 MeshPartition::MeshPartition(MeshPartition::domain_map_t domains_) : domains{std::move(domains_)}
 {
-    constexpr size_t n_nodes_estimate_factor = 4;
+    constexpr size_t n_nodes_estimate_factor = 4; // TODO: come up with better heuristic
     nodes.reserve(getNElements() * n_nodes_estimate_factor);
     visit(
         [&](const auto& element) { std::ranges::for_each(element.getNodes(), [&](n_id_t n) { nodes.push_back(n); }); });
     std::ranges::sort(nodes);
-    nodes.erase(std::ranges::unique(nodes).begin(), nodes.end());
+    const auto range_to_erase = std::ranges::unique(nodes);
+    nodes.erase(begin(range_to_erase), end(range_to_erase));
     nodes.shrink_to_fit();
+}
+
+auto MeshPartition::convertToMetisFormat() const
+{
+    std::vector< idx_t > eind, eptr;
+    size_t               topo_size = 0;
+    cvisit([&](const auto& element) { topo_size += element.getNodes().size(); });
+    eind.reserve(topo_size);
+    eptr.reserve(getNElements() + 1);
+    eptr.push_back(0);
+    for (el_id_t i = 0; i < getNElements(); ++i)
+    {
+        const auto el_ptr_opt = find(i);
+        std::visit(
+            [&]< ElementTypes T, el_o_t O >(const Element< T, O >* element) {
+                std::ranges::for_each(element->getNodes(), [&](auto n) { eind.push_back(n); });
+                eptr.push_back(eptr.back() + element->getNodes().size());
+            },
+            *el_ptr_opt);
+    };
+    return std::make_pair(std::move(eptr), std::move(eind));
+}
+
+MetisGraphWrapper MeshPartition::makeMetisDualGraph() const
+{
+    auto mesh_in_metis_format = convertToMetisFormat();
+    auto& [eptr, eind]        = mesh_in_metis_format;
+
+    auto  ne      = static_cast< idx_t >(getNElements());
+    auto  nn      = static_cast< idx_t >(getNodes().size());
+    idx_t ncommon = 2;
+    idx_t numflag = 0;
+
+    idx_t* xadj;
+    idx_t* adjncy;
+
+    const auto error = METIS_MeshToDual(&ne, &nn, eptr.data(), eind.data(), &ncommon, &numflag, &xadj, &adjncy);
+    detail::handleMetisErrorCode(error);
+
+    return MetisGraphWrapper{xadj, adjncy, getNElements()};
 }
 } // namespace lstr
 #endif // L3STER_MESH_MESHPARTITION_HPP

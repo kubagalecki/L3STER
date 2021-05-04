@@ -1,11 +1,12 @@
 #ifndef L3STER_MESH_ELEMENTSIDEMATCHING_HPP
 #define L3STER_MESH_ELEMENTSIDEMATCHING_HPP
 #include "mesh/ElementTraits.hpp"
+#include "util/Algorithm.hpp"
 
 namespace lstr::detail
 {
 template < el_ns_t I, typename Element, size_t N >
-constexpr auto matchSide(const Element& element, const std::array< n_id_t, N >& sorted_side_nodes)
+constexpr bool matchSide(const Element& element, const std::array< n_id_t, N >& sorted_side_nodes)
 {
     constexpr auto& side_inds = std::get< I >(ElementTraits< Element >::boundary_table);
     if constexpr (std::tuple_size_v< std::decay_t< decltype(side_inds) > > == N)
@@ -35,10 +36,16 @@ constexpr el_ns_t matchSidesRecursively(const Element& element, const std::array
 
 template < ElementTypes T, el_o_t O, size_t N >
 constexpr el_ns_t matchBoundaryNodesToElement(const Element< T, O >&         element,
-                                              const std::array< n_id_t, N >& sorted_boundary_nodes)
+                                              const std::array< n_id_t, N >& srt_boundary_nodes)
 {
+    const auto              srt_element_nodes = getSortedArray(element.getNodes());
+    std::array< n_id_t, N > common;
+    const auto common_end = std::ranges::set_intersection(srt_element_nodes, srt_boundary_nodes, begin(common)).out;
+    if (common_end == begin(common)) [[likely]]
+        return std::numeric_limits< el_ns_t >::max();
+
     constexpr auto n_sides = ElementTraits< Element< T, O > >::n_sides;
-    return matchSidesRecursively< n_sides - 1 >(element, sorted_boundary_nodes);
+    return matchSidesRecursively< n_sides - 1 >(element, srt_boundary_nodes);
 }
 } // namespace lstr::detail
 #endif // L3STER_MESH_ELEMENTSIDEMATCHING_HPP
