@@ -1,0 +1,172 @@
+#ifndef L3STER_MESH_ELEMENTINTERSECTING_HPP
+#define L3STER_MESH_ELEMENTINTERSECTING_HPP
+#include "mesh/ElementTypes.hpp"
+#include "util/Algorithm.hpp"
+
+#include <bitset>
+
+namespace lstr
+{
+namespace detail
+{
+template < ElementTypes T, el_o_t O, el_ns_t S1, el_ns_t S2 >
+consteval auto intersectElementSides()
+{
+    auto face1 = std::get< S1 >(ElementTraits< Element< T, O > >::boundary_table);
+    auto face2 = std::get< S2 >(ElementTraits< Element< T, O > >::boundary_table);
+    std::ranges::sort(face1);
+    std::ranges::sort(face2);
+    constexpr size_t min_face_size =
+        std::min({std::tuple_size_v< decltype(face1) >, std::tuple_size_v< decltype(face2) >});
+    using value_type = typename decltype(face1)::value_type;
+    std::array< value_type, min_face_size > intersection_buf;
+    const auto it = std::set_intersection(begin(face1), end(face1), begin(face2), end(face2), begin(intersection_buf));
+    const size_t intersection_size = std::distance(begin(intersection_buf), it);
+    return std::make_pair(intersection_buf, intersection_size);
+}
+
+template < ElementTypes T, el_o_t O, el_ns_t S1, el_ns_t S2 >
+consteval auto getSideIntersection()
+{
+    constexpr auto intersect_raw = intersectElementSides< T, O, S1, S2 >();
+    return trimArray< intersect_raw.second >(intersect_raw.first);
+}
+
+template < tuple_like T, size_t N >
+struct tuple_largerequal : public std::conditional_t< std::tuple_size_v< T > >= N, std::true_type, std::false_type >
+{};
+
+template < tuple_like T >
+using tuple_le2 = tuple_largerequal< T, 2 >;
+
+template < ElementTypes T, el_o_t O, el_ns_t S, el_ns_t... SIDES >
+consteval auto intersectSideWith(std::integer_sequence< el_ns_t, SIDES... >)
+{
+    return makeTupleIf< tuple_le2 >(getSideIntersection< T, O, S, SIDES >()...);
+}
+
+template < ElementTypes T, el_o_t O, el_ns_t S >
+consteval auto intersectSideWithSubseqSides()
+{
+    constexpr el_ns_t max_side_ind = ElementTraits< Element< T, O > >::n_sides - 1;
+    if constexpr (S < max_side_ind)
+        return intersectSideWith< T, O, S >(detail::int_seq_interval< el_ns_t, S + el_ns_t{1}, max_side_ind >{});
+    else
+        return std::tuple<>{};
+}
+
+template < ElementTypes T, el_o_t O, el_ns_t... SIDES >
+consteval auto intersectSidesWithSubseqSides(std::integer_sequence< el_ns_t, SIDES... >)
+{
+    return std::tuple_cat(intersectSideWithSubseqSides< T, O, SIDES >()...);
+}
+
+template < ElementTypes T, el_o_t O >
+consteval auto makeElementEdgeTable()
+{
+    if constexpr (ElementTraits< Element< T, O > >::native_dim < 3)
+        return std::tuple<>{};
+    else
+        return intersectSidesWithSubseqSides< T, O >(
+            std::make_integer_sequence< el_ns_t, ElementTraits< Element< T, O > >::n_sides - 1 >{});
+}
+
+template < ElementTypes T, el_o_t O >
+consteval auto getElementIndices()
+{
+    std::array< el_locind_t, Element< T, O >::n_nodes > nodes;
+    std::iota(begin(nodes), end(nodes), 0u);
+    return nodes;
+}
+
+template < ElementTypes T, el_o_t O, dim_t DIM >
+requires(DIM <= 3) consteval auto getElementOuterFeatures()
+{
+    if constexpr (DIM == 0)
+        return std::tuple<>{};
+
+    using el_traits_t     = ElementTraits< Element< T, O > >;
+    constexpr auto el_dim = el_traits_t::native_dim;
+
+    if constexpr (el_dim < DIM) //              3/9 cases: (1, 2), (1, 3), (2, 3)
+        return std::tuple<>{};
+    if constexpr (el_dim == DIM) //             3/9 cases: (1, 1), (2, 2), (3, 3)
+        return getElementIndices< T, O >();
+    if constexpr (DIM == el_dim - 1) //         2/9 cases: (2, 1), (3, 2)
+        return el_traits_t::boundary_table;
+    return makeElementEdgeTable< T, O >(); //   1/9 cases: (3, 1)
+}
+} // namespace detail
+
+template < ElementTypes T, el_o_t O, dim_t DIM >
+constexpr inline auto element_outer_features = detail::getElementOuterFeatures< T, O, DIM >();
+
+namespace detail
+{
+template < ElementTypes T1, ElementTypes T2, el_o_t O, dim_t DIM >
+consteval size_t getNPossibleIntersections()
+{
+    if constexpr (DIM == 0)
+        return 0;
+    else
+    {
+        constexpr size_t size1 = std::tuple_size_v< decltype(element_outer_features< T1, O, DIM >) >;
+        constexpr size_t size2 = std::tuple_size_v< decltype(element_outer_features< T2, O, DIM >) >;
+        return size1 * size2 + getNPossibleIntersections< T1, T2, DIM - 1 >();
+    }
+}
+
+template < ElementTypes T1, ElementTypes T2, el_o_t O >
+consteval auto makeIntersectionTable()
+{
+    constexpr auto d1                = ElementTraits< Element< T1, O > >::native_dim;
+    constexpr auto d2                = ElementTraits< Element< T2, O > >::native_dim;
+    constexpr auto lower_dim         = d1 <= d2 ? d1 : d2;
+    constexpr auto highest_matchable = d1 == d2 ? d1 - 1 : lower_dim;
+
+    using span_t = std::span< const el_locind_t >;
+    std::array< std::pair< span_t, span_t >, getNPossibleIntersections< T1, T2, O, highest_matchable >() > itable;
+    size_t                                                                                                 index = 0;
+    [&]< size_t... I >(std::index_sequence< I... >)
+    {
+        const auto fill_dimension = [&]< size_t Ind >(std::integral_constant< size_t, Ind >) {
+            if constexpr (Ind == 0)
+                return;
+
+            constexpr auto& features1 = element_outer_features< T1, O, Ind >;
+            constexpr auto& features2 = element_outer_features< T2, O, Ind >;
+            forEachTuple(
+                [&](const array auto& f1) {
+                    forEachTuple(
+                        [&](const array auto& f2) {
+                            itable[index] = std::make_pair(span_t{f1}, span_t{f2});
+                            ++index; // index increment on separate line for better clang-format indentation
+                        },
+                        features2);
+                },
+                features1);
+        };
+        (..., fill_dimension(std::integral_constant< size_t, I >{}));
+    }
+    (std::make_index_sequence< highest_matchable + 1 >{});
+}
+} // namespace detail
+
+template < ElementTypes T1, ElementTypes T2, el_o_t O >
+inline constexpr auto intersection_table = detail::makeIntersectionTable< T1, T2, O >();
+
+//template < ElementTypes T1, ElementTypes T2, el_o_t O >
+//size_t matchElements(const Element< T1, O >& el1, const Element< T2, O >& el2)
+//{
+//    // TODO
+//}
+
+template < ElementTypes T_matched, ElementTypes T_matching, el_o_t O >
+constexpr void updateMatchMask(const Element< T_matched, 1 >&                    matched_o1,
+                               const Element< T_matched, O >&                    matched_oN,
+                               const Element< T_matching, 1 >&                   matching,
+                               std::bitset< Element< T_matching, O >::n_nodes >& mask,
+                               typename Element< T_matching, O >::node_array_t&  nodes)
+{}
+} // namespace lstr
+#endif // L3STER_MESH_ELEMENTINTERSECTING_HPP

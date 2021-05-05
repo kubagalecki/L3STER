@@ -311,7 +311,7 @@ MeshPartition::el_boundary_view_result_t MeshPartition::getElementBoundaryViewIm
     };
 
     const auto boundary_nodes = getSortedArray(el.getNodes());
-    const auto match_side     = [&]< ElementTypes T_, el_o_t D_ >(const Element< T_, D_ >* domain_element) {
+    const auto match_side     = [&]< ElementTypes T_, el_o_t O_ >(const Element< T_, O_ >* domain_element) {
         return detail::matchBoundaryNodesToElement(*domain_element, boundary_nodes);
     };
 
@@ -335,7 +335,7 @@ MeshPartition::el_boundary_view_result_t MeshPartition::getElementBoundaryViewFa
     const auto boundary_nodes = getSortedArray(el.getNodes());
     el_ns_t    side_index     = 0;
 
-    const auto is_domain_element = [&]< ElementTypes DT, el_o_t DO >(const Element< DT, DO >& domain_element) {
+    const auto is_domain_element = [&]< ElementTypes T_, el_o_t O_ >(const Element< T_, O_ >& domain_element) {
         side_index = detail::matchBoundaryNodesToElement(domain_element, boundary_nodes);
         return side_index != std::numeric_limits< el_ns_t >::max();
     };

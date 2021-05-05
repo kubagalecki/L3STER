@@ -84,5 +84,22 @@ constexpr auto makeTupleIf(T&&... arg)
 {
     return std::tuple_cat(detail::tuplifyIf< TraitsPredicate >(std::forward< T >(arg))...);
 }
+
+template < typename F, typename... T >
+requires(std::invocable< F, T >and...) constexpr decltype(auto) forEachTuple(F&& f, std::tuple< T... >& t)
+{
+    [&]< size_t... I >(std::index_sequence< I... >) { (f(std::get< I >(t)), ...); }
+    (std::make_index_sequence< sizeof...(T) >{});
+    return std::forward< F >(f);
+}
+
+template < typename F, typename... T >
+requires(std::invocable< F, const std::remove_const_t< T > >and...) constexpr decltype(auto)
+    forEachTuple(F&& f, const std::tuple< T... >& t)
+{
+    [&]< size_t... I >(std::index_sequence< I... >) { (f(std::get< I >(t)), ...); }
+    (std::make_index_sequence< sizeof...(T) >{});
+    return std::forward< F >(f);
+}
 } // namespace lstr
 #endif // L3STER_UTIL_ALGORITHM_HPP

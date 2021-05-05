@@ -1,4 +1,5 @@
 #include "l3ster.hpp"
+#include "mesh/ConvertMeshToOrder.hpp"
 
 #include "TestDataPath.h"
 #include "catch2/catch.hpp"
@@ -290,4 +291,19 @@ TEST_CASE("Serial mesh partitioning", "[mesh]")
     std::ranges::set_intersection(p1.getGhostNodes(), p2.getGhostNodes(), std::back_inserter(intersects));
     CHECK(intersects.empty());
     REQUIRE_THROWS(lstr::partitionMesh(mesh, 42, {}));
+}
+
+TEST_CASE("Mesh conversion to higher order", "[mesh]")
+{
+    constexpr lstr::el_o_t order      = 2;
+    auto                   mesh       = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmesh_ascii4.msh), lstr::gmsh_tag);
+    auto&                  part       = mesh.getPartitions()[0];
+    const auto             n_elements = part.getNElements();
+    lstr::convertMeshToOrder< order >(mesh);
+    CHECK(n_elements == part.getNElements());
+    const auto validate_elorder = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >&) {
+        if constexpr (O != order)
+            throw std::logic_error{"Incorrect element order"};
+    };
+    CHECK_NOTHROW(part.cvisit(validate_elorder));
 }

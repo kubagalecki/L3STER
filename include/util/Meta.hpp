@@ -10,6 +10,7 @@
 #include <utility>
 #include <variant>
 
+#include "util/Common.hpp"
 #include "util/Concepts.hpp"
 
 namespace lstr
@@ -46,14 +47,6 @@ template < std::integral T, T first, T last >
 requires(first <= last) using int_seq_interval =
     decltype(detail::int_seq_from_array< detail::make_interval_array< T, first, last >() >());
 } // namespace detail
-
-template < typename... T >
-struct OverloadSet : T...
-{
-    using T::operator()...;
-};
-template < typename... T >
-OverloadSet(const T&...) -> OverloadSet< T... >;
 
 namespace detail
 {
