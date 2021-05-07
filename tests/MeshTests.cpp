@@ -297,9 +297,9 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
 {
     constexpr lstr::el_o_t order      = 2;
     auto                   mesh       = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmesh_ascii4.msh), lstr::gmsh_tag);
-    auto&                  part       = mesh.getPartitions()[0];
-    const auto             n_elements = part.getNElements();
+    const auto             n_elements = mesh.getPartitions()[0].getNElements();
     lstr::convertMeshToOrder< order >(mesh);
+    auto& part = mesh.getPartitions()[0];
     CHECK(n_elements == part.getNElements());
     const auto validate_elorder = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >&) {
         if constexpr (O != order)

@@ -74,33 +74,104 @@ consteval auto makeElementEdgeTable()
 template < ElementTypes T, el_o_t O >
 consteval auto getElementIndices()
 {
-    std::array< el_locind_t, Element< T, O >::n_nodes > nodes;
-    std::iota(begin(nodes), end(nodes), 0u);
-    return nodes;
+    return std::make_tuple(consecutiveIndices(std::integral_constant< el_locind_t, Element< T, O >::n_nodes >{}));
 }
 
 template < ElementTypes T, el_o_t O, dim_t DIM >
 requires(DIM <= 3) consteval auto getElementOuterFeatures()
 {
-    if constexpr (DIM == 0)
-        return std::tuple<>{};
-
     using el_traits_t     = ElementTraits< Element< T, O > >;
     constexpr auto el_dim = el_traits_t::native_dim;
 
-    if constexpr (el_dim < DIM) //              3/9 cases: (1, 2), (1, 3), (2, 3)
+    if constexpr (DIM == 0)
         return std::tuple<>{};
-    if constexpr (el_dim == DIM) //             3/9 cases: (1, 1), (2, 2), (3, 3)
-        return getElementIndices< T, O >();
-    if constexpr (DIM == el_dim - 1) //         2/9 cases: (2, 1), (3, 2)
-        return el_traits_t::boundary_table;
-    return makeElementEdgeTable< T, O >(); //   1/9 cases: (3, 1)
+    else if constexpr (el_dim < DIM)           // 3/9 cases: (1, 2), (1, 3), (2, 3)
+        return std::tuple<>{};                 //
+    else if constexpr (el_dim == DIM)          // 3/9 cases: (1, 1), (2, 2), (3, 3)
+        return getElementIndices< T, O >();    //
+    else if constexpr (DIM == el_dim - 1)      // 2/9 cases: (2, 1), (3, 2)
+        return el_traits_t::boundary_table;    //
+    else                                       //
+        return makeElementEdgeTable< T, O >(); // 1/9 cases: (3, 1)
 }
 } // namespace detail
 
 template < ElementTypes T, el_o_t O, dim_t DIM >
 constexpr inline auto element_outer_features = detail::getElementOuterFeatures< T, O, DIM >();
 
+namespace detail
+{
+template < ElementTypes T1, ElementTypes T2 >
+consteval dim_t highestMatchableDim()
+{
+    constexpr auto d1        = ElementTraits< Element< T1, 1 > >::native_dim;
+    constexpr auto d2        = ElementTraits< Element< T2, 1 > >::native_dim;
+    constexpr auto lower_dim = d1 <= d2 ? d1 : d2;
+    return d1 == d2 ? d1 - 1 : lower_dim;
+}
+
+template < dim_t DIM, ElementTypes T1, ElementTypes T2 >
+constexpr std::array< size_t, 2 > elementIntersectionAtDim(const Element< T1, 1 >& e1, const Element< T2, 1 >& e2)
+{
+    const auto&             f1 = element_outer_features< T1, 1, DIM >;
+    const auto&             f2 = element_outer_features< T2, 1, DIM >;
+    std::array< size_t, 2 > retval;
+    retval.fill(std::numeric_limits< size_t >::max()); // note the unsigned overflow is intentional and not UB
+    const bool found = anyInTuple(
+        [&](const array auto& inds1) {
+            ++retval[0];
+            retval[1]   = std::numeric_limits< size_t >::max();
+            auto nodes1 = arrayAtInds(e1.getNodes(), inds1);
+            std::ranges::sort(nodes1);
+            return anyInTuple(
+                [&](const array auto inds2) {
+                    ++retval[1];
+                    auto nodes2 = arrayAtInds(e2.getNodes(), inds2);
+                    std::ranges::sort(nodes2);
+                    return std::ranges::equal(nodes1, nodes2);
+                },
+                f2);
+        },
+        f1);
+    if (not found)
+        retval.fill(std::numeric_limits< size_t >::max());
+    return retval;
+}
+} // namespace detail
+
+template < ElementTypes T1, ElementTypes T2 >
+constexpr std::tuple< dim_t, size_t, size_t > elementIntersection(const Element< T1, 1 >& e1,
+                                                                  const Element< T2, 1 >& e2)
+{
+    constexpr auto highest_matchable = detail::highestMatchableDim< T1, T2 >();
+    if constexpr (highest_matchable == 0) // needs to be instantiated, but will never be called (line + line)
+        return {};
+    else
+    {
+        dim_t  m_dim;
+        size_t m1, m2;
+        [&]< dim_t... I >(std::integer_sequence< dim_t, I... >)
+        {
+            const auto matched = [&]< dim_t Ind >(std::integral_constant< dim_t, Ind >) {
+                const auto [f_ind1, f_ind2] = detail::elementIntersectionAtDim< Ind >(e1, e2);
+                if (f_ind1 != std::numeric_limits< size_t >::max())
+                {
+                    m_dim = Ind;
+                    m1    = f_ind1;
+                    m2    = f_ind2;
+                    return true;
+                }
+                else
+                    return false;
+            };
+            (... or matched(std::integral_constant< dim_t, I >{}));
+        }
+        (detail::int_seq_interval< dim_t, 1, highest_matchable >{});
+        return {m_dim, m1, m2};
+    }
+}
+
+/*
 namespace detail
 {
 template < ElementTypes T1, ElementTypes T2, el_o_t O, dim_t DIM >
@@ -155,11 +226,12 @@ consteval auto makeIntersectionTable()
 template < ElementTypes T1, ElementTypes T2, el_o_t O >
 inline constexpr auto intersection_table = detail::makeIntersectionTable< T1, T2, O >();
 
-//template < ElementTypes T1, ElementTypes T2, el_o_t O >
-//size_t matchElements(const Element< T1, O >& el1, const Element< T2, O >& el2)
+// template < ElementTypes T1, ElementTypes T2, el_o_t O >
+// size_t matchElements(const Element< T1, O >& el1, const Element< T2, O >& el2)
 //{
-//    // TODO
-//}
+//     // TODO
+// }
+*/
 
 template < ElementTypes T_matched, ElementTypes T_matching, el_o_t O >
 constexpr void updateMatchMask(const Element< T_matched, 1 >&                    matched_o1,
@@ -167,6 +239,8 @@ constexpr void updateMatchMask(const Element< T_matched, 1 >&                   
                                const Element< T_matching, 1 >&                   matching,
                                std::bitset< Element< T_matching, O >::n_nodes >& mask,
                                typename Element< T_matching, O >::node_array_t&  nodes)
-{}
+{
+    const auto [md, m1, m2] = elementIntersection(matched_o1, matching);
+}
 } // namespace lstr
 #endif // L3STER_MESH_ELEMENTINTERSECTING_HPP

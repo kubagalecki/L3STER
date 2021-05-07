@@ -48,12 +48,13 @@ public:
     [[nodiscard]] dim_t         getDim() const { return dim; };
     [[nodiscard]] inline size_t getNElements() const;
 
-    static inline const_find_result_t constifyFound(const find_result_t& f);
+    template < el_o_t O_CONV >
+    [[nodiscard]] Domain getConversionAlloc() const;
 
-private:
     template < ElementTypes ELTYPE, el_o_t ELORDER >
     std::vector< Element< ELTYPE, ELORDER > >& getElementVector();
 
+private:
     template < typename F >
     static auto wrapElementVisitor(F& element_visitor);
     template < typename F >
@@ -77,7 +78,7 @@ template < ElementTypes ELTYPE, el_o_t ELORDER >
 std::vector< Element< ELTYPE, ELORDER > >& Domain::getElementVector()
 {
     using el_vec_t = element_vector_t< ELTYPE, ELORDER >;
-    if (!element_vectors.empty())
+    if (not element_vectors.empty())
     {
         if (ElementTraits< Element< ELTYPE, ELORDER > >::native_dim != dim)
             throw std::invalid_argument("Element dimension incompatible with domain dimension");
@@ -125,7 +126,7 @@ void Domain::reserve(size_t size)
 {
     using el_vec_t = element_vector_t< ELTYPE, ELORDER >;
 
-    if (!element_vectors.empty())
+    if (not element_vectors.empty())
     {
         if (ElementTraits< Element< ELTYPE, ELORDER > >::native_dim != dim)
             throw std::invalid_argument("Pushing element to domain of different dimension");
@@ -251,6 +252,23 @@ size_t Domain::getNElements() const
         });
 }
 
+template < el_o_t O_CONV >
+Domain Domain::getConversionAlloc() const
+{
+    Domain alloc;
+    alloc.element_vectors.reserve(element_vectors.size());
+    alloc.dim = dim;
+    for (const auto& el_v : element_vectors)
+    {
+        std::visit(
+            [&]< ElementTypes T, el_o_t O >(const element_vector_t< T, O >& existing_vec) {
+                alloc.reserve< T, O_CONV >(existing_vec.size());
+            },
+            el_v);
+    }
+    return alloc;
+}
+
 class DomainView
 {
     using domain_ref_t = std::reference_wrapper< const Domain >;
@@ -267,7 +285,5 @@ public:
 private:
     d_id_t id;
 };
-
 } // namespace lstr
-
 #endif // L3STER_MESH_DOMAIN_HPP

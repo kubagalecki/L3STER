@@ -26,10 +26,12 @@ concept domain_predicate = requires(T op, const DomainView dv)
 class MeshPartition
 {
 public:
-    using domain_map_t = std::map< d_id_t, Domain >;
-    using node_vec_t   = std::vector< n_id_t >;
+    using domain_map_t              = std::map< d_id_t, Domain >;
+    using node_vec_t                = std::vector< n_id_t >;
+    using find_result_t             = std::optional< std::pair< element_ptr_variant_t, d_id_t > >;
+    using cfind_result_t            = std::optional< std::pair< element_cptr_variant_t, d_id_t > >;
+    using el_boundary_view_result_t = std::pair< cfind_result_t, el_ns_t >;
 
-    MeshPartition()                         = default;
     MeshPartition(const MeshPartition&)     = delete;
     MeshPartition(MeshPartition&&) noexcept = default;
     MeshPartition& operator=(const MeshPartition&) = delete;
@@ -72,50 +74,60 @@ public:
     decltype(auto) cvisit(F&& element_visitor, const std::vector< d_id_t >& domain_ids) const;
 
     // Note: if the predicate returns true for multiple elements, the reference to any one of them may be returned
-    using opt_el_ptr  = std::optional< element_ptr_variant_t >;
-    using opt_el_cptr = std::optional< element_cptr_variant_t >;
     template < invocable_on_const_elements_r< bool > F >
-    [[nodiscard]] opt_el_ptr find(F&& predicate);
+    [[nodiscard]] find_result_t find(F&& predicate);
     template < invocable_on_const_elements_r< bool > F >
-    [[nodiscard]] opt_el_cptr find(F&& predicate) const;
+    [[nodiscard]] cfind_result_t find(F&& predicate) const;
     template < invocable_on_const_elements_r< bool > F >
-    [[nodiscard]] opt_el_ptr find(F&& predicate, const std::vector< d_id_t >& domain_ids);
+    [[nodiscard]] find_result_t find(F&& predicate, const std::vector< d_id_t >& domain_ids);
     template < invocable_on_const_elements_r< bool > F >
-    [[nodiscard]] opt_el_cptr find(F&& predicate, const std::vector< d_id_t >& domain_ids) const;
+    [[nodiscard]] cfind_result_t find(F&& predicate, const std::vector< d_id_t >& domain_ids) const;
     template < invocable_on_const_elements_r< bool > F, typename D >
-    [[nodiscard]] opt_el_ptr find(F&& predicate, D&& domain_predicate);
+    [[nodiscard]] find_result_t find(F&& predicate, D&& domain_predicate);
     template < invocable_on_const_elements_r< bool > F, typename D >
-    [[nodiscard]] opt_el_cptr        find(F&& predicate, D&& domain_predicate) const;
-    [[nodiscard]] inline opt_el_ptr  find(el_id_t id);
-    [[nodiscard]] inline opt_el_cptr find(el_id_t id) const;
+    [[nodiscard]] cfind_result_t        find(F&& predicate, D&& domain_predicate) const;
+    [[nodiscard]] inline find_result_t  find(el_id_t id);
+    [[nodiscard]] inline cfind_result_t find(el_id_t id) const;
 
-private:
-    using el_boundary_view_result_t = std::pair< opt_el_cptr, el_ns_t >;
-    template < ElementTypes T, el_o_t O >
-    el_boundary_view_result_t getElementBoundaryViewImpl(const Element< T, O >& el) const;
-    template < ElementTypes T, el_o_t O >
-    el_boundary_view_result_t getElementBoundaryViewFallback(const Element< T, O >& el, d_id_t d) const;
-
-public:
     template < ElementTypes T, el_o_t O >
     el_boundary_view_result_t         getElementBoundaryView(const Element< T, O >& el, d_id_t d) const;
     [[nodiscard]] inline BoundaryView getBoundaryView(d_id_t) const;
 
-    [[nodiscard]] DomainView    getDomainView(d_id_t id) const { return DomainView(domains.at(id), id); }
-    [[nodiscard]] inline size_t getNElements() const;
+    [[nodiscard]] DomainView                   getDomainView(d_id_t id) const { return DomainView(domains.at(id), id); }
+    [[nodiscard]] inline size_t                getNElements() const;
+    [[nodiscard]] auto                         getNDomains() const { return domains.size(); }
+    [[nodiscard]] inline std::vector< d_id_t > getDomainIds() const;
+    [[nodiscard]] const Domain&                getDomain(d_id_t id) const { return domains.at(id); }
 
     [[nodiscard]] const node_vec_t& getNodes() const noexcept { return nodes; }
     [[nodiscard]] const node_vec_t& getGhostNodes() const noexcept { return ghost_nodes; }
 
+    template < el_o_t O >
+    [[nodiscard]] domain_map_t getConversionAlloc() const;
+
 private:
-    [[nodiscard]] inline auto              convertToMetisFormat() const;
-    [[nodiscard]] inline MetisGraphWrapper makeMetisDualGraph() const;
+    inline auto                  convertToMetisFormat() const;
+    inline MetisGraphWrapper     makeMetisDualGraph() const;
+    static inline cfind_result_t constifyFindResult(find_result_t found);
+
+    template < ElementTypes T, el_o_t O >
+    el_boundary_view_result_t getElementBoundaryViewImpl(const Element< T, O >& el) const;
+    template < ElementTypes T, el_o_t O >
+    el_boundary_view_result_t getElementBoundaryViewFallback(const Element< T, O >& el, d_id_t d) const;
 
     domain_map_t                       domains;
     node_vec_t                         nodes;
     node_vec_t                         ghost_nodes;
     std::optional< MetisGraphWrapper > dual_graph;
 };
+
+MeshPartition::cfind_result_t MeshPartition::constifyFindResult(find_result_t found)
+{
+    if (not found)
+        return {};
+    else
+        return std::make_pair(*detail::constifyFound(found->first), found->second);
+}
 
 const MetisGraphWrapper& MeshPartition::initDualGraph()
 {
@@ -133,20 +145,18 @@ const MetisGraphWrapper& MeshPartition::getDualGraph() const
 template < invocable_on_elements F, detail::domain_predicate D >
 decltype(auto) MeshPartition::visit(F&& element_visitor, D&& domain_predicate)
 {
-    std::ranges::for_each(domains, [&](domain_map_t::value_type& domain) {
-        if (domain_predicate(DomainView{domain.second, domain.first}))
-            domain.second.visit(element_visitor);
-    });
+    for (auto& [id, dom] : domains)
+        if (domain_predicate(DomainView{dom, id}))
+            dom.visit(element_visitor);
     return std::forward< F >(element_visitor);
 }
 
 template < invocable_on_const_elements F, detail::domain_predicate D >
 decltype(auto) MeshPartition::cvisit(F&& element_visitor, D&& domain_predicate) const
 {
-    std::for_each(domains.cbegin(), domains.cend(), [&](const domain_map_t::value_type& domain) {
-        if (domain_predicate(DomainView{domain.second, domain.first}))
-            domain.second.cvisit(element_visitor);
-    });
+    for (const auto& [id, dom] : domains)
+        if (domain_predicate(DomainView{dom, id}))
+            dom.cvisit(element_visitor);
     return std::forward< F >(element_visitor);
 }
 
@@ -237,19 +247,19 @@ decltype(auto) MeshPartition::cvisit(F&& element_visitor, const std::vector< d_i
 }
 
 template < invocable_on_const_elements_r< bool > F >
-std::optional< element_ptr_variant_t > MeshPartition::find(F&& predicate)
+MeshPartition::find_result_t MeshPartition::find(F&& predicate)
 {
     return find(std::forward< F >(predicate), [](const DomainView&) { return true; });
 }
 
 template < invocable_on_const_elements_r< bool > F >
-std::optional< element_cptr_variant_t > MeshPartition::find(F&& predicate) const
+MeshPartition::cfind_result_t MeshPartition::find(F&& predicate) const
 {
-    return detail::constifyFound(const_cast< MeshPartition* >(this)->find(std::forward< F >(predicate)));
+    return constifyFindResult(const_cast< MeshPartition* >(this)->find(std::forward< F >(predicate)));
 }
 
 template < invocable_on_const_elements_r< bool > F >
-std::optional< element_ptr_variant_t > MeshPartition::find(F&& predicate, const std::vector< d_id_t >& domain_ids)
+MeshPartition::find_result_t MeshPartition::find(F&& predicate, const std::vector< d_id_t >& domain_ids)
 {
     return find(std::forward< F >(predicate), [&](const auto& domain_view) {
         return std::ranges::any_of(domain_ids, [&](d_id_t d) { return d == domain_view.getID(); });
@@ -257,48 +267,47 @@ std::optional< element_ptr_variant_t > MeshPartition::find(F&& predicate, const 
 }
 
 template < invocable_on_const_elements_r< bool > F >
-std::optional< element_cptr_variant_t > MeshPartition::find(F&&                          predicate,
-                                                            const std::vector< d_id_t >& domain_ids) const
+MeshPartition::cfind_result_t MeshPartition::find(F&& predicate, const std::vector< d_id_t >& domain_ids) const
 {
-    return detail::constifyFound(const_cast< MeshPartition* >(this)->find(std::forward< F >(predicate), domain_ids));
+    return constifyFindResult(const_cast< MeshPartition* >(this)->find(std::forward< F >(predicate), domain_ids));
 }
 
 template < invocable_on_const_elements_r< bool > F, typename D >
-std::optional< element_ptr_variant_t > MeshPartition::find(F&& predicate, D&& domain_predicate)
+MeshPartition::find_result_t MeshPartition::find(F&& predicate, D&& domain_predicate)
 {
-    for (auto& domain_map_entry : domains)
+    for (auto& [dom_id, dom] : domains)
     {
-        if (domain_predicate(DomainView{domain_map_entry.second, domain_map_entry.first}))
+        if (domain_predicate(DomainView{dom, dom_id}))
         {
-            const auto found_result = domain_map_entry.second.find(predicate);
-            if (found_result)
-                return found_result;
+            const auto find_result = dom.find(predicate);
+            if (find_result)
+                return std::make_pair(*find_result, dom_id);
         }
     }
     return {};
 }
 
 template < invocable_on_const_elements_r< bool > F, typename D >
-std::optional< element_cptr_variant_t > MeshPartition::find(F&& predicate, D&& domain_predicate) const
+MeshPartition::cfind_result_t MeshPartition::find(F&& predicate, D&& domain_predicate) const
 {
-    return detail::constifyFound(
+    return constifyFindResult(
         const_cast< MeshPartition* >(this)->find(std::forward< F >(predicate), std::forward< D >(domain_predicate)));
 }
 
-MeshPartition::opt_el_ptr MeshPartition::find(el_id_t id)
+MeshPartition::find_result_t MeshPartition::find(el_id_t id)
 {
-    for (auto& domain_map_entry : domains)
+    for (auto& [dom_id, dom] : domains)
     {
-        const auto found_result = domain_map_entry.second.find(id);
-        if (found_result)
-            return found_result;
+        const auto find_result = dom.find(id);
+        if (find_result)
+            return std::make_pair(*find_result, dom_id);
     }
     return {};
 }
 
-MeshPartition::opt_el_cptr MeshPartition::find(el_id_t id) const
+MeshPartition::cfind_result_t MeshPartition::find(el_id_t id) const
 {
-    return detail::constifyFound(const_cast< MeshPartition* >(this)->find(id));
+    return constifyFindResult(const_cast< MeshPartition* >(this)->find(id));
 }
 
 template < ElementTypes T, el_o_t O >
@@ -318,12 +327,13 @@ MeshPartition::el_boundary_view_result_t MeshPartition::getElementBoundaryViewIm
     const auto adjacent_elems = dual_graph->getElementAdjacent(el.getId());
     for (el_id_t adj_id : adjacent_elems)
     {
-        const auto adj_el = find(adj_id);
-        if (!std::visit(matchElDim, *adj_el))
+        const auto  find_result = find(adj_id);
+        const auto& adj_el      = find_result->first;
+        if (not std::visit(matchElDim, adj_el))
             continue;
-        const auto side_index = std::visit(match_side, *adj_el);
+        const auto side_index = std::visit(match_side, adj_el);
         if (side_index != miss)
-            return std::make_pair(adj_el, side_index);
+            return std::make_pair(find_result, side_index);
     }
     return {{}, miss};
 }
@@ -362,7 +372,7 @@ BoundaryView MeshPartition::getBoundaryView(d_id_t boundary_id) const
 
     const auto insert_boundary_element_view = [&](const auto& boundary_element) {
         const auto& [domain_element_variant_opt, side_index] = getElementBoundaryView(boundary_element, boundary_id);
-        if (!domain_element_variant_opt)
+        if (not domain_element_variant_opt)
             throw std::logic_error{"BoundaryView could not be constructed because some of the boundary elements are "
                                    "not edges/faces of any of the domain elements in the specified partition"};
 
@@ -371,7 +381,7 @@ BoundaryView MeshPartition::getBoundaryView(d_id_t boundary_id) const
                 boundary_elements.emplace_back(
                     std::in_place_type< BoundaryElementView< T, O > >, *domain_element_ptr, side_index);
             };
-        std::visit(emplace_element, *domain_element_variant_opt);
+        std::visit(emplace_element, domain_element_variant_opt->first);
     };
 
     cvisit(insert_boundary_element_view, {boundary_id});
@@ -382,6 +392,23 @@ size_t MeshPartition::getNElements() const
 {
     return std::accumulate(
         domains.cbegin(), domains.cend(), 0, [](size_t s, const auto& d) { return s + d.second.getNElements(); });
+}
+
+std::vector< d_id_t > MeshPartition::getDomainIds() const
+{
+    std::vector< d_id_t > retval;
+    retval.reserve(domains.size());
+    std::ranges::transform(domains, back_inserter(retval), [](const auto& pair) { return pair.first; });
+    return retval;
+}
+
+template < el_o_t O >
+MeshPartition::domain_map_t MeshPartition::getConversionAlloc() const
+{
+    domain_map_t retval;
+    for (const auto& [id, dom] : domains)
+        retval.emplace_hint(retval.cend(), id, dom.template getConversionAlloc< O >());
+    return retval;
 }
 
 MeshPartition::MeshPartition(MeshPartition::domain_map_t domains_) : domains{std::move(domains_)}
@@ -404,15 +431,15 @@ auto MeshPartition::convertToMetisFormat() const
     eind.reserve(topo_size);
     eptr.reserve(getNElements() + 1);
     eptr.push_back(0);
-    for (el_id_t i = 0; i < getNElements(); ++i)
+    for (el_id_t id = 0; id < getNElements(); ++id)
     {
-        const auto el_ptr_opt = find(i);
+        const auto el_ptr = find(id)->first;
         std::visit(
             [&]< ElementTypes T, el_o_t O >(const Element< T, O >* element) {
                 std::ranges::for_each(element->getNodes(), [&](auto n) { eind.push_back(n); });
                 eptr.push_back(eptr.back() + element->getNodes().size());
             },
-            *el_ptr_opt);
+            el_ptr);
     };
     return std::make_pair(std::move(eptr), std::move(eind));
 }

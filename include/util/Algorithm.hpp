@@ -85,21 +85,62 @@ constexpr auto makeTupleIf(T&&... arg)
     return std::tuple_cat(detail::tuplifyIf< TraitsPredicate >(std::forward< T >(arg))...);
 }
 
-template < typename F, typename... T >
-requires(std::invocable< F, T >and...) constexpr decltype(auto) forEachTuple(F&& f, std::tuple< T... >& t)
+template < typename F, tuple_like T >
+requires tuple_invocable< F, T >
+constexpr decltype(auto) forEachTuple(F&& f, T& t)
 {
     [&]< size_t... I >(std::index_sequence< I... >) { (f(std::get< I >(t)), ...); }
-    (std::make_index_sequence< sizeof...(T) >{});
+    (std::make_index_sequence< std::tuple_size_v< T > >{});
     return std::forward< F >(f);
 }
 
-template < typename F, typename... T >
-requires(std::invocable< F, const std::remove_const_t< T > >and...) constexpr decltype(auto)
-    forEachTuple(F&& f, const std::tuple< T... >& t)
+template < typename F, tuple_like T >
+requires tuple_invocable< F, T > // TODO: this should be something like tuple_const_invocable
+constexpr decltype(auto) forEachTuple(F&& f, const T& t)
 {
     [&]< size_t... I >(std::index_sequence< I... >) { (f(std::get< I >(t)), ...); }
-    (std::make_index_sequence< sizeof...(T) >{});
+    (std::make_index_sequence< std::tuple_size_v< T > >{});
     return std::forward< F >(f);
+}
+
+template < typename F, tuple_like T >
+requires tuple_r_invocable< F, bool, T >
+bool anyInTuple(F&& predicate, T& t)
+{
+    return [&]< size_t... I >(std::index_sequence< I... >) { return (predicate(std::get< I >(t)) || ...); }
+    (std::make_index_sequence< std::tuple_size_v< T > >{});
+}
+
+template < typename F, tuple_like T >
+requires tuple_r_invocable< F, bool, T > // TODO: see: forEachTuple(F&& f, const T& t)
+bool anyInTuple(F&& predicate, const T& t)
+{
+    return [&]< size_t... I >(std::index_sequence< I... >) { return (predicate(std::get< I >(t)) || ...); }
+    (std::make_index_sequence< std::tuple_size_v< T > >{});
+}
+
+template < std::unsigned_integral T >
+std::vector< T > consecutiveIndices(T n)
+{
+    std::vector< T > retval(n);
+    std::iota(begin(retval), end(retval), T{0});
+    return retval;
+}
+
+template < std::unsigned_integral T, T N >
+constexpr std::array< T, N > consecutiveIndices(std::integral_constant< T, N >)
+{
+    std::array< T, N > retval;
+    std::iota(begin(retval), end(retval), T{0});
+    return retval;
+}
+
+template < std::copy_constructible T_a, std::integral T_filter, size_t N_a, size_t N_filter >
+constexpr auto arrayAtInds(const std::array< T_a, N_a >& array, const std::array< T_filter, N_filter >& filter)
+{
+    std::array< T_a, N_filter > retval;
+    std::ranges::transform(filter, begin(retval), [&](T_filter i) { return array[i]; });
+    return retval;
 }
 } // namespace lstr
 #endif // L3STER_UTIL_ALGORITHM_HPP

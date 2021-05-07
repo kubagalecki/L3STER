@@ -148,8 +148,8 @@ inline void assignBoundaryElements(const MeshPartition&                        p
     };
     part.cvisit(
         [&](const auto& boundary_el, const DomainView& dv) {
-            const auto domain_el   = part.getElementBoundaryView(boundary_el, dv.getID()).first;
-            const auto domain_part = lookup_el_part(std::visit([](const auto& el) { return el->getId(); }, *domain_el));
+            const auto domain_el   = part.getElementBoundaryView(boundary_el, dv.getID()).first->first;
+            const auto domain_part = lookup_el_part(std::visit([](const auto& el) { return el->getId(); }, domain_el));
             new_domain_maps[domain_part][dv.getID()].push(boundary_el);
         },
         boundaries);
