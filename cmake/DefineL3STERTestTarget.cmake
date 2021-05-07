@@ -6,8 +6,10 @@ add_executable( L3STER_tests
                 ${L3STER_DIR}/tests/HwlocTests.cpp
                 ${L3STER_DIR}/tests/NodeAllocationTests.cpp )
 
-set( L3STER_TESTS_DATA_PATH "${L3STER_DIR}/tests/data" CACHE STRING "Path to test data directory" )
-set( L3STER_N_NUMA_NODES 1 CACHE STRING "Number of NUMA nodes of current machine" ) # TODO: automate
+set( L3STER_TESTS_DATA_PATH "${L3STER_DIR}/tests/data" )
+execute_process( COMMAND bash -c "chmod +x ${L3STER_DIR}/scripts/n_numa_nodes.sh" )
+execute_process( COMMAND bash ${L3STER_DIR}/scripts/n_numa_nodes.sh
+                 OUTPUT_VARIABLE L3STER_N_NUMA_NODES )
 configure_file( ${L3STER_DIR}/tests/TestDataPath.h.in TestDataPath.h )
 target_include_directories( L3STER_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR} )
 target_link_libraries( L3STER_tests
