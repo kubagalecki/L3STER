@@ -1,5 +1,6 @@
 #include "l3ster.hpp"
 #include "mesh/ConvertMeshToOrder.hpp"
+#include "mesh/MapReferenceToPhysical.hpp"
 
 #include "TestDataPath.h"
 #include "catch2/catch.hpp"
@@ -85,13 +86,21 @@ TEMPLATE_TEST_CASE("2D mesh import", "[mesh]", lstr::Mesh, const lstr::Mesh)
 
     REQUIRE(mesh.getPartitions().size() == 1);
 
-    auto&       topology = mesh.getPartitions()[0];
-    const auto& nodes    = mesh.getVertices();
+    auto&            topology         = mesh.getPartitions()[0];
+    constexpr size_t expected_n_nodes = 121;
+    size_t           max_node{};
+    const auto       update_max_node = [&](const auto& el) {
+        const size_t max_el_node = *std::ranges::max_element(el.getNodes());
+        if (max_el_node >= expected_n_nodes)
+            throw std::invalid_argument{"max nodes exceeded"};
+        max_node = std::max(max_node, max_el_node);
+    };
+    topology.cvisit(update_max_node);
 
     CHECK_THROWS(topology.getDualGraph());
 
-    REQUIRE(nodes.size() == 121);
-    REQUIRE(nodes.size() == topology.getNodes().size());
+    REQUIRE(max_node + 1 == expected_n_nodes);
+    REQUIRE(max_node + 1 == topology.getNodes().size());
     REQUIRE(topology.getGhostNodes().size() == 0);
 
     // Const visitors
@@ -219,9 +228,8 @@ TEST_CASE("3D mesh import", "[mesh]")
     auto& part = mesh.getPartitions()[0];
     part.initDualGraph();
 
-    constexpr size_t expected_nvertices = 5885;
+    //    constexpr size_t expected_nvertices = 5885;
     constexpr size_t expected_nelements = 5664;
-    CHECK(mesh.getVertices().size() == expected_nvertices);
     CHECK(part.getNElements() == expected_nelements);
 
     for (int i = 2; i <= 7; ++i)
@@ -246,9 +254,11 @@ TEST_CASE("Element lookup by ID", "[mesh]")
     lstr::Domain d;
     CHECK_FALSE(d.find(1));
 
+    lstr::ElementData< lstr::ElementTypes::Line, 1 > data{};
+
     std::array< lstr::n_id_t, 2 > nodes{1, 2};
     lstr::el_id_t                 id = 1;
-    d.emplaceBack< lstr::ElementTypes::Line, 1 >(nodes, id++);
+    d.emplaceBack< lstr::ElementTypes::Line, 1 >(nodes, data, id++);
     CHECK_FALSE(d.find(0));
     CHECK(d.find(1));
 
@@ -258,15 +268,43 @@ TEST_CASE("Element lookup by ID", "[mesh]")
     };
 
     for (size_t i = 0; i < 10; ++i)
-        d.emplaceBack< lstr::ElementTypes::Line, 1 >(next(), id++);
+        d.emplaceBack< lstr::ElementTypes::Line, 1 >(next(), data, id++);
     CHECK(d.find(10));
 
-    d.emplaceBack< lstr::ElementTypes::Line, 1 >(next(), 0);
+    d.emplaceBack< lstr::ElementTypes::Line, 1 >(next(), data, 0);
     CHECK(d.find(0));
 
-    d.emplaceBack< lstr::ElementTypes::Line, 1 >(next(), id *= 2);
+    d.emplaceBack< lstr::ElementTypes::Line, 1 >(next(), data, id *= 2);
     CHECK(d.find(id));
     CHECK_FALSE(d.find(id + 1));
+}
+
+TEST_CASE("Reference to physical mapping", "[mesh]")
+{
+    SECTION("1D")
+    {
+        constexpr auto               el_t = lstr::ElementTypes::Line;
+        lstr::ElementData< el_t, 1 > data{{lstr::Point{std::array{1., 1., 1.}}, lstr::Point{std::array{.5, .5, .5}}}};
+        const auto                   element = lstr::Element< el_t, 1 >{{0, 1}, data, 0};
+        const auto mapped = lstr::mapToPhysicalSpace(element, std::array{lstr::Point< 1 >{std::array{0.}}});
+        CHECK(mapped[0].x() == Approx(.75).epsilon(1e-15));
+        CHECK(mapped[0].y() == Approx(.75).epsilon(1e-15));
+        CHECK(mapped[0].z() == Approx(.75).epsilon(1e-15));
+    }
+
+    SECTION("2D")
+    {
+        constexpr auto               el_t = lstr::ElementTypes::Quad;
+        lstr::ElementData< el_t, 1 > data{{lstr::Point{std::array{1., -1., 0.}},
+                                           lstr::Point{std::array{2., -1., 0.}},
+                                           lstr::Point{std::array{1., 1., 1.}},
+                                           lstr::Point{std::array{2., 1., 1.}}}};
+        const auto                   element = lstr::Element< el_t, 1 >{{0, 1}, data, 0};
+        const auto mapped = lstr::mapToPhysicalSpace(element, std::array{lstr::Point< 2 >{std::array{0., 0.}}});
+        CHECK(mapped[0].x() == Approx(1.5).epsilon(1e-15));
+        CHECK(mapped[0].y() == Approx(0.).epsilon(1e-15));
+        CHECK(mapped[0].z() == Approx(.5).epsilon(1e-15));
+    }
 }
 
 TEST_CASE("Serial mesh partitioning", "[mesh]")

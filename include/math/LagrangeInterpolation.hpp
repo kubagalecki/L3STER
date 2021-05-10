@@ -10,33 +10,32 @@
 namespace lstr
 {
 template < std::floating_point T, size_t N >
-constexpr Polynomial< T, N - 1 > lagrangeInterp(const std::array< T, N >& x, const std::array< T, N >& y)
+requires(N > 1) constexpr Polynomial< T, N - 1 > lagrangeInterp(const std::array< T, N >& x,
+                                                                const std::array< T, N >& y)
 {
-    static_assert(N > 1, "At least two points are needed for interpolation");
-
-    // Algorithm: Sum N polynomials l_i, such that l_i has roots at all x except x[i], and l_i(x[i])
-    // == y[i] Note: This method is accurate up until approximately N == 16
+    // Algorithm: Sum N polynomials l_i, such that l_i has roots at all x except x[i], and l_i(x[i]) == y[i]
+    // Note: This method is accurate up until approximately N == 16
     // TODO: Come up with/look up more accurate algorithm
-    // TODO: Explicitly test this function for basis functions of max order, as this is primarily
-    // what this utility is meant for.
+    // TODO: Explicitly test this function for basis functions of max order, as this is primarily what this utility is
+    // meant for.
 
     std::array< T, N > lag_coefs{};
     for (size_t i = 0; i < N; ++i)
     {
         std::array< T, N - 1 > roots;
-        std::copy(x.cbegin(), x.cbegin() + i, roots.begin());
-        std::copy(x.cbegin() + i + 1, x.cend(), roots.begin() + i);
+        std::copy_n(begin(x), i, roots.begin());
+        std::ranges::copy(x | std::views::drop(i + 1), begin(roots) + i);
         std::array< T, N > l_i{};
         l_i.front() = 1.;
-        for (size_t j = 0; j < N - 1; ++j)
+        for (auto j : std::views::iota(0u, N - 1))
         {
             for (size_t k = j + 1; k > 0; --k)
                 l_i[k] -= l_i[k - 1] * roots[j];
         }
         const PolynomialView root_poly{l_i};
         const T              s = y[i] / root_poly.evaluate(x[i]);
-        for (size_t k = 0; k < N; ++k)
-            lag_coefs[k] += s * l_i[k];
+        for (auto j : std::views::iota(0u, N))
+            lag_coefs[j] += s * l_i[j];
     }
     return Polynomial{lag_coefs};
 }

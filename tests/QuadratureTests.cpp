@@ -60,7 +60,7 @@ TEST_CASE("1D Gauss-Legendre quadrature, 3 point", "[quadrature]")
 
 TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 {
-    const auto element = lstr::Element< lstr::ElementTypes::Line, 1 >{{1, 2}, 0};
+    const auto element = lstr::Element< lstr::ElementTypes::Line, 1 >{{1, 2}, {}, 0};
 
     SECTION("1 point quadrature")
     {
@@ -118,7 +118,7 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 
 TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]")
 {
-    constexpr auto element = lstr::Element< lstr::ElementTypes::Quad, 1 >{{1, 2, 3, 4}, 0};
+    const auto element = lstr::Element< lstr::ElementTypes::Quad, 1 >{{1, 2, 3, 4}, {}, 0};
 
     constexpr auto o0_fun = [](double, double) {
         return 1.;
@@ -198,7 +198,7 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
 TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
 {
-    constexpr auto element = lstr::Element< lstr::ElementTypes ::Hex, 1 >{{1, 2, 3, 4, 5, 6, 7, 8}, 0};
+    const auto element = lstr::Element< lstr::ElementTypes ::Hex, 1 >{{1, 2, 3, 4, 5, 6, 7, 8}, {}, 0};
 
     constexpr auto o0_fun = [](double, double, double) {
         return 1.;

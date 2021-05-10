@@ -228,7 +228,7 @@ inline void partitionMesh(Mesh& mesh, idx_t n_parts, const std::vector< d_id_t >
     detail::assignBoundaryElements(part, epart, new_domain_maps, boundaries, domain_data[0]);
     auto new_partitions = detail::assignNodes(n_parts, npart, new_domain_maps);
 
-    mesh = Mesh{std::move(mesh.getVertices()), std::move(new_partitions)};
+    mesh = Mesh{std::move(new_partitions)};
 }
 } // namespace lstr
 #endif // L3STER_MESH_PARTITIONMESH_HPP

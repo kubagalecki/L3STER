@@ -85,37 +85,57 @@ constexpr auto makeTupleIf(T&&... arg)
     return std::tuple_cat(detail::tuplifyIf< TraitsPredicate >(std::forward< T >(arg))...);
 }
 
-template < typename F, tuple_like T >
-requires tuple_invocable< F, T >
-constexpr decltype(auto) forEachTuple(F&& f, T& t)
+template < tuple_like T, tuple_invocable< T > F >
+constexpr decltype(auto) forEachTuple(T& t, F&& f)
 {
     [&]< size_t... I >(std::index_sequence< I... >) { (f(std::get< I >(t)), ...); }
     (std::make_index_sequence< std::tuple_size_v< T > >{});
     return std::forward< F >(f);
 }
 
-template < typename F, tuple_like T >
-requires tuple_invocable< F, T > // TODO: this should be something like tuple_const_invocable
-constexpr decltype(auto) forEachTuple(F&& f, const T& t)
+template < tuple_like T, tuple_invocable< T > F > // TODO: this should be something like tuple_const_invocable
+constexpr decltype(auto) forEachTuple(const T& t, F&& f)
 {
     [&]< size_t... I >(std::index_sequence< I... >) { (f(std::get< I >(t)), ...); }
     (std::make_index_sequence< std::tuple_size_v< T > >{});
     return std::forward< F >(f);
 }
 
-template < typename F, tuple_like T >
-requires tuple_r_invocable< F, bool, T >
-bool anyInTuple(F&& predicate, T& t)
+template < tuple_like T, tuple_r_invocable< bool, T > P, tuple_invocable< T > F >
+bool anyInTuple(T& t, P&& predicate, F&& f)
 {
-    return [&]< size_t... I >(std::index_sequence< I... >) { return (predicate(std::get< I >(t)) || ...); }
+    return [&]< size_t... I >(std::index_sequence< I... >)
+    {
+        const auto wrapper = [&](auto& element) {
+            if (predicate(element))
+            {
+                f(element);
+                return true;
+            }
+            else
+                return false;
+        };
+        return (wrapper(std::get< I >(t)) or ...);
+    }
     (std::make_index_sequence< std::tuple_size_v< T > >{});
 }
 
-template < typename F, tuple_like T >
-requires tuple_r_invocable< F, bool, T > // TODO: see: forEachTuple(F&& f, const T& t)
-bool anyInTuple(F&& predicate, const T& t)
+template < tuple_like T, tuple_r_invocable< bool, T > P, tuple_invocable< T > F > // TODO: see: forEachTuple
+bool anyInTuple(const T& t, P&& predicate, F&& f)
 {
-    return [&]< size_t... I >(std::index_sequence< I... >) { return (predicate(std::get< I >(t)) || ...); }
+    return [&]< size_t... I >(std::index_sequence< I... >)
+    {
+        const auto wrapper = [&](const auto& element) {
+            if (predicate(element))
+            {
+                f(element);
+                return true;
+            }
+            else
+                return false;
+        };
+        return (wrapper(std::get< I >(t)) or ...);
+    }
     (std::make_index_sequence< std::tuple_size_v< T > >{});
 }
 

@@ -15,12 +15,14 @@
 
 namespace lstr
 {
-template < size_t I >
-using size_constant = std::integral_constant< size_t, I >;
-
 template < typename... T >
 struct type_set
 {};
+
+template < std::ranges::random_access_range R >
+inline constexpr size_t range_constexpr_size_v =
+    std::extent_v< std::decay_t< R > > > 0 ? std::extent_v< std::decay_t< R > >
+                                           : std::tuple_size_v< std::decay_t< R > >;
 
 namespace detail
 {
@@ -53,7 +55,7 @@ namespace detail
 template < typename T >
 struct Constify
 {
-    const T operator()(const T& in) requires(!std::is_pointer_v< T >) { return in; } // NOLINT
+    const T operator()(const T& in) requires(not std::is_pointer_v< T >) { return in; } // NOLINT
     const std::pointer_traits< T >::element_type* operator()(T in) requires(std::is_pointer_v< T >) { return in; }
     using type = decltype(std::declval< Constify< T > >()(std::declval< T >()));
 };
@@ -99,7 +101,7 @@ template < array auto A >
 constexpr inline auto unique_els_v = unique_els< A >::value;
 
 template < array auto... A >
-requires((A.size() == std::get< 0 >(std::tie(A...)).size()) && ...) struct tuplify
+requires((A.size() == std::get< 0 >(std::tie(A...)).size()) and ...) struct tuplify
 {
     static constexpr size_t N = (A.size(), ...);
     using tuple_t             = std::tuple< typename decltype(A)::value_type... >;
@@ -123,8 +125,8 @@ public:
 };
 
 template < array auto... A >
-requires(std::totally_ordered< typename decltype(A)::value_type >&&...) &&
-    ((A.size() > 0) && ...) struct all_combinations
+requires(std::totally_ordered< typename decltype(A)::value_type >and...) and
+    ((A.size() > 0) and ...) struct all_combinations
 {
     static constexpr auto unique_A = std::make_tuple(unique_els_v< A >...);
     static constexpr auto size     = (unique_els< A >::size * ...);

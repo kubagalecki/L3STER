@@ -2,6 +2,7 @@
 #define L3STER_MESH_ELEMENTTRAITS_HPP
 
 #include "mesh/ElementTypes.hpp"
+#include "mesh/Point.hpp"
 
 namespace lstr
 {
@@ -51,26 +52,6 @@ private:
 
 public:
     static constexpr auto boundary_table = makeBoundaryTable();
-
-    struct ElementData
-    {
-        val_t a;
-        val_t b;
-        val_t c;
-        val_t d;
-        val_t alphax;
-        val_t alphay;
-        val_t alphaz;
-        val_t betax;
-        val_t betay;
-        val_t betaz;
-        val_t gammax;
-        val_t gammay;
-        val_t gammaz;
-        val_t deltax;
-        val_t deltay;
-        val_t deltaz;
-    };
 };
 
 template < el_o_t O >
@@ -104,19 +85,6 @@ private:
 
 public:
     static constexpr auto boundary_table = makeBoundaryTable();
-
-    struct ElementData
-    {
-        val_t a;
-        val_t b;
-        val_t c;
-        val_t alphax;
-        val_t alphay;
-        val_t betax;
-        val_t betay;
-        val_t gammax;
-        val_t gammay;
-    };
 };
 
 template < el_o_t O >
@@ -131,11 +99,6 @@ struct ElementTraits< Element< ElementTypes::Line, O > >
     using boundary_table_t = std::array< std::array< el_locind_t, 1 >, n_sides >;
 
     static constexpr boundary_table_t boundary_table = {{{0}, {O}}};
-
-    struct ElementData
-    {
-        val_t L;
-    };
 };
 } // namespace lstr
 #endif // L3STER_MESH_ELEMENTTRAITS_HPP

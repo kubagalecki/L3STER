@@ -3,6 +3,7 @@
 
 #include <array>
 #include <concepts>
+#include <ranges>
 #include <tuple>
 #include <utility>
 
@@ -123,5 +124,9 @@ concept predicate_trait_specialized = requires
         Predicate< std::decay_t< T > >::value
         } -> std::convertible_to< bool >;
 };
+
+template < typename R, typename V >
+concept random_access_typed_range =
+    std::ranges::random_access_range< R > && std::same_as< std::ranges::range_value_t< R >, V >;
 } // namespace lstr
 #endif // L3STER_UTIL_CONCEPTS_HPP
