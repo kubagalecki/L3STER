@@ -1,6 +1,7 @@
 #include "l3ster.hpp"
 #include "mesh/ConvertMeshToOrder.hpp"
 #include "mesh/MapReferenceToPhysical.hpp"
+#include "mesh/primitives/CubeMesh.hpp"
 
 #include "TestDataPath.h"
 #include "catch2/catch.hpp"
@@ -82,7 +83,7 @@ TEMPLATE_TEST_CASE("2D mesh import", "[mesh]", lstr::Mesh, const lstr::Mesh)
     // Flag to prevent non-const member functions from being tested on const object
     constexpr bool is_const = std::is_same_v< TestType, const lstr::Mesh >;
 
-    TestType mesh = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmesh_ascii4.msh), lstr::gmsh_tag);
+    TestType mesh = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::gmsh_tag);
 
     REQUIRE(mesh.getPartitions().size() == 1);
 
@@ -254,7 +255,7 @@ TEST_CASE("Element lookup by ID", "[mesh]")
     lstr::Domain d;
     CHECK_FALSE(d.find(1));
 
-    lstr::ElementData< lstr::ElementTypes::Line, 1 > data{};
+    lstr::ElementData< lstr::ElementTypes::Line, 1 > data{{lstr::Point{0., 0., 0.}, lstr::Point{0., 0., 0.}}};
 
     std::array< lstr::n_id_t, 2 > nodes{1, 2};
     lstr::el_id_t                 id = 1;
@@ -281,36 +282,59 @@ TEST_CASE("Element lookup by ID", "[mesh]")
 
 TEST_CASE("Reference to physical mapping", "[mesh]")
 {
+    constexpr auto el_o = 2;
     SECTION("1D")
     {
-        constexpr auto               el_t = lstr::ElementTypes::Line;
-        lstr::ElementData< el_t, 1 > data{{lstr::Point{std::array{1., 1., 1.}}, lstr::Point{std::array{.5, .5, .5}}}};
-        const auto                   element = lstr::Element< el_t, 1 >{{0, 1}, data, 0};
-        const auto mapped = lstr::mapToPhysicalSpace(element, std::array{lstr::Point< 1 >{std::array{0.}}});
-        CHECK(mapped[0].x() == Approx(.75).epsilon(1e-15));
-        CHECK(mapped[0].y() == Approx(.75).epsilon(1e-15));
-        CHECK(mapped[0].z() == Approx(.75).epsilon(1e-15));
+        constexpr auto el_t                      = lstr::ElementTypes::Line;
+        using element_type                       = lstr::Element< el_t, el_o >;
+        constexpr auto                  el_nodes = typename element_type::node_array_t{};
+        lstr::ElementData< el_t, el_o > data{{lstr::Point{1., 1., 1.}, lstr::Point{.5, .5, .5}}};
+        const auto                      element = element_type{el_nodes, data, 0};
+        const auto                      mapped  = lstr::mapToPhysicalSpace(element, lstr::Point{0.});
+        CHECK(mapped.x() == Approx(.75).epsilon(1e-15));
+        CHECK(mapped.y() == Approx(.75).epsilon(1e-15));
+        CHECK(mapped.z() == Approx(.75).epsilon(1e-15));
     }
 
     SECTION("2D")
     {
-        constexpr auto               el_t = lstr::ElementTypes::Quad;
-        lstr::ElementData< el_t, 1 > data{{lstr::Point{std::array{1., -1., 0.}},
-                                           lstr::Point{std::array{2., -1., 0.}},
-                                           lstr::Point{std::array{1., 1., 1.}},
-                                           lstr::Point{std::array{2., 1., 1.}}}};
-        const auto                   element = lstr::Element< el_t, 1 >{{0, 1}, data, 0};
-        const auto mapped = lstr::mapToPhysicalSpace(element, std::array{lstr::Point< 2 >{std::array{0., 0.}}});
-        CHECK(mapped[0].x() == Approx(1.5).epsilon(1e-15));
-        CHECK(mapped[0].y() == Approx(0.).epsilon(1e-15));
-        CHECK(mapped[0].z() == Approx(.5).epsilon(1e-15));
+        constexpr auto el_t                      = lstr::ElementTypes::Quad;
+        using element_type                       = lstr::Element< el_t, el_o >;
+        constexpr auto                  el_nodes = typename element_type::node_array_t{};
+        lstr::ElementData< el_t, el_o > data{
+            {lstr::Point{1., -1., 0.}, lstr::Point{2., -1., 0.}, lstr::Point{1., 1., 1.}, lstr::Point{2., 1., 1.}}};
+        const auto element = element_type{el_nodes, data, 0};
+        const auto mapped  = lstr::mapToPhysicalSpace(element, lstr::Point{.5, -.5});
+        CHECK(mapped.x() == Approx(1.75).epsilon(1e-15));
+        CHECK(mapped.y() == Approx(-.5).epsilon(1e-15));
+        CHECK(mapped.z() == Approx(.25).epsilon(1e-15));
+    }
+
+    SECTION("3D")
+    {
+        constexpr auto el_t                      = lstr::ElementTypes::Hex;
+        using element_type                       = lstr::Element< el_t, el_o >;
+        constexpr auto                  el_nodes = typename element_type::node_array_t{};
+        lstr::ElementData< el_t, el_o > data{{lstr::Point{.5, .5, .5},
+                                              lstr::Point{1., .5, .5},
+                                              lstr::Point{.5, 1., .5},
+                                              lstr::Point{1., 1., .5},
+                                              lstr::Point{.5, .5, 1.},
+                                              lstr::Point{1., .5, 1.},
+                                              lstr::Point{.5, 1., 1.},
+                                              lstr::Point{1., 1., 1.}}};
+        const auto                      element = element_type{el_nodes, data, 0};
+        const auto                      mapped  = lstr::mapToPhysicalSpace(element, lstr::Point{0., 0., 0.});
+        CHECK(mapped.x() == Approx(.75).epsilon(1e-15));
+        CHECK(mapped.y() == Approx(.75).epsilon(1e-15));
+        CHECK(mapped.z() == Approx(.75).epsilon(1e-15));
     }
 }
 
 TEST_CASE("Serial mesh partitioning", "[mesh]")
 {
     constexpr auto n_parts    = 2u;
-    auto           mesh       = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmesh_ascii4.msh), lstr::gmsh_tag);
+    auto           mesh       = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::gmsh_tag);
     const auto     n_elements = mesh.getPartitions()[0].getNElements();
     REQUIRE_NOTHROW(lstr::partitionMesh(mesh, 1, {}));
     lstr::partitionMesh(mesh, n_parts, {2, 3, 4, 5});
@@ -333,15 +357,41 @@ TEST_CASE("Serial mesh partitioning", "[mesh]")
 
 TEST_CASE("Mesh conversion to higher order", "[mesh]")
 {
-    constexpr lstr::el_o_t order      = 2;
-    auto                   mesh       = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmesh_ascii4.msh), lstr::gmsh_tag);
-    const auto             n_elements = mesh.getPartitions()[0].getNElements();
-    lstr::convertMeshToOrder< order >(mesh);
-    auto& part = mesh.getPartitions()[0];
-    CHECK(n_elements == part.getNElements());
-    const auto validate_elorder = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >&) {
-        if constexpr (O != order)
-            throw std::logic_error{"Incorrect element order"};
-    };
-    CHECK_NOTHROW(part.cvisit(validate_elorder));
+    SECTION("mesh imported from gmsh")
+    {
+        constexpr lstr::el_o_t order = 2;
+        auto                   mesh  = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), lstr::gmsh_tag);
+        const auto             n_elements = mesh.getPartitions()[0].getNElements();
+        lstr::convertMeshToOrder< order >(mesh.getPartitions()[0]);
+        auto& part = mesh.getPartitions()[0];
+        CHECK(n_elements == part.getNElements());
+        const auto validate_elorder = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >&) {
+            if constexpr (O != order)
+                throw std::logic_error{"Incorrect element order"};
+        };
+        CHECK_NOTHROW(part.cvisit(validate_elorder));
+    }
+
+    SECTION("procedurally generated mesh")
+    {
+        constexpr lstr::el_o_t order = 2;
+        std::array             dist{0., .25, .5, .75, 1.};
+        auto                   mesh       = lstr::makeCubeMesh(dist);
+        const auto             n_elements = mesh.getPartitions()[0].getNElements();
+        const auto             n_nodes_o1 = mesh.getPartitions()[0].getNodes().size();
+        REQUIRE(n_elements ==
+                (dist.size() - 1) * (dist.size() - 1) * (dist.size() - 1) + 2 * (dist.size() - 1) * (dist.size() - 1));
+        REQUIRE(n_nodes_o1 == dist.size() * dist.size() * dist.size());
+
+        lstr::convertMeshToOrder< order >(mesh.getPartitions()[0]);
+        CHECK(mesh.getPartitions()[0].getNElements() == n_elements);
+        const auto expected_edge_nodes = (dist.size() - 1) * order + 1;
+        const auto expected_n_nodes    = expected_edge_nodes * expected_edge_nodes * expected_edge_nodes;
+        CHECK(mesh.getPartitions()[0].getNodes().size() == expected_n_nodes);
+        const auto validate_elorder = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >&) {
+            if constexpr (O != order)
+                throw std::logic_error{"Incorrect element order"};
+        };
+        CHECK_NOTHROW(mesh.getPartitions()[0].cvisit(validate_elorder));
+    }
 }

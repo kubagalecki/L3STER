@@ -1,6 +1,9 @@
 #ifndef L3STER_MESH_ELEMENTINTERSECTING_HPP
 #define L3STER_MESH_ELEMENTINTERSECTING_HPP
+
 #include "mesh/ElementTypes.hpp"
+#include "mesh/MapReferenceToPhysical.hpp"
+#include "mesh/NodePhysicalLocation.hpp"
 #include "util/Algorithm.hpp"
 
 #include <bitset>
@@ -89,8 +92,8 @@ requires(DIM <= 3) consteval auto getElementOuterFeatures()
         return getElementIndices< T, O >();    //
     else if constexpr (DIM == el_dim - 1)      // 2/9 cases: (2, 1), (3, 2)
         return el_traits_t::boundary_table;    //
-    else                                       //
-        return makeElementEdgeTable< T, O >(); // 1/9 cases: (3, 1)
+    else                                       // 1/9 cases: (3, 1)
+        return makeElementEdgeTable< T, O >(); //
 }
 } // namespace detail
 
@@ -108,124 +111,119 @@ consteval dim_t highestMatchableDim()
     return d1 == d2 ? d1 - 1 : lower_dim;
 }
 
-template < dim_t DIM, ElementTypes T1, ElementTypes T2 >
-constexpr auto elementIntersectionAtDim(const Element< T1, 1 >& e1, const Element< T2, 1 >& e2)
+template < dim_t DIM, el_o_t O, ElementTypes T1, ElementTypes T2 >
+auto elementIntersectionSpansAtDim(const Element< T1, 1 >& el1, const Element< T2, 1 >& el2)
 {
     using span_t = std::span< const el_locind_t >;
-    span_t      m1, m2;
-    const auto& f1    = element_outer_features< T1, 1, DIM >;
-    const auto& f2    = element_outer_features< T2, 1, DIM >;
-    const bool  found = anyInTuple(
-        f1,
-        [&](const array auto& inds1) {
-            auto nodes1 = arrayAtInds(e1.getNodes(), inds1);
-            std::ranges::sort(nodes1);
-            return anyInTuple(
-                f2,
-                [&](const array auto inds2) {
-                    auto nodes2 = arrayAtInds(e2.getNodes(), inds2);
-                    std::ranges::sort(nodes2);
-                    return std::ranges::equal(nodes1, nodes2);
-                },
-                [&](const array auto inds2) { m2 = inds2; });
-        },
-        [&](const array auto inds1) { m1 = inds1; });
-    return std::make_pair(m1, m2);
-}
-} // namespace detail
+    span_t           intersect_inds1, intersect_inds2;
+    const auto&      f1_o1   = element_outer_features< T1, 1, DIM >;
+    const auto&      f2_o1   = element_outer_features< T2, 1, DIM >;
+    const auto&      f1_oN   = element_outer_features< T1, O, DIM >;
+    const auto&      f2_oN   = element_outer_features< T2, O, DIM >;
+    constexpr size_t f1_size = std::tuple_size_v< std::decay_t< decltype(f1_o1) > >;
+    constexpr size_t f2_size = std::tuple_size_v< std::decay_t< decltype(f2_o1) > >;
 
-template < ElementTypes T1, ElementTypes T2 >
-constexpr std::tuple< dim_t, std::span< const el_locind_t >, std::span< const el_locind_t > >
-elementIntersection(const Element< T1, 1 >& e1, const Element< T2, 1 >& e2)
+    [&]< size_t... I1 >(std::index_sequence< I1... >)
+    {
+        const auto iterate_over_f1 = [&]< size_t Ind1 >(std::integral_constant< size_t, Ind1 >) {
+            auto nodes1 = arrayAtInds(el1.getNodes(), std::get< Ind1 >(f1_o1));
+            std::ranges::sort(nodes1);
+            return [&]< size_t... I2 >(std::index_sequence< I2... >)
+            {
+                const auto iterate_over_f2 = [&]< size_t Ind2 >(std::integral_constant< size_t, Ind2 >) {
+                    auto nodes2 = arrayAtInds(el2.getNodes(), std::get< Ind2 >(f2_o1));
+                    std::ranges::sort(nodes2);
+                    const bool is_matched = std::ranges::equal(nodes1, nodes2);
+                    if (is_matched)
+                    {
+                        intersect_inds1 = span_t{std::get< Ind1 >(f1_oN)};
+                        intersect_inds2 = span_t{std::get< Ind2 >(f2_oN)};
+                    }
+                    return is_matched;
+                };
+                return (iterate_over_f2(std::integral_constant< size_t, I2 >{}) or ...);
+            }
+            (std::make_index_sequence< f2_size >{});
+        };
+        (iterate_over_f1(std::integral_constant< size_t, I1 >{}) or ...);
+    }
+    (std::make_index_sequence< f1_size >{});
+
+    return std::make_pair(intersect_inds1, intersect_inds2);
+}
+
+template < el_o_t O, ElementTypes T1, ElementTypes T2 >
+std::pair< std::span< const el_locind_t >, std::span< const el_locind_t > >
+elementIntersection(const Element< T1, 1 >& el1, const Element< T2, 1 >& el2)
 {
     constexpr auto highest_matchable = detail::highestMatchableDim< T1, T2 >();
 
-    if constexpr (highest_matchable == 0) // needs to be instantiated, but will never be called (line + line)
-        throw std::logic_error{"Cannot match 2 line elements, mesh topology is incorrect"};
+    if constexpr (highest_matchable == 0) // metis marks 2 lines a neighbours in the dual graph
+        return {};
     else
     {
         if constexpr (highest_matchable == 1)
-            return std::tuple_cat(std::tuple{highest_matchable}, detail::elementIntersectionAtDim< 1 >(e1, e2));
-
-        // highest_matchable == 2
-        const auto [m1, m2] = detail::elementIntersectionAtDim< highest_matchable >(e1, e2);
-        if (not m1.empty())
-            return std::make_tuple(highest_matchable, m1, m2);
-        else
-            return std::tuple_cat(std::tuple{dim_t{1}}, detail::elementIntersectionAtDim< 1 >(e1, e2));
+            return detail::elementIntersectionSpansAtDim< 1, O >(el1, el2);
+        else // highest_matchable == 2
+        {
+            const auto match_dim2 = detail::elementIntersectionSpansAtDim< 2, O >(el1, el2);
+            if (not match_dim2.first.empty())
+                return match_dim2;
+            else
+                return detail::elementIntersectionSpansAtDim< 1, O >(el1, el2);
+        }
     }
 }
 
-/*
-namespace detail
+consteval auto getPointMatcher()
 {
-template < ElementTypes T1, ElementTypes T2, el_o_t O, dim_t DIM >
-consteval size_t getNPossibleIntersections()
-{
-    if constexpr (DIM == 0)
-        return 0;
-    else
-    {
-        constexpr size_t size1 = std::tuple_size_v< decltype(element_outer_features< T1, O, DIM >) >;
-        constexpr size_t size2 = std::tuple_size_v< decltype(element_outer_features< T2, O, DIM >) >;
-        return size1 * size2 + getNPossibleIntersections< T1, T2, DIM - 1 >();
-    }
-}
-
-template < ElementTypes T1, ElementTypes T2, el_o_t O >
-consteval auto makeIntersectionTable()
-{
-    constexpr auto d1                = ElementTraits< Element< T1, O > >::native_dim;
-    constexpr auto d2                = ElementTraits< Element< T2, O > >::native_dim;
-    constexpr auto lower_dim         = d1 <= d2 ? d1 : d2;
-    constexpr auto highest_matchable = d1 == d2 ? d1 - 1 : lower_dim;
-
-    using span_t = std::span< const el_locind_t >;
-    std::array< std::pair< span_t, span_t >, getNPossibleIntersections< T1, T2, O, highest_matchable >() > itable;
-    size_t                                                                                                 index = 0;
-    [&]< size_t... I >(std::index_sequence< I... >)
-    {
-        const auto fill_dimension = [&]< size_t Ind >(std::integral_constant< size_t, Ind >) {
-            if constexpr (Ind == 0)
-                return;
-
-            constexpr auto& features1 = element_outer_features< T1, O, Ind >;
-            constexpr auto& features2 = element_outer_features< T2, O, Ind >;
-            forEachTuple(
-                [&](const array auto& f1) {
-                    forEachTuple(
-                        [&](const array auto& f2) {
-                            itable[index] = std::make_pair(span_t{f1}, span_t{f2});
-                            ++index; // index increment on separate line for better clang-format indentation
-                        },
-                        features2);
-                },
-                features1);
-        };
-        (..., fill_dimension(std::integral_constant< size_t, I >{}));
-    }
-    (std::make_index_sequence< highest_matchable + 1 >{});
+    return [](const Point< 3 >& p1, const Point< 3 >& p2) {
+        constexpr double             tolerance = 1e-12;
+        Eigen::Matrix< val_t, 3, 1 > dif_vec   = Eigen::Matrix< val_t, 3, 1 >{p1} - Eigen::Matrix< val_t, 3, 1 >{p2};
+        return dif_vec.norm() < tolerance;
+    };
 }
 } // namespace detail
 
-template < ElementTypes T1, ElementTypes T2, el_o_t O >
-inline constexpr auto intersection_table = detail::makeIntersectionTable< T1, T2, O >();
-
-// template < ElementTypes T1, ElementTypes T2, el_o_t O >
-// size_t matchElements(const Element< T1, O >& el1, const Element< T2, O >& el2)
-//{
-//     // TODO
-// }
-*/
+template < el_o_t O, ElementTypes T >
+constexpr void updateMatchMask(const Element< T, 1 >&                   el_o1,
+                               std::bitset< Element< T, O >::n_nodes >& mask,
+                               typename Element< T, O >::node_array_t&  nodes)
+{
+    const auto el_o1_nodelocs = nodePhysicalLocation(el_o1);
+    const auto el_oN_nodelocs = nodePhysicalLocation(Element< T, O >{{}, el_o1.getData(), 0});
+    std::array< size_t, std::tuple_size_v< decltype(el_o1_nodelocs) > > matched_inds;
+    matchingPermutation(el_oN_nodelocs, el_o1_nodelocs, begin(matched_inds), detail::getPointMatcher());
+    for (size_t i = 0; auto ind : matched_inds)
+    {
+        mask[ind]  = true;
+        nodes[ind] = el_o1.getNodes()[i++];
+    }
+}
 
 template < ElementTypes T_converted, ElementTypes T_converting, el_o_t O >
-constexpr void updateMatchMask(const Element< T_converted, 1 >&                    converted_o1,
-                               const Element< T_converted, O >&                    converted_oN,
-                               const Element< T_converting, 1 >&                   converting,
+constexpr void updateMatchMask(const Element< T_converted, 1 >&                    pattern_o1_el,
+                               const Element< T_converted, O >&                    pattern_oN_el,
+                               const Element< T_converting, 1 >&                   match_o1_el,
                                std::bitset< Element< T_converting, O >::n_nodes >& mask,
                                typename Element< T_converting, O >::node_array_t&  nodes)
 {
-    const auto [md, m1, m2] = elementIntersection(converted_o1, converting);
+    const auto [pattern_inds, match_inds] = detail::elementIntersection< O >(pattern_o1_el, match_o1_el);
+    std::array< size_t, std::tuple_size_v< std::decay_t< decltype(nodes) > > > match_buffer;
+    const Element< T_converting, O > match_oN_el{{}, match_o1_el.getData(), {}};
+    auto filtered_match_inds = match_inds | std::views::filter([&](auto ind) { return not mask[ind]; });
+
+    matchingPermutation(
+        pattern_inds | std::views::transform([&](auto ind) { return nodePhysicalLocation(pattern_oN_el, ind); }),
+        filtered_match_inds | std::views::transform([&](auto ind) { return nodePhysicalLocation(match_oN_el, ind); }),
+        begin(match_buffer),
+        detail::getPointMatcher());
+
+    for (size_t i = 0u; auto m_ind : filtered_match_inds)
+    {
+        mask[m_ind]  = true;
+        nodes[m_ind] = pattern_oN_el.getNodes()[pattern_inds[match_buffer[i++]]];
+    }
 }
 } // namespace lstr
 #endif // L3STER_MESH_ELEMENTINTERSECTING_HPP

@@ -18,7 +18,7 @@ public:
     Mesh& operator=(Mesh&&) = default;
     ~Mesh()                 = default;
 
-    inline Mesh(std::vector< MeshPartition > partitions_) : partitions{std::move(partitions_)} {}
+    explicit Mesh(std::vector< MeshPartition > partitions_) : partitions{std::move(partitions_)} {}
 
     [[nodiscard]] const std::vector< MeshPartition >& getPartitions() const { return partitions; }
     [[nodiscard]] std::vector< MeshPartition >&       getPartitions() { return partitions; }

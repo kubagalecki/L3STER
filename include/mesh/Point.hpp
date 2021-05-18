@@ -16,17 +16,23 @@ public:
     using vector_t = Eigen::Matrix< val_t, DIM, 1u >;
 
     Point() = default;
-    explicit Point(const vector_t& coords_) : coords{coords_} {}            // NOLINT implicit conversion intended
-    explicit Point(const std::array< val_t, DIM >& a) : coords{a.data()} {} // NOLINT implicit conversion intended
+    explicit Point(const vector_t& coords_) noexcept : coords{coords_} {}
+    explicit Point(const std::array< val_t, DIM >& a) noexcept : coords{a.data()} {}
+    template < std::same_as< val_t >... T >
+    explicit Point(T... coords_) : coords{std::array{coords_...}.data()}
+    {}
 
-    [[nodiscard]] val_t  x() const requires(DIM >= 1) { return coords.coeff(0); }
-    [[nodiscard]] val_t  y() const requires(DIM >= 2) { return coords.coeff(1); }
-    [[nodiscard]] val_t  z() const requires(DIM >= 3) { return coords.coeff(2); }
-    [[nodiscard]] val_t& x() requires(DIM >= 1) { return coords.coeffRef(0); }
-    [[nodiscard]] val_t& y() requires(DIM >= 2) { return coords.coeffRef(1); }
-    [[nodiscard]] val_t& z() requires(DIM >= 3) { return coords.coeffRef(2); }
+    [[nodiscard]] val_t  operator[](size_t i) const noexcept { return coords.coeff(i); }
+    [[nodiscard]] val_t& operator[](size_t i) noexcept { return coords.coeffRef(i); }
 
-    operator vector_t() const { return coords; }; // NOLINT implicit conversion intended
+    [[nodiscard]] val_t  x() const noexcept requires(DIM >= 1) { return coords.coeff(0); }
+    [[nodiscard]] val_t  y() const noexcept requires(DIM >= 2) { return coords.coeff(1); }
+    [[nodiscard]] val_t  z() const noexcept requires(DIM >= 3) { return coords.coeff(2); }
+    [[nodiscard]] val_t& x() noexcept requires(DIM >= 1) { return coords.coeffRef(0); }
+    [[nodiscard]] val_t& y() noexcept requires(DIM >= 2) { return coords.coeffRef(1); }
+    [[nodiscard]] val_t& z() noexcept requires(DIM >= 3) { return coords.coeffRef(2); }
+
+    operator vector_t() const noexcept { return coords; }; // NOLINT implicit conversion intended
 
 private:
     vector_t coords;
@@ -34,5 +40,8 @@ private:
 
 template < size_t DIM >
 Point(const std::array< val_t, DIM >&) -> Point< DIM >;
+
+template < std::same_as< val_t >... T >
+Point(T...) -> Point< sizeof...(T) >;
 } // namespace lstr
 #endif // L3STER_MESH_POINT_HPP

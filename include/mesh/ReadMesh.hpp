@@ -185,7 +185,7 @@ inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
                         size_t n_bounding_entities;
                         file >> n_bounding_entities;
                         int skip;
-                        for (auto i : std::views::iota(0u, n_bounding_entities))
+                        for (size_t i = 0; i < n_bounding_entities; ++i)
                             file >> skip;
                     }
                 };
@@ -216,7 +216,7 @@ inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
     using entity_data_t = decltype(parse_entities(parse_format()));
 
     using node_data_t      = std::tuple< std::vector< size_t >, std::vector< Point< 3 > >, bool >;
-    const auto parse_nodes = [&](const Format& format_data) -> node_data_t {
+    const auto parse_nodes = [&](const Format&) -> node_data_t {
         skip_until_section("$Nodes", "'Node' section not found");
 
         const auto parse_nodes_asciiv4 = [&]() {
@@ -230,7 +230,7 @@ inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
             node_ids.reserve(n_nodes);
             node_coords.reserve(n_nodes);
 
-            for (auto block_ind : std::views::iota(0u, n_blocks))
+            for (size_t block_ind = 0; block_ind < n_blocks; ++block_ind)
             {
                 std::tuple< size_t, int, int, bool > _{};
                 auto& [block_size, dim, entity_tag, parametric] = _;
@@ -241,7 +241,7 @@ inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
 
                 std::copy_n(std::istream_iterator< size_t >(file), block_size, std::back_inserter(node_ids));
                 std::generate_n(std::back_inserter(node_coords), block_size, [&] {
-                    std::array< val_t, 3 > retval;
+                    std::array< val_t, 3 > retval; // NOLINT unneeded initialization
                     std::copy_n(std::istream_iterator< val_t >(file), 3, retval.begin());
                     return Point< 3 >{retval};
                 });
@@ -288,7 +288,7 @@ inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
                 return coords[node_contig_index(gmsh_id)];
             };
 
-            for (auto block : std::views::iota(0u, n_blocks))
+            for (size_t block = 0; block < n_blocks; ++block)
             {
                 int    entity_dim, entity_tag, element_type;
                 size_t block_size;

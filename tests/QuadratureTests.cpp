@@ -60,7 +60,8 @@ TEST_CASE("1D Gauss-Legendre quadrature, 3 point", "[quadrature]")
 
 TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 {
-    const auto element = lstr::Element< lstr::ElementTypes::Line, 1 >{{1, 2}, {}, 0};
+    const lstr::ElementData< lstr::ElementTypes::Line, 1 > data{{lstr::Point{0., 0., 0.}, lstr::Point{0., 0., 0.}}};
+    const auto element = lstr::Element< lstr::ElementTypes::Line, 1 >{{1, 2}, data, 0};
 
     SECTION("1 point quadrature")
     {
@@ -118,7 +119,9 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 
 TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]")
 {
-    const auto element = lstr::Element< lstr::ElementTypes::Quad, 1 >{{1, 2, 3, 4}, {}, 0};
+    const lstr::ElementData< lstr::ElementTypes::Quad, 1 > data{
+        {lstr::Point{0., 0., 0.}, lstr::Point{0., 0., 0.}, lstr::Point{0., 0., 0.}, lstr::Point{0., 0., 0.}}};
+    const auto element = lstr::Element< lstr::ElementTypes::Quad, 1 >{{1, 2, 3, 4}, data, 0};
 
     constexpr auto o0_fun = [](double, double) {
         return 1.;
@@ -198,7 +201,15 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
 TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
 {
-    const auto element = lstr::Element< lstr::ElementTypes ::Hex, 1 >{{1, 2, 3, 4, 5, 6, 7, 8}, {}, 0};
+    const lstr::ElementData< lstr::ElementTypes::Hex, 1 > data{{lstr::Point{0., 0., 0.},
+                                                                lstr::Point{0., 0., 0.},
+                                                                lstr::Point{0., 0., 0.},
+                                                                lstr::Point{0., 0., 0.},
+                                                                lstr::Point{0., 0., 0.},
+                                                                lstr::Point{0., 0., 0.},
+                                                                lstr::Point{0., 0., 0.},
+                                                                lstr::Point{0., 0., 0.}}};
+    const auto element = lstr::Element< lstr::ElementTypes ::Hex, 1 >{{1, 2, 3, 4, 5, 6, 7, 8}, data, 0};
 
     constexpr auto o0_fun = [](double, double, double) {
         return 1.;
