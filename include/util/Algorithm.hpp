@@ -162,5 +162,25 @@ constexpr auto arrayAtInds(const std::array< T_a, N_a >& array, const std::array
     std::ranges::transform(filter, begin(retval), [&](T_filter i) { return array[i]; });
     return retval;
 }
+
+template < std::ranges::range        R1,
+           std::ranges::range        R2,
+           std::weakly_incrementable O,
+           typename Pred  = std::ranges::equal_to,
+           typename Proj1 = std::identity,
+           typename Proj2 = std::identity >
+requires std::indirectly_writable< O, size_t > and
+    std::indirectly_comparable< std::ranges::iterator_t< R1 >, std::ranges::iterator_t< R2 >, Pred, Proj1, Proj2 >
+constexpr auto
+matchingPermutation(R1&& r_pattern, R2&& r_match, O out, Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {})
+{
+    O out_initial = out;
+    std::ranges::for_each(r_match, [&](auto&& match_el) {
+        *(out++) = std::distance(begin(r_pattern),
+                                 std::ranges::find_if(
+                                     r_pattern, [&](auto&& el) { return pred(el, proj2(match_el)); }, proj1));
+    });
+    return std::ranges::in_out_result{out_initial, out};
+}
 } // namespace lstr
 #endif // L3STER_UTIL_ALGORITHM_HPP
