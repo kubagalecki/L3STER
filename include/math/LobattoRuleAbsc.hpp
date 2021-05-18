@@ -1,5 +1,5 @@
-#ifndef L3STER_MATH_COMPUTELOBATTORULEABSC_HPP
-#define L3STER_MATH_COMPUTELOBATTORULEABSC_HPP
+#ifndef L3STER_MATH_LOBATTORULEABSC_HPP
+#define L3STER_MATH_LOBATTORULEABSC_HPP
 
 #include "math/Lobatto.hpp"
 
@@ -22,5 +22,8 @@ requires(NPOINTS > 1) auto computeLobattoRuleAbsc()
         return retval;
     }
 }
+
+template < std::floating_point T, size_t N >
+inline const auto lobatto_rule_absc = computeLobattoRuleAbsc< T, N >();
 } // namespace lstr
-#endif // L3STER_MATH_COMPUTELOBATTORULEABSC_HPP
+#endif // L3STER_MATH_LOBATTORULEABSC_HPP
