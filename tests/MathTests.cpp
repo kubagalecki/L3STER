@@ -1,6 +1,4 @@
-#include "math/LagrangeInterpolation.hpp"
-#include "math/Legendre.hpp"
-#include "math/LobattoRuleAbsc.hpp"
+#include "l3ster.hpp"
 
 #include "catch2/catch.hpp"
 

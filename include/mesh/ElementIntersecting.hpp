@@ -5,8 +5,10 @@
 #include "mesh/MapReferenceToPhysical.hpp"
 #include "mesh/NodePhysicalLocation.hpp"
 #include "util/Algorithm.hpp"
+#include "util/Meta.hpp"
 
 #include <bitset>
+#include <span>
 
 namespace lstr
 {

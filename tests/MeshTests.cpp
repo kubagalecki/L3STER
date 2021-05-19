@@ -1,7 +1,4 @@
 #include "l3ster.hpp"
-#include "mesh/ConvertMeshToOrder.hpp"
-#include "mesh/MapReferenceToPhysical.hpp"
-#include "mesh/primitives/CubeMesh.hpp"
 
 #include "TestDataPath.h"
 #include "catch2/catch.hpp"
@@ -361,9 +358,9 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
     {
         constexpr lstr::el_o_t order = 2;
         auto                   mesh  = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), lstr::gmsh_tag);
-        const auto             n_elements = mesh.getPartitions()[0].getNElements();
-        lstr::convertMeshToOrder< order >(mesh.getPartitions()[0]);
-        auto& part = mesh.getPartitions()[0];
+        auto&                  part  = mesh.getPartitions()[0];
+        const auto             n_elements = part.getNElements();
+        lstr::convertMeshToOrder< order >(part);
         CHECK(n_elements == part.getNElements());
         const auto validate_elorder = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >&) {
             if constexpr (O != order)
@@ -375,23 +372,24 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
     SECTION("procedurally generated mesh")
     {
         constexpr lstr::el_o_t order = 2;
-        std::array             dist{0., .25, .5, .75, 1.};
+        constexpr std::array   dist{0., .2, .4, .6, .8, 1.};
+        constexpr auto         n_edge_els = dist.size() - 1;
         auto                   mesh       = lstr::makeCubeMesh(dist);
-        const auto             n_elements = mesh.getPartitions()[0].getNElements();
-        const auto             n_nodes_o1 = mesh.getPartitions()[0].getNodes().size();
-        REQUIRE(n_elements ==
-                (dist.size() - 1) * (dist.size() - 1) * (dist.size() - 1) + 2 * (dist.size() - 1) * (dist.size() - 1));
+        auto&                  part       = mesh.getPartitions()[0];
+        const auto             n_elements = part.getNElements();
+        const auto             n_nodes_o1 = part.getNodes().size();
+        REQUIRE(n_elements == n_edge_els * n_edge_els * n_edge_els + 6 * n_edge_els * n_edge_els);
         REQUIRE(n_nodes_o1 == dist.size() * dist.size() * dist.size());
 
-        lstr::convertMeshToOrder< order >(mesh.getPartitions()[0]);
-        CHECK(mesh.getPartitions()[0].getNElements() == n_elements);
+        lstr::convertMeshToOrder< order >(part);
+        CHECK(part.getNElements() == n_elements);
         const auto expected_edge_nodes = (dist.size() - 1) * order + 1;
         const auto expected_n_nodes    = expected_edge_nodes * expected_edge_nodes * expected_edge_nodes;
-        CHECK(mesh.getPartitions()[0].getNodes().size() == expected_n_nodes);
+        CHECK(part.getNodes().size() == expected_n_nodes);
         const auto validate_elorder = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >&) {
             if constexpr (O != order)
                 throw std::logic_error{"Incorrect element order"};
         };
-        CHECK_NOTHROW(mesh.getPartitions()[0].cvisit(validate_elorder));
+        CHECK_NOTHROW(part.cvisit(validate_elorder));
     }
 }
