@@ -3,13 +3,21 @@
 # This way dependencies don't need to be rebuilt every CI run.
 ###############################################################
 
-FROM ubuntu:groovy
+FROM archlinux:latest
 
-RUN apt update && apt upgrade -y && apt autoremove -y
-
-# Install tzdata separately to skip user input
-RUN DEBIAN_FRONTEND="noninteractive" apt -y install tzdata
-
-# Install build utilities and dependencies
-RUN apt install -y build-essential gcovr curl git cmake catch2 libeigen3-dev libtbb-dev hwloc \
-libmetis-dev libparmetis-dev libptscotch-dev trilinos-all-dev
+RUN pacman -Syu --noconfirm git python3 patch cmake gcc10 gcc10-fortran make
+RUN mkdir -p ~/.spack; \
+    echo "packages:" > ~/.spack/packages.yaml && \
+    echo "  cmake:" >> ~/.spack/packages.yaml && \
+    echo "    externals:" >> ~/.spack/packages.yaml && \
+    echo -n "    - spec: cmake@" >> ~/.spack/packages.yaml && \
+    cmake --version | grep version | grep -Eo "[0-9]+\.[0-9]+\.[0-9]" >> ~/.spack/packages.yaml && \
+    echo "      prefix: /usr" >> ~/.spack/packages.yaml && \
+    echo "    buildable: False" >> ~/.spack/packages.yaml
+RUN git clone https://github.com/spack/spack.git
+RUN spack/bin/spack install --only dependencies trilinos build_type=Release +openmp cxxstd=17; spack/bin/spack clean -a
+RUN spack/bin/spack install trilinos build_type=Release +openmp cxxstd=17
+RUN spack/bin/spack install eigen build_type=Release
+RUN spack/bin/spack install catch2 build_type=Release
+RUN spack/bin/spack install intel-tbb cxxstd=17
+RUN spack/bin/spack gc -y; spack/bin/spack clean -a
