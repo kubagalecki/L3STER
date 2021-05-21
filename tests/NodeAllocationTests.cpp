@@ -1,4 +1,4 @@
-#include "numa/NodeGlobalResource.hpp"
+#include "l3ster.hpp"
 
 #include "catch2/catch.hpp"
 #include <vector>

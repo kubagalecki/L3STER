@@ -12,10 +12,10 @@ struct BoundaryElementView
     using element_t = Element< ELTYPE, ELORDER >;
 
     BoundaryElementView(const element_t& element_, const el_ns_t element_side_)
-        : element{std::cref(element_)}, element_side{element_side_}
+        : element{&element_}, element_side{element_side_}
     {}
 
-    element_cref_t< ELTYPE, ELORDER > element;
+    element_cptr_t< ELTYPE, ELORDER > element;
     el_ns_t                           element_side;
 };
 } // namespace lstr

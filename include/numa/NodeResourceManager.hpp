@@ -14,5 +14,4 @@ private:
     std::vector< MpiComm >            comms;
 };
 } // namespace lstr
-
 #endif // L3STER_NUMA_NODERESOURCEMANAGER_HPP

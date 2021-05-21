@@ -75,20 +75,30 @@ struct ElementFinder : ConstructionTracker
     nv_t nodes;
 };
 
-TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::Mesh, const lstr::Mesh)
+TEMPLATE_TEST_CASE("2D mesh import", "[mesh]", lstr::Mesh, const lstr::Mesh)
 {
     // Flag to prevent non-const member functions from being tested on const object
     constexpr bool is_const = std::is_same_v< TestType, const lstr::Mesh >;
 
-    TestType mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_ascii4.msh), lstr::gmsh_tag);
+    TestType mesh = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::gmsh_tag);
 
     REQUIRE(mesh.getPartitions().size() == 1);
 
-    auto&       topology = mesh.getPartitions()[0];
-    const auto& nodes    = mesh.getVertices();
+    auto&            topology         = mesh.getPartitions()[0];
+    constexpr size_t expected_n_nodes = 121;
+    size_t           max_node{};
+    const auto       update_max_node = [&](const auto& el) {
+        const size_t max_el_node = *std::ranges::max_element(el.getNodes());
+        if (max_el_node >= expected_n_nodes)
+            throw std::invalid_argument{"max nodes exceeded"};
+        max_node = std::max(max_node, max_el_node);
+    };
+    topology.cvisit(update_max_node);
 
-    REQUIRE(nodes.size() == 121);
-    REQUIRE(nodes.size() == topology.getNodes().size());
+    CHECK_THROWS(topology.getDualGraph());
+
+    REQUIRE(max_node + 1 == expected_n_nodes);
+    REQUIRE(max_node + 1 == topology.getNodes().size());
     REQUIRE(topology.getGhostNodes().size() == 0);
 
     // Const visitors
@@ -195,6 +205,8 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::Mesh, const lstr::Mesh)
     ConstructionTracker::resetCount();
 
     // BoundaryView
+    if constexpr (!is_const)
+        topology.initDualGraph();
     std::vector< lstr::BoundaryView > boundaries;
     boundaries.reserve(4);
     for (int i = 2; i <= 5; ++i)
@@ -208,21 +220,118 @@ TEMPLATE_TEST_CASE("Quadrilateral mesh", "[mesh]", lstr::Mesh, const lstr::Mesh)
     CHECK_THROWS(mesh.getPartitions()[0].getBoundaryView(6));
 }
 
+TEST_CASE("3D mesh import", "[mesh]")
+{
+    auto  mesh = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), lstr::gmsh_tag);
+    auto& part = mesh.getPartitions()[0];
+    part.initDualGraph();
+
+    //    constexpr size_t expected_nvertices = 5885;
+    constexpr size_t expected_nelements = 5664;
+    CHECK(part.getNElements() == expected_nelements);
+
+    for (int i = 2; i <= 7; ++i)
+        CHECK_NOTHROW(part.getBoundaryView(i));
+
+    CHECK_THROWS(part.getBoundaryView(42));
+}
+
 TEST_CASE("Unsupported mesh formats, mesh I/O error handling", "[mesh]")
 {
-    lstr::Mesh mesh;
-    REQUIRE_THROWS(mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_ascii2.msh), lstr::gmsh_tag));
-    REQUIRE_THROWS(mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_bin2.msh), lstr::gmsh_tag));
-    REQUIRE_THROWS(mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_bin4.msh), lstr::gmsh_tag));
-    REQUIRE_THROWS(mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(nonexistent.msh), lstr::gmsh_tag));
-    REQUIRE_THROWS(
-        mesh = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmsh_triangle_mesh_ascii4.msh), lstr::gmsh_tag));
+    using lstr::gmsh_tag;
+    using lstr::readMesh;
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmesh_ascii2.msh), gmsh_tag));
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmesh_bin2.msh), gmsh_tag));
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmesh_bin4.msh), gmsh_tag));
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(nonexistent.msh), gmsh_tag));
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_triangle_mesh.msh), gmsh_tag));
+}
+
+TEST_CASE("Element lookup by ID", "[mesh]")
+{
+    lstr::Domain d;
+    CHECK_FALSE(d.find(1));
+
+    lstr::ElementData< lstr::ElementTypes::Line, 1 > data{{lstr::Point{0., 0., 0.}, lstr::Point{0., 0., 0.}}};
+
+    std::array< lstr::n_id_t, 2 > nodes{1, 2};
+    lstr::el_id_t                 id = 1;
+    d.emplaceBack< lstr::ElementTypes::Line, 1 >(nodes, data, id++);
+    CHECK_FALSE(d.find(0));
+    CHECK(d.find(1));
+
+    const auto next = [&]() -> std::array< lstr::n_id_t, 2 >& {
+        std::ranges::for_each(nodes, [](auto& n) { ++n; });
+        return nodes;
+    };
+
+    for (size_t i = 0; i < 10; ++i)
+        d.emplaceBack< lstr::ElementTypes::Line, 1 >(next(), data, id++);
+    CHECK(d.find(10));
+
+    d.emplaceBack< lstr::ElementTypes::Line, 1 >(next(), data, 0);
+    CHECK(d.find(0));
+
+    d.emplaceBack< lstr::ElementTypes::Line, 1 >(next(), data, id *= 2);
+    CHECK(d.find(id));
+    CHECK_FALSE(d.find(id + 1));
+}
+
+TEST_CASE("Reference to physical mapping", "[mesh]")
+{
+    constexpr auto el_o = 2;
+    SECTION("1D")
+    {
+        constexpr auto el_t                      = lstr::ElementTypes::Line;
+        using element_type                       = lstr::Element< el_t, el_o >;
+        constexpr auto                  el_nodes = typename element_type::node_array_t{};
+        lstr::ElementData< el_t, el_o > data{{lstr::Point{1., 1., 1.}, lstr::Point{.5, .5, .5}}};
+        const auto                      element = element_type{el_nodes, data, 0};
+        const auto                      mapped  = lstr::mapToPhysicalSpace(element, lstr::Point{0.});
+        CHECK(mapped.x() == Approx(.75).epsilon(1e-15));
+        CHECK(mapped.y() == Approx(.75).epsilon(1e-15));
+        CHECK(mapped.z() == Approx(.75).epsilon(1e-15));
+    }
+
+    SECTION("2D")
+    {
+        constexpr auto el_t                      = lstr::ElementTypes::Quad;
+        using element_type                       = lstr::Element< el_t, el_o >;
+        constexpr auto                  el_nodes = typename element_type::node_array_t{};
+        lstr::ElementData< el_t, el_o > data{
+            {lstr::Point{1., -1., 0.}, lstr::Point{2., -1., 0.}, lstr::Point{1., 1., 1.}, lstr::Point{2., 1., 1.}}};
+        const auto element = element_type{el_nodes, data, 0};
+        const auto mapped  = lstr::mapToPhysicalSpace(element, lstr::Point{.5, -.5});
+        CHECK(mapped.x() == Approx(1.75).epsilon(1e-15));
+        CHECK(mapped.y() == Approx(-.5).epsilon(1e-15));
+        CHECK(mapped.z() == Approx(.25).epsilon(1e-15));
+    }
+
+    SECTION("3D")
+    {
+        constexpr auto el_t                      = lstr::ElementTypes::Hex;
+        using element_type                       = lstr::Element< el_t, el_o >;
+        constexpr auto                  el_nodes = typename element_type::node_array_t{};
+        lstr::ElementData< el_t, el_o > data{{lstr::Point{.5, .5, .5},
+                                              lstr::Point{1., .5, .5},
+                                              lstr::Point{.5, 1., .5},
+                                              lstr::Point{1., 1., .5},
+                                              lstr::Point{.5, .5, 1.},
+                                              lstr::Point{1., .5, 1.},
+                                              lstr::Point{.5, 1., 1.},
+                                              lstr::Point{1., 1., 1.}}};
+        const auto                      element = element_type{el_nodes, data, 0};
+        const auto                      mapped  = lstr::mapToPhysicalSpace(element, lstr::Point{0., 0., 0.});
+        CHECK(mapped.x() == Approx(.75).epsilon(1e-15));
+        CHECK(mapped.y() == Approx(.75).epsilon(1e-15));
+        CHECK(mapped.z() == Approx(.75).epsilon(1e-15));
+    }
 }
 
 TEST_CASE("Serial mesh partitioning", "[mesh]")
 {
     constexpr auto n_parts    = 2u;
-    auto           mesh       = lstr::readMesh(L3STER_GENERATE_ABS_TEST_DATA_PATH(gmesh_ascii4.msh), lstr::gmsh_tag);
+    auto           mesh       = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::gmsh_tag);
     const auto     n_elements = mesh.getPartitions()[0].getNElements();
     REQUIRE_NOTHROW(lstr::partitionMesh(mesh, 1, {}));
     lstr::partitionMesh(mesh, n_parts, {2, 3, 4, 5});
@@ -241,4 +350,46 @@ TEST_CASE("Serial mesh partitioning", "[mesh]")
     std::ranges::set_intersection(p1.getGhostNodes(), p2.getGhostNodes(), std::back_inserter(intersects));
     CHECK(intersects.empty());
     REQUIRE_THROWS(lstr::partitionMesh(mesh, 42, {}));
+}
+
+TEST_CASE("Mesh conversion to higher order", "[mesh]")
+{
+    SECTION("mesh imported from gmsh")
+    {
+        constexpr lstr::el_o_t order = 2;
+        auto                   mesh  = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), lstr::gmsh_tag);
+        auto&                  part  = mesh.getPartitions()[0];
+        const auto             n_elements = part.getNElements();
+        lstr::convertMeshToOrder< order >(part);
+        CHECK(n_elements == part.getNElements());
+        const auto validate_elorder = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >&) {
+            if constexpr (O != order)
+                throw std::logic_error{"Incorrect element order"};
+        };
+        CHECK_NOTHROW(part.cvisit(validate_elorder));
+    }
+
+    SECTION("procedurally generated mesh")
+    {
+        constexpr lstr::el_o_t order = 2;
+        constexpr std::array   dist{0., .2, .4, .6, .8, 1.};
+        constexpr auto         n_edge_els = dist.size() - 1;
+        auto                   mesh       = lstr::makeCubeMesh(dist);
+        auto&                  part       = mesh.getPartitions()[0];
+        const auto             n_elements = part.getNElements();
+        const auto             n_nodes_o1 = part.getNodes().size();
+        REQUIRE(n_elements == n_edge_els * n_edge_els * n_edge_els + 6 * n_edge_els * n_edge_els);
+        REQUIRE(n_nodes_o1 == dist.size() * dist.size() * dist.size());
+
+        lstr::convertMeshToOrder< order >(part);
+        CHECK(part.getNElements() == n_elements);
+        const auto expected_edge_nodes = (dist.size() - 1) * order + 1;
+        const auto expected_n_nodes    = expected_edge_nodes * expected_edge_nodes * expected_edge_nodes;
+        CHECK(part.getNodes().size() == expected_n_nodes);
+        const auto validate_elorder = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >&) {
+            if constexpr (O != order)
+                throw std::logic_error{"Incorrect element order"};
+        };
+        CHECK_NOTHROW(part.cvisit(validate_elorder));
+    }
 }

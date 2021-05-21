@@ -2,8 +2,7 @@
 #define L3STER_MESH_PARTITIONMESH_HPP
 #include "mesh/Mesh.hpp"
 #include "util/Algorithm.hpp"
-
-#include "metis.h"
+#include "util/MetisUtils.hpp"
 
 #include <vector>
 
@@ -80,19 +79,6 @@ inline int invokeMetis(idx_t&                n_elements,
                                npart.data());
 }
 
-inline void handleMetisErrorCode(int error)
-{
-    switch (error)
-    {
-    case METIS_OK:
-        break;
-    case METIS_ERROR_MEMORY:
-        throw std::bad_alloc{};
-    default:
-        throw std::runtime_error{"Metis failed to partition the mesh"};
-    }
-}
-
 template < std::invocable< const DomainView > F >
 auto partitionDomains(const MeshPartition&          part,
                       const std::array< idx_t, 3 >& domain_data,
@@ -162,9 +148,8 @@ inline void assignBoundaryElements(const MeshPartition&                        p
     };
     part.cvisit(
         [&](const auto& boundary_el, const DomainView& dv) {
-            const auto domain_el = part.getElementBoundaryView(boundary_el, dv.getID()).first;
-            const auto domain_part =
-                lookup_el_part(std::visit([](const auto& el) { return el.get().getId(); }, *domain_el));
+            const auto domain_el   = part.getElementBoundaryView(boundary_el, dv.getID()).first->first;
+            const auto domain_part = lookup_el_part(std::visit([](const auto& el) { return el->getId(); }, domain_el));
             new_domain_maps[domain_part][dv.getID()].push(boundary_el);
         },
         boundaries);
@@ -243,7 +228,7 @@ inline void partitionMesh(Mesh& mesh, idx_t n_parts, const std::vector< d_id_t >
     detail::assignBoundaryElements(part, epart, new_domain_maps, boundaries, domain_data[0]);
     auto new_partitions = detail::assignNodes(n_parts, npart, new_domain_maps);
 
-    mesh = Mesh{std::move(mesh.getVertices()), std::move(new_partitions)};
+    mesh = Mesh{std::move(new_partitions)};
 }
 } // namespace lstr
 #endif // L3STER_MESH_PARTITIONMESH_HPP

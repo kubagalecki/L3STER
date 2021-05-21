@@ -84,8 +84,7 @@ template < std::floating_point T, size_t ORDER >
         return ret_t{{0.}};
     else
     {
-        std::array< T, ORDER > ret;
-        auto                   der_coefs = ret;
+        std::array< T, ORDER > ret, der_coefs;
         std::iota(der_coefs.rbegin(), der_coefs.rend(), 1);
         std::transform(
             coefs.get().cbegin(), coefs.get().cend() - 1, der_coefs.cbegin(), ret.begin(), std::multiplies{});

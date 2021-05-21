@@ -15,13 +15,12 @@ using parametrize_type_over_element_types_and_orders_t =
     parametrize_over_combinations_t< U, T, element_types, element_orders >;
 template < ElementTypes ELTYPE, el_o_t ELORDER >
 class Element;
-using element_variant_t = parametrize_type_over_element_types_and_orders_t< std::variant, Element >;
 template < ElementTypes ELTYPE, el_o_t ELORDER >
-using element_ref_t = std::reference_wrapper< Element< ELTYPE, ELORDER > >;
+using element_ptr_t = Element< ELTYPE, ELORDER >*;
 template < ElementTypes ELTYPE, el_o_t ELORDER >
-using element_cref_t         = std::reference_wrapper< const Element< ELTYPE, ELORDER > >;
-using element_ref_variant_t  = parametrize_type_over_element_types_and_orders_t< std::variant, element_ref_t >;
-using element_cref_variant_t = parametrize_type_over_element_types_and_orders_t< std::variant, element_cref_t >;
+using element_cptr_t         = const Element< ELTYPE, ELORDER >*;
+using element_ptr_variant_t  = parametrize_type_over_element_types_and_orders_t< std::variant, element_ptr_t >;
+using element_cptr_variant_t = parametrize_type_over_element_types_and_orders_t< std::variant, element_cptr_t >;
 
 namespace detail
 {

@@ -1,5 +1,4 @@
-#include "math/LagrangeInterpolation.hpp"
-#include "math/Legendre.hpp"
+#include "l3ster.hpp"
 
 #include "catch2/catch.hpp"
 
@@ -158,4 +157,56 @@ TEST_CASE("Legendre polynomials", "[math]")
     constexpr auto lp4          = getLegendrePolynomial< double, 4 >();
     constexpr auto lp4_expected = Polynomial{std::array{4.375, 0., -3.75, 0., .375}};
     CHECK(std::ranges::equal(lp4.coefs, lp4_expected.coefs, approx));
+}
+
+TEST_CASE("Lobatto abscissas", "[math]")
+{
+    SECTION("2 points")
+    {
+        const auto la = computeLobattoRuleAbsc< double, 2 >();
+        CHECK(la[0] == -1.);
+        CHECK(la[1] == 1.);
+    }
+
+    SECTION("3 points")
+    {
+        const auto la = computeLobattoRuleAbsc< double, 3 >();
+        CHECK(la[0] == -1.);
+        CHECK(la[1] == 0.);
+        CHECK(la[2] == 1.);
+    }
+
+    SECTION("4 points")
+    {
+        const auto la     = computeLobattoRuleAbsc< double, 4 >();
+        const auto a12abs = .2 * std::sqrt(5.);
+        CHECK(la[0] == -1.);
+        CHECK(la[1] == Approx(-a12abs).epsilon(1e-14));
+        CHECK(la[2] == Approx(a12abs).epsilon(1e-14));
+        CHECK(la[3] == 1.);
+    }
+
+    SECTION("5 points")
+    {
+        const auto la     = computeLobattoRuleAbsc< double, 5 >();
+        const auto a13abs = std::sqrt(21.) / 7.;
+        CHECK(la[0] == -1.);
+        CHECK(la[1] == Approx(-a13abs).epsilon(1e-14));
+        CHECK(la[2] == 0.);
+        CHECK(la[3] == Approx(a13abs).epsilon(1e-14));
+        CHECK(la[4] == 1.);
+    }
+
+    SECTION("6 points")
+    {
+        const auto la     = computeLobattoRuleAbsc< double, 6 >();
+        const auto a14abs = std::sqrt((7. + 2 * std::sqrt(7.)) / 21.);
+        const auto a23abs = std::sqrt((7. - 2 * std::sqrt(7.)) / 21.);
+        CHECK(la[0] == -1.);
+        CHECK(la[1] == Approx(-a14abs).epsilon(1e-14));
+        CHECK(la[2] == Approx(-a23abs).epsilon(1e-14));
+        CHECK(la[3] == Approx(a23abs).epsilon(1e-14));
+        CHECK(la[4] == Approx(a14abs).epsilon(1e-14));
+        CHECK(la[5] == 1.);
+    }
 }

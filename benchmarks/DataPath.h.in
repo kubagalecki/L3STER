@@ -1,0 +1,1 @@
+#define L3STER_TESTDATA_ABSPATH(file) "@L3STER_BENCH_DATA_PATH@/" #file

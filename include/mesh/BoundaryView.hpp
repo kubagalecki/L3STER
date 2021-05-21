@@ -3,6 +3,7 @@
 
 #include <utility>
 
+#include "mesh/Aliases.hpp"
 #include "mesh/BoundaryElementView.hpp"
 
 namespace lstr
@@ -16,21 +17,19 @@ public:
 
     explicit BoundaryView(boundary_element_view_variant_vector_t in) : boundary_elements{std::move(in)} {};
 
-    template < typename F >
+    template < invocable_on_const_elements F >
     decltype(auto) visit(F&& visitor) const;
 
     [[nodiscard]] size_t size() const { return boundary_elements.size(); }
 
 private:
-    boundary_element_view_variant_vector_t boundary_elements{};
+    const boundary_element_view_variant_vector_t boundary_elements{};
 };
 
-template < typename F >
+template < invocable_on_const_elements F >
 decltype(auto) BoundaryView::visit(F&& visitor) const
 {
-    std::for_each(boundary_elements.cbegin(), boundary_elements.cend(), [&](const auto& boundary) {
-        std::visit< void >(visitor, boundary);
-    });
+    std::ranges::for_each(boundary_elements, [&](const auto& boundary_el) { std::visit(visitor, boundary_el); });
     return std::forward< F >(visitor);
 }
 } // namespace lstr

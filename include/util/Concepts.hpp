@@ -3,6 +3,7 @@
 
 #include <array>
 #include <concepts>
+#include <ranges>
 #include <tuple>
 #include <utility>
 
@@ -21,8 +22,6 @@ struct is_array< std::array< T, N > > : std::true_type
 template < typename T >
 concept array = detail::is_array< T >::value;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 namespace detail
 {
     template < typename T >
@@ -36,8 +35,6 @@ namespace detail
 template < typename T >
 concept tuple = detail::is_tuple< T >::value;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 namespace detail
 {
     template < typename T >
@@ -50,8 +47,6 @@ namespace detail
 
 template < typename T >
 concept pair = detail::is_pair< T >::value;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace detail
 {
@@ -84,7 +79,35 @@ concept tuple_like = requires
     typename detail::fold_tuple_gettable< T, std::make_index_sequence< std::tuple_size_v< T > > >;
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
+namespace detail
+{
+    template < typename T, typename tuple_t >
+    struct is_tuple_invocable : std::false_type
+    {};
+
+    template < typename T, tuple_like tuple_t >
+        struct is_tuple_invocable< T, tuple_t > : std::conditional_t < []< size_t... I >(std::index_sequence< I... >)
+    {
+        return (std::is_invocable_v< T, std::tuple_element_t< I, tuple_t > > and ...);
+    }(std::make_index_sequence< std::tuple_size_v< tuple_t > >{}), std::true_type, std::false_type > {};
+
+    template < typename R, typename T, typename tuple_t >
+    struct is_tuple_r_invocable : std::false_type
+    {};
+
+    template < typename R, typename T, tuple_like tuple_t >
+        struct is_tuple_r_invocable< R, T, tuple_t > :
+        std::conditional_t < []< size_t... I >(std::index_sequence< I... >)
+    {
+        return (std::is_invocable_r_v< R, T, std::tuple_element_t< I, tuple_t > > and ...);
+    }(std::make_index_sequence< std::tuple_size_v< tuple_t > >{}), std::true_type, std::false_type > {};
+} // namespace detail
+
+template < typename T, typename tuple_t >
+concept tuple_invocable = detail::is_tuple_invocable< T, tuple_t >::value;
+
+template < typename T, typename R, typename tuple_t >
+concept tuple_r_invocable = detail::is_tuple_r_invocable< R, T, tuple_t >::value;
 
 template < typename T, typename Domain, typename Range >
 concept mapping = requires(T f, Domain x)
@@ -94,6 +117,16 @@ concept mapping = requires(T f, Domain x)
         } -> std::convertible_to< Range >;
 };
 
-} // namespace lstr
+template < typename T, template < typename > typename Predicate >
+concept predicate_trait_specialized = requires
+{
+    {
+        Predicate< std::decay_t< T > >::value
+        } -> std::convertible_to< bool >;
+};
 
+template < typename R, typename V >
+concept random_access_typed_range =
+    std::ranges::random_access_range< R > && std::same_as< std::ranges::range_value_t< R >, V >;
+} // namespace lstr
 #endif // L3STER_UTIL_CONCEPTS_HPP

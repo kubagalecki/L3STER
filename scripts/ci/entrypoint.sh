@@ -1,5 +1,7 @@
 #!/bin/bash
 
+. /spack/share/spack/setup-env.sh
+spack load eigen catch2 intel-tbb trilinos
 mkdir build
 cd build
 cmake \
@@ -8,12 +10,10 @@ cmake \
   -DL3STER_ENABLE_TESTS=ON \
   -DL3STER_ENABLE_VERBOSITY=ON \
   .. || exit 1
-if [ "$REPORT_COVERAGE" != "" ]; then
-  export GMON_OUT_PREFIX=profile_data
-fi
 cmake --build . -- -j || exit 1
-ctest --output-on-failure --repeat until-pass:2 --timeout 120 || exit 1
+ctest --output-on-failure --repeat until-pass:2 --timeout 600 || exit 1
 if [ "$REPORT_COVERAGE" != "" ]; then
+  pacman -S --noconfirm gcovr
   chmod +x generate_coverage_report.sh
   ./generate_coverage_report.sh || exit 1
   curl -s https://codecov.io/bash >codecov.sh || exit 1

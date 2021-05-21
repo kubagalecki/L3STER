@@ -73,12 +73,12 @@ public:
 
         Request(const Request&) = delete;
         Request& operator=(const Request&) = delete;
-        Request(Request&&) noexcept;
-        Request& operator=(Request&&) noexcept;
+        inline Request(Request&&) noexcept;
+        inline Request& operator=(Request&&) noexcept;
         ~Request() { wait(); };
 
-        void wait() { MPI_Wait(&request, MPI_STATUS_IGNORE); }
-        bool test();
+        void        wait() { MPI_Wait(&request, MPI_STATUS_IGNORE); }
+        inline bool test();
 
     private:
         Request() = default;
@@ -88,8 +88,8 @@ public:
 
     void abort() { MPI_Abort(comm, MPI_ERR_UNKNOWN); }
 
-    [[nodiscard]] int getRank() const;
-    [[nodiscard]] int getSize() const;
+    [[nodiscard]] inline int getRank() const;
+    [[nodiscard]] inline int getSize() const;
 
     template < typename T >
     requires std::is_arithmetic_v< T >

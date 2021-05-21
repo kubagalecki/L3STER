@@ -21,6 +21,8 @@ public:
     using element_vector_t         = std::vector< Element< ELTYPE, ELORDER > >;
     using element_vector_variant_t = parametrize_type_over_element_types_and_orders_t< std::variant, element_vector_t >;
     using element_vector_variant_vector_t = std::vector< element_vector_variant_t >;
+    using find_result_t                   = std::optional< element_ptr_variant_t >;
+    using const_find_result_t             = std::optional< element_cptr_variant_t >;
 
     template < ElementTypes ELTYPE, el_o_t ELORDER >
     void push(const Element< ELTYPE, ELORDER >& element);
@@ -36,33 +38,47 @@ public:
     template < invocable_on_const_elements F >
     void cvisit(F&& element_visitor) const;
 
-    template < invocable_on_elements_r< bool > F >
-    [[nodiscard]] std::optional< element_ref_variant_t > findElement(const F& predicate);
     template < invocable_on_const_elements_r< bool > F >
-    [[nodiscard]] std::optional< element_cref_variant_t > findElement(const F& predicate) const;
+    [[nodiscard]] find_result_t find(F&& predicate);
+    template < invocable_on_const_elements_r< bool > F >
+    [[nodiscard]] const_find_result_t        find(F&& predicate) const;
+    [[nodiscard]] inline find_result_t       find(el_id_t id);
+    [[nodiscard]] inline const_find_result_t find(el_id_t id) const;
 
     [[nodiscard]] dim_t         getDim() const { return dim; };
     [[nodiscard]] inline size_t getNElements() const;
 
-private:
+    template < el_o_t O_CONV >
+    [[nodiscard]] Domain getConversionAlloc() const;
+
     template < ElementTypes ELTYPE, el_o_t ELORDER >
     std::vector< Element< ELTYPE, ELORDER > >& getElementVector();
 
+private:
     template < typename F >
-    [[nodiscard]] static auto wrapElementVisitor(F& element_visitor);
-
+    static auto wrapElementVisitor(F& element_visitor);
     template < typename F >
-    [[nodiscard]] static auto wrapCElementVisitor(F& element_visitor);
+    static auto wrapCElementVisitor(F& element_visitor);
 
     element_vector_variant_vector_t element_vectors;
     dim_t                           dim = 0;
 };
 
+namespace detail
+{
+inline Domain::const_find_result_t constifyFound(const Domain::find_result_t& f)
+{
+    if (not f)
+        return {};
+    return constifyVariant(*f);
+}
+} // namespace detail
+
 template < ElementTypes ELTYPE, el_o_t ELORDER >
 std::vector< Element< ELTYPE, ELORDER > >& Domain::getElementVector()
 {
     using el_vec_t = element_vector_t< ELTYPE, ELORDER >;
-    if (!element_vectors.empty())
+    if (not element_vectors.empty())
     {
         if (ElementTraits< Element< ELTYPE, ELORDER > >::native_dim != dim)
             throw std::invalid_argument("Element dimension incompatible with domain dimension");
@@ -85,10 +101,18 @@ void Domain::push(const Element< ELTYPE, ELORDER >& element)
     emplaceBack< ELTYPE, ELORDER >(element);
 }
 
-template < ElementTypes ELTYPE, el_o_t ELORDER, typename... ArgTypes >
+template < ElementTypes T, el_o_t O, typename... ArgTypes >
 void Domain::emplaceBack(ArgTypes&&... Args)
 {
-    getElementVector< ELTYPE, ELORDER >().emplace_back(std::forward< ArgTypes >(Args)...);
+    using el_t   = Element< T, O >;
+    auto& vector = getElementVector< T, O >();
+    vector.emplace_back(std::forward< ArgTypes >(Args)...);
+    if (vector.size() == 1 or vector.back().getId() > (vector.crbegin() + 1)->getId()) [[likely]]
+        return;
+    else [[unlikely]]
+        std::inplace_merge(vector.begin(), vector.end() - 1, vector.end(), [](const el_t& el1, const el_t& el2) {
+            return el1.getId() < el2.getId();
+        });
 }
 
 template < ElementTypes ELTYPE, el_o_t ELORDER >
@@ -102,7 +126,7 @@ void Domain::reserve(size_t size)
 {
     using el_vec_t = element_vector_t< ELTYPE, ELORDER >;
 
-    if (!element_vectors.empty())
+    if (not element_vectors.empty())
     {
         if (ElementTraits< Element< ELTYPE, ELORDER > >::native_dim != dim)
             throw std::invalid_argument("Pushing element to domain of different dimension");
@@ -133,64 +157,75 @@ template < invocable_on_const_elements F >
 void Domain::cvisit(F&& element_visitor) const
 {
     auto visitor = wrapCElementVisitor(element_visitor);
-    std::for_each(element_vectors.cbegin(), element_vectors.cend(), [&](const element_vector_variant_t& el_vec) {
-        std::visit(visitor, el_vec);
-    });
-}
-
-template < invocable_on_elements_r< bool > F >
-std::optional< element_ref_variant_t > Domain::findElement(const F& predicate)
-{
-    std::optional< element_ref_variant_t > ret_val;
-
-    const auto element_vector_visitor = [&ret_val, &predicate](const auto& element_vector) {
-        const auto found_iter = std::find_if(element_vector.cbegin(), element_vector.cend(), std::cref(predicate));
-
-        if (found_iter != element_vector.cend())
-        {
-            using element_t     = typename std::decay_t< decltype(element_vector) >::value_type;
-            using element_ref_t = std::reference_wrapper< element_t >;
-
-            ret_val.emplace(std::in_place_type< element_ref_t >, std::ref(const_cast< element_t& >(*found_iter)));
-
-            // Note: const_cast is used correctly, because the underlying element is not const.
-            // However, we need to pass it to the predicate as a const reference, since the
-            // predicate is not allowed to modify the element.
-        }
-    };
-
-    for (const auto& element_vector_variant : element_vectors)
-    {
-        std::visit(element_vector_visitor, element_vector_variant);
-
-        if (ret_val)
-            break;
-    }
-
-    return ret_val;
+    std::ranges::for_each(element_vectors,
+                          [&](const element_vector_variant_t& el_vec) { std::visit(visitor, el_vec); });
 }
 
 template < invocable_on_const_elements_r< bool > F >
-std::optional< element_cref_variant_t > Domain::findElement(const F& predicate) const
+Domain::find_result_t Domain::find(F&& predicate)
 {
-    // The non-const version of findElement does not modify `this`, it merely returns a non-const
-    // reference to the underlying data. For this reason, we can call it as const, as long as we
-    // const-qualify the returned value. Therefore, the following line of code does NOT invoke UB.
-    auto nonconst_ref_opt = const_cast< Domain* >(this)->findElement(predicate);
-
-    if (!nonconst_ref_opt)
-        return std::optional< element_cref_variant_t >{};
-
-    const auto const_qualify = [](const auto& element_ref) {
-        using element_t              = typename std::decay_t< decltype(element_ref) >::type;
-        constexpr auto element_type  = ElementTraits< element_t >::element_type;
-        constexpr auto element_order = ElementTraits< element_t >::element_order;
-
-        return std::optional< element_cref_variant_t >{
-            std::in_place, std::in_place_type< element_cref_t< element_type, element_order > >, std::cref(element_ref)};
+    std::optional< element_ptr_variant_t > opt_el_ptr_variant;
+    const auto vector_visitor = [&]< ElementTypes T, el_o_t O >(const element_vector_t< T, O >& el_vec) {
+        const auto el_it = std::ranges::find_if(el_vec, std::ref(predicate));
+        if (el_it != el_vec.cend())
+        {
+            // const_cast is used because we don't want to allow the predicate to alter the elements
+            opt_el_ptr_variant.emplace(const_cast< Element< T, O >* >(&*el_it));
+            return true;
+        }
+        else
+            return false;
     };
+    const auto vector_variant_visitor = [&](const element_vector_variant_t& var) {
+        return std::visit(vector_visitor, var);
+    };
+    std::ranges::find_if(element_vectors, vector_variant_visitor);
+    return opt_el_ptr_variant;
+}
 
-    return std::visit(const_qualify, *nonconst_ref_opt);
+template < invocable_on_const_elements_r< bool > F >
+Domain::const_find_result_t Domain::find(F&& predicate) const
+{
+    return detail::constifyFound(const_cast< Domain* >(this)->find(predicate));
+}
+
+Domain::find_result_t Domain::find(el_id_t id)
+{
+    std::optional< element_ptr_variant_t > opt_el_ptr_variant;
+    const auto vector_visitor = [&]< ElementTypes T, el_o_t O >(element_vector_t< T, O >& el_vec) -> bool {
+        if (el_vec.empty())
+            return false;
+
+        const auto front_id = el_vec.front().getId();
+        const auto back_id  = el_vec.back().getId();
+
+        if (id < front_id or id > back_id)
+            return false;
+
+        // optimization for contiguous case
+        if (back_id - front_id + 1u == el_vec.size())
+        {
+            opt_el_ptr_variant.emplace(&el_vec[id - front_id]);
+            return true;
+        }
+
+        const auto it = std::ranges::lower_bound(el_vec, id, {}, [](const Element< T, O >& el) { return el.getId(); });
+        if (it == end(el_vec) or it->getId() != id)
+            return false;
+
+        opt_el_ptr_variant.emplace(&*it);
+        return true;
+    };
+    const auto vector_variant_visitor = [&](element_vector_variant_t& var) {
+        return std::visit< bool >(vector_visitor, var);
+    };
+    std::ranges::find_if(element_vectors, vector_variant_visitor);
+    return opt_el_ptr_variant;
+}
+
+Domain::const_find_result_t Domain::find(el_id_t id) const
+{
+    return detail::constifyFound(const_cast< Domain* >(this)->find(id));
 }
 
 template < typename F >
@@ -204,8 +239,8 @@ auto Domain::wrapElementVisitor(F& element_visitor)
 template < typename F >
 auto Domain::wrapCElementVisitor(F& element_visitor)
 {
-    return [&element_visitor](const auto& element_vector) {
-        std::for_each(element_vector.cbegin(), element_vector.cend(), std::ref(element_visitor));
+    return [&](const auto& element_vector) {
+        std::ranges::for_each(element_vector, std::ref(element_visitor));
     };
 }
 
@@ -215,6 +250,23 @@ size_t Domain::getNElements() const
         element_vectors.cbegin(), element_vectors.cend(), 0u, [](size_t sum, const auto& el_vec_var) {
             return sum + std::visit([](const auto& el_vec) { return el_vec.size(); }, el_vec_var);
         });
+}
+
+template < el_o_t O_CONV >
+Domain Domain::getConversionAlloc() const
+{
+    Domain alloc;
+    alloc.element_vectors.reserve(element_vectors.size());
+    alloc.dim = dim;
+    for (const auto& el_v : element_vectors)
+    {
+        std::visit(
+            [&]< ElementTypes T, el_o_t O >(const element_vector_t< T, O >& existing_vec) {
+                alloc.reserve< T, O_CONV >(existing_vec.size());
+            },
+            el_v);
+    }
+    return alloc;
 }
 
 class DomainView
@@ -233,7 +285,5 @@ public:
 private:
     d_id_t id;
 };
-
 } // namespace lstr
-
 #endif // L3STER_MESH_DOMAIN_HPP
