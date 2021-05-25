@@ -13,7 +13,11 @@ RUN mkdir -p ~/.spack; \
     echo -n "    - spec: cmake@" >> ~/.spack/packages.yaml && \
     cmake --version | grep version | grep -Eo "[0-9]+\.[0-9]+\.[0-9]" >> ~/.spack/packages.yaml && \
     echo "      prefix: /usr" >> ~/.spack/packages.yaml && \
-    echo "    buildable: False" >> ~/.spack/packages.yaml
+    echo "    buildable: False" >> ~/.spack/packages.yaml && \
+    echo "  all:" >> ~/.spack/packages.yaml && \
+    echo "    compiler:" >> ~/.spack/packages.yaml && \
+    echo -n "    - gcc@" >> ~/.spack/packages.yaml && \
+    gcc-10 --version | grep gcc | grep -Eo "10\.[0-9]\.0" | head -1 >> ~/.spack/packages.yaml
 RUN git clone https://github.com/spack/spack.git
 RUN spack/bin/spack install --only dependencies trilinos build_type=Release +openmp cxxstd=17; spack/bin/spack clean -a
 RUN spack/bin/spack install trilinos build_type=Release +openmp cxxstd=17
