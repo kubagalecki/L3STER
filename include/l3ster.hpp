@@ -13,4 +13,6 @@
 
 #include "mesh/primitives/CubeMesh.hpp"
 
+#include "mapping/JacobiMat.hpp"
+
 #endif // L3STER_HPP
