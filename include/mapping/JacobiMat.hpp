@@ -2,6 +2,8 @@
 #define L3STER_MAPPING_JACOBIMAT_HPP
 
 #include "basisfun/ReferenceBasisFunction.hpp"
+#include "util/Algorithm.hpp"
+#include "util/Meta.hpp"
 
 #include "Eigen/Core"
 
@@ -11,65 +13,28 @@ namespace lstr
 template < ElementTypes T, el_o_t O >
 auto getNatJacobiMatGenerator(const Element< T, O >& el)
 {
-    using ret_t = Eigen::
-        Matrix< val_t, ElementTraits< Element< T, O > >::native_dim, ElementTraits< Element< T, O > >::native_dim >;
-    if constexpr (T == ElementTypes::Line)
+    if constexpr (T == ElementTypes::Line or T == ElementTypes::Quad or T == ElementTypes::Hex)
     {
-        return [val = (el.getData().vertices[1].x() - el.getData().vertices[0].x()) / 2.](const Point< 1 >&) {
-            return ret_t{val};
-        };
-    }
-    else if constexpr (T == ElementTypes::Quad)
-    {
-        return [&](const Point< 2 >& ref_point) {
-            ret_t jac_mat = ret_t::Zero();
-            [&]< size_t... I >(std::index_sequence< I... >)
-            {
-                const auto contrib_i = [&]< size_t Ind >(std::integral_constant< size_t, Ind >) {
-                    jac_mat(0, 0) +=
-                        ReferenceBasisFunctionDerXi< T, 1, Ind >{}(ref_point)*el.getData().vertices[Ind].x();
-                    jac_mat(0, 1) +=
-                        ReferenceBasisFunctionDerXi< T, 1, Ind >{}(ref_point)*el.getData().vertices[Ind].y();
-                    jac_mat(1, 0) +=
-                        ReferenceBasisFunctionDerEta< T, 1, Ind >{}(ref_point)*el.getData().vertices[Ind].x();
-                    jac_mat(1, 1) +=
-                        ReferenceBasisFunctionDerEta< T, 1, Ind >{}(ref_point)*el.getData().vertices[Ind].y();
-                };
-                (contrib_i(std::integral_constant< size_t, I >{}), ...);
-            }
-            (std::make_index_sequence< 4 >{});
-            return jac_mat;
-        };
-    }
-    else if constexpr (T == ElementTypes::Hex)
-    {
-        return [&](const Point< 3 >& ref_point) {
-            ret_t jac_mat = ret_t::Zero();
-            [&]< size_t... I >(std::index_sequence< I... >)
-            {
-                const auto contrib_i = [&]< size_t Ind >(std::integral_constant< size_t, Ind >) {
-                    jac_mat(0, 0) +=
-                        ReferenceBasisFunctionDerXi< T, 1, Ind >{}(ref_point)*el.getData().vertices[Ind].x();
-                    jac_mat(0, 1) +=
-                        ReferenceBasisFunctionDerXi< T, 1, Ind >{}(ref_point)*el.getData().vertices[Ind].y();
-                    jac_mat(0, 2) +=
-                        ReferenceBasisFunctionDerXi< T, 1, Ind >{}(ref_point)*el.getData().vertices[Ind].z();
-                    jac_mat(1, 0) +=
-                        ReferenceBasisFunctionDerEta< T, 1, Ind >{}(ref_point)*el.getData().vertices[Ind].x();
-                    jac_mat(1, 1) +=
-                        ReferenceBasisFunctionDerEta< T, 1, Ind >{}(ref_point)*el.getData().vertices[Ind].y();
-                    jac_mat(1, 2) +=
-                        ReferenceBasisFunctionDerEta< T, 1, Ind >{}(ref_point)*el.getData().vertices[Ind].z();
-                    jac_mat(2, 0) +=
-                        ReferenceBasisFunctionDerZeta< T, 1, Ind >{}(ref_point)*el.getData().vertices[Ind].x();
-                    jac_mat(2, 1) +=
-                        ReferenceBasisFunctionDerZeta< T, 1, Ind >{}(ref_point)*el.getData().vertices[Ind].y();
-                    jac_mat(2, 2) +=
-                        ReferenceBasisFunctionDerZeta< T, 1, Ind >{}(ref_point)*el.getData().vertices[Ind].z();
-                };
-                (contrib_i(std::integral_constant< size_t, I >{}), ...);
-            }
-            (std::make_index_sequence< 8 >{});
+        return [&](const Point< ElementTraits< Element< T, O > >::native_dim >& point) {
+            constexpr auto nat_dim    = ElementTraits< Element< T, O > >::native_dim;
+            constexpr auto n_o1_nodes = Element< T, 1 >::n_nodes;
+            using ret_t               = Eigen::Matrix< val_t, nat_dim, nat_dim >;
+            ret_t jac_mat             = ret_t::Zero();
+            forConstexpr(
+                [&]< size_t SHAPEF >(std::integral_constant< size_t, SHAPEF >) {
+                    forConstexpr(
+                        [&]< size_t DERDIM >(std::integral_constant< size_t, DERDIM >) {
+                            forConstexpr(
+                                [&]< dim_t SDIM >(std::integral_constant< dim_t, SDIM >) {
+                                    const val_t vert_coord   = el.getData().vertices[SHAPEF][SDIM];
+                                    const val_t shapefun_val = ReferenceBasisFunction< T, 1, SHAPEF, DERDIM >{}(point);
+                                    jac_mat(DERDIM - 1, SDIM) += vert_coord * shapefun_val;
+                                },
+                                std::make_integer_sequence< dim_t, nat_dim >{});
+                        },
+                        int_seq_interval< size_t, 1, nat_dim >{});
+                },
+                std::make_integer_sequence< size_t, n_o1_nodes >{});
             return jac_mat;
         };
     }

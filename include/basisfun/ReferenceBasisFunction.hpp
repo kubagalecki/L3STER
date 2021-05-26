@@ -120,10 +120,12 @@ val_t evaluateHexBasisFunDerZeta(const Point< 3 >& point)
 }
 } // namespace detail
 
-template < ElementTypes T, el_o_t O, el_locind_t I >
-requires(I < ElementTraits< Element< T, O > >::nodes_per_element) struct ReferenceBasisFunction
+// DER_DIM: 0 -> no derivative; 1 -> d/d_xi; 2 -> d/d_eta; 3 -> d/d_zeta
+template < ElementTypes T, el_o_t O, el_locind_t I, dim_t DER_DIM = 0 >
+requires(I < ElementTraits< Element< T, O > >::nodes_per_element and
+         DER_DIM <= ElementTraits< Element< T, O > >::native_dim) struct ReferenceBasisFunction
 {
-    val_t operator()(const Point< ElementTraits< Element< T, O > >::native_dim >& point)
+    val_t operator()(const Point< ElementTraits< Element< T, O > >::native_dim >& point) requires(DER_DIM == 0)
     {
         if constexpr (T == ElementTypes::Line)
             return detail::evaluateLineBasisFun< O, I >(point);
@@ -132,12 +134,8 @@ requires(I < ElementTraits< Element< T, O > >::nodes_per_element) struct Referen
         else if constexpr (T == ElementTypes::Hex)
             return detail::evaluateHexBasisFun< O, I >(point);
     }
-};
 
-template < ElementTypes T, el_o_t O, el_locind_t I >
-requires(I < ElementTraits< Element< T, O > >::nodes_per_element) struct ReferenceBasisFunctionDerXi
-{
-    val_t operator()(const Point< ElementTraits< Element< T, O > >::native_dim >& point)
+    val_t operator()(const Point< ElementTraits< Element< T, O > >::native_dim >& point) requires(DER_DIM == 1)
     {
         if constexpr (T == ElementTypes::Line)
             return detail::evaluateLineBasisFunDer< O, I >(point);
@@ -146,28 +144,19 @@ requires(I < ElementTraits< Element< T, O > >::nodes_per_element) struct Referen
         else if constexpr (T == ElementTypes::Hex)
             return detail::evaluateHexBasisFunDerXi< O, I >(point);
     }
-};
 
-template < ElementTypes T, el_o_t O, el_locind_t I >
-requires(I < ElementTraits< Element< T, O > >::nodes_per_element and
-         ElementTraits< Element< T, O > >::native_dim >= 2) struct ReferenceBasisFunctionDerEta
-{
-    val_t operator()(const Point< ElementTraits< Element< T, O > >::native_dim >& point)
+    val_t operator()(const Point< ElementTraits< Element< T, O > >::native_dim >& point) requires(DER_DIM == 2)
     {
         if constexpr (T == ElementTypes::Quad)
             return detail::evaluateQuadBasisFunDerEta< O, I >(point);
         else if constexpr (T == ElementTypes::Hex)
             return detail::evaluateHexBasisFunDerEta< O, I >(point);
     }
-};
 
-template < ElementTypes T, el_o_t O, el_locind_t I >
-requires(I < ElementTraits< Element< T, O > >::nodes_per_element and
-         ElementTraits< Element< T, O > >::native_dim >= 3) struct ReferenceBasisFunctionDerZeta
-{
-    val_t operator()(const Point< ElementTraits< Element< T, O > >::native_dim >& point)
+    val_t operator()(const Point< ElementTraits< Element< T, O > >::native_dim >& point) requires(DER_DIM == 3)
     {
-        return detail::evaluateHexBasisFunDerZeta< O, I >(point);
+        if constexpr (T == ElementTypes::Hex)
+            return detail::evaluateHexBasisFunDerZeta< O, I >(point);
     }
 };
 } // namespace lstr

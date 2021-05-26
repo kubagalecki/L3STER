@@ -3,6 +3,9 @@
 #ifndef L3STER_UTIL_META_HPP
 #define L3STER_UTIL_META_HPP
 
+#include "util/Common.hpp"
+#include "util/Concepts.hpp"
+
 #include <algorithm>
 #include <array>
 #include <numeric>
@@ -10,19 +13,11 @@
 #include <utility>
 #include <variant>
 
-#include "util/Common.hpp"
-#include "util/Concepts.hpp"
-
 namespace lstr
 {
 template < typename... T >
 struct type_set
 {};
-
-template < std::ranges::random_access_range R >
-inline constexpr size_t range_constexpr_size_v =
-    std::extent_v< std::decay_t< R > > > 0 ? std::extent_v< std::decay_t< R > >
-                                           : std::tuple_size_v< std::decay_t< R > >;
 
 namespace detail
 {
@@ -44,11 +39,11 @@ constexpr auto int_seq_from_array()
     }
     (std::make_index_sequence< A.size() >{});
 }
+} // namespace detail
 
 template < std::integral T, T first, T last >
 requires(first <= last) using int_seq_interval =
     decltype(detail::int_seq_from_array< detail::make_interval_array< T, first, last >() >());
-} // namespace detail
 
 namespace detail
 {
