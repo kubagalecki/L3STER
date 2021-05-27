@@ -1,3 +1,4 @@
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Tests](https://github.com/kubagalecki/L3STER/workflows/tests/badge.svg)](https://github.com/kubagalecki/L3STER/actions)
 [![codecov](https://codecov.io/gh/kubagalecki/L3STER/branch/main/graph/badge.svg?token=6VT1TVS7FG)](https://codecov.io/gh/kubagalecki/L3STER)
 
