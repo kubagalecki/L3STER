@@ -3,8 +3,6 @@
 
 #include <benchmark/benchmark.h>
 
-#include <iostream>
-
 void BM_MeshRead(benchmark::State& state)
 {
     for (auto _ : state)
