@@ -1,5 +1,6 @@
 #ifndef L3STER_UTIL_ALGORITHM_HPP
 #define L3STER_UTIL_ALGORITHM_HPP
+
 #include "util/Concepts.hpp"
 
 #include <iterator>
@@ -93,52 +94,6 @@ constexpr decltype(auto) forEachTuple(T& t, F&& f)
     return std::forward< F >(f);
 }
 
-template < tuple_like T, tuple_invocable< T > F > // TODO: this should be something like tuple_const_invocable
-constexpr decltype(auto) forEachTuple(const T& t, F&& f)
-{
-    [&]< size_t... I >(std::index_sequence< I... >) { (f(std::get< I >(t)), ...); }
-    (std::make_index_sequence< std::tuple_size_v< T > >{});
-    return std::forward< F >(f);
-}
-
-template < tuple_like T, tuple_r_invocable< bool, T > P, tuple_invocable< T > F >
-bool anyInTuple(T& t, P&& predicate, F&& f)
-{
-    return [&]< size_t... I >(std::index_sequence< I... >)
-    {
-        const auto wrapper = [&](auto& element) {
-            if (predicate(element))
-            {
-                f(element);
-                return true;
-            }
-            else
-                return false;
-        };
-        return (wrapper(std::get< I >(t)) or ...);
-    }
-    (std::make_index_sequence< std::tuple_size_v< T > >{});
-}
-
-template < tuple_like T, tuple_r_invocable< bool, T > P, tuple_invocable< T > F > // TODO: see: forEachTuple
-bool anyInTuple(const T& t, P&& predicate, F&& f)
-{
-    return [&]< size_t... I >(std::index_sequence< I... >)
-    {
-        const auto wrapper = [&](const auto& element) {
-            if (predicate(element))
-            {
-                f(element);
-                return true;
-            }
-            else
-                return false;
-        };
-        return (wrapper(std::get< I >(t)) or ...);
-    }
-    (std::make_index_sequence< std::tuple_size_v< T > >{});
-}
-
 template < std::unsigned_integral T >
 std::vector< T > consecutiveIndices(T n)
 {
@@ -181,6 +136,13 @@ matchingPermutation(R1&& r_pattern, R2&& r_match, O out, Pred pred = {}, Proj1 p
                                      r_pattern, [&](auto&& el) { return pred(el, proj2(match_el)); }, proj1));
     });
     return std::ranges::in_out_result{out_initial, out};
+}
+
+template < typename F, std::integral T, T... I >
+requires(std::invocable< F, std::integral_constant< T, I > >and...) void forConstexpr(F&& f,
+                                                                                      std::integer_sequence< T, I... >)
+{
+    (f(std::integral_constant< T, I >{}), ...);
 }
 } // namespace lstr
 #endif // L3STER_UTIL_ALGORITHM_HPP

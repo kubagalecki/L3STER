@@ -42,7 +42,7 @@ auto computeGaussRule(A&& a, B&& b, C&& c)
     }
     J(ORDER - 1, ORDER - 1) = -b(ORDER) / a(ORDER);
 
-    Eigen::SelfAdjointEigenSolver< matrix_t > eigen_solver;
+    auto eigen_solver = Eigen::SelfAdjointEigenSolver< matrix_t >{};
     eigen_solver.compute(J);
     const auto& eig_vals = eigen_solver.eigenvalues();
     const auto& eig_vecs = eigen_solver.eigenvectors();
