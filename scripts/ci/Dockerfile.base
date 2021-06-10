@@ -5,7 +5,7 @@
 
 FROM archlinux:latest
 
-RUN pacman -Syu --noconfirm git python3 patch cmake gcc10 gcc10-fortran make gcovr shasum
+RUN pacman -Syu --noconfirm git python3 patch cmake gcc10 gcc10-fortran make gcovr
 RUN mkdir -p ~/.spack; \
     echo "packages:" > ~/.spack/packages.yaml && \
     echo "  cmake:" >> ~/.spack/packages.yaml && \
