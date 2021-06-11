@@ -21,3 +21,4 @@ comment:
 
 ignore:
   - "**/*Test*.cpp"
+  - "build"
