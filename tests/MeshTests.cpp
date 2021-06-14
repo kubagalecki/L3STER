@@ -363,7 +363,7 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
         lstr::convertMeshToOrder< order >(part);
         CHECK(n_elements == part.getNElements());
         const auto validate_elorder = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >&) {
-            if constexpr (O != order)
+            if constexpr (O != 2)
                 throw std::logic_error{"Incorrect element order"};
         };
         CHECK_NOTHROW(part.cvisit(validate_elorder));
@@ -387,7 +387,7 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
         const auto expected_n_nodes    = expected_edge_nodes * expected_edge_nodes * expected_edge_nodes;
         CHECK(part.getNodes().size() == expected_n_nodes);
         const auto validate_elorder = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >&) {
-            if constexpr (O != order)
+            if constexpr (O != 2)
                 throw std::logic_error{"Incorrect element order"};
         };
         CHECK_NOTHROW(part.cvisit(validate_elorder));
