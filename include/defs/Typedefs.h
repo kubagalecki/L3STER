@@ -8,6 +8,7 @@
 
 namespace lstr
 {
+using std::ptrdiff_t;
 using std::size_t;
 
 using val_t       = double;        // floating point value type
