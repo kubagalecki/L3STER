@@ -69,10 +69,10 @@ template < std::floating_point T, size_t ORDER >
 [[nodiscard]] constexpr Polynomial< T, ORDER + 1 > PolynomialView< T, ORDER >::integral() const
 {
     std::array< T, ORDER + 1 > int_coefs;
-    std::generate(int_coefs.rbegin(), int_coefs.rend(), [i = 1u]() mutable { return 1. / static_cast< T >(i++); });
+    std::ranges::generate(int_coefs | std::views::reverse, [i = 1u]() mutable { return 1. / static_cast< T >(i++); });
     std::array< T, ORDER + 2 > ret;
     ret.back() = 0.; // Integration constant = 0
-    std::transform(coefs.get().cbegin(), coefs.get().cend(), int_coefs.cbegin(), ret.begin(), std::multiplies{});
+    std::ranges::transform(coefs.get(), int_coefs, ret.begin(), std::multiplies{});
     return Polynomial< T, ORDER + 1 >{ret};
 }
 
@@ -84,10 +84,12 @@ template < std::floating_point T, size_t ORDER >
         return ret_t{{0.}};
     else
     {
-        std::array< T, ORDER > ret, der_coefs;
-        std::iota(der_coefs.rbegin(), der_coefs.rend(), 1);
-        std::transform(
-            coefs.get().cbegin(), coefs.get().cend() - 1, der_coefs.cbegin(), ret.begin(), std::multiplies{});
+        std::array< T, ORDER > ret;
+        std::ranges::transform(coefs.get() | std::views::take(ptrdiff_t{ORDER}),
+                               std::views::iota(1u, ORDER + 1u) | std::views::reverse |
+                                   std::views::transform([](size_t v) { return static_cast< T >(v); }),
+                               begin(ret),
+                               std::multiplies{});
         return ret_t{ret};
     }
 }
@@ -111,11 +113,11 @@ template < std::floating_point T, size_t ORDER >
         comp_mat(i + 1, i)         = 1.;
         comp_mat(i + 1, ORDER - 1) = -coefs.get()[ORDER - 1 - i] / coefs.get().front();
     }
+    const auto eig = comp_mat.eigenvalues();
 
-    auto eig = comp_mat.eigenvalues();
-    auto ret = std::array< complex_t, ORDER >{};
-    std::copy(eig.data(), eig.data() + eig.size(), ret.begin());
-    std::sort(ret.begin(), ret.end(), [](complex_t a, complex_t b) { return a.real() < b.real(); });
+    std::array< complex_t, ORDER > ret;
+    std::ranges::copy(std::views::counted(eig.data(), eig.size()), ret.begin());
+    std::ranges::sort(ret, [](complex_t a, complex_t b) { return a.real() < b.real(); });
     return ret;
 }
 
@@ -124,10 +126,8 @@ constexpr Polynomial< T, O1 + O2 > operator*(const Polynomial< T, O1 >& a, const
 {
     Polynomial< T, O1 + O2 > ret{};
     ret.coefs.fill(0.);
-    std::for_each(a.cbegin(), a.cend(), [&, a_ind = 0](const T& ac) mutable {
-        std::for_each(b.coefs.cbegin(), b.coefs.cend(), [&, b_ind = 0u](const T& bc) mutable {
-            ret.coefs[a_ind + b_ind++] += ac * bc;
-        });
+    std::ranges::for_each(a, [&, a_ind = 0](T ac) mutable {
+        std::ranges::for_each(b, [&, b_ind = 0u](T bc) mutable { ret.coefs[a_ind + b_ind++] += ac * bc; });
         ++a_ind;
     });
     return ret;
@@ -136,17 +136,16 @@ constexpr Polynomial< T, O1 + O2 > operator*(const Polynomial< T, O1 >& a, const
 template < std::floating_point T, size_t O1, size_t O2 >
 constexpr Polynomial< T, std::max(O1, O2) > operator+(const Polynomial< T, O1 >& a, const Polynomial< T, O2 >& b)
 {
-    constexpr auto   O_low    = std::min(O1, O2);
-    constexpr auto   O_high   = std::max(O1, O2);
-    constexpr size_t O_diff   = O_high - O_low;
-    constexpr auto   poly_sum = [&](const auto& poly_low, const auto& poly_high) {
+    constexpr auto poly_sum = [](const auto& poly_low, const auto& poly_high) {
+        constexpr auto          O_low  = std::min(O1, O2);
+        constexpr auto          O_high = std::max(O1, O2);
+        constexpr size_t        O_diff = O_high - O_low;
         Polynomial< T, O_high > ret;
-        std::copy(poly_high.coef.cbegin(), poly_high.coef.cbegin() + O_diff, ret.coef.begin());
-        std::transform(poly_low.coef.cbegin(),
-                       poly_low.coef.cend(),
-                       poly_high.coef.cbegin() + O_diff,
-                       ret.coef.begin() + O_diff,
-                       std::plus{});
+        std::ranges::copy(poly_high.coef | std::views::take(ptrdiff_t{O_diff}), ret.coef.begin());
+        std::ranges::transform(poly_low.coef,
+                               poly_high.coef | std::views::drop(ptrdiff_t{O_diff}),
+                               ret.coef.begin() + O_diff,
+                               std::plus{});
     };
     if constexpr (O1 < O2)
         return poly_sum(a, b);
