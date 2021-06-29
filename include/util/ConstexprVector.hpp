@@ -25,6 +25,24 @@ public:
     using const_reverse_iterator = std::reverse_iterator< const_iterator >;
 
     constexpr ConstexprVector() = default;
+    constexpr ConstexprVector(size_type n, const T& value) : m_data{m_alloc.allocate(n)}, m_size{n}, m_capacity{n}
+    {
+        for (size_type i = 0u; i < n; ++i)
+            construct(i, value);
+    }
+    constexpr ConstexprVector(size_type n) : m_data{m_alloc.allocate(n)}, m_size{n}, m_capacity{n}
+    {
+        for (size_type i = 0u; i < n; ++i)
+            construct(i);
+    }
+    constexpr ConstexprVector(std::initializer_list< T > list)
+        : m_data{m_alloc.allocate(list.size())}, m_size{list.size()}, m_capacity{list.size()}
+    {
+        auto it = list.begin();
+        for (size_type i = 0u; i < m_size; ++i)
+            construct(i, std::move(*it++));
+    }
+
     constexpr ConstexprVector(const ConstexprVector& vc)
         : m_data{m_alloc.allocate(vc.size())}, m_size{vc.size()}, m_capacity{vc.size()}
     {
@@ -80,10 +98,17 @@ public:
         deallocate();
     }
 
+    // Capacity
     [[nodiscard]] constexpr size_t size() const { return m_size; }
     [[nodiscard]] constexpr size_t capacity() const { return m_capacity; }
     [[nodiscard]] constexpr bool   empty() const { return m_size == 0u; }
+    constexpr void                 reserve(size_type n)
+    {
+        if (n > m_capacity)
+            reallocate(n);
+    }
 
+    // Iterators
     constexpr reference       operator[](size_type i) { return m_data[i]; }
     constexpr const_reference operator[](size_type i) const { return m_data[i]; }
     constexpr reference       front() { return *m_data; }
@@ -99,12 +124,12 @@ public:
     constexpr iterator               end() { return m_data + m_size; }
     constexpr const_iterator         end() const { return m_data + m_size; }
     constexpr const_iterator         cend() const { return m_data + m_size; }
-    constexpr reverse_iterator       rbegin() { return reverse_iterator{m_data + (m_size - 1u)}; }
-    constexpr const_reverse_iterator rbegin() const { return m_data + m_size - 1; }
-    constexpr const_reverse_iterator crbegin() const { return m_data + m_size - 1; }
-    constexpr reverse_iterator       rend() { return m_data - 1u; }
-    constexpr const_reverse_iterator rend() const { return m_data - 1u; }
-    constexpr const_reverse_iterator crend() const { return m_data - 1u; }
+    constexpr reverse_iterator       rbegin() { return std::make_reverse_iterator(m_data + m_size); }
+    constexpr const_reverse_iterator rbegin() const { return std::make_reverse_iterator(m_data + m_size); }
+    constexpr const_reverse_iterator crbegin() const { return std::make_reverse_iterator(m_data + m_size); }
+    constexpr reverse_iterator       rend() { return std::make_reverse_iterator(m_data); }
+    constexpr const_reverse_iterator rend() const { return std::make_reverse_iterator(m_data); }
+    constexpr const_reverse_iterator crend() const { return std::make_reverse_iterator(m_data); }
 
     constexpr void pushBack(const_reference value) { emplaceBack(value); }
     template < typename... Arg >
