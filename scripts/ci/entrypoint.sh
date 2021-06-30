@@ -16,11 +16,11 @@ if [ "$REPORT_COVERAGE" != "" ]; then
   chmod +x generate_coverage_report.sh
   ./generate_coverage_report.sh || exit 1
   curl https://keybase.io/codecovsecurity/pgp_keys.asc | gpg --import || exit 1
-  curl -Os https://uploader.codecov.io/latest/codecov-linux || exit 1
-  curl -Os https://uploader.codecov.io/latest/codecov-linux.SHA256SUM || exit 1
-  curl -Os https://uploader.codecov.io/latest/codecov-linux.SHA256SUM.sig || exit 1
-  gpg --verify codecov-linux.SHA256SUM.sig codecov-linux.SHA256SUM || exit 1
-  sha256sum -c codecov-linux.SHA256SUM || exit 1
-  chmod +x codecov-linux
-  ./codecov-linux -Z -X gcov || exit 1
+  curl -Os https://uploader.codecov.io/latest/linux/codecov || exit 1
+  curl -Os https://uploader.codecov.io/latest/linux/codecov.SHA256SUM || exit 1
+  curl -Os https://uploader.codecov.io/latest/linux/codecov.SHA256SUM.sig || exit 1
+  gpg --verify codecov.SHA256SUM.sig codecov.SHA256SUM || exit 1
+  sha256sum -c codecov.SHA256SUM || exit 1
+  chmod +x codecov
+  ./codecov -Z -X gcov || exit 1
 fi
