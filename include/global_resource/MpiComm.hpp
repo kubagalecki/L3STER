@@ -1,5 +1,7 @@
-#ifndef L3STER_NUMA_MPICOMM_HPP
-#define L3STER_NUMA_MPICOMM_HPP
+#ifndef L3STER_GLOBAL_RESOURCE_MPICOMM_HPP
+#define L3STER_GLOBAL_RESOURCE_MPICOMM_HPP
+
+#include "util/Concepts.hpp"
 
 #include "mpi.h"
 
@@ -91,17 +93,13 @@ public:
     [[nodiscard]] inline int getRank() const;
     [[nodiscard]] inline int getSize() const;
 
-    template < typename T >
-    requires std::is_arithmetic_v< T >
+    template < arithmetic T >
     void send(const T* buf, size_t count, int dest, int tag = 0);
-    template < typename T >
-    requires std::is_arithmetic_v< T >
+    template < arithmetic T >
     [[nodiscard]] Request sendAsync(const T* buf, size_t count, int dest, int tag = 0);
-    template < typename T >
-    requires std::is_arithmetic_v< T >
+    template < arithmetic T >
     void receive(T* buf, size_t count, int source, int tag = 0);
-    template < typename T >
-    requires std::is_arithmetic_v< T >
+    template < arithmetic T >
     [[nodiscard]] Request receiveAsync(T* buf, size_t count, int source, int tag = 0);
 
     [[nodiscard]] MPI_Comm& get() { return comm; }
@@ -131,16 +129,15 @@ bool MpiComm::Request::test()
     return flag;
 }
 
-template < typename T >
-requires std::is_arithmetic_v< T >
+template < arithmetic T >
 void MpiComm::send(const T* buf, size_t count, int dest, int tag)
 {
     if (MPI_Send(buf, count, detail::MpiType< T >::value(), dest, tag, comm))
         throw std::runtime_error{"MPI send failed"};
 }
 
-template < typename T >
-requires std::is_arithmetic_v< T > MpiComm::Request MpiComm::sendAsync(const T* buf, size_t count, int dest, int tag)
+template < arithmetic T >
+MpiComm::Request MpiComm::sendAsync(const T* buf, size_t count, int dest, int tag)
 {
     Request request;
     if (MPI_Isend(buf, count, detail::MpiType< T >::value(), dest, tag, comm, &request.request))
@@ -148,16 +145,15 @@ requires std::is_arithmetic_v< T > MpiComm::Request MpiComm::sendAsync(const T* 
     return request;
 }
 
-template < typename T >
-requires std::is_arithmetic_v< T >
+template < arithmetic T >
 void MpiComm::receive(T* buf, size_t count, int source, int tag)
 {
     if (MPI_Recv(buf, count, detail::MpiType< T >::value(), source, tag, comm, MPI_STATUS_IGNORE))
         throw std::runtime_error{"MPI receive failed"};
 }
 
-template < typename T >
-requires std::is_arithmetic_v< T > MpiComm::Request MpiComm::receiveAsync(T* buf, size_t count, int source, int tag)
+template < arithmetic T >
+MpiComm::Request MpiComm::receiveAsync(T* buf, size_t count, int source, int tag)
 {
     Request request;
     if (MPI_Irecv(buf, count, detail::MpiType< T >::value(), source, tag, comm, &request.request))
@@ -182,4 +178,4 @@ int MpiComm::getSize() const
 }
 } // namespace lstr
 
-#endif // L3STER_NUMA_MPICOMM_HPP
+#endif // L3STER_GLOBAL_RESOURCE_MPICOMM_HPP

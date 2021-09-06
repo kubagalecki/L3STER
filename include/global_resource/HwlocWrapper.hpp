@@ -1,9 +1,10 @@
-#ifndef L3STER_NUMA_NUMATOPOLOGY_HPP
-#define L3STER_NUMA_NUMATOPOLOGY_HPP
+#ifndef L3STER_GLOBAL_RESOURCE_NUMATOPOLOGY_HPP
+#define L3STER_GLOBAL_RESOURCE_NUMATOPOLOGY_HPP
 
 #include "hwloc.h"
 
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
 #include <type_traits>
 #include <vector>
@@ -111,7 +112,7 @@ inline HwlocWrapper::~HwlocWrapper()
 inline void HwlocWrapper::bindThreadToCore(size_t node, size_t cpu) const
 {
     if (hwloc_set_cpubind(topo, cpu_masks[node][cpu], HWLOC_CPUBIND_THREAD))
-        throw std::runtime_error{"failed not bind thread to core"};
+        throw std::runtime_error{"failed to bind thread to core"};
 }
 
 inline void HwlocWrapper::bindThreadToNode(size_t node) const
@@ -119,7 +120,7 @@ inline void HwlocWrapper::bindThreadToNode(size_t node) const
     detail::HwlocBitmapRaiiWrapper cpu_set{};
     hwloc_cpuset_from_nodeset(topo, cpu_set, node_masks[node]);
     if (hwloc_set_cpubind(topo, cpu_set, HWLOC_CPUBIND_THREAD))
-        throw std::runtime_error{"failed bind thread to NUMA node"};
+        throw std::runtime_error{"failed to bind thread to NUMA node"};
 }
 
 inline std::pair< size_t, size_t > HwlocWrapper::getLastThreadLocation() const
@@ -127,10 +128,10 @@ inline std::pair< size_t, size_t > HwlocWrapper::getLastThreadLocation() const
     detail::HwlocBitmapRaiiWrapper cpu{};
     if (hwloc_get_last_cpu_location(topo, cpu, HWLOC_CPUBIND_THREAD))
         throw std::runtime_error("hwloc failed to obtain the last location of the current thread");
-    const auto ret = findCpuIf([&](hwloc_const_cpuset_t set) { return hwloc_bitmap_isequal(set, cpu); });
-    if (ret.first == std::numeric_limits< size_t >::max())
+    const auto ret_val = findCpuIf([&](hwloc_const_cpuset_t set) { return hwloc_bitmap_isequal(set, cpu); });
+    if (ret_val.first == std::numeric_limits< size_t >::max())
         throw std::logic_error{"The thread location provided by hwloc seems to lie outside of the machine's topology"};
-    return ret;
+    return ret_val;
 }
 
 inline void* HwlocWrapper::allocateOnNode(size_t size, size_t node) const noexcept
@@ -186,15 +187,18 @@ requires std::is_invocable_r_v< bool, F, hwloc_cpuset_t > std::pair< size_t, siz
                                                           HwlocWrapper::findCpuIf(const F& fun)
 const noexcept
 {
-    std::pair< size_t, size_t > ret;
-    const size_t                node_dist = std::distance(
-        cpu_masks.begin(), std::ranges::find_if(cpu_masks, [&](const std::vector< hwloc_cpuset_t >& cpus) {
-            ret.second = std::distance(cpus.begin(), std::ranges::find_if(cpus, fun));
-            return ret.second < cpus.size();
-        }));
-    ret.first = node_dist == cpu_masks.size() ? std::numeric_limits< size_t >::max() : node_dist;
-    return ret;
+    std::pair< size_t, size_t > ret_val;
+    auto& [node, cpu] = ret_val;
+
+    const auto find_cpu = [&](const std::vector< hwloc_cpuset_t >& cpus) {
+        cpu = std::distance(cpus.begin(), std::ranges::find_if(cpus, fun));
+        return cpu < cpus.size();
+    };
+    const auto   node_it  = std::ranges::find_if(cpu_masks, find_cpu);
+    const size_t node_ind = std::distance(cpu_masks.begin(), node_it);
+    node                  = node_ind == cpu_masks.size() ? std::numeric_limits< size_t >::max() : node_ind;
+    return ret_val;
 }
 } // namespace lstr
 
-#endif // L3STER_NUMA_NUMATOPOLOGY_HPP
+#endif // L3STER_GLOBAL_RESOURCE_NUMATOPOLOGY_HPP

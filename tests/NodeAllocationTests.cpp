@@ -1,11 +1,13 @@
-#include "l3ster.hpp"
+#include "alloc/NodeGlobalMemoryResource.hpp"
+#include "global_resource/GlobalResource.hpp"
 
 #include "catch2/catch.hpp"
+
 #include <vector>
 
 TEST_CASE("Node allocation tests", "[hwloc]")
 {
-    lstr::HwlocWrapper       topo{};
+    auto&                    topo = lstr::GlobalResource< lstr::HwlocWrapper >::getMaybeUninitialized();
     lstr::NodeGlobalResource alloc{&topo, 0};
     {
         std::pmr::vector< double > v(&alloc);
