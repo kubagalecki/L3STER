@@ -5,7 +5,7 @@
 
 FROM archlinux:latest
 
-RUN pacman -Syu --noconfirm git python3 patch cmake gcc10 gcc10-fortran make gcovr
+RUN pacman -Syu --noconfirm git python3 patch cmake gcc gcc-fortran make gcovr
 RUN mkdir -p ~/.spack; \
     echo "packages:" > ~/.spack/packages.yaml && \
     echo "  cmake:" >> ~/.spack/packages.yaml && \
@@ -17,11 +17,12 @@ RUN mkdir -p ~/.spack; \
     echo "  all:" >> ~/.spack/packages.yaml && \
     echo "    compiler:" >> ~/.spack/packages.yaml && \
     echo -n "    - gcc@" >> ~/.spack/packages.yaml && \
-    gcc-10 --version | grep gcc | grep -Eo "10\.[0-9]\.0" | head -1 >> ~/.spack/packages.yaml
+    gcc --version | grep gcc | grep -Eo "[0-9]+\.[0-9]\.0" | head -1 >> ~/.spack/packages.yaml
 RUN git clone https://github.com/spack/spack.git
-RUN spack/bin/spack install --only dependencies trilinos build_type=Release +openmp cxxstd=17; spack/bin/spack clean -a
-RUN spack/bin/spack install trilinos build_type=Release +openmp cxxstd=17
-RUN spack/bin/spack install eigen build_type=Release
-RUN spack/bin/spack install catch2 build_type=Release
+RUN spack/bin/spack install --only dependencies trilinos cxxstd=17 +openmp +superlu-dist
+RUN spack/bin/spack clean -a
+RUN spack/bin/spack install trilinos cxxstd=17 +openmp +superlu-dist
+RUN spack/bin/spack install eigen
+RUN spack/bin/spack install catch2
 RUN spack/bin/spack install intel-tbb cxxstd=17
 RUN spack/bin/spack gc -y; spack/bin/spack clean -a
