@@ -1,5 +1,5 @@
-#ifndef L3STER_NUMA_NODEGLOBAL_RESOURCE_HPP
-#define L3STER_NUMA_NODEGLOBAL_RESOURCE_HPP
+#ifndef L3STER_ALLOC_NODEGLOBALMEMORYRESOURCE_HPP
+#define L3STER_ALLOC_NODEGLOBALMEMORYRESOURCE_HPP
 
 #include "global_resource/HwlocWrapper.hpp"
 
@@ -61,4 +61,4 @@ bool NodeGlobalResource::do_is_equal(const std::pmr::memory_resource& other) con
     return this == &other;
 }
 } // namespace lstr
-#endif // L3STER_NUMA_NODEGLOBAL_RESOURCE_HPP
+#endif // L3STER_ALLOC_NODEGLOBALMEMORYRESOURCE_HPP

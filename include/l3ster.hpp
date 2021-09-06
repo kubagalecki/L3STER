@@ -9,7 +9,10 @@
 #include "quad/InvokeQuadrature.hpp"
 #include "quad/QuadratureGenerator.hpp"
 
-#include "global_resource/NodeResourceManager.hpp"
+#include "alloc/NodeGlobalMemoryResource.hpp"
+#include "global_resource/GlobalResource.hpp"
+#include "global_resource/HwlocWrapper.hpp"
+#include "global_resource/MpiComm.hpp"
 
 #include "mesh/primitives/CubeMesh.hpp"
 

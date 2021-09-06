@@ -1,11 +1,12 @@
-#include "l3ster.hpp"
+#include "global_resource/GlobalResource.hpp"
+#include "global_resource/MpiComm.hpp"
 
 #include <iostream>
 
 int main(int argc, char* argv[])
 {
-    lstr::MpiScopeGuard mpi_guard{argc, argv};
-    lstr::MpiComm       comm{};
+    lstr::GlobalResource< lstr::MpiScopeGuard >::init(argc, argv);
+    lstr::MpiComm comm{};
     try
     {
         const auto size = comm.getSize();

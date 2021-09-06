@@ -1,4 +1,5 @@
-#include "l3ster.hpp"
+#include "global_resource/GlobalResource.hpp"
+#include "global_resource/HwlocWrapper.hpp"
 
 #include "TestDataPath.h"
 #include "catch2/catch.hpp"
@@ -9,7 +10,7 @@
 
 TEST_CASE("hwloc topology test", "[hwloc]")
 {
-    lstr::HwlocWrapper topology{};
+    auto& topology = lstr::GlobalResource< lstr::HwlocWrapper >::getMaybeUninitialized();
     REQUIRE(L3STER_N_NUMA_NODES == topology.getMachineSize());
 
     lstr::detail::HwlocBitmapRaiiWrapper aggregate_bmp{};
@@ -33,7 +34,7 @@ TEST_CASE("hwloc topology test", "[hwloc]")
 
 TEST_CASE("hwloc thread-to-core binding test", "[hwloc]")
 {
-    lstr::HwlocWrapper         toplogy{};
+    auto&                      topology = lstr::GlobalResource< lstr::HwlocWrapper >::getMaybeUninitialized();
     std::vector< std::thread > thread_pool(std::thread::hardware_concurrency());
     size_t                     node_index = 0, cpu_index = 0;
     std::atomic_bool           hwloc_thread_binding_test_result{true};
@@ -42,8 +43,8 @@ TEST_CASE("hwloc thread-to-core binding test", "[hwloc]")
                             // Catch2 doesn't support multithreaded tests, so manual try-catch is needed
                             try
                             {
-                                toplogy.bindThreadToCore(node, cpu);
-                                const auto obtained_result       = toplogy.getLastThreadLocation();
+                                topology.bindThreadToCore(node, cpu);
+                                const auto obtained_result       = topology.getLastThreadLocation();
                                 const auto expected_resut        = std::make_pair(node, cpu);
                                 hwloc_thread_binding_test_result = obtained_result == expected_resut;
                             }
@@ -55,7 +56,7 @@ TEST_CASE("hwloc thread-to-core binding test", "[hwloc]")
                         node_index,
                         cpu_index};
         ++cpu_index;
-        if (cpu_index == toplogy.getNodeSize(node_index))
+        if (cpu_index == topology.getNodeSize(node_index))
         {
             ++node_index;
             cpu_index = 0;
@@ -68,7 +69,7 @@ TEST_CASE("hwloc thread-to-core binding test", "[hwloc]")
 
 TEST_CASE("hwloc thread-to-node binding test", "[hwloc]")
 {
-    lstr::HwlocWrapper         topology;
+    auto&                      topology = lstr::GlobalResource< lstr::HwlocWrapper >::getMaybeUninitialized();
     std::vector< std::thread > thread_pool(topology.getMachineSize());
     std::atomic_bool           hwloc_thread_binding_test_result{true};
     std::ranges::generate(thread_pool, [&, index = 0u]() mutable {
@@ -92,8 +93,8 @@ TEST_CASE("hwloc thread-to-node binding test", "[hwloc]")
 
 TEST_CASE("hwloc memory binding test", "[hwloc]")
 {
-    lstr::HwlocWrapper topology{};
-    constexpr size_t   size = 42 * sizeof(size_t);
+    auto&            topology = lstr::GlobalResource< lstr::HwlocWrapper >::getMaybeUninitialized();
+    constexpr size_t size     = 42 * sizeof(size_t);
     for (size_t node = 0; node < topology.getMachineSize(); ++node)
     {
         volatile auto allocated = static_cast< size_t* >(topology.allocateOnNode(size, node));

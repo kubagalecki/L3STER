@@ -1,5 +1,5 @@
-#ifndef L3STER_NUMA_MPICOMM_HPP
-#define L3STER_NUMA_MPICOMM_HPP
+#ifndef L3STER_GLOBAL_RESOURCE_MPICOMM_HPP
+#define L3STER_GLOBAL_RESOURCE_MPICOMM_HPP
 
 #include "util/Concepts.hpp"
 
@@ -178,4 +178,4 @@ int MpiComm::getSize() const
 }
 } // namespace lstr
 
-#endif // L3STER_NUMA_MPICOMM_HPP
+#endif // L3STER_GLOBAL_RESOURCE_MPICOMM_HPP
