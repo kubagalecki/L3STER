@@ -9,7 +9,7 @@
 #include "quad/InvokeQuadrature.hpp"
 #include "quad/QuadratureGenerator.hpp"
 
-#include "numa/NodeResourceManager.hpp"
+#include "global_resource/NodeResourceManager.hpp"
 
 #include "mesh/primitives/CubeMesh.hpp"
 

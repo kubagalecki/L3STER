@@ -1,7 +1,7 @@
 #ifndef L3STER_NUMA_NODEGLOBAL_RESOURCE_HPP
 #define L3STER_NUMA_NODEGLOBAL_RESOURCE_HPP
 
-#include "numa/HwlocWrapper.hpp"
+#include "global_resource/HwlocWrapper.hpp"
 
 #include <memory>
 #include <memory_resource>

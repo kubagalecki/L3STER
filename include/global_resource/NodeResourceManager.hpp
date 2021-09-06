@@ -1,8 +1,8 @@
 #ifndef L3STER_NUMA_NODERESOURCEMANAGER_HPP
 #define L3STER_NUMA_NODERESOURCEMANAGER_HPP
 
-#include "numa/MpiComm.hpp"
-#include "numa/NodeGlobalResource.hpp"
+#include "global_resource/MpiComm.hpp"
+#include "global_resource/NodeGlobalResource.hpp"
 
 namespace lstr
 {
