@@ -50,7 +50,7 @@ namespace detail
 template < typename T >
 struct Constify
 {
-    const T operator()(const T& in) requires(not std::is_pointer_v< T >) { return in; } // NOLINT
+    const T operator()(const T& in) requires(not std::is_pointer_v< T >) { return in; }
     const std::pointer_traits< T >::element_type* operator()(T in) requires(std::is_pointer_v< T >) { return in; }
     using type = decltype(std::declval< Constify< T > >()(std::declval< T >()));
 };

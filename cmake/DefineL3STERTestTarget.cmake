@@ -1,11 +1,12 @@
-add_executable( L3STER_tests
-                ${L3STER_DIR}/tests/TestsMain.cpp
+add_executable( L3STER_tests ${L3STER_DIR}/tests/TestsMain.cpp
+                ${L3STER_DIR}/tests/HwlocTests.cpp
+                ${L3STER_DIR}/tests/MappingTests.cpp
                 ${L3STER_DIR}/tests/MathTests.cpp
                 ${L3STER_DIR}/tests/MeshTests.cpp
-                ${L3STER_DIR}/tests/QuadratureTests.cpp
-                ${L3STER_DIR}/tests/HwlocTests.cpp
                 ${L3STER_DIR}/tests/NodeAllocationTests.cpp
-                ${L3STER_DIR}/tests/MappingTests.cpp )
+                ${L3STER_DIR}/tests/QuadratureTests.cpp
+                ${L3STER_DIR}/tests/UtilTests.cpp
+                )
 
 set( L3STER_TESTS_DATA_PATH "${L3STER_DIR}/tests/data" )
 execute_process( COMMAND bash -c "chmod +x ${L3STER_DIR}/scripts/n_numa_nodes.sh" )
