@@ -1,4 +1,6 @@
-#include "l3ster.hpp"
+#include "math/ComputeGaussRule.hpp"
+#include "math/LagrangeInterpolation.hpp"
+#include "math/LobattoRuleAbsc.hpp"
 
 #include "catch2/catch.hpp"
 
@@ -115,7 +117,7 @@ TEST_CASE("Lagrange interpolation", "[math]")
         std::generate(ret.begin(), ret.end(), [&, x0 = -argument_range]() mutable {
             x0 += argument_range;
             return std::uniform_real_distribution< double >{x0, x0 + argument_range}(prng);
-        });
+              });
         return ret;
     };
     const auto make_random_array = [&] {
