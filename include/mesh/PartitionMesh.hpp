@@ -211,13 +211,13 @@ inline std::vector< MeshPartition > assignNodes(idx_t                           
 }
 } // namespace detail
 
-inline void partitionMesh(Mesh& mesh, idx_t n_parts, const std::vector< d_id_t >& boundaries)
+[[nodiscard]] inline Mesh partitionMesh(const Mesh& mesh, idx_t n_parts, const std::vector< d_id_t >& boundaries)
 {
     if (mesh.getPartitions().size() != 1)
         throw std::logic_error{"Cannot partition a mesh which is either empty or has already been partitioned"};
 
     if (n_parts <= 1)
-        return;
+        return mesh;
 
     const MeshPartition& part            = mesh.getPartitions()[0];
     const auto           is_not_boundary = detail::getDomainPredicate(boundaries);
@@ -228,9 +228,7 @@ inline void partitionMesh(Mesh& mesh, idx_t n_parts, const std::vector< d_id_t >
 
     auto new_domain_maps = detail::distributeDomainElements(part, n_parts, epart, is_not_boundary);
     detail::assignBoundaryElements(part, epart, new_domain_maps, boundaries, domain_data[0]);
-    auto new_partitions = detail::assignNodes(n_parts, npart, new_domain_maps);
-
-    mesh = Mesh{std::move(new_partitions)};
+    return Mesh{detail::assignNodes(n_parts, npart, new_domain_maps)};
 }
 } // namespace lstr
 #endif // L3STER_MESH_PARTITIONMESH_HPP

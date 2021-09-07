@@ -9,10 +9,12 @@
 namespace lstr
 {
 template < el_o_t O_C >
-void convertMeshToOrder(MeshPartition& mesh)
+[[nodiscard]] MeshPartition convertMeshToOrder(const MeshPartition& mesh)
 {
-    const auto& dual_graph = mesh.initDualGraph();
+    if (not mesh.isDualGraphInitialized())
+        throw std::logic_error("Initialize the dual graph of the mesh before converting it to a different order");
 
+    const auto&         dual_graph  = mesh.getDualGraph();
     auto                new_domains = mesh.getConversionAlloc< O_C >();
     n_id_t              max_node    = mesh.getNodes().size();
     std::vector< bool > converted(mesh.getNElements(), false);
@@ -60,7 +62,7 @@ void convertMeshToOrder(MeshPartition& mesh)
     for (auto domain_id : mesh.getDomainIds())
         convert_domain(mesh.getDomain(domain_id), new_domains[domain_id]);
 
-    mesh = MeshPartition{std::move(new_domains), consecutiveIndices(max_node), {}};
+    return MeshPartition{std::move(new_domains), consecutiveIndices(max_node), {}};
 }
 } // namespace lstr
 #endif // L3STER_MESH_CONVERTMESHTOORDER_HPP

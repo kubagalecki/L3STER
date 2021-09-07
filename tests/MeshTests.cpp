@@ -1,4 +1,7 @@
-#include "l3ster.hpp"
+#include "mesh/ConvertMeshToOrder.hpp"
+#include "mesh/PartitionMesh.hpp"
+#include "mesh/ReadMesh.hpp"
+#include "mesh/primitives/CubeMesh.hpp"
 
 #include "TestDataPath.h"
 #include "catch2/catch.hpp"
@@ -333,8 +336,8 @@ TEST_CASE("Serial mesh partitioning", "[mesh]")
     constexpr auto n_parts    = 2u;
     auto           mesh       = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::gmsh_tag);
     const auto     n_elements = mesh.getPartitions()[0].getNElements();
-    REQUIRE_NOTHROW(lstr::partitionMesh(mesh, 1, {}));
-    lstr::partitionMesh(mesh, n_parts, {2, 3, 4, 5});
+    REQUIRE_NOTHROW(mesh = lstr::partitionMesh(mesh, 1, {}));
+    mesh = lstr::partitionMesh(mesh, n_parts, {2, 3, 4, 5});
     REQUIRE(mesh.getPartitions().size() == n_parts);
     REQUIRE(std::accumulate(
                 mesh.getPartitions().cbegin(), mesh.getPartitions().cend(), 0u, [](size_t size, const auto& part) {
@@ -359,14 +362,16 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
         constexpr lstr::el_o_t order = 2;
         auto                   mesh  = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), lstr::gmsh_tag);
         auto&                  part  = mesh.getPartitions()[0];
-        const auto             n_elements = part.getNElements();
-        lstr::convertMeshToOrder< order >(part);
+        part.initDualGraph();
+        const auto n_elements = part.getNElements();
+        part                  = lstr::convertMeshToOrder< order >(part);
         CHECK(n_elements == part.getNElements());
         const auto validate_elorder = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >&) {
             if constexpr (O != 2)
                 throw std::logic_error{"Incorrect element order"};
         };
         CHECK_NOTHROW(part.cvisit(validate_elorder));
+        CHECK(part.getNodes().size() == 44745u);
     }
 
     SECTION("procedurally generated mesh")
@@ -376,12 +381,13 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
         constexpr auto         n_edge_els = dist.size() - 1;
         auto                   mesh       = lstr::makeCubeMesh(dist);
         auto&                  part       = mesh.getPartitions()[0];
-        const auto             n_elements = part.getNElements();
-        const auto             n_nodes_o1 = part.getNodes().size();
+        part.initDualGraph();
+        const auto n_elements = part.getNElements();
+        const auto n_nodes_o1 = part.getNodes().size();
         REQUIRE(n_elements == n_edge_els * n_edge_els * n_edge_els + 6 * n_edge_els * n_edge_els);
         REQUIRE(n_nodes_o1 == dist.size() * dist.size() * dist.size());
 
-        lstr::convertMeshToOrder< order >(part);
+        part = lstr::convertMeshToOrder< order >(part);
         CHECK(part.getNElements() == n_elements);
         const auto expected_edge_nodes = (dist.size() - 1) * order + 1;
         const auto expected_n_nodes    = expected_edge_nodes * expected_edge_nodes * expected_edge_nodes;

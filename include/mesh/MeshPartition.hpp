@@ -35,12 +35,6 @@ public:
     using cfind_result_t            = std::optional< std::pair< element_cptr_variant_t, d_id_t > >;
     using el_boundary_view_result_t = std::pair< cfind_result_t, el_ns_t >;
 
-    MeshPartition(const MeshPartition&)     = delete;
-    MeshPartition(MeshPartition&&) noexcept = default;
-    MeshPartition& operator=(const MeshPartition&) = delete;
-    MeshPartition& operator=(MeshPartition&&) noexcept = default;
-    ~MeshPartition()                                   = default;
-
     inline explicit MeshPartition(domain_map_t domains_);
     MeshPartition(domain_map_t domains_, node_vec_t nodes_, node_vec_t ghost_nodes_)
         : domains{std::move(domains_)}, nodes{std::move(nodes_)}, ghost_nodes{std::move(ghost_nodes_)}

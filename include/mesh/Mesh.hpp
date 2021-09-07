@@ -12,12 +12,6 @@ namespace lstr
 class Mesh
 {
 public:
-    Mesh(const Mesh&) = delete;
-    Mesh(Mesh&&)      = default;
-    Mesh& operator=(const Mesh&) = delete;
-    Mesh& operator=(Mesh&&) = default;
-    ~Mesh()                 = default;
-
     explicit Mesh(std::vector< MeshPartition > partitions_) : partitions{std::move(partitions_)} {}
 
     [[nodiscard]] const std::vector< MeshPartition >& getPartitions() const { return partitions; }

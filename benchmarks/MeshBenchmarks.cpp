@@ -48,3 +48,29 @@ void BM_BoundaryViewGenerationFallback(benchmark::State& state)
     }
 }
 BENCHMARK(BM_BoundaryViewGenerationFallback)->Unit(benchmark::kSecond);
+
+void BM_MeshOrderConversion(benchmark::State& state)
+{
+    auto  mesh = lstr::readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), lstr::gmsh_tag);
+    auto& part = mesh.getPartitions()[0];
+    part.initDualGraph();
+
+    for (auto _ : state)
+    {
+        const auto converted = lstr::convertMeshToOrder< 2 >(part);
+        benchmark::DoNotOptimize(converted);
+    }
+}
+BENCHMARK(BM_MeshOrderConversion)->Unit(benchmark::kSecond);
+
+void BM_MeshPartitioning(benchmark::State& state)
+{
+    auto mesh = lstr::readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), lstr::gmsh_tag);
+
+    for (auto _ : state)
+    {
+        const auto parted = lstr::partitionMesh(mesh, 2, {});
+        benchmark::DoNotOptimize(parted);
+    }
+}
+BENCHMARK(BM_MeshPartitioning)->Unit(benchmark::kMillisecond);
