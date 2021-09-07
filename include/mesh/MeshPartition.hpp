@@ -93,7 +93,7 @@ public:
     el_boundary_view_result_t         getElementBoundaryView(const Element< T, O >& el, d_id_t d) const;
     [[nodiscard]] inline BoundaryView getBoundaryView(d_id_t) const;
 
-    [[nodiscard]] DomainView                   getDomainView(d_id_t id) const { return DomainView(domains.at(id), id); }
+    [[nodiscard]] DomainView                   getDomainView(d_id_t id) const { return DomainView{domains.at(id), id}; }
     [[nodiscard]] inline size_t                getNElements() const;
     [[nodiscard]] auto                         getNDomains() const { return domains.size(); }
     [[nodiscard]] inline std::vector< d_id_t > getDomainIds() const;

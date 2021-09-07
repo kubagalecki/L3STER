@@ -3,6 +3,7 @@
 
 #include "mesh/Aliases.hpp"
 #include "mesh/Element.hpp"
+#include "util/Concepts.hpp"
 
 #include <algorithm>
 #include <execution>
@@ -34,18 +35,16 @@ public:
     template < ElementTypes ELTYPE, el_o_t ELORDER >
     void reserve(size_t size);
 
-    template < invocable_on_elements F, typename ExecPolicy = std::execution::sequenced_policy >
-    requires std::is_execution_policy_v< std::remove_cvref_t< ExecPolicy > >
+    template < invocable_on_elements F, ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
     void visit(F&& element_visitor, const ExecPolicy& policy = std::execution::seq);
-    template < invocable_on_const_elements F, typename ExecPolicy = std::execution::sequenced_policy >
-    requires std::is_execution_policy_v< std::remove_cvref_t< ExecPolicy > >
+    template < invocable_on_const_elements F, ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
     void cvisit(F&& element_visitor, const ExecPolicy& policy = std::execution::seq) const;
 
-    template < invocable_on_const_elements_r< bool > F, typename ExecPolicy = std::execution::sequenced_policy >
-    requires std::is_execution_policy_v< std::remove_cvref_t< ExecPolicy > >
+    template < invocable_on_const_elements_r< bool > F,
+               ExecutionPolicy_c                     ExecPolicy = std::execution::sequenced_policy >
     [[nodiscard]] find_result_t find(F&& predicate, const ExecPolicy& policy = std::execution::seq);
-    template < invocable_on_const_elements_r< bool > F, typename ExecPolicy = std::execution::sequenced_policy >
-    requires std::is_execution_policy_v< std::remove_cvref_t< ExecPolicy > >
+    template < invocable_on_const_elements_r< bool > F,
+               ExecutionPolicy_c                     ExecPolicy = std::execution::sequenced_policy >
     [[nodiscard]] const_find_result_t        find(F&& predicate, const ExecPolicy& policy = std::execution::seq) const;
     [[nodiscard]] inline find_result_t       find(el_id_t id);
     [[nodiscard]] inline const_find_result_t find(el_id_t id) const;
@@ -60,11 +59,9 @@ public:
     std::vector< Element< ELTYPE, ELORDER > >& getElementVector();
 
 private:
-    template < typename F, typename ExecPolicy >
-    requires std::is_execution_policy_v< std::remove_cvref_t< ExecPolicy > >
+    template < typename F, ExecutionPolicy_c ExecPolicy >
     static auto wrapElementVisitor(F& element_visitor, const ExecPolicy& policy);
-    template < typename F, typename ExecPolicy >
-    requires std::is_execution_policy_v< std::remove_cvref_t< ExecPolicy > >
+    template < typename F, ExecutionPolicy_c ExecPolicy >
     static auto wrapCElementVisitor(F& element_visitor, const ExecPolicy& policy);
 
     element_vector_variant_vector_t element_vectors;
@@ -153,16 +150,14 @@ void Domain::reserve(size_t size)
     }
 }
 
-template < invocable_on_elements F, typename ExecPolicy >
-requires std::is_execution_policy_v< std::remove_cvref_t< ExecPolicy > >
+template < invocable_on_elements F, ExecutionPolicy_c ExecPolicy >
 void Domain::visit(F&& element_visitor, const ExecPolicy& policy)
 {
     auto visitor = wrapElementVisitor(element_visitor, policy);
     std::ranges::for_each(element_vectors, [&](element_vector_variant_t& el_vec) { std::visit(visitor, el_vec); });
 }
 
-template < invocable_on_const_elements F, typename ExecPolicy >
-requires std::is_execution_policy_v< std::remove_cvref_t< ExecPolicy > >
+template < invocable_on_const_elements F, ExecutionPolicy_c ExecPolicy >
 void Domain::cvisit(F&& element_visitor, const ExecPolicy& policy) const
 {
     auto visitor = wrapCElementVisitor(element_visitor, policy);
@@ -170,9 +165,8 @@ void Domain::cvisit(F&& element_visitor, const ExecPolicy& policy) const
                           [&](const element_vector_variant_t& el_vec) { std::visit(visitor, el_vec); });
 }
 
-template < invocable_on_const_elements_r< bool > F, typename ExecPolicy >
-requires std::is_execution_policy_v< std::remove_cvref_t< ExecPolicy > > Domain::find_result_t
-Domain::find(F&& predicate, const ExecPolicy& policy)
+template < invocable_on_const_elements_r< bool > F, ExecutionPolicy_c ExecPolicy >
+Domain::find_result_t Domain::find(F&& predicate, const ExecPolicy& policy)
 {
     std::optional< element_ptr_variant_t > opt_el_ptr_variant;
     const auto vector_visitor = [&]< ElementTypes T, el_o_t O >(const element_vector_t< T, O >& el_vec) {
@@ -193,10 +187,8 @@ Domain::find(F&& predicate, const ExecPolicy& policy)
     return opt_el_ptr_variant;
 }
 
-template < invocable_on_const_elements_r< bool > F, typename ExecPolicy >
-requires std::is_execution_policy_v< std::remove_cvref_t< ExecPolicy > > Domain::const_find_result_t
-Domain::find(F&& predicate, const ExecPolicy& policy)
-const
+template < invocable_on_const_elements_r< bool > F, ExecutionPolicy_c ExecPolicy >
+Domain::const_find_result_t Domain::find(F&& predicate, const ExecPolicy& policy) const
 {
     return detail::constifyFound(const_cast< Domain* >(this)->find(predicate, policy));
 }
@@ -240,8 +232,7 @@ Domain::const_find_result_t Domain::find(el_id_t id) const
     return detail::constifyFound(const_cast< Domain* >(this)->find(id));
 }
 
-template < typename F, typename ExecPolicy >
-requires std::is_execution_policy_v< std::remove_cvref_t< ExecPolicy > >
+template < typename F, ExecutionPolicy_c ExecPolicy >
 auto Domain::wrapElementVisitor(F& element_visitor, const ExecPolicy& policy)
 {
     return [&](auto& element_vector) {
@@ -253,8 +244,7 @@ auto Domain::wrapElementVisitor(F& element_visitor, const ExecPolicy& policy)
     };
 }
 
-template < typename F, typename ExecPolicy >
-requires std::is_execution_policy_v< std::remove_cvref_t< ExecPolicy > >
+template < typename F, ExecutionPolicy_c ExecPolicy >
 auto Domain::wrapCElementVisitor(F& element_visitor, const ExecPolicy& policy)
 {
     return [&](const auto& element_vector) {
