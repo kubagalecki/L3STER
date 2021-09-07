@@ -35,17 +35,15 @@ public:
     template < ElementTypes ELTYPE, el_o_t ELORDER >
     void reserve(size_t size);
 
-    template < invocable_on_elements F, ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, const ExecPolicy& policy = std::execution::seq);
-    template < invocable_on_const_elements F, ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    void cvisit(F&& element_visitor, const ExecPolicy& policy = std::execution::seq) const;
+    template < invocable_on_elements F, ExecutionPolicy_c ExecPolicy >
+    void visit(F&& element_visitor, const ExecPolicy& policy);
+    template < invocable_on_const_elements F, ExecutionPolicy_c ExecPolicy >
+    void cvisit(F&& element_visitor, const ExecPolicy& policy) const;
 
-    template < invocable_on_const_elements_r< bool > F,
-               ExecutionPolicy_c                     ExecPolicy = std::execution::sequenced_policy >
-    [[nodiscard]] find_result_t find(F&& predicate, const ExecPolicy& policy = std::execution::seq);
-    template < invocable_on_const_elements_r< bool > F,
-               ExecutionPolicy_c                     ExecPolicy = std::execution::sequenced_policy >
-    [[nodiscard]] const_find_result_t        find(F&& predicate, const ExecPolicy& policy = std::execution::seq) const;
+    template < invocable_on_const_elements_r< bool > F, ExecutionPolicy_c ExecPolicy >
+    [[nodiscard]] find_result_t find(F&& predicate, const ExecPolicy& policy);
+    template < invocable_on_const_elements_r< bool > F, ExecutionPolicy_c ExecPolicy >
+    [[nodiscard]] const_find_result_t        find(F&& predicate, const ExecPolicy& policy) const;
     [[nodiscard]] inline find_result_t       find(el_id_t id);
     [[nodiscard]] inline const_find_result_t find(el_id_t id) const;
 

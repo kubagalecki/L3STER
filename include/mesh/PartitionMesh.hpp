@@ -169,20 +169,22 @@ inline std::vector< MeshPartition > assignNodes(idx_t                           
         size_t         n_normal = 0, n_ghosts = 0;
         std::ranges::fill(node_types, none);
         std::ranges::for_each(dm, [&](const auto& dom_p) {
-            dom_p.second.cvisit([&](const auto& element) {
-                std::ranges::for_each(element.getNodes(), [&](n_id_t node) {
-                    if (npart[node] == part_ind)
-                    {
-                        node_types[node] = normal;
-                        ++n_normal;
-                    }
-                    else
-                    {
-                        node_types[node] = ghost;
-                        ++n_ghosts;
-                    }
-                });
-            });
+            dom_p.second.cvisit(
+                [&](const auto& element) {
+                    std::ranges::for_each(element.getNodes(), [&](n_id_t node) {
+                        if (npart[node] == part_ind)
+                        {
+                            node_types[node] = normal;
+                            ++n_normal;
+                        }
+                        else
+                        {
+                            node_types[node] = ghost;
+                            ++n_ghosts;
+                        }
+                    });
+                },
+                std::execution::seq);
         });
         std::vector< n_id_t > nodes, ghost_nodes;
         nodes.reserve(n_normal);
