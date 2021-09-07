@@ -30,7 +30,10 @@ void BM_BoundaryViewGeneration(benchmark::State& state)
     partition.initDualGraph();
 
     for (auto _ : state)
-        const auto temp = partition.getBoundaryView(2);
+    {
+        const auto boundary_view = partition.getBoundaryView(2);
+        benchmark::DoNotOptimize(boundary_view);
+    }
 }
 BENCHMARK(BM_BoundaryViewGeneration)->Unit(benchmark::kMillisecond);
 
@@ -39,6 +42,9 @@ void BM_BoundaryViewGenerationFallback(benchmark::State& state)
     const auto mesh = lstr::readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), lstr::gmsh_tag);
 
     for (auto _ : state)
-        const auto temp = mesh.getPartitions()[0].getBoundaryView(2);
+    {
+        const auto boundary_view = mesh.getPartitions()[0].getBoundaryView(2);
+        benchmark::DoNotOptimize(boundary_view);
+    }
 }
-BENCHMARK(BM_BoundaryViewGenerationFallback)->Unit(benchmark::kMillisecond);
+BENCHMARK(BM_BoundaryViewGenerationFallback)->Unit(benchmark::kSecond);
