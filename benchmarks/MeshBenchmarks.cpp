@@ -76,23 +76,32 @@ void BM_MeshPartitioning(benchmark::State& state)
 BENCHMARK(BM_MeshPartitioning)->Unit(benchmark::kMillisecond)->Name("Partition mesh in half");
 
 template < typename ExecutionPolicy >
-void BM_ElementIteration(benchmark::State& state)
+void BM_CopyElementNodes(benchmark::State& state)
 {
-    const auto     mesh         = lstr::readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), lstr::gmsh_tag);
-    const auto&    part         = mesh.getPartitions()[0];
-    constexpr auto read_element = []< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >& el) {
-        const auto nodes_copy = el.getNodes();
+    const auto            mesh = lstr::readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), lstr::gmsh_tag);
+    const auto&           part = mesh.getPartitions()[0];
+    std::atomic< size_t > progress_counter{0u};
+
+    const auto element_op_counter = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >& el) {
+        progress_counter.fetch_add(lstr::Element< T, O >::n_nodes, std::memory_order_relaxed);
+    };
+    part.cvisit(element_op_counter, std::execution::par);
+
+    const auto read_element = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >& el) {
+        auto nodes_copy = el.getNodes();
         benchmark::DoNotOptimize(nodes_copy);
     };
 
     for (auto _ : state)
         part.cvisit(read_element, ExecutionPolicy{});
+
+    state.SetBytesProcessed(progress_counter.load() * sizeof(lstr::n_id_t) * state.iterations());
 }
-BENCHMARK_TEMPLATE(BM_ElementIteration, std::execution::sequenced_policy)
+BENCHMARK_TEMPLATE(BM_CopyElementNodes, std::execution::sequenced_policy)
     ->Unit(benchmark::kMicrosecond)
     ->UseRealTime()
-    ->Name("Serial element iteration");
-BENCHMARK_TEMPLATE(BM_ElementIteration, std::execution::parallel_policy)
+    ->Name("Make local node list copy [serial]");
+BENCHMARK_TEMPLATE(BM_CopyElementNodes, std::execution::parallel_policy)
     ->Unit(benchmark::kMicrosecond)
     ->UseRealTime()
-    ->Name("Parallel element iteration");
+    ->Name("Make local node list copy [parallel]");

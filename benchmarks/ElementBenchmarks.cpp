@@ -29,7 +29,7 @@ void BM_JacobianComputation(benchmark::State& state)
         benchmark::DoNotOptimize(val);
     }
 }
-BENCHMARK(BM_JacobianComputation);
+BENCHMARK(BM_JacobianComputation)->Name("Compute Jacobian");
 
 void BM_ReferenceBasisComputation(benchmark::State& state)
 {
@@ -42,7 +42,7 @@ void BM_ReferenceBasisComputation(benchmark::State& state)
         benchmark::DoNotOptimize(ders);
     }
 }
-BENCHMARK(BM_ReferenceBasisComputation);
+BENCHMARK(BM_ReferenceBasisComputation)->Name("Compute reference basis");
 
 void BM_SingleBasisDerivativeComputation(benchmark::State& state)
 {
@@ -54,7 +54,7 @@ void BM_SingleBasisDerivativeComputation(benchmark::State& state)
         benchmark::DoNotOptimize(ders);
     }
 }
-BENCHMARK(BM_SingleBasisDerivativeComputation);
+BENCHMARK(BM_SingleBasisDerivativeComputation)->Name("Compute single basis derivative");
 
 void BM_AggregateBasisDerivativeComputation(benchmark::State& state)
 {
@@ -68,4 +68,4 @@ void BM_AggregateBasisDerivativeComputation(benchmark::State& state)
         benchmark::DoNotOptimize(ders);
     }
 }
-BENCHMARK(BM_AggregateBasisDerivativeComputation);
+BENCHMARK(BM_AggregateBasisDerivativeComputation)->Name("Compute basis derivatives as aggregate");
