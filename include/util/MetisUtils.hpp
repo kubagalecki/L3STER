@@ -18,6 +18,12 @@ class MetisGraphWrapper
 public:
     using span_t = std::span< const idx_t >;
 
+    inline MetisGraphWrapper(const MetisGraphWrapper& other);
+    MetisGraphWrapper(MetisGraphWrapper&&) noexcept = default;
+    inline MetisGraphWrapper& operator              =(const MetisGraphWrapper& other);
+    MetisGraphWrapper&        operator=(MetisGraphWrapper&&) noexcept = default;
+    ~MetisGraphWrapper()                                              = default;
+
     MetisGraphWrapper(idx_t* xa, idx_t* adj, size_t nv) : xadj{xa}, adjncy{adj}, nvert{nv} {}
 
     [[nodiscard]] span_t getXadj() const { return {xadj.get(), nvert + 1}; }
@@ -29,6 +35,25 @@ private:
     array_t xadj, adjncy;
     size_t  nvert;
 };
+
+MetisGraphWrapper::MetisGraphWrapper(const MetisGraphWrapper& other)
+    : xadj{static_cast< idx_t* >(malloc((other.getXadj().size()) * sizeof(idx_t)))},     // NOLINT
+      adjncy{static_cast< idx_t* >(malloc((other.getAdjncy().size()) * sizeof(idx_t)))}, // NOLINT
+      nvert{other.nvert}
+{
+    std::ranges::copy(other.getXadj(), xadj.get());
+    std::ranges::copy(other.getAdjncy(), adjncy.get());
+}
+
+MetisGraphWrapper& MetisGraphWrapper::operator=(const MetisGraphWrapper& other)
+{
+    xadj.reset(static_cast< idx_t* >(malloc((other.getXadj().size()) * sizeof(idx_t))));     // NOLINT
+    adjncy.reset(static_cast< idx_t* >(malloc((other.getAdjncy().size()) * sizeof(idx_t)))); // NOLINT
+    nvert = other.nvert;
+    std::ranges::copy(other.getXadj(), xadj.get());
+    std::ranges::copy(other.getAdjncy(), adjncy.get());
+    return *this;
+}
 
 MetisGraphWrapper::span_t MetisGraphWrapper::getElementAdjacent(size_t el_id) const
 {

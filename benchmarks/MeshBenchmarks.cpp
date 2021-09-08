@@ -8,7 +8,7 @@ void BM_MeshRead(benchmark::State& state)
     for (auto _ : state)
         const auto temp = lstr::readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), lstr::gmsh_tag);
 }
-BENCHMARK(BM_MeshRead)->Unit(benchmark::kMillisecond);
+BENCHMARK(BM_MeshRead)->Unit(benchmark::kMillisecond)->Name("Read mesh");
 
 void BM_DualGraphGeneration(benchmark::State& state)
 {
@@ -21,7 +21,7 @@ void BM_DualGraphGeneration(benchmark::State& state)
         partition.deleteDualGraph();
     }
 }
-BENCHMARK(BM_DualGraphGeneration)->Unit(benchmark::kMillisecond);
+BENCHMARK(BM_DualGraphGeneration)->Unit(benchmark::kMillisecond)->Name("Generate dual graph");
 
 void BM_BoundaryViewGeneration(benchmark::State& state)
 {
@@ -30,15 +30,78 @@ void BM_BoundaryViewGeneration(benchmark::State& state)
     partition.initDualGraph();
 
     for (auto _ : state)
-        const auto temp = partition.getBoundaryView(2);
+    {
+        const auto boundary_view = partition.getBoundaryView(2);
+        benchmark::DoNotOptimize(boundary_view);
+    }
 }
-BENCHMARK(BM_BoundaryViewGeneration)->Unit(benchmark::kMillisecond);
+BENCHMARK(BM_BoundaryViewGeneration)->Unit(benchmark::kMillisecond)->Name("Generate boundary view");
 
 void BM_BoundaryViewGenerationFallback(benchmark::State& state)
 {
     const auto mesh = lstr::readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), lstr::gmsh_tag);
 
     for (auto _ : state)
-        const auto temp = mesh.getPartitions()[0].getBoundaryView(2);
+    {
+        const auto boundary_view = mesh.getPartitions()[0].getBoundaryView(2);
+        benchmark::DoNotOptimize(boundary_view);
+    }
 }
-BENCHMARK(BM_BoundaryViewGenerationFallback)->Unit(benchmark::kMillisecond);
+BENCHMARK(BM_BoundaryViewGenerationFallback)->Unit(benchmark::kSecond)->Name("Generate boundary view (fallback)");
+
+void BM_MeshOrderConversion(benchmark::State& state)
+{
+    auto  mesh = lstr::readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), lstr::gmsh_tag);
+    auto& part = mesh.getPartitions()[0];
+    part.initDualGraph();
+
+    for (auto _ : state)
+    {
+        const auto converted = lstr::convertMeshToOrder< 2 >(part);
+        benchmark::DoNotOptimize(converted);
+    }
+}
+BENCHMARK(BM_MeshOrderConversion)->Unit(benchmark::kSecond)->Name("Convert mesh to 2nd order");
+
+void BM_MeshPartitioning(benchmark::State& state)
+{
+    auto mesh = lstr::readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), lstr::gmsh_tag);
+
+    for (auto _ : state)
+    {
+        const auto parted = lstr::partitionMesh(mesh, 2, {});
+        benchmark::DoNotOptimize(parted);
+    }
+}
+BENCHMARK(BM_MeshPartitioning)->Unit(benchmark::kMillisecond)->Name("Partition mesh in half");
+
+template < typename ExecutionPolicy >
+void BM_CopyElementNodes(benchmark::State& state)
+{
+    const auto            mesh = lstr::readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), lstr::gmsh_tag);
+    const auto&           part = mesh.getPartitions()[0];
+    std::atomic< size_t > progress_counter{0u};
+
+    const auto element_op_counter = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >& el) {
+        progress_counter.fetch_add(lstr::Element< T, O >::n_nodes, std::memory_order_relaxed);
+    };
+    part.cvisit(element_op_counter, std::execution::par);
+
+    const auto read_element = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >& el) {
+        auto nodes_copy = el.getNodes();
+        benchmark::DoNotOptimize(nodes_copy);
+    };
+
+    for (auto _ : state)
+        part.cvisit(read_element, ExecutionPolicy{});
+
+    state.SetBytesProcessed(progress_counter.load() * sizeof(lstr::n_id_t) * state.iterations());
+}
+BENCHMARK_TEMPLATE(BM_CopyElementNodes, std::execution::sequenced_policy)
+    ->Unit(benchmark::kMicrosecond)
+    ->UseRealTime()
+    ->Name("Make local node list copy [serial]");
+BENCHMARK_TEMPLATE(BM_CopyElementNodes, std::execution::parallel_policy)
+    ->Unit(benchmark::kMicrosecond)
+    ->UseRealTime()
+    ->Name("Make local node list copy [parallel]");

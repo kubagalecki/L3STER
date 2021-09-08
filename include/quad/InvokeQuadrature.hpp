@@ -1,8 +1,10 @@
 #ifndef L3STER_QUAD_INVOKEQUADRATURE_HPP
 #define L3STER_QUAD_INVOKEQUADRATURE_HPP
+
 #include "quad/Quadrature.hpp"
 
 #include <concepts>
+#include <numeric>
 #include <tuple>
 
 namespace lstr

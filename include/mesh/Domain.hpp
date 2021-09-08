@@ -3,8 +3,10 @@
 
 #include "mesh/Aliases.hpp"
 #include "mesh/Element.hpp"
+#include "util/Concepts.hpp"
 
 #include <algorithm>
+#include <execution>
 #include <functional>
 #include <optional>
 #include <type_traits>
@@ -33,15 +35,15 @@ public:
     template < ElementTypes ELTYPE, el_o_t ELORDER >
     void reserve(size_t size);
 
-    template < invocable_on_elements F >
-    void visit(F&& element_visitor);
-    template < invocable_on_const_elements F >
-    void cvisit(F&& element_visitor) const;
+    template < invocable_on_elements F, ExecutionPolicy_c ExecPolicy >
+    void visit(F&& element_visitor, const ExecPolicy& policy);
+    template < invocable_on_const_elements F, ExecutionPolicy_c ExecPolicy >
+    void cvisit(F&& element_visitor, const ExecPolicy& policy) const;
 
-    template < invocable_on_const_elements_r< bool > F >
-    [[nodiscard]] find_result_t find(F&& predicate);
-    template < invocable_on_const_elements_r< bool > F >
-    [[nodiscard]] const_find_result_t        find(F&& predicate) const;
+    template < invocable_on_const_elements_r< bool > F, ExecutionPolicy_c ExecPolicy >
+    [[nodiscard]] find_result_t find(F&& predicate, const ExecPolicy& policy);
+    template < invocable_on_const_elements_r< bool > F, ExecutionPolicy_c ExecPolicy >
+    [[nodiscard]] const_find_result_t        find(F&& predicate, const ExecPolicy& policy) const;
     [[nodiscard]] inline find_result_t       find(el_id_t id);
     [[nodiscard]] inline const_find_result_t find(el_id_t id) const;
 
@@ -55,10 +57,10 @@ public:
     std::vector< Element< ELTYPE, ELORDER > >& getElementVector();
 
 private:
-    template < typename F >
-    static auto wrapElementVisitor(F& element_visitor);
-    template < typename F >
-    static auto wrapCElementVisitor(F& element_visitor);
+    template < typename F, ExecutionPolicy_c ExecPolicy >
+    static auto wrapElementVisitor(F& element_visitor, const ExecPolicy& policy);
+    template < typename F, ExecutionPolicy_c ExecPolicy >
+    static auto wrapCElementVisitor(F& element_visitor, const ExecPolicy& policy);
 
     element_vector_variant_vector_t element_vectors;
     dim_t                           dim = 0;
@@ -146,27 +148,27 @@ void Domain::reserve(size_t size)
     }
 }
 
-template < invocable_on_elements F >
-void Domain::visit(F&& element_visitor)
+template < invocable_on_elements F, ExecutionPolicy_c ExecPolicy >
+void Domain::visit(F&& element_visitor, const ExecPolicy& policy)
 {
-    auto visitor = wrapElementVisitor(element_visitor);
+    auto visitor = wrapElementVisitor(element_visitor, policy);
     std::ranges::for_each(element_vectors, [&](element_vector_variant_t& el_vec) { std::visit(visitor, el_vec); });
 }
 
-template < invocable_on_const_elements F >
-void Domain::cvisit(F&& element_visitor) const
+template < invocable_on_const_elements F, ExecutionPolicy_c ExecPolicy >
+void Domain::cvisit(F&& element_visitor, const ExecPolicy& policy) const
 {
-    auto visitor = wrapCElementVisitor(element_visitor);
+    auto visitor = wrapCElementVisitor(element_visitor, policy);
     std::ranges::for_each(element_vectors,
                           [&](const element_vector_variant_t& el_vec) { std::visit(visitor, el_vec); });
 }
 
-template < invocable_on_const_elements_r< bool > F >
-Domain::find_result_t Domain::find(F&& predicate)
+template < invocable_on_const_elements_r< bool > F, ExecutionPolicy_c ExecPolicy >
+Domain::find_result_t Domain::find(F&& predicate, const ExecPolicy& policy)
 {
     std::optional< element_ptr_variant_t > opt_el_ptr_variant;
     const auto vector_visitor = [&]< ElementTypes T, el_o_t O >(const element_vector_t< T, O >& el_vec) {
-        const auto el_it = std::ranges::find_if(el_vec, std::ref(predicate));
+        const auto el_it = std::find_if(policy, cbegin(el_vec), cend(el_vec), std::ref(predicate));
         if (el_it != el_vec.cend())
         {
             // const_cast is used because we don't want to allow the predicate to alter the elements
@@ -183,10 +185,10 @@ Domain::find_result_t Domain::find(F&& predicate)
     return opt_el_ptr_variant;
 }
 
-template < invocable_on_const_elements_r< bool > F >
-Domain::const_find_result_t Domain::find(F&& predicate) const
+template < invocable_on_const_elements_r< bool > F, ExecutionPolicy_c ExecPolicy >
+Domain::const_find_result_t Domain::find(F&& predicate, const ExecPolicy& policy) const
 {
-    return detail::constifyFound(const_cast< Domain* >(this)->find(predicate));
+    return detail::constifyFound(const_cast< Domain* >(this)->find(predicate, policy));
 }
 
 Domain::find_result_t Domain::find(el_id_t id)
@@ -228,19 +230,27 @@ Domain::const_find_result_t Domain::find(el_id_t id) const
     return detail::constifyFound(const_cast< Domain* >(this)->find(id));
 }
 
-template < typename F >
-auto Domain::wrapElementVisitor(F& element_visitor)
+template < typename F, ExecutionPolicy_c ExecPolicy >
+auto Domain::wrapElementVisitor(F& element_visitor, const ExecPolicy& policy)
 {
-    return [&element_visitor](auto& element_vector) {
-        std::ranges::for_each(element_vector, std::ref(element_visitor));
+    return [&](auto& element_vector) {
+        // we need to be able to iterate in a deterministic order, execution::seq does not guarantee that
+        if constexpr (std::is_same_v< ExecPolicy, std::execution::sequenced_policy >)
+            std::ranges::for_each(element_vector, std::ref(element_visitor));
+        else
+            std::for_each(policy, begin(element_vector), end(element_vector), std::ref(element_visitor));
     };
 }
 
-template < typename F >
-auto Domain::wrapCElementVisitor(F& element_visitor)
+template < typename F, ExecutionPolicy_c ExecPolicy >
+auto Domain::wrapCElementVisitor(F& element_visitor, const ExecPolicy& policy)
 {
     return [&](const auto& element_vector) {
-        std::ranges::for_each(element_vector, std::ref(element_visitor));
+        // we need to be able to iterate in a deterministic order, execution::seq does not guarantee that
+        if constexpr (std::is_same_v< ExecPolicy, std::execution::sequenced_policy >)
+            std::ranges::for_each(element_vector, std::ref(element_visitor));
+        else
+            std::for_each(policy, cbegin(element_vector), cend(element_vector), std::ref(element_visitor));
     };
 }
 

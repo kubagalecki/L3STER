@@ -3,6 +3,7 @@
 
 #include <array>
 #include <concepts>
+#include <execution>
 #include <ranges>
 #include <tuple>
 #include <utility>
@@ -131,5 +132,8 @@ concept random_access_typed_range =
 
 template < typename T >
 concept arithmetic = std::is_arithmetic_v< T >;
+
+template < typename T >
+concept ExecutionPolicy_c = std::is_execution_policy_v< T >;
 } // namespace lstr
 #endif // L3STER_UTIL_CONCEPTS_HPP

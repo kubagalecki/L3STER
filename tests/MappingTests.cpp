@@ -1,4 +1,5 @@
-#include "l3ster.hpp"
+#include "mapping/ComputeBasisDerivative.hpp"
+#include "mapping/MapReferenceToPhysical.hpp"
 
 #include "TestDataPath.h"
 #include "catch2/catch.hpp"
