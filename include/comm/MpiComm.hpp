@@ -1,5 +1,5 @@
-#ifndef L3STER_GLOBAL_RESOURCE_MPICOMM_HPP
-#define L3STER_GLOBAL_RESOURCE_MPICOMM_HPP
+#ifndef L3STER_COMM_MPICOMM_HPP
+#define L3STER_COMM_MPICOMM_HPP
 
 #include "util/Concepts.hpp"
 
@@ -108,9 +108,8 @@ private:
     MPI_Comm comm = MPI_COMM_WORLD;
 };
 
-MpiComm::Request::Request(MpiComm::Request&& other) noexcept
+MpiComm::Request::Request(MpiComm::Request&& other) noexcept : request(other.request)
 {
-    request       = other.request;
     other.request = MPI_REQUEST_NULL;
 }
 
@@ -124,7 +123,7 @@ MpiComm::Request& MpiComm::Request::operator=(MpiComm::Request&& other) noexcept
 
 bool MpiComm::Request::test()
 {
-    int flag;
+    int flag{};
     MPI_Test(&request, &flag, MPI_STATUS_IGNORE);
     return flag;
 }
@@ -178,4 +177,4 @@ int MpiComm::getSize() const
 }
 } // namespace lstr
 
-#endif // L3STER_GLOBAL_RESOURCE_MPICOMM_HPP
+#endif // L3STER_COMM_MPICOMM_HPP

@@ -1,5 +1,5 @@
 #include "alloc/NodeGlobalMemoryResource.hpp"
-#include "global_resource/GlobalResource.hpp"
+#include "util/GlobalResource.hpp"
 
 #include "catch2/catch.hpp"
 

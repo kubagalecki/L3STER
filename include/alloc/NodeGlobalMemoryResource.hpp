@@ -1,7 +1,7 @@
 #ifndef L3STER_ALLOC_NODEGLOBALMEMORYRESOURCE_HPP
 #define L3STER_ALLOC_NODEGLOBALMEMORYRESOURCE_HPP
 
-#include "global_resource/HwlocWrapper.hpp"
+#include "util/HwlocWrapper.hpp"
 
 #include <memory>
 #include <memory_resource>
