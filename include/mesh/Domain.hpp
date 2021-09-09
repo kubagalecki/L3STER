@@ -26,6 +26,8 @@ public:
     using find_result_t                   = std::optional< element_ptr_variant_t >;
     using const_find_result_t             = std::optional< element_cptr_variant_t >;
 
+    friend class SerializedDomain;
+
     template < ElementTypes ELTYPE, el_o_t ELORDER >
     void push(const Element< ELTYPE, ELORDER >& element);
     template < ElementTypes ELTYPE, el_o_t ELORDER, typename... Args >

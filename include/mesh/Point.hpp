@@ -22,8 +22,8 @@ public:
     explicit Point(T... coords_) : coords{std::array{coords_...}.data()}
     {}
 
-    [[nodiscard]] val_t  operator[](size_t i) const noexcept { return coords.coeff(i); }
-    [[nodiscard]] val_t& operator[](size_t i) noexcept { return coords.coeffRef(i); }
+    [[nodiscard]] val_t  operator[](ptrdiff_t i) const noexcept { return coords.coeff(i); }
+    [[nodiscard]] val_t& operator[](ptrdiff_t i) noexcept { return coords.coeffRef(i); }
 
     [[nodiscard]] val_t  x() const noexcept requires(DIM >= 1) { return coords.coeff(0); }
     [[nodiscard]] val_t  y() const noexcept requires(DIM >= 2) { return coords.coeff(1); }
