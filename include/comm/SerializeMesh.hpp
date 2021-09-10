@@ -8,6 +8,8 @@
 
 namespace lstr
 {
+namespace detail
+{
 template < ElementTypes T, el_o_t O >
 void serializeElementNodes(const Element< T, O >& el, n_id_t* dest) noexcept
 {
@@ -17,7 +19,7 @@ void serializeElementNodes(const Element< T, O >& el, n_id_t* dest) noexcept
 template < ElementTypes T, el_o_t O >
 void serializeElementData(const Element< T, O >& el, val_t* dest) noexcept
 {
-    constexpr auto n_verts = ElementData< T, O >::n_verts;
+    constexpr auto n_verts = static_cast< ptrdiff_t >(ElementData< T, O >::n_verts);
     auto&          verts   = el.getData().vertices;
     for (ptrdiff_t vert_i = 0; vert_i < n_verts; ++vert_i)
         for (ptrdiff_t dim_i = 0; dim_i < 3; ++dim_i)
@@ -49,6 +51,7 @@ private:
     val_t*   data_offset;
     el_id_t* id_offset;
 };
+} // namespace detail
 
 struct SerializedDomain
 {
@@ -91,7 +94,7 @@ SerializedDomain::SerializedDomain(const Domain& domain)
     element_data.resize(data_size);
     element_ids.resize(id_size);
 
-    ElementSerializer serializer{element_nodes.data(), element_data.data(), element_ids.data()};
+    detail::ElementSerializer serializer{element_nodes.data(), element_data.data(), element_ids.data()};
     domain.cvisit(serializer, std::execution::seq);
 }
 
