@@ -30,7 +30,7 @@ public:
 
     Domain() = default;
     Domain(element_vector_variant_vector_t&& element_vectors_, dim_t dim_)
-        : element_vectors{std::move(element_vectors_)}, dim{dim}
+        : element_vectors{std::move(element_vectors_)}, dim{dim_}
     {}
 
     template < ElementTypes ELTYPE, el_o_t ELORDER >

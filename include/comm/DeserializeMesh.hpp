@@ -16,7 +16,6 @@ deserializeElementVector(const n_id_t*& nodes, const val_t*& data, const el_id_t
     using data_array_t = Element< T, O >::element_data_t;
 
     constexpr auto node_chunk_size = Element< T, O >::n_nodes;
-    constexpr auto data_chunk_size = ElementData< T, O >::n_verts * 3;
 
     std::vector< Element< T, O > > ret_val;
     ret_val.reserve(size);
