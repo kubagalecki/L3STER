@@ -35,7 +35,7 @@ public:
     using cfind_result_t            = std::optional< std::pair< element_cptr_variant_t, d_id_t > >;
     using el_boundary_view_result_t = std::pair< cfind_result_t, el_ns_t >;
 
-    friend class SerializedPartition;
+    friend struct SerializedPartition;
 
     inline explicit MeshPartition(domain_map_t domains_);
     MeshPartition(domain_map_t domains_, node_vec_t nodes_, node_vec_t ghost_nodes_)

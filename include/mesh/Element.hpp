@@ -1,5 +1,3 @@
-// Data type representing a physical element
-
 #ifndef L3STER_MESH_ELEMENT_HPP
 #define L3STER_MESH_ELEMENT_HPP
 
@@ -20,6 +18,9 @@ template < ElementTypes T, el_o_t O >
 class Element
 {
 public:
+    static constexpr ElementTypes type  = T;
+    static constexpr el_o_t       order = O;
+
     static constexpr size_t n_nodes = ElementTraits< Element< T, O > >::nodes_per_element;
     using node_array_t              = std::array< n_id_t, n_nodes >;
     using element_data_t            = ElementData< T, O >::ElementData;

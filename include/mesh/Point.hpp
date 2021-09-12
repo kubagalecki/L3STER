@@ -43,5 +43,11 @@ Point(const std::array< val_t, DIM >&) -> Point< DIM >;
 
 template < std::same_as< val_t >... T >
 Point(T...) -> Point< sizeof...(T) >;
+
+template < dim_t DIM >
+bool operator==(const Point< DIM >& p1, const Point< DIM >& p2)
+{
+    return static_cast< Point< DIM >::vector_t >(p1) == static_cast< Point< DIM >::vector_t >(p2);
+}
 } // namespace lstr
 #endif // L3STER_MESH_POINT_HPP

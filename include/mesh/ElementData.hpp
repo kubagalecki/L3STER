@@ -15,6 +15,7 @@ requires(T == ElementTypes::Line or T == ElementTypes::Quad or T == ElementTypes
     static constexpr auto n_verts = ElementTraits< Element< T, 1 > >::nodes_per_element;
     using vertex_array_t          = std::array< Point< 3 >, n_verts >;
 
+    ElementData() = default;
     ElementData(const vertex_array_t& vertices_) : vertices{vertices_} {} // NOLINT implicit conversion intended
     template < el_o_t O_ >                                                // NOLINTNEXTLINE implicit conversion intended
     requires(O != O_) ElementData(const ElementData< T, O_ >& d) : vertices{d.vertices} {}
