@@ -69,7 +69,8 @@ inline Domain deserializeDomain(const SerializedDomain& domain)
     size_t i = 0;
     for (auto&& offset : domain.type_order_offsets)
     {
-        auto& current_vec = elements.emplace_back(initElementVectorVariant(domain.types[i], domain.orders[i]));
+        auto& current_vec = elements.emplace_back(
+            initElementVectorVariant(static_cast< ElementTypes >(domain.types[i]), domain.orders[i]));
         std::visit(
             [&]< ElementTypes T, el_o_t O >(std::vector< Element< T, O > >& v) {
                 v = deserializeElementVector< T, O >(node_ptr, data_ptr, id_ptr, offset);

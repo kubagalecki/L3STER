@@ -24,6 +24,7 @@ struct ConstructionTracker
         ++mv_asgn;
         return *this;
     }
+    ~ConstructionTracker() = default;
 
     static size_t defaults;
     static size_t copies;

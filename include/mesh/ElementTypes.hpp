@@ -8,7 +8,7 @@
 
 namespace lstr
 {
-enum class ElementTypes
+enum class ElementTypes : std::uint_fast8_t
 {
     Hex,  // Hexahedral elements (geometrically linear)
     Quad, // Quadrilateral elements (geometrically linear)

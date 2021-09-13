@@ -1,6 +1,7 @@
 function( add_mpi_test source name nprocs )
     get_filename_component( test_target ${source} NAME_WE )
     add_executable( ${test_target} ${source} )
+    target_include_directories( ${test_target} PRIVATE ${CMAKE_CURRENT_BINARY_DIR} )
     target_compile_options( ${test_target} PRIVATE -fno-sanitize=all )
     target_link_options( ${test_target} PRIVATE -fno-sanitize=all )
     target_link_libraries( ${test_target} L3STER )
@@ -26,3 +27,4 @@ endfunction()
 
 add_mpi_test( "${L3STER_DIR}/tests/MpiBlockingCommunicationTest.cpp" "MPI_blocking_communication_test" "1;2;4" )
 add_mpi_test( "${L3STER_DIR}/tests/MpiAsyncCommunicationTest.cpp" "MPI_async_communication_test" "1;2;4" )
+add_mpi_test( "${L3STER_DIR}/tests/MeshDistributionTests.cpp" "Mesh_distribution_test" "2;4" )

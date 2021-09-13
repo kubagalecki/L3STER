@@ -55,14 +55,15 @@ private:
 
 struct SerializedDomain
 {
+    SerializedDomain() = default;
     explicit inline SerializedDomain(const Domain& domain);
 
-    std::vector< n_id_t >       element_nodes;
-    std::vector< val_t >        element_data;
-    std::vector< el_id_t >      element_ids;
-    std::vector< ptrdiff_t >    type_order_offsets;
-    std::vector< ElementTypes > types;
-    std::vector< el_o_t >       orders;
+    std::vector< n_id_t >            element_nodes;
+    std::vector< val_t >             element_data;
+    std::vector< el_id_t >           element_ids;
+    std::vector< ptrdiff_t >         type_order_offsets;
+    std::vector< std::uint_fast8_t > types;
+    std::vector< el_o_t >            orders;
 };
 
 SerializedDomain::SerializedDomain(const Domain& domain)
@@ -83,7 +84,7 @@ SerializedDomain::SerializedDomain(const Domain& domain)
         id_size += vec_size;
 
         type_order_offsets.push_back(vec_size);
-        types.push_back(T);
+        types.push_back(static_cast< std::uint_fast8_t >(T));
         orders.push_back(O);
     };
 
@@ -100,6 +101,7 @@ SerializedDomain::SerializedDomain(const Domain& domain)
 
 struct SerializedPartition
 {
+    SerializedPartition() = default;
     explicit SerializedPartition(const MeshPartition& part) : nodes{part.nodes}, ghost_nodes{part.ghost_nodes}
     {
         for (const auto& [id, dom] : part.domains)
