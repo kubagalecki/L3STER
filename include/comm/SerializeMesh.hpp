@@ -55,7 +55,7 @@ private:
 
 struct SerializedDomain
 {
-    explicit SerializedDomain(const Domain& domain);
+    explicit inline SerializedDomain(const Domain& domain);
 
     std::vector< n_id_t >       element_nodes;
     std::vector< val_t >        element_data;
