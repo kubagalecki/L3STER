@@ -85,7 +85,7 @@ inline SerializedPartition receivePartition(const MpiComm& comm, int source)
     SerializedPartition             ret_val{};
     std::vector< MpiComm::Request > messages{};
     constexpr size_t                messages_per_domain = 6;
-    messages.reserve(messages_per_domain);
+    messages.reserve(messages_per_domain * n_doms + 2);
     for (size_t i = 0; i < n_doms; ++i)
     {
         auto& domain = ret_val.domains.emplace(dom_ids[i], SerializedDomain{}).first->second;
@@ -109,20 +109,15 @@ inline SerializedPartition receivePartition(const MpiComm& comm, int source)
         messages.emplace_back(comm.receiveAsync(domain.type_order_offsets.data(), offset_msg_size, source, msg_tag++));
         messages.emplace_back(comm.receiveAsync(domain.types.data(), offset_msg_size, source, msg_tag++));
         messages.emplace_back(comm.receiveAsync(domain.orders.data(), offset_msg_size, source, msg_tag++));
-
-        messages.clear(); // block until complete
     }
 
-    {
-        const auto nodes_size = sizes[4 * n_doms];
-        ret_val.nodes.resize(nodes_size);
-        [[maybe_unused]] auto msg_temp1 = comm.receiveAsync(ret_val.nodes.data(), nodes_size, source, msg_tag++);
+    const auto nodes_size = sizes[4 * n_doms];
+    ret_val.nodes.resize(nodes_size);
+    messages.emplace_back(comm.receiveAsync(ret_val.nodes.data(), nodes_size, source, msg_tag++));
 
-        const auto ghost_nodes_size = sizes.back();
-        ret_val.ghost_nodes.resize(ghost_nodes_size);
-        [[maybe_unused]] auto msg_temp2 =
-            comm.receiveAsync(ret_val.ghost_nodes.data(), ghost_nodes_size, source, msg_tag++);
-    }
+    const auto ghost_nodes_size = sizes.back();
+    ret_val.ghost_nodes.resize(ghost_nodes_size);
+    messages.emplace_back(comm.receiveAsync(ret_val.ghost_nodes.data(), ghost_nodes_size, source, msg_tag++));
 
     return ret_val;
 }
