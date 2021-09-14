@@ -2,6 +2,7 @@ add_executable( L3STER_tests ${L3STER_DIR}/tests/TestsMain.cpp
                 ${L3STER_DIR}/tests/HwlocTests.cpp
                 ${L3STER_DIR}/tests/MappingTests.cpp
                 ${L3STER_DIR}/tests/MathTests.cpp
+                ${L3STER_DIR}/tests/MeshSerializationTests.cpp
                 ${L3STER_DIR}/tests/MeshTests.cpp
                 ${L3STER_DIR}/tests/NodeAllocationTests.cpp
                 ${L3STER_DIR}/tests/QuadratureTests.cpp

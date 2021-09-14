@@ -75,6 +75,29 @@ void BM_MeshPartitioning(benchmark::State& state)
 }
 BENCHMARK(BM_MeshPartitioning)->Unit(benchmark::kMillisecond)->Name("Partition mesh in half");
 
+void BM_MeshSerialization(benchmark::State& state)
+{
+    const auto mesh = lstr::readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), lstr::gmsh_tag);
+    for (auto _ : state)
+    {
+        const auto serialized = lstr::SerializedPartition{mesh.getPartitions()[0]};
+        benchmark::DoNotOptimize(serialized);
+    }
+}
+BENCHMARK(BM_MeshSerialization)->Unit(benchmark::kMillisecond)->Name("Serialize mesh");
+
+void BM_MeshDeserialization(benchmark::State& state)
+{
+    const auto mesh       = lstr::readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), lstr::gmsh_tag);
+    const auto serialized = lstr::SerializedPartition{mesh.getPartitions()[0]};
+    for (auto _ : state)
+    {
+        const auto part2 = lstr::deserializePartition(serialized);
+        benchmark::DoNotOptimize(part2);
+    }
+}
+BENCHMARK(BM_MeshDeserialization)->Unit(benchmark::kMillisecond)->Name("Deserialize mesh");
+
 template < typename ExecutionPolicy >
 void BM_CopyElementNodes(benchmark::State& state)
 {
@@ -82,7 +105,7 @@ void BM_CopyElementNodes(benchmark::State& state)
     const auto&           part = mesh.getPartitions()[0];
     std::atomic< size_t > progress_counter{0u};
 
-    const auto element_op_counter = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >& el) {
+    const auto element_op_counter = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >&) {
         progress_counter.fetch_add(lstr::Element< T, O >::n_nodes, std::memory_order_relaxed);
     };
     part.cvisit(element_op_counter, std::execution::par);

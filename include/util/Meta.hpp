@@ -19,6 +19,10 @@ template < typename... T >
 struct type_set
 {};
 
+template < auto... V >
+struct value_set
+{};
+
 namespace detail
 {
 template < std::integral T, T first, T last >

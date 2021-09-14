@@ -1,5 +1,5 @@
-#ifndef L3STER_GLOBAL_RESOURCE_MPICOMM_HPP
-#define L3STER_GLOBAL_RESOURCE_MPICOMM_HPP
+#ifndef L3STER_COMM_MPICOMM_HPP
+#define L3STER_COMM_MPICOMM_HPP
 
 #include "util/Concepts.hpp"
 
@@ -8,6 +8,7 @@
 #include <memory_resource>
 #include <stdexcept>
 #include <type_traits>
+#include <vector>
 
 namespace lstr
 {
@@ -49,7 +50,7 @@ struct MpiScopeGuard
 MpiScopeGuard::MpiScopeGuard(int& argc, char**& argv)
 {
     constexpr auto required_mode = MPI_THREAD_SERIALIZED;
-    int            provided_mode;
+    int            provided_mode{};
     int            mpi_status = MPI_Init_thread(&argc, &argv, required_mode, &provided_mode);
     if (mpi_status)
         throw std::runtime_error{"failed to initialize MPI"};
@@ -93,24 +94,45 @@ public:
     [[nodiscard]] inline int getRank() const;
     [[nodiscard]] inline int getSize() const;
 
+    // send
     template < arithmetic T >
-    void send(const T* buf, size_t count, int dest, int tag = 0);
+    void send(const T* buf, size_t count, int dest, int tag = 0) const;
     template < arithmetic T >
-    [[nodiscard]] Request sendAsync(const T* buf, size_t count, int dest, int tag = 0);
+    void send(const std::vector< T >& buf, int dest, int tag = 0) const
+    {
+        send(buf.data(), buf.size(), dest, tag);
+    }
     template < arithmetic T >
-    void receive(T* buf, size_t count, int source, int tag = 0);
+    [[nodiscard]] Request sendAsync(const T* buf, size_t count, int dest, int tag = 0) const;
     template < arithmetic T >
-    [[nodiscard]] Request receiveAsync(T* buf, size_t count, int source, int tag = 0);
+    [[nodiscard]] Request sendAsync(const std::vector< T >& buf, int dest, int tag = 0) const
+    {
+        return sendAsync(buf.data(), buf.size(), dest, tag);
+    }
 
+    // recv
+    template < arithmetic T >
+    void receive(T* buf, size_t count, int source, int tag = 0) const;
+    template < arithmetic T >
+    T receive(int source, int tag = 0) const;
+    template < arithmetic T >
+    std::vector< T > receive(size_t count, int source, int tag = 0) const;
+    template < arithmetic T >
+    [[nodiscard]] Request receiveAsync(T* buf, size_t count, int source, int tag = 0) const;
+
+    // reduce
+    template < arithmetic T >
+    void reduce(const T* send_buf, T* recv_buf, size_t count, int root, MPI_Op op) const;
+
+    // observers
     [[nodiscard]] MPI_Comm& get() { return comm; }
 
 private:
     MPI_Comm comm = MPI_COMM_WORLD;
 };
 
-MpiComm::Request::Request(MpiComm::Request&& other) noexcept
+MpiComm::Request::Request(MpiComm::Request&& other) noexcept : request(other.request)
 {
-    request       = other.request;
     other.request = MPI_REQUEST_NULL;
 }
 
@@ -124,20 +146,20 @@ MpiComm::Request& MpiComm::Request::operator=(MpiComm::Request&& other) noexcept
 
 bool MpiComm::Request::test()
 {
-    int flag;
+    int flag{};
     MPI_Test(&request, &flag, MPI_STATUS_IGNORE);
     return flag;
 }
 
 template < arithmetic T >
-void MpiComm::send(const T* buf, size_t count, int dest, int tag)
+void MpiComm::send(const T* buf, size_t count, int dest, int tag) const
 {
     if (MPI_Send(buf, count, detail::MpiType< T >::value(), dest, tag, comm))
         throw std::runtime_error{"MPI send failed"};
 }
 
 template < arithmetic T >
-MpiComm::Request MpiComm::sendAsync(const T* buf, size_t count, int dest, int tag)
+MpiComm::Request MpiComm::sendAsync(const T* buf, size_t count, int dest, int tag) const
 {
     Request request;
     if (MPI_Isend(buf, count, detail::MpiType< T >::value(), dest, tag, comm, &request.request))
@@ -146,14 +168,30 @@ MpiComm::Request MpiComm::sendAsync(const T* buf, size_t count, int dest, int ta
 }
 
 template < arithmetic T >
-void MpiComm::receive(T* buf, size_t count, int source, int tag)
+void MpiComm::receive(T* buf, size_t count, int source, int tag) const
 {
     if (MPI_Recv(buf, count, detail::MpiType< T >::value(), source, tag, comm, MPI_STATUS_IGNORE))
         throw std::runtime_error{"MPI receive failed"};
 }
 
 template < arithmetic T >
-MpiComm::Request MpiComm::receiveAsync(T* buf, size_t count, int source, int tag)
+T MpiComm::receive(int source, int tag) const
+{
+    T ret_val{};
+    receive(&ret_val, 1, source, tag);
+    return ret_val;
+}
+
+template < arithmetic T >
+std::vector< T > MpiComm::receive(size_t count, int source, int tag) const
+{
+    std::vector< T > ret_val(count);
+    receive(ret_val.data(), count, source, tag);
+    return ret_val;
+}
+
+template < arithmetic T >
+MpiComm::Request MpiComm::receiveAsync(T* buf, size_t count, int source, int tag) const
 {
     Request request;
     if (MPI_Irecv(buf, count, detail::MpiType< T >::value(), source, tag, comm, &request.request))
@@ -161,9 +199,16 @@ MpiComm::Request MpiComm::receiveAsync(T* buf, size_t count, int source, int tag
     return request;
 }
 
+template < arithmetic T >
+void MpiComm::reduce(const T* send_buf, T* recv_buf, size_t count, int root, MPI_Op op) const
+{
+    if (MPI_Reduce(send_buf, recv_buf, count, detail::MpiType< T >::value(), op, root, comm))
+        throw std::runtime_error{"MPI reduce failed"};
+}
+
 int MpiComm::getRank() const
 {
-    int rank;
+    int rank{};
     if (MPI_Comm_rank(comm, &rank))
         throw std::runtime_error{"MPI rank query failed"};
     return rank;
@@ -171,11 +216,11 @@ int MpiComm::getRank() const
 
 int MpiComm::getSize() const
 {
-    int size;
+    int size{};
     if (MPI_Comm_size(comm, &size))
         throw std::runtime_error{"MPI comm size query failed"};
     return size;
 }
 } // namespace lstr
 
-#endif // L3STER_GLOBAL_RESOURCE_MPICOMM_HPP
+#endif // L3STER_COMM_MPICOMM_HPP

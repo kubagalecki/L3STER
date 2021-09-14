@@ -35,6 +35,8 @@ public:
     using cfind_result_t            = std::optional< std::pair< element_cptr_variant_t, d_id_t > >;
     using el_boundary_view_result_t = std::pair< cfind_result_t, el_ns_t >;
 
+    friend struct SerializedPartition;
+
     inline explicit MeshPartition(domain_map_t domains_);
     MeshPartition(domain_map_t domains_, node_vec_t nodes_, node_vec_t ghost_nodes_)
         : domains{std::move(domains_)}, nodes{std::move(nodes_)}, ghost_nodes{std::move(ghost_nodes_)}
@@ -45,6 +47,7 @@ public:
     [[nodiscard]] bool              isDualGraphInitialized() const noexcept { return dual_graph.has_value(); }
     [[nodiscard]] inline const MetisGraphWrapper& getDualGraph() const;
 
+    // (c)visit
     template < invocable_on_elements    F,
                detail::domain_predicate D,
                ExecutionPolicy_c        ExecPolicy = std::execution::sequenced_policy >
@@ -88,6 +91,7 @@ public:
                           const std::vector< d_id_t >& domain_ids,
                           const ExecPolicy&            policy = std::execution::seq) const;
 
+    // find
     // Note: if the predicate returns true for multiple elements, the reference to any one of them may be returned
     template < invocable_on_const_elements_r< bool > F,
                ExecutionPolicy_c                     ExecPolicy = std::execution::sequenced_policy >
@@ -116,18 +120,19 @@ public:
     [[nodiscard]] inline find_result_t  find(el_id_t id);
     [[nodiscard]] inline cfind_result_t find(el_id_t id) const;
 
+    // boundary views
     template < ElementTypes T, el_o_t O >
     el_boundary_view_result_t         getElementBoundaryView(const Element< T, O >& el, d_id_t d) const;
     [[nodiscard]] inline BoundaryView getBoundaryView(d_id_t) const;
 
+    // observers
     [[nodiscard]] DomainView                   getDomainView(d_id_t id) const { return DomainView{domains.at(id), id}; }
     [[nodiscard]] inline size_t                getNElements() const;
     [[nodiscard]] auto                         getNDomains() const { return domains.size(); }
     [[nodiscard]] inline std::vector< d_id_t > getDomainIds() const;
     [[nodiscard]] const Domain&                getDomain(d_id_t id) const { return domains.at(id); }
-
-    [[nodiscard]] const node_vec_t& getNodes() const noexcept { return nodes; }
-    [[nodiscard]] const node_vec_t& getGhostNodes() const noexcept { return ghost_nodes; }
+    [[nodiscard]] const node_vec_t&            getNodes() const noexcept { return nodes; }
+    [[nodiscard]] const node_vec_t&            getGhostNodes() const noexcept { return ghost_nodes; }
 
     template < el_o_t O >
     [[nodiscard]] domain_map_t getConversionAlloc() const;

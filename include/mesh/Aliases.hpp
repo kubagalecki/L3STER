@@ -22,6 +22,10 @@ using element_cptr_t         = const Element< ELTYPE, ELORDER >*;
 using element_ptr_variant_t  = parametrize_type_over_element_types_and_orders_t< std::variant, element_ptr_t >;
 using element_cptr_variant_t = parametrize_type_over_element_types_and_orders_t< std::variant, element_cptr_t >;
 
+template < ElementTypes TYPE, el_o_t ORDER >
+using type_order_set          = value_set< TYPE, ORDER >;
+using type_order_combinations = parametrize_type_over_element_types_and_orders_t< type_set, type_order_set >;
+
 namespace detail
 {
 template < typename F, bool CONSTNESS, typename... Args >

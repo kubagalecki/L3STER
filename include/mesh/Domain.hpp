@@ -26,6 +26,13 @@ public:
     using find_result_t                   = std::optional< element_ptr_variant_t >;
     using const_find_result_t             = std::optional< element_cptr_variant_t >;
 
+    friend struct SerializedDomain;
+
+    Domain() = default;
+    Domain(element_vector_variant_vector_t&& element_vectors_, dim_t dim_)
+        : element_vectors{std::move(element_vectors_)}, dim{dim_}
+    {}
+
     template < ElementTypes ELTYPE, el_o_t ELORDER >
     void push(const Element< ELTYPE, ELORDER >& element);
     template < ElementTypes ELTYPE, el_o_t ELORDER, typename... Args >

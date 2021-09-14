@@ -1,5 +1,5 @@
-#ifndef L3STER_GLOBAL_RESOURCE_GLOBALRESOURCE_HPP
-#define L3STER_GLOBAL_RESOURCE_GLOBALRESOURCE_HPP
+#ifndef L3STER_UTIL_GLOBALRESOURCE_HPP
+#define L3STER_UTIL_GLOBALRESOURCE_HPP
 
 #include <concepts>
 #include <optional>
@@ -41,4 +41,4 @@ std::optional< T >& GlobalResource< T >::getOpt()
     return instance;
 }
 } // namespace lstr
-#endif // L3STER_GLOBAL_RESOURCE_GLOBALRESOURCE_HPP
+#endif // L3STER_UTIL_GLOBALRESOURCE_HPP

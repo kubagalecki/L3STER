@@ -1,5 +1,5 @@
-#include "global_resource/GlobalResource.hpp"
-#include "global_resource/HwlocWrapper.hpp"
+#include "util/GlobalResource.hpp"
+#include "util/HwlocWrapper.hpp"
 
 #include "TestDataPath.h"
 #include "catch2/catch.hpp"

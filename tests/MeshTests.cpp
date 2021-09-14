@@ -24,6 +24,7 @@ struct ConstructionTracker
         ++mv_asgn;
         return *this;
     }
+    ~ConstructionTracker() = default;
 
     static size_t defaults;
     static size_t copies;
@@ -362,9 +363,12 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
         constexpr lstr::el_o_t order = 2;
         auto                   mesh  = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), lstr::gmsh_tag);
         auto&                  part  = mesh.getPartitions()[0];
+        const auto             n_elements = part.getNElements();
+
+        CHECK_THROWS(part = lstr::convertMeshToOrder< order >(part));
+
         part.initDualGraph();
-        const auto n_elements = part.getNElements();
-        part                  = lstr::convertMeshToOrder< order >(part);
+        part = lstr::convertMeshToOrder< order >(part);
         CHECK(n_elements == part.getNElements());
         const auto validate_elorder = [&]< lstr::ElementTypes T, lstr::el_o_t O >(const lstr::Element< T, O >&) {
             if constexpr (O != 2)

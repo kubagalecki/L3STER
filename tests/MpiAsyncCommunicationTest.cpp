@@ -1,5 +1,5 @@
-#include "global_resource/GlobalResource.hpp"
-#include "global_resource/MpiComm.hpp"
+#include "comm/MpiComm.hpp"
+#include "util/GlobalResource.hpp"
 
 #include <algorithm>
 #include <iostream>
