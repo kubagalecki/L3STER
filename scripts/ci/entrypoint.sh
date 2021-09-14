@@ -21,6 +21,7 @@ if [ "$REPORT_COVERAGE" != "" ]; then
   curl -Os https://uploader.codecov.io/latest/linux/codecov.SHA256SUM.sig || exit 1
   gpg --verify codecov.SHA256SUM.sig codecov.SHA256SUM || exit 1
   sha256sum -c codecov.SHA256SUM || exit 1
+  rm generate_coverage_report.sh codecov.SHA256SUM.sig codecov.SHA256SUM
   chmod +x codecov
   ./codecov -Z -X gcov || exit 1
 fi
