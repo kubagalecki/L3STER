@@ -1,4 +1,4 @@
-#include "comm/DistributeMesh.hpp"
+#include "comm/ReceiveMesh.hpp"
 #include "mesh/ReadMesh.hpp"
 #include "util/GlobalResource.hpp"
 

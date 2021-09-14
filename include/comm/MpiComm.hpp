@@ -94,6 +94,7 @@ public:
     [[nodiscard]] inline int getRank() const;
     [[nodiscard]] inline int getSize() const;
 
+    // send
     template < arithmetic T >
     void send(const T* buf, size_t count, int dest, int tag = 0) const;
     template < arithmetic T >
@@ -109,6 +110,7 @@ public:
         return sendAsync(buf.data(), buf.size(), dest, tag);
     }
 
+    // recv
     template < arithmetic T >
     void receive(T* buf, size_t count, int source, int tag = 0) const;
     template < arithmetic T >
@@ -118,6 +120,11 @@ public:
     template < arithmetic T >
     [[nodiscard]] Request receiveAsync(T* buf, size_t count, int source, int tag = 0) const;
 
+    // reduce
+    template < arithmetic T >
+    void reduce(const T* send_buf, T* recv_buf, size_t count, int root, MPI_Op op) const;
+
+    // observers
     [[nodiscard]] MPI_Comm& get() { return comm; }
 
 private:
@@ -190,6 +197,13 @@ MpiComm::Request MpiComm::receiveAsync(T* buf, size_t count, int source, int tag
     if (MPI_Irecv(buf, count, detail::MpiType< T >::value(), source, tag, comm, &request.request))
         throw std::runtime_error{"MPI asynchronous receive failed"};
     return request;
+}
+
+template < arithmetic T >
+void MpiComm::reduce(const T* send_buf, T* recv_buf, size_t count, int root, MPI_Op op) const
+{
+    if (MPI_Reduce(send_buf, recv_buf, count, detail::MpiType< T >::value(), op, root, comm))
+        throw std::runtime_error{"MPI reduce failed"};
 }
 
 int MpiComm::getRank() const

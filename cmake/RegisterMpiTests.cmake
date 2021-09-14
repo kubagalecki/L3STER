@@ -27,4 +27,5 @@ endfunction()
 
 add_mpi_test( "${L3STER_DIR}/tests/MpiBlockingCommunicationTest.cpp" "MPI_blocking_communication_test" "1;2;4" )
 add_mpi_test( "${L3STER_DIR}/tests/MpiAsyncCommunicationTest.cpp" "MPI_async_communication_test" "1;2;4" )
-add_mpi_test( "${L3STER_DIR}/tests/MeshDistributionTests.cpp" "Mesh_distribution_test" "2;4" )
+add_mpi_test( "${L3STER_DIR}/tests/MeshSendRecvTest.cpp" "Mesh_send_recv_test" "2;4" )
+add_mpi_test( "${L3STER_DIR}/tests/MeshDistributionTest.cpp" "Mesh_distribution_test" "1;2;4" )
