@@ -1,0 +1,140 @@
+# L3STER tests are divided into 2 categories, based on whether they require MPI. Non-MPI tests are based on the Catch2
+#   testing framework and are compiled into a single executable. Individual tests are registered with CTest using the
+#   `catch_discover_tests` utility provided by Catch2. Conversely, MPI tests are all compiled into separate executables.
+#   These are defined and registered with CTest using the `add_mpi_test` utility (see below).
+
+# Detect Catch2
+function( detect_catch2 Verbosity L3STERPath )
+    if ( Verbosity )
+        message( STATUS "Detecting Catch2" )
+        list( APPEND CMAKE_MESSAGE_INDENT "  " )
+        message( STATUS "Looking for Catch2 in the L3STER directory" )
+    endif ()
+
+    if ( EXISTS "${L3STERPath}/Catch2" )
+        set( L3STER_Catch2_path "${L3STERPath}/Catch2" PARENT_SCOPE )
+        if ( Verbosity )
+            message( STATUS "Looking for Catch2 in the L3STER directory - found" )
+            list( POP_BACK CMAKE_MESSAGE_INDENT )
+            message( STATUS "Detecting Catch2 - found" )
+        endif ()
+    endif ()
+endfunction()
+
+# Catch2 needs to be added at base scope to properly load the CTest registration module
+detect_catch2( ${L3STER_ENABLE_VERBOSITY} ${PROJECT_SOURCE_DIR} )
+
+if ( L3STER_Catch2_path )
+    add_subdirectory( ${L3STER_Catch2_path} )
+else ()
+    if ( L3STER_ENABLE_VERBOSITY )
+        list( APPEND CMAKE_MESSAGE_INDENT "  " )
+        message( STATUS "Looking for Catch2 in the L3STER directory - not found" )
+        message( STATUS "Checking if Catch2 was installed on the system" )
+    endif ()
+    find_package( Catch2 REQUIRED )
+    if ( TARGET Catch2::Catch2 )
+        if ( L3STER_ENABLE_VERBOSITY )
+            message( STATUS "Checking if Catch2 was installed on the system - found" )
+            list( POP_BACK CMAKE_MESSAGE_INDENT )
+            message( STATUS "Detecting Catch2 - found" )
+        endif ()
+    else ()
+        if ( L3STER_ENABLE_VERBOSITY )
+            message( STATUS "Checking if Catch2 was installed on the system - not found" )
+            list( POP_BACK CMAKE_MESSAGE_INDENT )
+            message( STATUS "Detecting Catch2 - not found" )
+        endif ()
+        message( SEND_ERROR "Could not locate Catch2 unit test library. "
+                 "If you don't have Catch2, you can simply clone the Catch2 repository "
+                 "into the top level directory of L3STER." )
+    endif ()
+endif ()
+
+include( CTest )
+include( Catch )
+#######################################################################################################################
+
+# Define the Catch2-based target
+add_executable( L3STER_tests TestsMain.cpp
+                HwlocTests.cpp
+                MappingTests.cpp
+                MathTests.cpp
+                MeshSerializationTests.cpp
+                MeshTests.cpp
+                NodeAllocationTests.cpp
+                QuadratureTests.cpp
+                UtilTests.cpp
+                )
+
+target_include_directories( L3STER_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR} )
+target_link_libraries( L3STER_tests
+                       L3STER
+                       Catch2::Catch2
+                       )
+
+catch_discover_tests( L3STER_tests )
+#######################################################################################################################
+
+# Define MPI tests
+function( add_mpi_test source name nprocs )
+    get_filename_component( test_target ${source} NAME_WE )
+    add_executable( ${test_target} ${source} )
+    target_include_directories( ${test_target} PRIVATE ${CMAKE_CURRENT_BINARY_DIR} )
+    target_compile_options( ${test_target} PRIVATE -fno-sanitize=all )
+    target_link_options( ${test_target} PRIVATE -fno-sanitize=all )
+    target_link_libraries( ${test_target} L3STER )
+    set( test_env GMON_OUT_PREFIX=profile_data )
+    set( test_driver mpiexec )
+    if ( ${ARGC} EQUAL 4 )
+        set( args ${ARGV4} )
+    endif ()
+    foreach ( np ${nprocs} )
+        set( test_params "-n;${np};--oversubscribe;$<TARGET_FILE:${test_target}>;${args}" )
+        set( test_name ${name}_np_${np} )
+        set( test_dir ${CMAKE_CURRENT_BINARY_DIR}/${test_name} )
+        file( MAKE_DIRECTORY ${test_dir} )
+        list( APPEND L3STER_MPI_TESTS ${test_name} )
+        add_test( NAME ${test_name}
+                  COMMAND ${test_driver} ${test_params}
+                  WORKING_DIRECTORY ${test_dir}
+                  )
+        set_tests_properties( ${test_name} PROPERTIES ENVIRONMENT ${test_env} )
+    endforeach ()
+    set( L3STER_MPI_TESTS ${L3STER_MPI_TESTS} PARENT_SCOPE )
+endfunction()
+
+add_mpi_test( "MpiBlockingCommunicationTest.cpp" "MPI_blocking_communication_test" "1;2;4" )
+add_mpi_test( "MpiAsyncCommunicationTest.cpp" "MPI_async_communication_test" "1;2;4" )
+add_mpi_test( "MeshSendRecvTest.cpp" "Mesh_send_recv_test" "2;4" )
+add_mpi_test( "MeshDistributionTest.cpp" "Mesh_distribution_test" "1;2;4" )
+#######################################################################################################################
+
+# Generate test data
+execute_process( COMMAND lscpu
+                 COMMAND grep -i numa
+                 COMMAND head -1
+                 COMMAND grep -o "[0-9]*"
+                 OUTPUT_VARIABLE L3STER_N_NUMA_NODES
+                 )
+set( L3STER_TESTS_DATA_PATH "${CMAKE_CURRENT_SOURCE_DIR}/data" )
+configure_file( TestDataPath.h.in TestDataPath.h )
+#######################################################################################################################
+
+# Coverage gathering
+if ( L3STER_ENABLE_COVERAGE )
+    set( script_file ${CMAKE_CURRENT_BINARY_DIR}/generate_coverage_report.sh )
+    file( WRITE ${script_file}
+          "gcovr -x -d --exclude-unreachable-branches --exclude-throw-branches -r ${PROJECT_SOURCE_DIR}/.. -e ${PROJECT_SOURCE_DIR}/tests -o coverage_report.xml ./\n"
+          "rm gmon.out\n"
+          )
+    foreach ( test ${L3STER_MPI_TESTS} )
+        file( APPEND ${script_file}
+              "cd ${test}\n"
+              "gcovr -x -d --exclude-unreachable-branches --exclude-throw-branches -r ${PROJECT_SOURCE_DIR}/.. -e ${PROJECT_SOURCE_DIR}/tests -o coverage_report.xml ./\n"
+              "rm ./profile_data*\n"
+              "cd ..\n"
+              )
+    endforeach ()
+endif ()
+#######################################################################################################################

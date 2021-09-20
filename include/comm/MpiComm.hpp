@@ -78,7 +78,7 @@ public:
         Request& operator=(const Request&) = delete;
         inline Request(Request&&) noexcept;
         inline Request& operator=(Request&&) noexcept;
-        ~Request() { wait(); };
+        ~Request() { wait(); }
 
         void        wait() { MPI_Wait(&request, MPI_STATUS_IGNORE); }
         inline bool test();

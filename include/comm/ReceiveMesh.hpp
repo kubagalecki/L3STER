@@ -48,7 +48,7 @@ inline SerializedPartition receivePartition(const MpiComm& comm, int source)
 
     const auto ghost_nodes_size = sizes.back();
     ret_val.ghost_nodes.resize(ghost_nodes_size);
-    messages.emplace_back(comm.receiveAsync(ret_val.ghost_nodes.data(), ghost_nodes_size, source, msg_tag++));
+    messages.emplace_back(comm.receiveAsync(ret_val.ghost_nodes.data(), ghost_nodes_size, source, msg_tag));
 
     return ret_val;
 }

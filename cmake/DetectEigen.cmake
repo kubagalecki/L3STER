@@ -62,5 +62,5 @@ function( detect_eigen Verbosity EigenPath L3STERPath )
     endif ()
 endfunction()
 
-detect_eigen( ${L3STER_ENABLE_VERBOSITY} "${Eigen_DIR}" ${L3STER_DIR} )
+detect_eigen( ${L3STER_ENABLE_VERBOSITY} "${Eigen_DIR}" ${PROJECT_SOURCE_DIR} )
 list( APPEND L3STER_DEPENDENCY_LIST Eigen3::Eigen )

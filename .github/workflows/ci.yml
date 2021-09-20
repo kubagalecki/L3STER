@@ -57,7 +57,7 @@ jobs:
     env:
       CMAKE_BUILD_TYPE: Debug
       CMAKE_TOOLCHAIN_PATH: ../cmake/toolchains/Coverage.cmake
-      REPORT_COVERAGE: true
+      REPORT_COVERAGE: ON
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     steps:
       - uses: actions/checkout@v2
