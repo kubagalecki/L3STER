@@ -3,12 +3,15 @@ project( L3STER LANGUAGES CXX VERSION 0.1.0 )
 #######################################################################################################################
 
 # Require Linux
+
 if ( NOT ${CMAKE_SYSTEM_NAME} STREQUAL Linux )
     message( FATAL_ERROR "Currently, L3STER only supports Linux" )
 endif ()
+
 #######################################################################################################################
 
 # L3STER options
+
 # Verbosity (mainly relating to finding dependencies)
 option( L3STER_ENABLE_VERBOSITY "enable verbose config" )
 
@@ -20,18 +23,38 @@ option( L3STER_ENABLE_COVERAGE "enable coverage" )
 
 # Build benchmarks
 option( L3STER_ENABLE_BENCHMARKS "enable benchmarks" )
+
 #######################################################################################################################
 
 # Detect dependencies
-include( "cmake/DetectTrilinos.cmake" )
-include( "cmake/DetectEigen.cmake" )
-include( "cmake/DetectHwloc.cmake" )
-include( "cmake/DetectMetis.cmake" )
-include( "cmake/DetectParmetis.cmake" )
-include( "cmake/DetectTBB.cmake" )
+
+# Utilities
+include( "cmake/DefineTrilinosTarget.cmake" )
+include( "cmake/ImportLibrary.cmake" )
+
+# Import libraries
+# Trilinos
+define_trilinos_target( ${L3STER_ENABLE_VERBOSITY} Tpetra Belos MueLu )
+list( APPEND L3STER_DEPENDENCY_LIST Trilinos )
+
+# Eigen
+find_package( Eigen3 3.3 REQUIRED )
+list( APPEND L3STER_DEPENDENCY_LIST Eigen3::Eigen )
+
+# Hwloc
+importlibrary( hwloc.h "${L3STER_ENABLE_VERBOSITY}" )
+
+# Metis
+importlibrary( metis.h "${L3STER_ENABLE_VERBOSITY}" )
+
+# TBB
+find_package( TBB REQUIRED )
+list( APPEND L3STER_DEPENDENCY_LIST TBB::tbb )
+
 #######################################################################################################################
 
 # Define the L3STER target
+
 add_library( L3STER INTERFACE )
 target_include_directories( L3STER INTERFACE include )
 set_target_properties( L3STER PROPERTIES INTERFACE_COMPILE_FEATURES cxx_std_20 )
@@ -45,16 +68,21 @@ file( GLOB_RECURSE L3STER_SOURCES
       include/*
       )
 target_sources( L3STER INTERFACE ${L3STER_SOURCES} )
+
 #######################################################################################################################
 
 # Tests
+
 if ( L3STER_ENABLE_TESTS )
     add_subdirectory( tests )
 endif ()
+
 #######################################################################################################################
 
 # Benchmarks
+
 if ( L3STER_ENABLE_BENCHMARKS )
     add_subdirectory( benchmarks )
 endif ()
+
 #######################################################################################################################

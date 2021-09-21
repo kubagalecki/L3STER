@@ -3,59 +3,16 @@
 #   `catch_discover_tests` utility provided by Catch2. Conversely, MPI tests are all compiled into separate executables.
 #   These are defined and registered with CTest using the `add_mpi_test` utility (see below).
 
-# Detect Catch2
-function( detect_catch2 Verbosity L3STERPath )
-    if ( Verbosity )
-        message( STATUS "Detecting Catch2" )
-        list( APPEND CMAKE_MESSAGE_INDENT "  " )
-        message( STATUS "Looking for Catch2 in the L3STER directory" )
-    endif ()
+# Set up testing facilities
 
-    if ( EXISTS "${L3STERPath}/Catch2" )
-        set( L3STER_Catch2_path "${L3STERPath}/Catch2" PARENT_SCOPE )
-        if ( Verbosity )
-            message( STATUS "Looking for Catch2 in the L3STER directory - found" )
-            list( POP_BACK CMAKE_MESSAGE_INDENT )
-            message( STATUS "Detecting Catch2 - found" )
-        endif ()
-    endif ()
-endfunction()
-
-# Catch2 needs to be added at base scope to properly load the CTest registration module
-detect_catch2( ${L3STER_ENABLE_VERBOSITY} ${PROJECT_SOURCE_DIR} )
-
-if ( L3STER_Catch2_path )
-    add_subdirectory( ${L3STER_Catch2_path} )
-else ()
-    if ( L3STER_ENABLE_VERBOSITY )
-        list( APPEND CMAKE_MESSAGE_INDENT "  " )
-        message( STATUS "Looking for Catch2 in the L3STER directory - not found" )
-        message( STATUS "Checking if Catch2 was installed on the system" )
-    endif ()
-    find_package( Catch2 REQUIRED )
-    if ( TARGET Catch2::Catch2 )
-        if ( L3STER_ENABLE_VERBOSITY )
-            message( STATUS "Checking if Catch2 was installed on the system - found" )
-            list( POP_BACK CMAKE_MESSAGE_INDENT )
-            message( STATUS "Detecting Catch2 - found" )
-        endif ()
-    else ()
-        if ( L3STER_ENABLE_VERBOSITY )
-            message( STATUS "Checking if Catch2 was installed on the system - not found" )
-            list( POP_BACK CMAKE_MESSAGE_INDENT )
-            message( STATUS "Detecting Catch2 - not found" )
-        endif ()
-        message( SEND_ERROR "Could not locate Catch2 unit test library. "
-                 "If you don't have Catch2, you can simply clone the Catch2 repository "
-                 "into the top level directory of L3STER." )
-    endif ()
-endif ()
-
+find_package( Catch2 REQUIRED )
 include( CTest )
 include( Catch )
+
 #######################################################################################################################
 
 # Define the Catch2-based target
+
 add_executable( L3STER_tests TestsMain.cpp
                 HwlocTests.cpp
                 MappingTests.cpp
@@ -66,7 +23,6 @@ add_executable( L3STER_tests TestsMain.cpp
                 QuadratureTests.cpp
                 UtilTests.cpp
                 )
-
 target_include_directories( L3STER_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR} )
 target_link_libraries( L3STER_tests
                        L3STER
@@ -74,9 +30,12 @@ target_link_libraries( L3STER_tests
                        )
 
 catch_discover_tests( L3STER_tests )
+
 #######################################################################################################################
 
 # Define MPI tests
+
+# Utility for defining a test
 function( add_mpi_test source name nprocs )
     get_filename_component( test_target ${source} NAME_WE )
     add_executable( ${test_target} ${source} )
@@ -104,13 +63,16 @@ function( add_mpi_test source name nprocs )
     set( L3STER_MPI_TESTS ${L3STER_MPI_TESTS} PARENT_SCOPE )
 endfunction()
 
+# Define individual tests
 add_mpi_test( "MpiBlockingCommunicationTest.cpp" "MPI_blocking_communication_test" "1;2;4" )
 add_mpi_test( "MpiAsyncCommunicationTest.cpp" "MPI_async_communication_test" "1;2;4" )
 add_mpi_test( "MeshSendRecvTest.cpp" "Mesh_send_recv_test" "2;4" )
 add_mpi_test( "MeshDistributionTest.cpp" "Mesh_distribution_test" "1;2;4" )
+
 #######################################################################################################################
 
 # Generate test data
+
 execute_process( COMMAND lscpu
                  COMMAND grep -i numa
                  COMMAND head -1
@@ -119,9 +81,11 @@ execute_process( COMMAND lscpu
                  )
 set( L3STER_TESTS_DATA_PATH "${CMAKE_CURRENT_SOURCE_DIR}/data" )
 configure_file( TestDataPath.h.in TestDataPath.h )
+
 #######################################################################################################################
 
 # Coverage gathering
+
 if ( L3STER_ENABLE_COVERAGE )
     set( script_file ${CMAKE_CURRENT_BINARY_DIR}/generate_coverage_report.sh )
     file( WRITE ${script_file}
@@ -137,4 +101,5 @@ if ( L3STER_ENABLE_COVERAGE )
               )
     endforeach ()
 endif ()
+
 #######################################################################################################################
