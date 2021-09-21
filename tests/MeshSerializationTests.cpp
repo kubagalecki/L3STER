@@ -1,5 +1,5 @@
-#include "comm/DeserializeMesh.hpp"
-#include "mesh/ReadMesh.hpp"
+#include "l3ster/comm/DeserializeMesh.hpp"
+#include "l3ster/mesh/ReadMesh.hpp"
 
 #include "TestDataPath.h"
 #include "catch2/catch.hpp"

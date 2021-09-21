@@ -1,5 +1,5 @@
-#include "comm/DistributeMesh.hpp"
-#include "util/GlobalResource.hpp"
+#include "l3ster/comm/DistributeMesh.hpp"
+#include "l3ster/util/GlobalResource.hpp"
 
 #include "TestDataPath.h"
 

@@ -1,6 +1,6 @@
-#include "math/ComputeGaussRule.hpp"
-#include "math/LagrangeInterpolation.hpp"
-#include "math/LobattoRuleAbsc.hpp"
+#include "l3ster/math/ComputeGaussRule.hpp"
+#include "l3ster/math/LagrangeInterpolation.hpp"
+#include "l3ster/math/LobattoRuleAbsc.hpp"
 
 #include "catch2/catch.hpp"
 

@@ -1,6 +1,6 @@
-#include "comm/ReceiveMesh.hpp"
-#include "mesh/ReadMesh.hpp"
-#include "util/GlobalResource.hpp"
+#include "l3ster/comm/ReceiveMesh.hpp"
+#include "l3ster/mesh/ReadMesh.hpp"
+#include "l3ster/util/GlobalResource.hpp"
 
 #include "TestDataPath.h"
 

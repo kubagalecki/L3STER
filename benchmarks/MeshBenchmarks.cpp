@@ -1,5 +1,5 @@
 #include "DataPath.h"
-#include "l3ster.hpp"
+#include "l3ster/l3ster.hpp"
 
 #include <benchmark/benchmark.h>
 

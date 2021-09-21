@@ -1,7 +1,7 @@
-#include "mesh/ConvertMeshToOrder.hpp"
-#include "mesh/PartitionMesh.hpp"
-#include "mesh/ReadMesh.hpp"
-#include "mesh/primitives/CubeMesh.hpp"
+#include "l3ster/mesh/ConvertMeshToOrder.hpp"
+#include "l3ster/mesh/PartitionMesh.hpp"
+#include "l3ster/mesh/ReadMesh.hpp"
+#include "l3ster/mesh/primitives/CubeMesh.hpp"
 
 #include "TestDataPath.h"
 #include "catch2/catch.hpp"

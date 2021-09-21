@@ -1,5 +1,5 @@
-#include "comm/MpiComm.hpp"
-#include "util/GlobalResource.hpp"
+#include "l3ster/comm/MpiComm.hpp"
+#include "l3ster/util/GlobalResource.hpp"
 
 #include <algorithm>
 #include <iostream>

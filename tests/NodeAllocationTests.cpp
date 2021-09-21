@@ -1,5 +1,5 @@
-#include "alloc/NodeGlobalMemoryResource.hpp"
-#include "util/GlobalResource.hpp"
+#include "l3ster/alloc/NodeGlobalMemoryResource.hpp"
+#include "l3ster/util/GlobalResource.hpp"
 
 #include "catch2/catch.hpp"
 
