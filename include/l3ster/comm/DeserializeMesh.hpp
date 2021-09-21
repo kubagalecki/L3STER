@@ -2,7 +2,7 @@
 #define L3STER_COMM_DESERIALIZEMESH_HPP
 
 #include "SerializeMesh.hpp"
-#include <l3ster/mesh/ElementTraits.hpp>
+#include "l3ster/mesh/ElementTraits.hpp"
 
 namespace lstr
 {

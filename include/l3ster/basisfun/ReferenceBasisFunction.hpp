@@ -3,9 +3,9 @@
 
 #include "l3ster/math/LagrangeInterpolation.hpp"
 #include "l3ster/math/LobattoRuleAbsc.hpp"
+#include "l3ster/mesh/Element.hpp"
 #include "l3ster/mesh/ElementTraits.hpp"
 #include "l3ster/mesh/Point.hpp"
-#include <l3ster/mesh/Element.hpp>
 
 namespace lstr
 {

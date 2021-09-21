@@ -2,9 +2,9 @@
 #define L3STER_COMM_SERIALIZEMESH_HPP
 
 #include "l3ster/mesh/Domain.hpp"
+#include "l3ster/mesh/MeshPartition.hpp"
 
 #include <iterator>
-#include <l3ster/mesh/MeshPartition.hpp>
 
 namespace lstr
 {
