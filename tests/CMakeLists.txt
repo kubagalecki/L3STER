@@ -3,7 +3,7 @@
 #   `catch_discover_tests` utility provided by Catch2. Conversely, MPI tests are all compiled into separate executables.
 #   These are defined and registered with CTest using the `add_mpi_test` utility (see below).
 
-# Set up testing facilities
+### Set up testing facilities ###
 
 find_package( Catch2 REQUIRED )
 include( CTest )
@@ -11,7 +11,7 @@ include( Catch )
 
 #######################################################################################################################
 
-# Define the Catch2-based target
+### Define the Catch2-based target ###
 
 add_executable( L3STER_tests TestsMain.cpp
                 HwlocTests.cpp
@@ -33,7 +33,7 @@ catch_discover_tests( L3STER_tests )
 
 #######################################################################################################################
 
-# Define MPI tests
+### Define MPI tests ###
 
 # Utility for defining a test
 function( add_mpi_test source name nprocs )
@@ -71,7 +71,7 @@ add_mpi_test( "MeshDistributionTest.cpp" "Mesh_distribution_test" "1;2;4" )
 
 #######################################################################################################################
 
-# Generate test data
+### Generate test data ###
 
 execute_process( COMMAND lscpu
                  COMMAND grep -i numa
@@ -84,18 +84,18 @@ configure_file( TestDataPath.h.in TestDataPath.h )
 
 #######################################################################################################################
 
-# Coverage gathering
+### Coverage gathering ###
 
 if ( L3STER_ENABLE_COVERAGE )
     set( script_file ${CMAKE_CURRENT_BINARY_DIR}/generate_coverage_report.sh )
     file( WRITE ${script_file}
-          "gcovr -x -d --exclude-unreachable-branches --exclude-throw-branches -r ${PROJECT_SOURCE_DIR}/.. -e ${PROJECT_SOURCE_DIR}/tests -o coverage_report.xml ./\n"
+          "gcovr -x -d --exclude-unreachable-branches --exclude-throw-branches -r ${L3STER_SOURCE_DIR}/.. -e ${L3STER_SOURCE_DIR}/tests -o coverage_report.xml ./\n"
           "rm gmon.out\n"
           )
     foreach ( test ${L3STER_MPI_TESTS} )
         file( APPEND ${script_file}
               "cd ${test}\n"
-              "gcovr -x -d --exclude-unreachable-branches --exclude-throw-branches -r ${PROJECT_SOURCE_DIR}/.. -e ${PROJECT_SOURCE_DIR}/tests -o coverage_report.xml ./\n"
+              "gcovr -x -d --exclude-unreachable-branches --exclude-throw-branches -r ${L3STER_SOURCE_DIR}/.. -e ${L3STER_SOURCE_DIR}/tests -o coverage_report.xml ./\n"
               "rm ./profile_data*\n"
               "cd ..\n"
               )

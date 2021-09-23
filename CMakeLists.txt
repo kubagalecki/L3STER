@@ -1,8 +1,17 @@
 cmake_minimum_required( VERSION 3.13 )
-project( L3STER LANGUAGES CXX VERSION 0.1.0 )
+
 #######################################################################################################################
 
-# Require Linux
+### Define project ###
+
+project( L3STER
+         LANGUAGES CXX
+         VERSION 0.1.0
+         )
+
+#######################################################################################################################
+
+### Require Linux ###
 
 if ( NOT ${CMAKE_SYSTEM_NAME} STREQUAL Linux )
     message( FATAL_ERROR "Currently, L3STER only supports Linux" )
@@ -10,7 +19,7 @@ endif ()
 
 #######################################################################################################################
 
-# L3STER options
+### L3STER options ###
 
 # Verbosity (mainly relating to finding dependencies)
 option( L3STER_ENABLE_VERBOSITY "enable verbose config" )
@@ -26,7 +35,7 @@ option( L3STER_ENABLE_BENCHMARKS "enable benchmarks" )
 
 #######################################################################################################################
 
-# Detect dependencies
+### Detect dependencies ###
 
 # Utilities
 include( "cmake/DefineTrilinosTarget.cmake" )
@@ -53,25 +62,28 @@ list( APPEND L3STER_DEPENDENCY_LIST TBB::tbb )
 
 #######################################################################################################################
 
-# Define the L3STER target
+### Define the L3STER target ###
 
 add_library( L3STER INTERFACE )
-target_include_directories( L3STER INTERFACE include )
+target_include_directories( L3STER INTERFACE
+                            $<BUILD_INTERFACE:${L3STER_SOURCE_DIR}/include>
+                            $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
+                            )
 set_target_properties( L3STER PROPERTIES INTERFACE_COMPILE_FEATURES cxx_std_20 )
 target_link_libraries( L3STER INTERFACE ${L3STER_DEPENDENCY_LIST} )
 
 # Explicitly state L3STER sources - this is helpful to the IDE, but not required for a correct build
 file( GLOB_RECURSE L3STER_SOURCES
       LIST_DIRECTORIES false
-      RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+      RELATIVE ${L3STER_SOURCE_DIR}
       CONFIGURE_DEPENDS
       include/*
       )
-target_sources( L3STER INTERFACE ${L3STER_SOURCES} )
+target_sources( L3STER INTERFACE $<BUILD_INTERFACE: ${L3STER_SOURCES}> )
 
 #######################################################################################################################
 
-# Tests
+### Tests ###
 
 if ( L3STER_ENABLE_TESTS )
     add_subdirectory( tests )
@@ -79,10 +91,29 @@ endif ()
 
 #######################################################################################################################
 
-# Benchmarks
+### Benchmarks ###
 
 if ( L3STER_ENABLE_BENCHMARKS )
     add_subdirectory( benchmarks )
 endif ()
 
 #######################################################################################################################
+
+### Installation ###
+
+include( GNUInstallDirs )
+
+# Mark L3STER and Trilinos for export (Trilinos is an interface target, hence the need for export)
+install( TARGETS L3STER Trilinos EXPORT L3STER )
+
+# Copy L3STER headers to the destination directory
+install( DIRECTORY include/l3ster
+         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+         FILES_MATCHING REGEX ".*\.h(pp)?"
+         )
+
+# Export L3STER
+install( EXPORT L3STER
+         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake
+         NAMESPACE L3STER
+         )
