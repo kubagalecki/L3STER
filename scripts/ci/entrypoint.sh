@@ -12,11 +12,11 @@ if [ "$DEPLOYMENT_TESTS" ]; then
     .. || exit 1
   cmake --install . || exit 1
   rm -rf ./*
-  cmake -DL3STER_ENABLE_TESTS=ON \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchains/StaticAnalysis.cmake ../tests || exit 1
+  cmake -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchains/StaticAnalysis.cmake \
+    ../tests || exit 1
   cmake --build . -- -j || exit 1
-  ctest --output-on-failure --repeat until-pass:2 --timeout 600 || exit 1
+  ctest --output-on-failure --repeat until-pass:2 --timeout 300 || exit 1
 else
   cmake \
     -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TYPE" \
