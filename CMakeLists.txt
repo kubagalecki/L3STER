@@ -67,7 +67,7 @@ list( APPEND L3STER_DEPENDENCY_LIST TBB::tbb )
 add_library( L3STER INTERFACE )
 target_include_directories( L3STER INTERFACE
                             $<BUILD_INTERFACE:${L3STER_SOURCE_DIR}/include>
-                            $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>
+                            $<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>
                             )
 set_target_properties( L3STER PROPERTIES INTERFACE_COMPILE_FEATURES cxx_std_20 )
 target_link_libraries( L3STER INTERFACE ${L3STER_DEPENDENCY_LIST} )
@@ -79,7 +79,7 @@ file( GLOB_RECURSE L3STER_SOURCES
       CONFIGURE_DEPENDS
       include/*
       )
-target_sources( L3STER INTERFACE $<BUILD_INTERFACE: ${L3STER_SOURCES}> )
+target_sources( L3STER INTERFACE $<BUILD_INTERFACE:${L3STER_SOURCES}> )
 
 #######################################################################################################################
 
@@ -102,18 +102,35 @@ endif ()
 ### Installation ###
 
 include( GNUInstallDirs )
+include( CMakePackageConfigHelpers )
 
 # Mark L3STER and Trilinos for export (Trilinos is an interface target, hence the need for export)
-install( TARGETS L3STER Trilinos EXPORT L3STER )
+install( TARGETS L3STER Trilinos EXPORT L3STERTargets )
+
+# Export L3STER
+install( EXPORT L3STERTargets
+         DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/L3STER"
+         NAMESPACE L3STER::
+         )
 
 # Copy L3STER headers to the destination directory
 install( DIRECTORY include/l3ster
-         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
          FILES_MATCHING REGEX ".*\.h(pp)?"
          )
 
-# Export L3STER
-install( EXPORT L3STER
-         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake
-         NAMESPACE L3STER
+# Configure package and install config
+configure_package_config_file( "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Config.cmake.in"
+                               "${CMAKE_CURRENT_BINARY_DIR}/L3STERConfig.cmake"
+                               INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/L3STER"
+                               )
+write_basic_package_version_file(
+        "${CMAKE_CURRENT_BINARY_DIR}/L3STERConfigVersion.cmake"
+        VERSION "${CMAKE_PROJECT_VERSION}"
+        COMPATIBILITY AnyNewerVersion
+)
+install( FILES
+         "${CMAKE_CURRENT_BINARY_DIR}/L3STERConfig.cmake"
+         "${CMAKE_CURRENT_BINARY_DIR}/L3STERConfigVersion.cmake"
+         DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/L3STER"
          )

@@ -3,6 +3,19 @@
 #   `catch_discover_tests` utility provided by Catch2. Conversely, MPI tests are all compiled into separate executables.
 #   These are defined and registered with CTest using the `add_mpi_test` utility (see below).
 
+### Correctly set up the L3STER target depending on whether it's been installed ###
+
+cmake_minimum_required( VERSION 3.13 )
+project( L3STER_tests )
+
+if ( TARGET L3STER )
+    add_library( L3STER::L3STER ALIAS L3STER )
+else ()
+    find_package( L3STER REQUIRED )
+endif ()
+
+#######################################################################################################################
+
 ### Set up testing facilities ###
 
 find_package( Catch2 REQUIRED )
@@ -25,7 +38,7 @@ add_executable( L3STER_tests TestsMain.cpp
                 )
 target_include_directories( L3STER_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR} )
 target_link_libraries( L3STER_tests
-                       L3STER
+                       L3STER::L3STER
                        Catch2::Catch2
                        )
 

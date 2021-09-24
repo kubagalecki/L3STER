@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v2
       - name: Append docker base
         run: sed -i '1 i\FROM '"$DOCKER_BASE" $GITHUB_WORKSPACE/Dockerfile
-      - uses: ./scripts/ci/run-unit-tests
+      - uses: ./scripts/ci/run-tests
 
   sanitizers:
     name: Sanitizers
@@ -48,7 +48,7 @@ jobs:
       - uses: actions/checkout@v2
       - name: Append docker base
         run: sed -i '1 i\FROM '"$DOCKER_BASE" $GITHUB_WORKSPACE/Dockerfile
-      - uses: ./scripts/ci/run-unit-tests
+      - uses: ./scripts/ci/run-tests
 
   coverage:
     name: Code coverage
@@ -63,4 +63,16 @@ jobs:
       - uses: actions/checkout@v2
       - name: Append docker base
         run: sed -i '1 i\FROM '"$DOCKER_BASE" $GITHUB_WORKSPACE/Dockerfile
-      - uses: ./scripts/ci/run-unit-tests
+      - uses: ./scripts/ci/run-tests
+
+  deployment:
+    name: Deployment tests
+    needs: unit_tests_and_static_analysis
+    runs-on: ubuntu-latest
+    env:
+      DEPLOYMENT_TESTS: true
+    steps:
+      - uses: actions/checkout@v2
+      - name: Append docker base
+        run: sed -i '1 i\FROM '"$DOCKER_BASE" $GITHUB_WORKSPACE/Dockerfile
+      - uses: ./scripts/ci/run-tests
