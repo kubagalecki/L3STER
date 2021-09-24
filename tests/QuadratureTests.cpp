@@ -1,5 +1,5 @@
-#include "quad/InvokeQuadrature.hpp"
-#include "quad/QuadratureGenerator.hpp"
+#include "l3ster/quad/InvokeQuadrature.hpp"
+#include "l3ster/quad/QuadratureGenerator.hpp"
 
 #include "catch2/catch.hpp"
 
