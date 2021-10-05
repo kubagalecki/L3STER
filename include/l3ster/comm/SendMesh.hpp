@@ -4,21 +4,26 @@
 #include "MpiComm.hpp"
 #include "SerializeMesh.hpp"
 
+#include <memory>
+#include <utility>
+
 namespace lstr
 {
 namespace detail
 {
 inline auto sendNDoms(const MpiComm& comm, const SerializedPartition& part, int destination, int tag)
 {
-    const size_t n_domains = part.domains.size();
-    return comm.sendAsync(&n_domains, 1, destination, tag);
+    auto n_dom_ptr = std::make_unique< size_t >(part.domains.size()); // extend lifetime past fun call
+    auto msg       = comm.sendAsync(n_dom_ptr.get(), 1, destination, tag);
+    return std::make_pair(std::move(n_dom_ptr), std::move(msg));
 }
 
 inline auto sendIds(const MpiComm& comm, const SerializedPartition& part, int destination, int tag)
 {
     std::vector< d_id_t > dom_ids(part.domains.size());
     std::ranges::transform(part.domains, begin(dom_ids), [](const auto& pair) { return pair.first; });
-    return comm.sendAsync(dom_ids, destination, tag);
+    auto msg = comm.sendAsync(dom_ids, destination, tag);
+    return std::make_pair(std::move(dom_ids), std::move(msg));
 }
 
 inline size_t getSizeMsgLength(size_t n_domains)
@@ -41,7 +46,8 @@ inline auto sendSizes(const MpiComm& comm, const SerializedPartition& part, int 
     }
     size_info.push_back(part.nodes.size());
     size_info.push_back(part.ghost_nodes.size());
-    return comm.sendAsync(size_info, destination, tag);
+    auto msg = comm.sendAsync(size_info, destination, tag);
+    return std::make_pair(std::move(size_info), std::move(msg));
 }
 } // namespace detail
 
@@ -49,14 +55,14 @@ inline void sendPartition(const MpiComm& comm, const SerializedPartition& part, 
 {
     int msg_tag = 0;
 
-    const size_t n_messages = 3 + 6 * part.domains.size() + 2; // 3 prelims, 6 per domain, 2 for (ghost)nodes
-    std::vector< MpiComm::Request > messages;                  // communication completion ensured via RAII
+    const size_t                    n_messages = 6 * part.domains.size() + 2; // 6 per domain, 2 for (ghost)nodes
+    std::vector< MpiComm::Request > messages;                                 // comm completion ensured via RAII
     messages.reserve(n_messages);
 
     // prelims
-    messages.emplace_back(detail::sendNDoms(comm, part, destination, msg_tag++));
-    messages.emplace_back(detail::sendIds(comm, part, destination, msg_tag++));
-    messages.emplace_back(detail::sendSizes(comm, part, destination, msg_tag++));
+    const auto n_dom_msg_and_data = detail::sendNDoms(comm, part, destination, msg_tag++);
+    const auto ids_msg_and_data   = detail::sendIds(comm, part, destination, msg_tag++);
+    const auto size_msg_and_data  = detail::sendSizes(comm, part, destination, msg_tag++);
 
     // domain data
     for (const auto& [id, dom] : part.domains)
