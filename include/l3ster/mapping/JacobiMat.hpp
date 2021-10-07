@@ -28,8 +28,9 @@ requires(T == ElementTypes::Line or T == ElementTypes::Quad or
                                 const val_t vert_coord = el.getData().vertices[SHAPEFUN_IND][SPACEDIM_IND];
                                 const val_t shapefun_val =
                                     ReferenceBasisFunction< T,
-                                                            1,
+                                                            1, // Lagrange 1 == shape fun
                                                             SHAPEFUN_IND,
+                                                            BasisTypes::Lagrange, // Lagrange 1 == shape fun
                                                             detail::derivativeByIndex(DERDIM_IND) >{}(point);
                                 jac_mat(DERDIM_IND, SPACEDIM_IND) += vert_coord * shapefun_val;
                             },

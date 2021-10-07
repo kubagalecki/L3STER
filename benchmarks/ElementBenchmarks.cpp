@@ -38,7 +38,7 @@ void BM_ReferenceBasisComputation(benchmark::State& state)
     const auto     point = lstr::Point{.5, .5, .5};
     for (auto _ : state)
     {
-        const auto ders = lstr::computeRefBasisDers< T, O >(point);
+        const auto ders = lstr::computeRefBasisDers< T, O, lstr::BasisTypes::Lagrange >(point);
         benchmark::DoNotOptimize(ders);
     }
 }
@@ -50,7 +50,7 @@ void BM_SingleBasisDerivativeComputation(benchmark::State& state)
     const auto point   = lstr::Point{.5, .5, .5};
     for (auto _ : state)
     {
-        const auto ders = computePhysBasisDers< 0 >(element, point);
+        const auto ders = computePhysBasisDers< 0, lstr::BasisTypes::Lagrange >(element, point);
         benchmark::DoNotOptimize(ders);
     }
 }
@@ -61,7 +61,7 @@ void BM_AggregateBasisDerivativeComputation(benchmark::State& state)
     const auto element  = getExampleElement();
     const auto point    = lstr::Point{.5, .5, .5};
     const auto J        = getNatJacobiMatGenerator(element)(point);
-    const auto ref_ders = computeRefBasisDers< lstr::ElementTypes::Hex, 1 >(point);
+    const auto ref_ders = computeRefBasisDers< lstr::ElementTypes::Hex, 1, lstr::BasisTypes::Lagrange >(point);
     for (auto _ : state)
     {
         const auto ders = lstr::computePhysBasisDers< lstr::ElementTypes::Hex, 1 >(J, ref_ders);

@@ -79,11 +79,12 @@ TEST_CASE("Jacobi matrix computation", "[mapping]")
 TEST_CASE("Basis function derivatives", "[mapping]")
 {
     using namespace lstr;
+    constexpr auto LB = BasisTypes::Lagrange;
     SECTION("Line")
     {
         const auto element = getLineElement();
-        const auto bf_der0 = computePhysBasisDers< 0 >(element, Point{0.});
-        const auto bf_der1 = computePhysBasisDers< 1 >(element, Point{0.});
+        const auto bf_der0 = computePhysBasisDers< 0, LB >(element, Point{0.});
+        const auto bf_der1 = computePhysBasisDers< 1, LB >(element, Point{0.});
         CHECK(bf_der0[0] == Approx(-1.).epsilon(1e-13));
         CHECK(bf_der1[0] == Approx(1.).epsilon(1e-13));
     }
@@ -92,10 +93,10 @@ TEST_CASE("Basis function derivatives", "[mapping]")
     {
         const auto element = getQuadElement();
         const auto point   = Point{0., 0.};
-        const auto bf_der0 = computePhysBasisDers< 0 >(element, point);
-        const auto bf_der1 = computePhysBasisDers< 1 >(element, point);
-        const auto bf_der2 = computePhysBasisDers< 2 >(element, point);
-        const auto bf_der3 = computePhysBasisDers< 3 >(element, point);
+        const auto bf_der0 = computePhysBasisDers< 0, LB >(element, point);
+        const auto bf_der1 = computePhysBasisDers< 1, LB >(element, point);
+        const auto bf_der2 = computePhysBasisDers< 2, LB >(element, point);
+        const auto bf_der3 = computePhysBasisDers< 3, LB >(element, point);
         CHECK(bf_der0[0] == Approx(-.25).epsilon(1e-13));
         CHECK(bf_der0[1] == Approx(-.25).epsilon(1e-13));
         CHECK(bf_der1[0] == Approx(.5).epsilon(1e-13));
@@ -119,14 +120,14 @@ TEST_CASE("Basis function derivatives", "[mapping]")
                                                                                                   Point{1., 1., 1.}}},
                                                              0};
         const auto point   = Point{0., 0., 0.};
-        const auto bf_der0 = computePhysBasisDers< 0 >(element, point);
-        const auto bf_der1 = computePhysBasisDers< 1 >(element, point);
-        const auto bf_der2 = computePhysBasisDers< 2 >(element, point);
-        const auto bf_der3 = computePhysBasisDers< 3 >(element, point);
-        const auto bf_der4 = computePhysBasisDers< 4 >(element, point);
-        const auto bf_der5 = computePhysBasisDers< 5 >(element, point);
-        const auto bf_der6 = computePhysBasisDers< 6 >(element, point);
-        const auto bf_der7 = computePhysBasisDers< 7 >(element, point);
+        const auto bf_der0 = computePhysBasisDers< 0, LB >(element, point);
+        const auto bf_der1 = computePhysBasisDers< 1, LB >(element, point);
+        const auto bf_der2 = computePhysBasisDers< 2, LB >(element, point);
+        const auto bf_der3 = computePhysBasisDers< 3, LB >(element, point);
+        const auto bf_der4 = computePhysBasisDers< 4, LB >(element, point);
+        const auto bf_der5 = computePhysBasisDers< 5, LB >(element, point);
+        const auto bf_der6 = computePhysBasisDers< 6, LB >(element, point);
+        const auto bf_der7 = computePhysBasisDers< 7, LB >(element, point);
         CHECK(bf_der0[0] == Approx(-.25).epsilon(1e-13));
         CHECK(bf_der0[1] == Approx(-.25).epsilon(1e-13));
         CHECK(bf_der0[2] == Approx(-.25).epsilon(1e-13));
@@ -160,10 +161,10 @@ TEST_CASE("Basis function derivatives", "[mapping]")
                                            const Point< ElementTraits< Element< T, O > >::native_dim >& point) {
                 const auto jacobi_gen = getNatJacobiMatGenerator(element);
                 const auto J          = jacobi_gen(point);
-                const auto all_ders   = computePhysBasisDers< T, O >(J, computeRefBasisDers< T, O >(point));
+                const auto all_ders   = computePhysBasisDers< T, O >(J, computeRefBasisDers< T, O, LB >(point));
                 forConstexpr(
                     [&]< el_locind_t I >(std::integral_constant< el_locind_t, I >) {
-                        const auto single_der = computePhysBasisDers< I >(element, point);
+                        const auto single_der = computePhysBasisDers< I, LB >(element, point);
                         for (size_t i = 0; i < ElementTraits< Element< T, O > >::native_dim; ++i)
                             CHECK(single_der[i] == Approx(all_ders(i, I)).epsilon(1e-13));
                     },

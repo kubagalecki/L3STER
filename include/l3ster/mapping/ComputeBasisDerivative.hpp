@@ -5,7 +5,7 @@
 
 namespace lstr
 {
-template < el_locind_t I, ElementTypes T, el_o_t O >
+template < el_locind_t I, BasisTypes BT, ElementTypes T, el_o_t O >
 auto computePhysBasisDers(const Element< T, O >&                                       element,
                           const Point< ElementTraits< Element< T, O > >::native_dim >& point)
 {
@@ -15,7 +15,7 @@ auto computePhysBasisDers(const Element< T, O >&                                
     vector_t   ref_ders;
     forConstexpr(
         [&]< dim_t DER_DIM >(std::integral_constant< dim_t, DER_DIM >) {
-            ref_ders[DER_DIM] = ReferenceBasisFunction< T, O, I, detail::derivativeByIndex(DER_DIM) >{}(point);
+            ref_ders[DER_DIM] = ReferenceBasisFunction< T, O, I, BT, detail::derivativeByIndex(DER_DIM) >{}(point);
         },
         std::make_integer_sequence< dim_t, nat_dim >{});
     return vector_t{jacobi_mat.inverse() * ref_ders};

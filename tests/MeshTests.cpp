@@ -284,6 +284,7 @@ TEST_CASE("Element lookup by ID", "[mesh]")
 TEST_CASE("Reference to physical mapping", "[mesh]")
 {
     constexpr auto el_o = 2;
+    constexpr auto LB   = lstr::BasisTypes::Lagrange;
     SECTION("1D")
     {
         constexpr auto el_t                      = lstr::ElementTypes::Line;
@@ -291,7 +292,7 @@ TEST_CASE("Reference to physical mapping", "[mesh]")
         constexpr auto                  el_nodes = typename element_type::node_array_t{};
         lstr::ElementData< el_t, el_o > data{{lstr::Point{1., 1., 1.}, lstr::Point{.5, .5, .5}}};
         const auto                      element = element_type{el_nodes, data, 0};
-        const auto                      mapped  = lstr::mapToPhysicalSpace(element, lstr::Point{0.});
+        const auto                      mapped  = lstr::mapToPhysicalSpace< LB >(element, lstr::Point{0.});
         CHECK(mapped.x() == Approx(.75).epsilon(1e-15));
         CHECK(mapped.y() == Approx(.75).epsilon(1e-15));
         CHECK(mapped.z() == Approx(.75).epsilon(1e-15));
@@ -305,7 +306,7 @@ TEST_CASE("Reference to physical mapping", "[mesh]")
         lstr::ElementData< el_t, el_o > data{
             {lstr::Point{1., -1., 0.}, lstr::Point{2., -1., 0.}, lstr::Point{1., 1., 1.}, lstr::Point{2., 1., 1.}}};
         const auto element = element_type{el_nodes, data, 0};
-        const auto mapped  = lstr::mapToPhysicalSpace(element, lstr::Point{.5, -.5});
+        const auto mapped  = lstr::mapToPhysicalSpace< LB >(element, lstr::Point{.5, -.5});
         CHECK(mapped.x() == Approx(1.75).epsilon(1e-15));
         CHECK(mapped.y() == Approx(-.5).epsilon(1e-15));
         CHECK(mapped.z() == Approx(.25).epsilon(1e-15));
@@ -325,7 +326,7 @@ TEST_CASE("Reference to physical mapping", "[mesh]")
                                               lstr::Point{.5, 1., 1.},
                                               lstr::Point{1., 1., 1.}}};
         const auto                      element = element_type{el_nodes, data, 0};
-        const auto                      mapped  = lstr::mapToPhysicalSpace(element, lstr::Point{0., 0., 0.});
+        const auto                      mapped  = lstr::mapToPhysicalSpace< LB >(element, lstr::Point{0., 0., 0.});
         CHECK(mapped.x() == Approx(.75).epsilon(1e-15));
         CHECK(mapped.y() == Approx(.75).epsilon(1e-15));
         CHECK(mapped.z() == Approx(.75).epsilon(1e-15));
