@@ -38,7 +38,7 @@ const auto& QuadratureGenerator< QTYPE, QORDER >::get(const Element< ElementType
         using quadrature_t      = Quadrature< ref_size * ref_size, 2 >;
 
         const auto& ref_quadrature   = ref_quadrature_t::value;
-        const auto& ref_quadrature_p = ref_quadrature.getQPoints();
+        const auto& ref_quadrature_p = ref_quadrature.getPoints();
         const auto& ref_quadrature_w = ref_quadrature.getWeights();
 
         typename quadrature_t::q_points_t q_points;
@@ -72,7 +72,7 @@ const auto& QuadratureGenerator< QTYPE, QORDER >::get(const Element< ElementType
         using quadrature_t      = Quadrature< ref_size * ref_size * ref_size, 3 >;
 
         const auto& ref_quadrature   = ref_quadrature_t::value;
-        const auto& ref_quadrature_p = ref_quadrature.getQPoints();
+        const auto& ref_quadrature_p = ref_quadrature.getPoints();
         const auto& ref_quadrature_w = ref_quadrature.getWeights();
 
         typename quadrature_t::q_points_t q_points;

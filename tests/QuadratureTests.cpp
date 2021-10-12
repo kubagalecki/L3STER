@@ -15,7 +15,7 @@ TEST_CASE("1D Gauss-Legendre quadrature, 1 point", "[quadrature]")
     Approx qp_0 = Approx(0).margin(tol);
     Approx w_0  = Approx(2).margin(tol);
 
-    CHECK(ref_quad.getQPoints()[0][0] == qp_0);
+    CHECK(ref_quad.getPoints()[0][0] == qp_0);
     CHECK(ref_quad.getWeights()[0] == w_0);
 }
 
@@ -30,8 +30,8 @@ TEST_CASE("1D Gauss-Legendre quadrature, 2 point", "[quadrature]")
     Approx qp_1 = Approx(0.57735026919).margin(tol);
     Approx w    = Approx(1).margin(tol);
 
-    CHECK(ref_quad.getQPoints()[0].front() == qp_0);
-    CHECK(ref_quad.getQPoints()[1].front() == qp_1);
+    CHECK(ref_quad.getPoints()[0].front() == qp_0);
+    CHECK(ref_quad.getPoints()[1].front() == qp_1);
     CHECK(ref_quad.getWeights()[0] == w);
     CHECK(ref_quad.getWeights()[0] == w);
 }
@@ -50,9 +50,9 @@ TEST_CASE("1D Gauss-Legendre quadrature, 3 point", "[quadrature]")
     Approx w_1  = Approx(0.8888888889).margin(tol);
     Approx w_2  = Approx(0.5555555556).margin(tol);
 
-    CHECK(ref_quad.getQPoints()[0].front() == qp_0);
-    CHECK(ref_quad.getQPoints()[1].front() == qp_1);
-    CHECK(ref_quad.getQPoints()[2].front() == qp_2);
+    CHECK(ref_quad.getPoints()[0].front() == qp_0);
+    CHECK(ref_quad.getPoints()[1].front() == qp_1);
+    CHECK(ref_quad.getPoints()[2].front() == qp_2);
     CHECK(ref_quad.getWeights()[0] == w_0);
     CHECK(ref_quad.getWeights()[1] == w_1);
     CHECK(ref_quad.getWeights()[2] == w_2);
@@ -73,7 +73,7 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
         Approx qp_0 = Approx(0).margin(tol);
         Approx w_0  = Approx(2).margin(tol);
 
-        CHECK(quadrature.getQPoints()[0][0] == qp_0);
+        CHECK(quadrature.getPoints()[0][0] == qp_0);
         CHECK(quadrature.getWeights()[0] == w_0);
     }
 
@@ -88,8 +88,8 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
         Approx qp_1 = Approx(0.57735026919).margin(tol);
         Approx w    = Approx(1).margin(tol);
 
-        CHECK(quadrature.getQPoints()[0].front() == qp_0);
-        CHECK(quadrature.getQPoints()[1].front() == qp_1);
+        CHECK(quadrature.getPoints()[0].front() == qp_0);
+        CHECK(quadrature.getPoints()[1].front() == qp_1);
         CHECK(quadrature.getWeights()[0] == w);
         CHECK(quadrature.getWeights()[0] == w);
     }
@@ -108,9 +108,9 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
         Approx w_1  = Approx(0.8888888889).margin(tol);
         Approx w_2  = Approx(0.5555555556).margin(tol);
 
-        CHECK(quadrature.getQPoints()[0].front() == qp_0);
-        CHECK(quadrature.getQPoints()[1].front() == qp_1);
-        CHECK(quadrature.getQPoints()[2].front() == qp_2);
+        CHECK(quadrature.getPoints()[0].front() == qp_0);
+        CHECK(quadrature.getPoints()[1].front() == qp_1);
+        CHECK(quadrature.getPoints()[2].front() == qp_2);
         CHECK(quadrature.getWeights()[0] == w_0);
         CHECK(quadrature.getWeights()[1] == w_1);
         CHECK(quadrature.getWeights()[2] == w_2);
@@ -165,8 +165,8 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
         Approx qp_0 = Approx(0).margin(tol);
         Approx w_0  = Approx(4).margin(tol);
-        CHECK(quadrature.getQPoints()[0][0] == qp_0);
-        CHECK(quadrature.getQPoints()[0][1] == qp_0);
+        CHECK(quadrature.getPoints()[0][0] == qp_0);
+        CHECK(quadrature.getPoints()[0][1] == qp_0);
         CHECK(quadrature.getWeights()[0] == w_0);
     }
 
@@ -245,9 +245,9 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
 
         Approx qp_0 = Approx(0).margin(tol);
         Approx w_0  = Approx(8).margin(tol);
-        CHECK(quadrature.getQPoints()[0][0] == qp_0);
-        CHECK(quadrature.getQPoints()[0][1] == qp_0);
-        CHECK(quadrature.getQPoints()[0][2] == qp_0);
+        CHECK(quadrature.getPoints()[0][0] == qp_0);
+        CHECK(quadrature.getPoints()[0][1] == qp_0);
+        CHECK(quadrature.getPoints()[0][2] == qp_0);
         CHECK(quadrature.getWeights()[0] == w_0);
     }
 
