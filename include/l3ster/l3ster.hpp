@@ -7,7 +7,7 @@
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/PartitionMesh.hpp"
 #include "l3ster/mesh/ReadMesh.hpp"
-#include "l3ster/quad/InvokeQuadrature.hpp"
+#include "l3ster/quad/EvalQuadrature.hpp"
 #include "l3ster/quad/QuadratureGenerator.hpp"
 
 #include "l3ster/alloc/NodeGlobalMemoryResource.hpp"
