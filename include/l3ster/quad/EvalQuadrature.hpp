@@ -44,7 +44,7 @@ concept QuadKernelDefaultInitializable_c = std::default_initializable< typename 
 
 // This is a weighted reduction of `fun` over quadrature points
 template < typename Integrator, q_l_t QLENGTH, dim_t QDIM >
-auto evalQuadrature(Integrator&& fun, const Quadrature< QLENGTH, QDIM >& quad) requires
+auto evalQuadrature(Integrator&& integrator, const Quadrature< QLENGTH, QDIM >& quad) requires
     detail::QuadIntegrable_c< Integrator, Quadrature< QLENGTH, QDIM > > and
     detail::QuadKernelDefaultInitializable_c< Integrator, Quadrature< QLENGTH, QDIM > >
 {
@@ -53,7 +53,7 @@ auto evalQuadrature(Integrator&& fun, const Quadrature< QLENGTH, QDIM >& quad) r
     using weight_t = quad_t::weights_t::value_type;
 
     const auto invoke_and_weigh = [&](const point_t& point, const weight_t& weight) {
-        return std::apply(fun, point) * weight;
+        return std::apply(integrator, point) * weight;
     };
     const auto zero_init = typename detail::QuadIntTraits< Integrator, Quadrature< QLENGTH, QDIM > >::kernel_t{};
     return std::transform_reduce(quad.getPoints().cbegin(),
@@ -67,5 +67,26 @@ auto evalQuadrature(Integrator&& fun, const Quadrature< QLENGTH, QDIM >& quad) r
 // This is a weighted reduction of `fun` over point-index pairs. This is meant to enable more efficient calculation,
 // where certain quantities (e.g. basis derivatives) can be precomputed collectively for all quadrature points, and then
 // accessed by index during quadrature evaluation
+template < typename Integrator, typename Zero, q_l_t QLENGTH, dim_t QDIM >
+auto evalQuadrature(Integrator&& integrator, const Quadrature< QLENGTH, QDIM >& quad, Zero zero) noexcept requires
+    requires(Integrator                                          integr,
+             Quadrature< QLENGTH, QDIM >::q_points_t::value_type qp,
+             Quadrature< QLENGTH, QDIM >::weights_t::value_type  w,
+             ptrdiff_t                                           index,
+             Zero                                                el0)
+{
+    {
+        el0 += integr(index, qp) * w
+    }
+    noexcept->std::convertible_to< Zero >;
+}
+{
+    for (ptrdiff_t i = 0; const auto& qp : quad.getPoints())
+    {
+        zero += integrator(i, qp) * quad.getWeights()[i];
+        ++i;
+    }
+    return zero;
+}
 } // namespace lstr
 #endif // L3STER_QUAD_EVALQUADRATURE_HPP
