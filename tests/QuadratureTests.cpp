@@ -117,6 +117,13 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
     }
 }
 
+static constexpr auto wrapQuadEvaluator(const auto& eval)
+{
+    return [&](ptrdiff_t, const auto& arr) noexcept {
+        return std::apply(eval, arr);
+    };
+}
+
 TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]")
 {
     const lstr::ElementData< lstr::ElementTypes::Quad, 1 > data{
@@ -181,6 +188,11 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
         CHECK(lstr::evalQuadrature(o1_fun, quadrature) == o1_int);
         CHECK(lstr::evalQuadrature(o2_fun, quadrature) == o2_int);
         CHECK(lstr::evalQuadrature(o3_fun, quadrature) == o3_int);
+
+        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, 0.) == o0_int);
+        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, 0.) == o1_int);
+        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, 0.) == o2_int);
+        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, 0.) == o3_int);
     }
 
     SECTION("9 point quadrature")
@@ -196,6 +208,13 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
         CHECK(lstr::evalQuadrature(o3_fun, quadrature) == o3_int);
         CHECK(lstr::evalQuadrature(o4_fun, quadrature) == o4_int);
         CHECK(lstr::evalQuadrature(o5_fun, quadrature) == o5_int);
+
+        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, 0.) == o0_int);
+        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, 0.) == o1_int);
+        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, 0.) == o2_int);
+        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, 0.) == o3_int);
+        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o4_fun), quadrature, 0.) == o4_int);
+        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o5_fun), quadrature, 0.) == o5_int);
     }
 }
 
@@ -262,6 +281,11 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
         CHECK(lstr::evalQuadrature(o1_fun, quadrature) == o1_int);
         CHECK(lstr::evalQuadrature(o2_fun, quadrature) == o2_int);
         CHECK(lstr::evalQuadrature(o3_fun, quadrature) == o3_int);
+
+        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, 0.) == o0_int);
+        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, 0.) == o1_int);
+        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, 0.) == o2_int);
+        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, 0.) == o3_int);
     }
 
     SECTION("512 point quadrature")
@@ -272,5 +296,6 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
         REQUIRE(quadrature.dim == 3);
 
         CHECK(lstr::evalQuadrature(trig_fun, quadrature) == trig_int);
+        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(trig_fun), quadrature, 0.) == trig_int);
     }
 }
