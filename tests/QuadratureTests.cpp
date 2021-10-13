@@ -177,10 +177,10 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
         REQUIRE(quadrature.size == 4);
         REQUIRE(quadrature.dim == 2);
 
-        CHECK(lstr::invokeQuadrature(o0_fun, quadrature) == o0_int);
-        CHECK(lstr::invokeQuadrature(o1_fun, quadrature) == o1_int);
-        CHECK(lstr::invokeQuadrature(o2_fun, quadrature) == o2_int);
-        CHECK(lstr::invokeQuadrature(o3_fun, quadrature) == o3_int);
+        CHECK(lstr::evalQuadrature(o0_fun, quadrature) == o0_int);
+        CHECK(lstr::evalQuadrature(o1_fun, quadrature) == o1_int);
+        CHECK(lstr::evalQuadrature(o2_fun, quadrature) == o2_int);
+        CHECK(lstr::evalQuadrature(o3_fun, quadrature) == o3_int);
     }
 
     SECTION("9 point quadrature")
@@ -190,12 +190,12 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
         REQUIRE(quadrature.size == 9);
         REQUIRE(quadrature.dim == 2);
 
-        CHECK(lstr::invokeQuadrature(o0_fun, quadrature) == o0_int);
-        CHECK(lstr::invokeQuadrature(o1_fun, quadrature) == o1_int);
-        CHECK(lstr::invokeQuadrature(o2_fun, quadrature) == o2_int);
-        CHECK(lstr::invokeQuadrature(o3_fun, quadrature) == o3_int);
-        CHECK(lstr::invokeQuadrature(o4_fun, quadrature) == o4_int);
-        CHECK(lstr::invokeQuadrature(o5_fun, quadrature) == o5_int);
+        CHECK(lstr::evalQuadrature(o0_fun, quadrature) == o0_int);
+        CHECK(lstr::evalQuadrature(o1_fun, quadrature) == o1_int);
+        CHECK(lstr::evalQuadrature(o2_fun, quadrature) == o2_int);
+        CHECK(lstr::evalQuadrature(o3_fun, quadrature) == o3_int);
+        CHECK(lstr::evalQuadrature(o4_fun, quadrature) == o4_int);
+        CHECK(lstr::evalQuadrature(o5_fun, quadrature) == o5_int);
     }
 }
 
@@ -258,10 +258,10 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
         REQUIRE(quadrature.size == 8);
         REQUIRE(quadrature.dim == 3);
 
-        CHECK(lstr::invokeQuadrature(o0_fun, quadrature) == o0_int);
-        CHECK(lstr::invokeQuadrature(o1_fun, quadrature) == o1_int);
-        CHECK(lstr::invokeQuadrature(o2_fun, quadrature) == o2_int);
-        CHECK(lstr::invokeQuadrature(o3_fun, quadrature) == o3_int);
+        CHECK(lstr::evalQuadrature(o0_fun, quadrature) == o0_int);
+        CHECK(lstr::evalQuadrature(o1_fun, quadrature) == o1_int);
+        CHECK(lstr::evalQuadrature(o2_fun, quadrature) == o2_int);
+        CHECK(lstr::evalQuadrature(o3_fun, quadrature) == o3_int);
     }
 
     SECTION("512 point quadrature")
@@ -271,6 +271,6 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
         REQUIRE(quadrature.size == 512);
         REQUIRE(quadrature.dim == 3);
 
-        CHECK(lstr::invokeQuadrature(trig_fun, quadrature) == trig_int);
+        CHECK(lstr::evalQuadrature(trig_fun, quadrature) == trig_int);
     }
 }

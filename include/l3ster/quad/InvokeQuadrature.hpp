@@ -1,5 +1,5 @@
-#ifndef L3STER_QUAD_INVOKEQUADRATURE_HPP
-#define L3STER_QUAD_INVOKEQUADRATURE_HPP
+#ifndef L3STER_QUAD_EVALQUADRATURE_HPP
+#define L3STER_QUAD_EVALQUADRATURE_HPP
 
 #include "Quadrature.hpp"
 
@@ -42,8 +42,9 @@ template < typename T, typename Q >
 concept QuadKernelDefaultInitializable_c = std::default_initializable< typename QuadIntTraits< T, Q >::kernel_t >;
 } // namespace detail
 
+// This is a weighted reduction of `fun` over quadrature points
 template < typename Integrator, q_l_t QLENGTH, dim_t QDIM >
-auto invokeQuadrature(Integrator&& fun, const Quadrature< QLENGTH, QDIM >& quad) requires
+auto evalQuadrature(Integrator&& fun, const Quadrature< QLENGTH, QDIM >& quad) requires
     detail::QuadIntegrable_c< Integrator, Quadrature< QLENGTH, QDIM > > and
     detail::QuadKernelDefaultInitializable_c< Integrator, Quadrature< QLENGTH, QDIM > >
 {
@@ -62,5 +63,9 @@ auto invokeQuadrature(Integrator&& fun, const Quadrature< QLENGTH, QDIM >& quad)
                                  std::plus<>{},
                                  invoke_and_weigh);
 }
+
+// This is a weighted reduction of `fun` over point-index pairs. This is meant to enable more efficient calculation,
+// where certain quantities (e.g. basis derivatives) can be precomputed collectively for all quadrature points, and then
+// accessed by index during quadrature evaluation
 } // namespace lstr
-#endif // L3STER_QUAD_INVOKEQUADRATURE_HPP
+#endif // L3STER_QUAD_EVALQUADRATURE_HPP
