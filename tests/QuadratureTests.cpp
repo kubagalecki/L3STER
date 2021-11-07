@@ -1,13 +1,15 @@
 #include "l3ster/quad/EvalQuadrature.hpp"
-#include "l3ster/quad/QuadratureGenerator.hpp"
+#include "l3ster/quad/GenerateQuadrature.hpp"
 
 #include "catch2/catch.hpp"
 
 static constexpr double tol = 1e-10;
 
+using namespace lstr;
+
 TEST_CASE("1D Gauss-Legendre quadrature, 1 point", "[quadrature]")
 {
-    const auto& ref_quad = lstr::ReferenceQuadrature< lstr::QuadratureTypes::GLeg, 0 >::value;
+    const auto& ref_quad = ReferenceQuadrature< QuadratureTypes::GLeg, 0 >::value;
 
     REQUIRE(ref_quad.size == 1);
     REQUIRE(ref_quad.dim == 1);
@@ -21,7 +23,7 @@ TEST_CASE("1D Gauss-Legendre quadrature, 1 point", "[quadrature]")
 
 TEST_CASE("1D Gauss-Legendre quadrature, 2 point", "[quadrature]")
 {
-    const auto& ref_quad = lstr::ReferenceQuadrature< lstr::QuadratureTypes::GLeg, 2 >::value;
+    const auto& ref_quad = ReferenceQuadrature< QuadratureTypes::GLeg, 2 >::value;
 
     REQUIRE(ref_quad.size == 2);
     REQUIRE(ref_quad.dim == 1);
@@ -38,7 +40,7 @@ TEST_CASE("1D Gauss-Legendre quadrature, 2 point", "[quadrature]")
 
 TEST_CASE("1D Gauss-Legendre quadrature, 3 point", "[quadrature]")
 {
-    const auto& ref_quad = lstr::ReferenceQuadrature< lstr::QuadratureTypes::GLeg, 4 >::value;
+    const auto& ref_quad = ReferenceQuadrature< QuadratureTypes::GLeg, 4 >::value;
 
     REQUIRE(ref_quad.size == 3);
     REQUIRE(ref_quad.dim == 1);
@@ -46,9 +48,9 @@ TEST_CASE("1D Gauss-Legendre quadrature, 3 point", "[quadrature]")
     Approx qp_0 = Approx(-0.77459666924).margin(tol);
     Approx qp_1 = Approx(0).margin(tol);
     Approx qp_2 = Approx(0.77459666924).margin(tol);
-    Approx w_0  = Approx(0.5555555556).margin(tol);
-    Approx w_1  = Approx(0.8888888889).margin(tol);
-    Approx w_2  = Approx(0.5555555556).margin(tol);
+    Approx w_0  = Approx(0.55555555556).margin(tol);
+    Approx w_1  = Approx(0.88888888889).margin(tol);
+    Approx w_2  = Approx(0.55555555556).margin(tol);
 
     CHECK(ref_quad.getPoints()[0].front() == qp_0);
     CHECK(ref_quad.getPoints()[1].front() == qp_1);
@@ -60,12 +62,9 @@ TEST_CASE("1D Gauss-Legendre quadrature, 3 point", "[quadrature]")
 
 TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 {
-    const lstr::ElementData< lstr::ElementTypes::Line, 1 > data{{lstr::Point{0., 0., 0.}, lstr::Point{0., 0., 0.}}};
-    const auto element = lstr::Element< lstr::ElementTypes::Line, 1 >{{1, 2}, data, 0};
-
     SECTION("1 point quadrature")
     {
-        const auto& quadrature = lstr::QuadratureGenerator< lstr::QuadratureTypes::GLeg, 1 >{}.get(element);
+        const auto& quadrature = generateQuadrature< QuadratureTypes::GLeg, 1, ElementTypes::Line >();
 
         REQUIRE(quadrature.size == 1);
         REQUIRE(quadrature.dim == 1);
@@ -79,7 +78,7 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 
     SECTION("2 point quadrature")
     {
-        const auto& quadrature = lstr::QuadratureGenerator< lstr::QuadratureTypes::GLeg, 3 >{}.get(element);
+        const auto& quadrature = generateQuadrature< QuadratureTypes::GLeg, 3, ElementTypes::Line >();
 
         REQUIRE(quadrature.size == 2);
         REQUIRE(quadrature.dim == 1);
@@ -96,7 +95,7 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 
     SECTION("3 point quadrature")
     {
-        const auto& quadrature = lstr::QuadratureGenerator< lstr::QuadratureTypes::GLeg, 5 >{}.get(element);
+        const auto& quadrature = generateQuadrature< QuadratureTypes::GLeg, 5, ElementTypes::Line >();
 
         REQUIRE(quadrature.size == 3);
         REQUIRE(quadrature.dim == 1);
@@ -104,9 +103,9 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
         Approx qp_0 = Approx(-0.77459666924).margin(tol);
         Approx qp_1 = Approx(0).margin(tol);
         Approx qp_2 = Approx(0.77459666924).margin(tol);
-        Approx w_0  = Approx(0.5555555556).margin(tol);
-        Approx w_1  = Approx(0.8888888889).margin(tol);
-        Approx w_2  = Approx(0.5555555556).margin(tol);
+        Approx w_0  = Approx(0.55555555556).margin(tol);
+        Approx w_1  = Approx(0.88888888889).margin(tol);
+        Approx w_2  = Approx(0.55555555556).margin(tol);
 
         CHECK(quadrature.getPoints()[0].front() == qp_0);
         CHECK(quadrature.getPoints()[1].front() == qp_1);
@@ -126,10 +125,6 @@ static constexpr auto wrapQuadEvaluator(const auto& eval)
 
 TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]")
 {
-    const lstr::ElementData< lstr::ElementTypes::Quad, 1 > data{
-        {lstr::Point{0., 0., 0.}, lstr::Point{0., 0., 0.}, lstr::Point{0., 0., 0.}, lstr::Point{0., 0., 0.}}};
-    const auto element = lstr::Element< lstr::ElementTypes::Quad, 1 >{{1, 2, 3, 4}, data, 0};
-
     constexpr auto o0_fun = [](double, double) {
         return 1.;
     };
@@ -143,29 +138,29 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
     constexpr auto o2_fun = [](double xi, double eta) {
         return 2. * xi * xi + xi + 3. * eta * eta + 2. * eta + 1.;
     };
-    Approx o2_int = Approx(10.66666666667).margin(tol);
+    Approx o2_int = Approx(10.666666666667).margin(tol);
 
     constexpr auto o3_fun = [](double xi, double eta) {
         return 3. * xi * xi * xi + 2. * xi * xi + xi + 4. * eta * eta * eta + 3. * eta * eta + 2. * eta + 1.;
     };
-    Approx o3_int = Approx(10.66666666667).margin(tol);
+    Approx o3_int = Approx(10.666666666667).margin(tol);
 
     constexpr auto o4_fun = [](double xi, double eta) {
         return 4. * xi * xi * xi * xi + 3. * xi * xi * xi + 2. * xi * xi + xi + 5. * eta * eta * eta * eta +
                4. * eta * eta * eta + 3. * eta * eta + 2. * eta + 1.;
     };
-    Approx o4_int = Approx(17.86666666667).margin(tol);
+    Approx o4_int = Approx(17.866666666667).margin(tol);
 
     constexpr auto o5_fun = [](double xi, double eta) {
         return 5. * xi * xi * xi * xi * xi + 4. * xi * xi * xi * xi + 3. * xi * xi * xi + 2. * xi * xi + xi +
                6. * eta * eta * eta * eta * eta + 5. * eta * eta * eta * eta + 4. * eta * eta * eta + 3. * eta * eta +
                2. * eta + 1.;
     };
-    Approx o5_int = Approx(17.86666666667).margin(tol);
+    Approx o5_int = Approx(17.866666666667).margin(tol);
 
     SECTION("1 point quadrature")
     {
-        const auto& quadrature = lstr::QuadratureGenerator< lstr::QuadratureTypes::GLeg, 1 >{}.get(element);
+        const auto& quadrature = generateQuadrature< QuadratureTypes::GLeg, 1, ElementTypes::Quad >();
 
         REQUIRE(quadrature.size == 1);
         REQUIRE(quadrature.dim == 2);
@@ -179,57 +174,47 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
     SECTION("4 point quadrature")
     {
-        const auto& quadrature = lstr::QuadratureGenerator< lstr::QuadratureTypes::GLeg, 3 >{}.get(element);
+        const auto& quadrature = generateQuadrature< QuadratureTypes::GLeg, 3, ElementTypes::Quad >();
 
         REQUIRE(quadrature.size == 4);
         REQUIRE(quadrature.dim == 2);
 
-        CHECK(lstr::evalQuadrature(o0_fun, quadrature) == o0_int);
-        CHECK(lstr::evalQuadrature(o1_fun, quadrature) == o1_int);
-        CHECK(lstr::evalQuadrature(o2_fun, quadrature) == o2_int);
-        CHECK(lstr::evalQuadrature(o3_fun, quadrature) == o3_int);
+        CHECK(evalQuadrature(o0_fun, quadrature) == o0_int);
+        CHECK(evalQuadrature(o1_fun, quadrature) == o1_int);
+        CHECK(evalQuadrature(o2_fun, quadrature) == o2_int);
+        CHECK(evalQuadrature(o3_fun, quadrature) == o3_int);
 
-        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, 0.) == o0_int);
-        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, 0.) == o1_int);
-        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, 0.) == o2_int);
-        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, 0.) == o3_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, 0.) == o0_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, 0.) == o1_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, 0.) == o2_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, 0.) == o3_int);
     }
 
     SECTION("9 point quadrature")
     {
-        const auto& quadrature = lstr::QuadratureGenerator< lstr::QuadratureTypes::GLeg, 5 >{}.get(element);
+        const auto& quadrature = generateQuadrature< QuadratureTypes::GLeg, 5, ElementTypes::Quad >();
 
         REQUIRE(quadrature.size == 9);
         REQUIRE(quadrature.dim == 2);
 
-        CHECK(lstr::evalQuadrature(o0_fun, quadrature) == o0_int);
-        CHECK(lstr::evalQuadrature(o1_fun, quadrature) == o1_int);
-        CHECK(lstr::evalQuadrature(o2_fun, quadrature) == o2_int);
-        CHECK(lstr::evalQuadrature(o3_fun, quadrature) == o3_int);
-        CHECK(lstr::evalQuadrature(o4_fun, quadrature) == o4_int);
-        CHECK(lstr::evalQuadrature(o5_fun, quadrature) == o5_int);
+        CHECK(evalQuadrature(o0_fun, quadrature) == o0_int);
+        CHECK(evalQuadrature(o1_fun, quadrature) == o1_int);
+        CHECK(evalQuadrature(o2_fun, quadrature) == o2_int);
+        CHECK(evalQuadrature(o3_fun, quadrature) == o3_int);
+        CHECK(evalQuadrature(o4_fun, quadrature) == o4_int);
+        CHECK(evalQuadrature(o5_fun, quadrature) == o5_int);
 
-        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, 0.) == o0_int);
-        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, 0.) == o1_int);
-        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, 0.) == o2_int);
-        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, 0.) == o3_int);
-        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o4_fun), quadrature, 0.) == o4_int);
-        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o5_fun), quadrature, 0.) == o5_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, 0.) == o0_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, 0.) == o1_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, 0.) == o2_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, 0.) == o3_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o4_fun), quadrature, 0.) == o4_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o5_fun), quadrature, 0.) == o5_int);
     }
 }
 
 TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
 {
-    const lstr::ElementData< lstr::ElementTypes::Hex, 1 > data{{lstr::Point{0., 0., 0.},
-                                                                lstr::Point{0., 0., 0.},
-                                                                lstr::Point{0., 0., 0.},
-                                                                lstr::Point{0., 0., 0.},
-                                                                lstr::Point{0., 0., 0.},
-                                                                lstr::Point{0., 0., 0.},
-                                                                lstr::Point{0., 0., 0.},
-                                                                lstr::Point{0., 0., 0.}}};
-    const auto element = lstr::Element< lstr::ElementTypes ::Hex, 1 >{{1, 2, 3, 4, 5, 6, 7, 8}, data, 0};
-
     constexpr auto o0_fun = [](double, double, double) {
         return 1.;
     };
@@ -257,7 +242,7 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
 
     SECTION("1 point quadrature")
     {
-        const auto& quadrature = lstr::QuadratureGenerator< lstr::QuadratureTypes::GLeg, 1 >{}.get(element);
+        const auto& quadrature = generateQuadrature< QuadratureTypes::GLeg, 1, ElementTypes::Hex >();
 
         REQUIRE(quadrature.size == 1);
         REQUIRE(quadrature.dim == 3);
@@ -272,30 +257,30 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
 
     SECTION("8 point quadrature")
     {
-        const auto& quadrature = lstr::QuadratureGenerator< lstr::QuadratureTypes::GLeg, 3 >{}.get(element);
+        const auto& quadrature = generateQuadrature< QuadratureTypes::GLeg, 3, ElementTypes::Hex >();
 
         REQUIRE(quadrature.size == 8);
         REQUIRE(quadrature.dim == 3);
 
-        CHECK(lstr::evalQuadrature(o0_fun, quadrature) == o0_int);
-        CHECK(lstr::evalQuadrature(o1_fun, quadrature) == o1_int);
-        CHECK(lstr::evalQuadrature(o2_fun, quadrature) == o2_int);
-        CHECK(lstr::evalQuadrature(o3_fun, quadrature) == o3_int);
+        CHECK(evalQuadrature(o0_fun, quadrature) == o0_int);
+        CHECK(evalQuadrature(o1_fun, quadrature) == o1_int);
+        CHECK(evalQuadrature(o2_fun, quadrature) == o2_int);
+        CHECK(evalQuadrature(o3_fun, quadrature) == o3_int);
 
-        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, 0.) == o0_int);
-        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, 0.) == o1_int);
-        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, 0.) == o2_int);
-        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, 0.) == o3_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, 0.) == o0_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, 0.) == o1_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, 0.) == o2_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, 0.) == o3_int);
     }
 
     SECTION("512 point quadrature")
     {
-        const auto& quadrature = lstr::QuadratureGenerator< lstr::QuadratureTypes::GLeg, 15 >{}.get(element);
+        const auto& quadrature = generateQuadrature< QuadratureTypes::GLeg, 15, ElementTypes::Hex >();
 
         REQUIRE(quadrature.size == 512);
         REQUIRE(quadrature.dim == 3);
 
-        CHECK(lstr::evalQuadrature(trig_fun, quadrature) == trig_int);
-        CHECK(lstr::evalQuadrature(wrapQuadEvaluator(trig_fun), quadrature, 0.) == trig_int);
+        CHECK(evalQuadrature(trig_fun, quadrature) == trig_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(trig_fun), quadrature, 0.) == trig_int);
     }
 }

@@ -1,39 +1,24 @@
 // Quadrature generation functionality
 
-#ifndef L3STER_QUAD_QUADRATUREGENERATOR_HPP
-#define L3STER_QUAD_QUADRATUREGENERATOR_HPP
+#ifndef L3STER_QUAD_GENERATEQUADRATURE_HPP
+#define L3STER_QUAD_GENERATEQUADRATURE_HPP
 
 #include "ReferenceQuadrature.hpp"
 #include "l3ster/mesh/Element.hpp"
 
 namespace lstr
 {
-template < QuadratureTypes QTYPE, q_o_t QORDER >
-struct QuadratureGenerator
+template < QuadratureTypes QT, q_o_t QO, ElementTypes ET >
+const auto& generateQuadrature() requires(ET == ElementTypes::Line)
 {
-    template < el_o_t ELORDER >
-    [[nodiscard]] const auto& get(const Element< ElementTypes::Line, ELORDER >&) const;
-
-    template < el_o_t ELORDER >
-    [[nodiscard]] const auto& get(const Element< ElementTypes::Quad, ELORDER >&) const;
-
-    template < el_o_t ELORDER >
-    [[nodiscard]] const auto& get(const Element< ElementTypes::Hex, ELORDER >&) const;
-};
-
-template < QuadratureTypes QTYPE, q_o_t QORDER >
-template < el_o_t ELORDER >
-const auto& QuadratureGenerator< QTYPE, QORDER >::get(const Element< ElementTypes::Line, ELORDER >&) const
-{
-    return ReferenceQuadrature< QTYPE, QORDER >::value;
+    return ReferenceQuadrature< QT, QO >::value;
 }
 
-template < QuadratureTypes QTYPE, q_o_t QORDER >
-template < el_o_t ELORDER >
-const auto& QuadratureGenerator< QTYPE, QORDER >::get(const Element< ElementTypes::Quad, ELORDER >&) const
+template < QuadratureTypes QT, q_o_t QO, ElementTypes ET >
+const auto& generateQuadrature() requires(ET == ElementTypes::Quad)
 {
     static const auto quad = [] {
-        using ref_quadrature_t  = ReferenceQuadrature< QTYPE, QORDER >;
+        using ref_quadrature_t  = ReferenceQuadrature< QT, QO >;
         constexpr auto ref_size = ref_quadrature_t::size;
         using quadrature_t      = Quadrature< ref_size * ref_size, 2 >;
 
@@ -62,12 +47,11 @@ const auto& QuadratureGenerator< QTYPE, QORDER >::get(const Element< ElementType
     return quad;
 }
 
-template < QuadratureTypes QTYPE, q_o_t QORDER >
-template < el_o_t ELORDER >
-const auto& QuadratureGenerator< QTYPE, QORDER >::get(const Element< ElementTypes::Hex, ELORDER >&) const
+template < QuadratureTypes QT, q_o_t QO, ElementTypes ET >
+const auto& generateQuadrature() requires(ET == ElementTypes::Hex)
 {
     static const auto quad = [] {
-        using ref_quadrature_t  = ReferenceQuadrature< QTYPE, QORDER >;
+        using ref_quadrature_t  = ReferenceQuadrature< QT, QO >;
         constexpr auto ref_size = ref_quadrature_t::size;
         using quadrature_t      = Quadrature< ref_size * ref_size * ref_size, 3 >;
 
@@ -100,4 +84,4 @@ const auto& QuadratureGenerator< QTYPE, QORDER >::get(const Element< ElementType
     return quad;
 }
 } // namespace lstr
-#endif // L3STER_QUAD_QUADRATUREGENERATOR_HPP
+#endif // L3STER_QUAD_GENERATEQUADRATURE_HPP

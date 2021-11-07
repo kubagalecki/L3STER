@@ -47,7 +47,7 @@ define_trilinos_target( ${L3STER_ENABLE_VERBOSITY} Tpetra Belos MueLu )
 list( APPEND L3STER_DEPENDENCY_LIST Trilinos )
 
 # Eigen
-find_package( Eigen3 3.3 REQUIRED )
+find_package( Eigen3 3.4 REQUIRED )
 list( APPEND L3STER_DEPENDENCY_LIST Eigen3::Eigen )
 
 # Hwloc

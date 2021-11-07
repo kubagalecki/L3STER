@@ -2,9 +2,10 @@
 
 #include <benchmark/benchmark.h>
 
+using namespace lstr;
+
 auto getExampleElement()
 {
-    using namespace lstr;
     Element< ElementTypes::Hex, 1 > element{{0, 1, 2, 3, 4, 5, 6, 7},
                                             ElementData< ElementTypes::Hex, 1 >{{Point{0., 0., 0.},
                                                                                  Point{1., 0., 0.},
@@ -21,7 +22,7 @@ auto getExampleElement()
 void BM_JacobianComputation(benchmark::State& state)
 {
     const auto element = getExampleElement();
-    const auto point   = lstr::Point{.5, .5, .5};
+    const auto point   = Point{.5, .5, .5};
     for (auto _ : state)
     {
         const auto jacobi_mat_eval = getNatJacobiMatGenerator(element);
@@ -33,12 +34,12 @@ BENCHMARK(BM_JacobianComputation)->Name("Compute Jacobian");
 
 void BM_ReferenceBasisComputation(benchmark::State& state)
 {
-    constexpr auto T     = lstr::ElementTypes::Hex;
-    constexpr auto O     = lstr::el_o_t{1};
-    const auto     point = lstr::Point{.5, .5, .5};
+    constexpr auto   T     = ElementTypes::Hex;
+    constexpr el_o_t O     = 1;
+    const auto       point = Point{.5, .5, .5};
     for (auto _ : state)
     {
-        const auto ders = lstr::computeRefBasisDers< T, O, lstr::BasisTypes::Lagrange >(point);
+        const auto ders = computeRefBasisDers< T, O, BasisTypes::Lagrange >(point);
         benchmark::DoNotOptimize(ders);
     }
 }
@@ -47,10 +48,10 @@ BENCHMARK(BM_ReferenceBasisComputation)->Name("Compute reference basis");
 void BM_SingleBasisDerivativeComputation(benchmark::State& state)
 {
     const auto element = getExampleElement();
-    const auto point   = lstr::Point{.5, .5, .5};
+    const auto point   = Point{.5, .5, .5};
     for (auto _ : state)
     {
-        const auto ders = computePhysBasisDers< 0, lstr::BasisTypes::Lagrange >(element, point);
+        const auto ders = computePhysBasisDers< 0, BasisTypes::Lagrange >(element, point);
         benchmark::DoNotOptimize(ders);
     }
 }
@@ -59,12 +60,12 @@ BENCHMARK(BM_SingleBasisDerivativeComputation)->Name("Compute single basis deriv
 void BM_AggregateBasisDerivativeComputation(benchmark::State& state)
 {
     const auto element  = getExampleElement();
-    const auto point    = lstr::Point{.5, .5, .5};
+    const auto point    = Point{.5, .5, .5};
     const auto J        = getNatJacobiMatGenerator(element)(point);
-    const auto ref_ders = computeRefBasisDers< lstr::ElementTypes::Hex, 1, lstr::BasisTypes::Lagrange >(point);
+    const auto ref_ders = computeRefBasisDers< ElementTypes::Hex, 1, BasisTypes::Lagrange >(point);
     for (auto _ : state)
     {
-        const auto ders = lstr::computePhysBasisDers< lstr::ElementTypes::Hex, 1 >(J, ref_ders);
+        const auto ders = computePhysBasisDers< ElementTypes::Hex, 1 >(J, ref_ders);
         benchmark::DoNotOptimize(ders);
     }
 }
