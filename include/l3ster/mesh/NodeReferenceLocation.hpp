@@ -9,53 +9,59 @@ namespace lstr
 namespace detail
 {
 template < el_o_t O >
-auto getLineNodeLocations()
+auto makeLineNodeLocations()
 {
-    std::array< Point< 1 >, O + 1 > retval;
-    std::ranges::transform(lobatto_rule_absc< val_t, O + 1 >, begin(retval), [](double x) { return Point< 1 >{x}; });
-    return retval;
+    std::array< Point< 1 >, O + 1 > ret_val;
+    std::ranges::transform(
+        getLobattoRuleAbsc< val_t, O + 1 >(), begin(ret_val), [](double x) { return Point< 1 >{x}; });
+    return ret_val;
 }
 
 template < el_o_t O >
-auto getQuadNodeLocations()
+auto makeQuadNodeLocations()
 {
     constexpr auto                                            nodes_per_edge = O + 1;
-    std::array< Point< 2 >, nodes_per_edge * nodes_per_edge > retval;
+    std::array< Point< 2 >, nodes_per_edge * nodes_per_edge > ret_val;
     size_t                                                    i = 0;
-    for (auto eta : lobatto_rule_absc< val_t, nodes_per_edge >)
-        for (auto xi : lobatto_rule_absc< val_t, nodes_per_edge >)
-            retval[i++] = Point< 2 >{xi, eta};
-    return retval;
+    for (auto eta : getLobattoRuleAbsc< val_t, nodes_per_edge >())
+        for (auto xi : getLobattoRuleAbsc< val_t, nodes_per_edge >())
+            ret_val[i++] = Point< 2 >{xi, eta};
+    return ret_val;
 }
 
 template < el_o_t O >
-auto getHexNodeLocations()
+auto makeHexNodeLocations()
 {
     constexpr auto                        nodes_per_edge = O + 1;
     constexpr auto                        total_nodes    = nodes_per_edge * nodes_per_edge * nodes_per_edge;
-    std::array< Point< 3 >, total_nodes > retval;
+    std::array< Point< 3 >, total_nodes > ret_val;
     size_t                                i = 0;
-    for (auto zeta : lobatto_rule_absc< val_t, nodes_per_edge >)
-        for (auto eta : lobatto_rule_absc< val_t, nodes_per_edge >)
-            for (auto xi : lobatto_rule_absc< val_t, nodes_per_edge >)
-                retval[i++] = Point< 3 >{xi, eta, zeta};
-    return retval;
-}
-
-template < ElementTypes T, el_o_t O >
-auto getNodeLocations()
-{
-    if constexpr (T == ElementTypes::Line)
-        return getLineNodeLocations< O >();
-    else if constexpr (T == ElementTypes::Quad)
-        return getQuadNodeLocations< O >();
-    else if constexpr (T == ElementTypes::Hex)
-        return getHexNodeLocations< O >();
+    for (auto zeta : getLobattoRuleAbsc< val_t, nodes_per_edge >())
+        for (auto eta : getLobattoRuleAbsc< val_t, nodes_per_edge >())
+            for (auto xi : getLobattoRuleAbsc< val_t, nodes_per_edge >())
+                ret_val[i++] = Point< 3 >{xi, eta, zeta};
+    return ret_val;
 }
 } // namespace detail
 
 template < ElementTypes T, el_o_t O >
-requires(T == ElementTypes::Line or T == ElementTypes::Quad or T == ElementTypes::Hex) inline const
-    auto node_reference_locations = detail::getNodeLocations< T, O >();
+const auto& getNodeLocations() requires(T == ElementTypes::Line or T == ElementTypes::Quad or T == ElementTypes::Hex)
+{
+    if constexpr (T == ElementTypes::Line)
+    {
+        static const auto value = detail::makeLineNodeLocations< O >();
+        return value;
+    }
+    else if constexpr (T == ElementTypes::Quad)
+    {
+        static const auto value = detail::makeQuadNodeLocations< O >();
+        return value;
+    }
+    else if constexpr (T == ElementTypes::Hex)
+    {
+        static const auto value = detail::makeHexNodeLocations< O >();
+        return value;
+    }
+}
 } // namespace lstr
 #endif // L3STER_MESH_NODEREFERENCELOCATION_HPP

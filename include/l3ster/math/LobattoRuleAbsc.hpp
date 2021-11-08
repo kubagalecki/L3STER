@@ -5,6 +5,8 @@
 
 namespace lstr
 {
+namespace detail
+{
 template < std::floating_point T, size_t NPOINTS >
 requires(NPOINTS > 1) auto computeLobattoRuleAbsc()
 {
@@ -22,8 +24,13 @@ requires(NPOINTS > 1) auto computeLobattoRuleAbsc()
         return retval;
     }
 }
+} // namespace detail
 
 template < std::floating_point T, size_t N >
-inline const auto lobatto_rule_absc = computeLobattoRuleAbsc< T, N >();
+const auto& getLobattoRuleAbsc()
+{
+    static const auto val = detail::computeLobattoRuleAbsc< T, N >();
+    return val;
+}
 } // namespace lstr
 #endif // L3STER_MATH_LOBATTORULEABSC_HPP

@@ -6,6 +6,7 @@
 #include "l3ster/mesh/Element.hpp"
 #include "l3ster/mesh/ElementTraits.hpp"
 #include "l3ster/mesh/Point.hpp"
+#include "l3ster/util/Algorithm.hpp"
 
 namespace lstr
 {
@@ -28,43 +29,45 @@ template < el_o_t O, el_locind_t I >
 auto computeLagrangeLineBasisPolynomial()
 {
     constexpr auto vals = [] {
-        std::array< val_t, O + 1 > retval{};
-        retval[I] = 1.;
-        return retval;
+        std::array< val_t, O + 1 > ret_val{};
+        ret_val[I] = 1.;
+        return ret_val;
     }();
-    return lagrangeInterp(lobatto_rule_absc< val_t, O + 1 >, vals);
+    return lagrangeInterp(getLobattoRuleAbsc< val_t, O + 1 >(), vals);
 }
 
 template < el_o_t O, el_locind_t I >
-inline const auto lagrange_line_basis_polynomial = computeLagrangeLineBasisPolynomial< O, I >();
-
-template < el_o_t O, el_locind_t I >
-inline const auto lagrange_line_basis_polynomial_der = lagrange_line_basis_polynomial< O, I >.derivative();
+const auto& getLagrangeLineBasisPolynomial()
+{
+    static const auto value = computeLagrangeLineBasisPolynomial< O, I >();
+    return value;
+}
 
 template < el_o_t O, el_locind_t I >
 val_t evaluateLagrangeLineBasisFun(const Point< 1 >& point)
 {
-    return lagrange_line_basis_polynomial< O, I >.evaluate(point.x());
+    return getLagrangeLineBasisPolynomial< O, I >().evaluate(point.x());
 }
 
 template < el_o_t O, el_locind_t I >
 val_t evaluateLagrangeLineBasisFunDer(const Point< 1 >& point)
 {
-    return lagrange_line_basis_polynomial_der< O, I >.evaluate(point.x());
+    static const auto der = getLagrangeLineBasisPolynomial< O, I >().derivative();
+    return der.evaluate(point.x());
 }
 
 template < el_o_t O, el_locind_t I, BasisTypes BT >
 val_t evaluateLineBasisFun(const Point< 1 >& point)
 {
     if constexpr (BT == BasisTypes::Lagrange)
-        return lagrange_line_basis_polynomial< O, I >.evaluate(point.x());
+        return evaluateLagrangeLineBasisFun< O, I >(point);
 }
 
 template < el_o_t O, el_locind_t I, BasisTypes BT >
 val_t evaluateLineBasisFunDer(const Point< 1 >& point)
 {
     if constexpr (BT == BasisTypes::Lagrange)
-        return lagrange_line_basis_polynomial_der< O, I >.evaluate(point.x());
+        return evaluateLagrangeLineBasisFunDer< O, I >(point);
 }
 
 // based on standard tensor product expansion
@@ -193,6 +196,21 @@ requires(I < Element< T, O >::n_nodes and
     }
 };
 
+template < ElementTypes T, el_o_t O, BasisTypes BT >
+auto computeRefBasis(const Point< ElementTraits< Element< T, O > >::native_dim >& point)
+{
+    constexpr el_locind_t n_basis_fun = Element< T, O >::n_nodes;
+    using ret_t                       = Eigen::Matrix< val_t, 1, n_basis_fun >;
+    ret_t ret_val; // NOLINT we want raw memory to be written to below
+    forConstexpr(
+        [&]< el_locind_t I >(std::integral_constant< el_locind_t, I >) {
+            const auto val = ReferenceBasisFunction< T, O, I, BT >{}(point);
+            ret_val(0, I)  = val;
+        },
+        std::make_integer_sequence< el_locind_t, n_basis_fun >{});
+    return ret_val;
+}
+
 namespace detail
 {
 constexpr DerDim derivativeByIndex(dim_t d)
@@ -207,17 +225,17 @@ auto computeRefBasisDers(const Point< ElementTraits< Element< T, O > >::native_d
     constexpr dim_t       nat_dim     = ElementTraits< Element< T, O > >::native_dim;
     constexpr el_locind_t n_basis_fun = Element< T, O >::n_nodes;
     using ret_t                       = Eigen::Matrix< val_t, nat_dim, n_basis_fun >;
-    ret_t retval; // NOLINT we want raw memory to be written to below
+    ret_t ret_val; // NOLINT we want raw memory to be written to below
     forConstexpr(
         [&]< el_locind_t I >(std::integral_constant< el_locind_t, I >) {
             forConstexpr(
                 [&]< dim_t D >(std::integral_constant< dim_t, D >) {
-                    retval(D, I) = ReferenceBasisFunction< T, O, I, BT, detail::derivativeByIndex(D) >{}(point);
+                    ret_val(D, I) = ReferenceBasisFunction< T, O, I, BT, detail::derivativeByIndex(D) >{}(point);
                 },
                 std::make_integer_sequence< dim_t, nat_dim >{});
         },
         std::make_integer_sequence< el_locind_t, n_basis_fun >{});
-    return retval;
+    return ret_val;
 }
 } // namespace lstr
 #endif // L3STER_BASISFUN_REFERENCEBASISFUNCTION_HPP

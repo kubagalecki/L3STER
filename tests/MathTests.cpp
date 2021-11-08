@@ -165,14 +165,14 @@ TEST_CASE("Lobatto abscissas", "[math]")
 {
     SECTION("2 points")
     {
-        const auto la = computeLobattoRuleAbsc< double, 2 >();
+        const auto& la = getLobattoRuleAbsc< double, 2 >();
         CHECK(la[0] == -1.);
         CHECK(la[1] == 1.);
     }
 
     SECTION("3 points")
     {
-        const auto la = computeLobattoRuleAbsc< double, 3 >();
+        const auto& la = getLobattoRuleAbsc< double, 3 >();
         CHECK(la[0] == -1.);
         CHECK(la[1] == 0.);
         CHECK(la[2] == 1.);
@@ -180,8 +180,8 @@ TEST_CASE("Lobatto abscissas", "[math]")
 
     SECTION("4 points")
     {
-        const auto la     = computeLobattoRuleAbsc< double, 4 >();
-        const auto a12abs = .2 * std::sqrt(5.);
+        const auto& la     = getLobattoRuleAbsc< double, 4 >();
+        const auto  a12abs = .2 * std::sqrt(5.);
         CHECK(la[0] == -1.);
         CHECK(la[1] == Approx(-a12abs).epsilon(1e-14));
         CHECK(la[2] == Approx(a12abs).epsilon(1e-14));
@@ -190,8 +190,8 @@ TEST_CASE("Lobatto abscissas", "[math]")
 
     SECTION("5 points")
     {
-        const auto la     = computeLobattoRuleAbsc< double, 5 >();
-        const auto a13abs = std::sqrt(21.) / 7.;
+        const auto& la     = getLobattoRuleAbsc< double, 5 >();
+        const auto  a13abs = std::sqrt(21.) / 7.;
         CHECK(la[0] == -1.);
         CHECK(la[1] == Approx(-a13abs).epsilon(1e-14));
         CHECK(la[2] == 0.);
@@ -201,9 +201,9 @@ TEST_CASE("Lobatto abscissas", "[math]")
 
     SECTION("6 points")
     {
-        const auto la     = computeLobattoRuleAbsc< double, 6 >();
-        const auto a14abs = std::sqrt((7. + 2 * std::sqrt(7.)) / 21.);
-        const auto a23abs = std::sqrt((7. - 2 * std::sqrt(7.)) / 21.);
+        const auto& la     = getLobattoRuleAbsc< double, 6 >();
+        const auto  a14abs = std::sqrt((7. + 2 * std::sqrt(7.)) / 21.);
+        const auto  a23abs = std::sqrt((7. - 2 * std::sqrt(7.)) / 21.);
         CHECK(la[0] == -1.);
         CHECK(la[1] == Approx(-a14abs).epsilon(1e-14));
         CHECK(la[2] == Approx(-a23abs).epsilon(1e-14));

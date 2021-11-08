@@ -1,5 +1,5 @@
+#include "l3ster/assembly/ComputeRefBasesAtQpoints.hpp"
 #include "l3ster/quad/EvalQuadrature.hpp"
-#include "l3ster/quad/GenerateQuadrature.hpp"
 
 #include "catch2/catch.hpp"
 
@@ -9,7 +9,7 @@ using namespace lstr;
 
 TEST_CASE("1D Gauss-Legendre quadrature, 1 point", "[quadrature]")
 {
-    const auto& ref_quad = ReferenceQuadrature< QuadratureTypes::GLeg, 0 >::value;
+    const auto& ref_quad = getReferenceQuadrature< QuadratureTypes::GLeg, 0 >();
 
     REQUIRE(ref_quad.size == 1);
     REQUIRE(ref_quad.dim == 1);
@@ -23,7 +23,7 @@ TEST_CASE("1D Gauss-Legendre quadrature, 1 point", "[quadrature]")
 
 TEST_CASE("1D Gauss-Legendre quadrature, 2 point", "[quadrature]")
 {
-    const auto& ref_quad = ReferenceQuadrature< QuadratureTypes::GLeg, 2 >::value;
+    const auto& ref_quad = getReferenceQuadrature< QuadratureTypes::GLeg, 2 >();
 
     REQUIRE(ref_quad.size == 2);
     REQUIRE(ref_quad.dim == 1);
@@ -40,7 +40,7 @@ TEST_CASE("1D Gauss-Legendre quadrature, 2 point", "[quadrature]")
 
 TEST_CASE("1D Gauss-Legendre quadrature, 3 point", "[quadrature]")
 {
-    const auto& ref_quad = ReferenceQuadrature< QuadratureTypes::GLeg, 4 >::value;
+    const auto& ref_quad = getReferenceQuadrature< QuadratureTypes::GLeg, 4 >();
 
     REQUIRE(ref_quad.size == 3);
     REQUIRE(ref_quad.dim == 1);
