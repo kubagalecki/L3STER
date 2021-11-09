@@ -1,27 +1,8 @@
-#include "l3ster/l3ster.hpp"
-
-#include <benchmark/benchmark.h>
-
-using namespace lstr;
-
-auto getExampleElement()
-{
-    Element< ElementTypes::Hex, 1 > element{{0, 1, 2, 3, 4, 5, 6, 7},
-                                            ElementData< ElementTypes::Hex, 1 >{{Point{0., 0., 0.},
-                                                                                 Point{1., 0., 0.},
-                                                                                 Point{0., 1., 0.},
-                                                                                 Point{1., 1., 0.},
-                                                                                 Point{0., 0., 1.},
-                                                                                 Point{1., 0., 1.},
-                                                                                 Point{0., 1., 1.},
-                                                                                 Point{2., 2., 2.}}},
-                                            0};
-    return element;
-}
+#include "Common.hpp"
 
 void BM_JacobianComputation(benchmark::State& state)
 {
-    const auto element = getExampleElement();
+    const auto element = getExampleHexElement();
     const auto point   = Point{.5, .5, .5};
     for (auto _ : state)
     {
@@ -47,7 +28,7 @@ BENCHMARK(BM_ReferenceBasisComputation)->Name("Compute reference basis");
 
 void BM_SingleBasisDerivativeComputation(benchmark::State& state)
 {
-    const auto element = getExampleElement();
+    const auto element = getExampleHexElement();
     const auto point   = Point{.5, .5, .5};
     for (auto _ : state)
     {
@@ -59,7 +40,7 @@ BENCHMARK(BM_SingleBasisDerivativeComputation)->Name("Compute single basis deriv
 
 void BM_AggregateBasisDerivativeComputation(benchmark::State& state)
 {
-    const auto element  = getExampleElement();
+    const auto element  = getExampleHexElement();
     const auto point    = Point{.5, .5, .5};
     const auto J        = getNatJacobiMatGenerator(element)(point);
     const auto ref_ders = computeRefBasisDers< ElementTypes::Hex, 1, BasisTypes::Lagrange >(point);
