@@ -69,7 +69,7 @@ consteval auto intersectSidesWithSubseqSides(std::integer_sequence< el_ns_t, SID
 template < ElementTypes T, el_o_t O >
 consteval auto makeElementEdgeTable()
 {
-    if constexpr (ElementTraits< Element< T, O > >::native_dim < 3)
+    if constexpr (detail::el_dim< T, O > < 3)
         return std::tuple<>{};
     else
         return intersectSidesWithSubseqSides< T, O >(
@@ -105,10 +105,10 @@ constexpr inline auto element_outer_features = detail::getElementOuterFeatures< 
 namespace detail
 {
 template < ElementTypes T1, ElementTypes T2 >
-consteval dim_t highestMatchableDim()
+consteval dim_t getHighestMatchableDim()
 {
-    constexpr auto d1        = ElementTraits< Element< T1, 1 > >::native_dim;
-    constexpr auto d2        = ElementTraits< Element< T2, 1 > >::native_dim;
+    constexpr auto d1        = detail::el_dim< T1, 1 >;
+    constexpr auto d2        = detail::el_dim< T2, 1 >;
     constexpr auto lower_dim = d1 <= d2 ? d1 : d2;
     return d1 == d2 ? d1 - 1 : lower_dim;
 }
@@ -158,7 +158,7 @@ template < el_o_t O, ElementTypes T1, ElementTypes T2 >
 std::pair< std::span< const el_locind_t >, std::span< const el_locind_t > >
 elementIntersection(const Element< T1, 1 >& el1, const Element< T2, 1 >& el2)
 {
-    constexpr auto highest_matchable = detail::highestMatchableDim< T1, T2 >();
+    constexpr auto highest_matchable = detail::getHighestMatchableDim< T1, T2 >();
 
     if constexpr (highest_matchable == 0) // metis marks 2 lines a neighbours in the dual graph
         return {};

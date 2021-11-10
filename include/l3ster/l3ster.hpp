@@ -3,7 +3,7 @@
 
 // This header includes the entire L3STER library
 
-#include "l3ster/assembly/ComputePhysBasesAtQpoints.hpp"
+#include "l3ster/assembly/AssembleLocalMatrix.hpp"
 #include "l3ster/comm/DeserializeMesh.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/PartitionMesh.hpp"

@@ -89,11 +89,11 @@ std::vector< Element< ELTYPE, ELORDER > >& Domain::getElementVector()
     using el_vec_t = element_vector_t< ELTYPE, ELORDER >;
     if (not element_vectors.empty())
     {
-        if (ElementTraits< Element< ELTYPE, ELORDER > >::native_dim != dim)
+        if (detail::el_dim< ELTYPE, ELORDER > != dim)
             throw std::invalid_argument("Element dimension incompatible with domain dimension");
     }
     else
-        dim = ElementTraits< Element< ELTYPE, ELORDER > >::native_dim;
+        dim = detail::el_dim< ELTYPE, ELORDER >;
 
     const auto vector_variant_it = std::find_if(element_vectors.begin(), element_vectors.end(), [](const auto& v) {
         return std::holds_alternative< el_vec_t >(v);
@@ -137,11 +137,11 @@ void Domain::reserve(size_t size)
 
     if (not element_vectors.empty())
     {
-        if (ElementTraits< Element< ELTYPE, ELORDER > >::native_dim != dim)
+        if (detail::el_dim< ELTYPE, ELORDER > != dim)
             throw std::invalid_argument("Pushing element to domain of different dimension");
     }
     else
-        dim = ElementTraits< Element< ELTYPE, ELORDER > >::native_dim;
+        dim = detail::el_dim< ELTYPE, ELORDER >;
 
     const auto vector_variant_it =
         std::ranges::find_if(element_vectors, [](const auto& v) { return std::holds_alternative< el_vec_t >(v); });

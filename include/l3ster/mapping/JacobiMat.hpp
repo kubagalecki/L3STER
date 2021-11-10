@@ -15,8 +15,8 @@ template < ElementTypes T, el_o_t O >
 requires(T == ElementTypes::Line or T == ElementTypes::Quad or
          T == ElementTypes::Hex) auto getNatJacobiMatGenerator(const Element< T, O >& element)
 {
-    return [&element](const Point< ElementTraits< Element< T, O > >::native_dim >& point) {
-        constexpr auto nat_dim    = ElementTraits< Element< T, O > >::native_dim;
+    return [&element](const Point< detail::el_dim< T, O > >& point) {
+        constexpr auto nat_dim    = detail::el_dim< T, O >;
         constexpr auto n_o1_nodes = Element< T, 1 >::n_nodes;
         using ret_t               = Eigen::Matrix< val_t, nat_dim, nat_dim >;
         ret_t jac_mat             = ret_t::Zero();
