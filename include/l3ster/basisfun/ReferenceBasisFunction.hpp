@@ -155,9 +155,9 @@ val_t evaluateHexBasisFunDerZeta(const Point< 3 >& point)
 
 template < ElementTypes T, el_o_t O, el_locind_t I, BasisTypes BT, DerDim DER_DIM = DerDim::NoDer >
 requires(I < Element< T, O >::n_nodes and
-         static_cast< dim_t >(DER_DIM) <= detail::el_dim< T, O >) struct ReferenceBasisFunction
+         static_cast< dim_t >(DER_DIM) <= Element< T, O >::native_dim) struct ReferenceBasisFunction
 {
-    val_t operator()(const Point< detail::el_dim< T, O > >& point) const requires(DER_DIM == DerDim::NoDer)
+    val_t operator()(const Point< Element< T, O >::native_dim >& point) const requires(DER_DIM == DerDim::NoDer)
     {
         if constexpr (T == ElementTypes::Line)
             return detail::evaluateLineBasisFun< O, I, BT >(point);
@@ -167,7 +167,7 @@ requires(I < Element< T, O >::n_nodes and
             return detail::evaluateHexBasisFun< O, I, BT >(point);
     }
 
-    val_t operator()(const Point< detail::el_dim< T, O > >& point) const requires(DER_DIM == DerDim::DX1)
+    val_t operator()(const Point< Element< T, O >::native_dim >& point) const requires(DER_DIM == DerDim::DX1)
     {
         if constexpr (T == ElementTypes::Line)
             return detail::evaluateLineBasisFunDer< O, I, BT >(point);
@@ -177,7 +177,7 @@ requires(I < Element< T, O >::n_nodes and
             return detail::evaluateHexBasisFunDerXi< O, I, BT >(point);
     }
 
-    val_t operator()(const Point< detail::el_dim< T, O > >& point) const requires(DER_DIM == DerDim::DX2)
+    val_t operator()(const Point< Element< T, O >::native_dim >& point) const requires(DER_DIM == DerDim::DX2)
     {
         if constexpr (T == ElementTypes::Quad)
             return detail::evaluateQuadBasisFunDerEta< O, I, BT >(point);
@@ -185,7 +185,7 @@ requires(I < Element< T, O >::n_nodes and
             return detail::evaluateHexBasisFunDerEta< O, I, BT >(point);
     }
 
-    val_t operator()(const Point< detail::el_dim< T, O > >& point) const requires(DER_DIM == DerDim::DX3)
+    val_t operator()(const Point< Element< T, O >::native_dim >& point) const requires(DER_DIM == DerDim::DX3)
     {
         if constexpr (T == ElementTypes::Hex)
             return detail::evaluateHexBasisFunDerZeta< O, I, BT >(point);
@@ -193,7 +193,7 @@ requires(I < Element< T, O >::n_nodes and
 };
 
 template < ElementTypes T, el_o_t O, BasisTypes BT >
-auto computeRefBasis(const Point< detail::el_dim< T, O > >& point)
+auto computeRefBasis(const Point< Element< T, O >::native_dim >& point)
 {
     constexpr el_locind_t n_basis_fun = Element< T, O >::n_nodes;
     using ret_t                       = Eigen::Matrix< val_t, 1, n_basis_fun >;
@@ -216,9 +216,9 @@ constexpr DerDim derivativeByIndex(dim_t d)
 } // namespace detail
 
 template < ElementTypes T, el_o_t O, BasisTypes BT >
-auto computeRefBasisDers(const Point< detail::el_dim< T, O > >& point)
+auto computeRefBasisDers(const Point< Element< T, O >::native_dim >& point)
 {
-    constexpr dim_t       nat_dim     = detail::el_dim< T, O >;
+    constexpr dim_t       nat_dim     = Element< T, O >::native_dim;
     constexpr el_locind_t n_basis_fun = Element< T, O >::n_nodes;
     using ret_t                       = Eigen::Matrix< val_t, nat_dim, n_basis_fun >;
     ret_t ret_val; // NOLINT we want raw memory to be written to below

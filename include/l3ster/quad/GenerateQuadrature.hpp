@@ -9,13 +9,13 @@
 namespace lstr
 {
 template < QuadratureTypes QT, q_o_t QO, ElementTypes ET >
-const auto& generateQuadrature() requires(ET == ElementTypes::Line)
+const auto& getQuadrature() requires(ET == ElementTypes::Line)
 {
     return getReferenceQuadrature< QT, QO >();
 }
 
 template < QuadratureTypes QT, q_o_t QO, ElementTypes ET >
-const auto& generateQuadrature() requires(ET == ElementTypes::Quad)
+const auto& getQuadrature() requires(ET == ElementTypes::Quad)
 {
     static const auto value = [] {
         const auto& ref_quadrature   = getReferenceQuadrature< QT, QO >();
@@ -44,7 +44,7 @@ const auto& generateQuadrature() requires(ET == ElementTypes::Quad)
 }
 
 template < QuadratureTypes QT, q_o_t QO, ElementTypes ET >
-const auto& generateQuadrature() requires(ET == ElementTypes::Hex)
+const auto& getQuadrature() requires(ET == ElementTypes::Hex)
 {
     static const auto value = [] {
         const auto& ref_quadrature   = getReferenceQuadrature< QT, QO >();

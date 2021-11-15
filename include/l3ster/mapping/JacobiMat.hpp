@@ -5,8 +5,6 @@
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/Meta.hpp"
 
-#include "Eigen/Core"
-
 namespace lstr
 {
 // Jacobi matrix in native dimension, i.e. y=0, z=0 for 1D, z=0 for 2D is assumed
@@ -15,8 +13,8 @@ template < ElementTypes T, el_o_t O >
 requires(T == ElementTypes::Line or T == ElementTypes::Quad or
          T == ElementTypes::Hex) auto getNatJacobiMatGenerator(const Element< T, O >& element)
 {
-    return [&element](const Point< detail::el_dim< T, O > >& point) {
-        constexpr auto nat_dim    = detail::el_dim< T, O >;
+    return [&element](const Point< Element< T, O >::native_dim >& point) {
+        constexpr auto nat_dim    = Element< T, O >::native_dim;
         constexpr auto n_o1_nodes = Element< T, 1 >::n_nodes;
         using ret_t               = Eigen::Matrix< val_t, nat_dim, nat_dim >;
         ret_t jac_mat             = ret_t::Zero();

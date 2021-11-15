@@ -7,18 +7,22 @@
 
 using namespace lstr;
 
-inline auto getExampleHexElement()
+template < el_o_t O >
+auto getExampleHexElement()
 {
-    Element< ElementTypes::Hex, 1 > element{{0, 1, 2, 3, 4, 5, 6, 7},
-                                            ElementData< ElementTypes::Hex, 1 >{{Point{0., 0., 0.},
-                                                                                 Point{1., 0., 0.},
-                                                                                 Point{0., 1., 0.},
-                                                                                 Point{1., 1., 0.},
-                                                                                 Point{0., 0., 1.},
-                                                                                 Point{1., 0., 1.},
-                                                                                 Point{0., 1., 1.},
-                                                                                 Point{2., 2., 2.}}},
-                                            0};
+    using el_t = Element< ElementTypes::Hex, O >;
+    std::array< n_id_t, el_t::n_nodes > nodes;
+    std::iota(begin(nodes), end(nodes), 0);
+    el_t element{nodes,
+                 ElementData< ElementTypes::Hex, O >{{Point{0., 0., 0.},
+                                                      Point{1., 0., 0.},
+                                                      Point{0., 1., 0.},
+                                                      Point{1., 1., 0.},
+                                                      Point{0., 0., 1.},
+                                                      Point{1., 0., 1.},
+                                                      Point{0., 1., 1.},
+                                                      Point{2., 2., 2.}}},
+                 0};
     return element;
 }
 #endif // L3STER_BENCHMARKS_COMMON_HPP

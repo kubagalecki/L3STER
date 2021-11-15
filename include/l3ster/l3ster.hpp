@@ -14,6 +14,7 @@
 #include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/util/GlobalResource.hpp"
 #include "l3ster/util/HwlocWrapper.hpp"
+#include "l3ster/util/SetStackSize.hpp"
 
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 

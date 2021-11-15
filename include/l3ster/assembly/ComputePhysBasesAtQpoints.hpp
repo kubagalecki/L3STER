@@ -9,10 +9,10 @@ namespace lstr
 namespace detail
 {
 template < ElementTypes ET, el_o_t EO >
-using jacobian_t = Eigen::Matrix< val_t, el_dim< ET, EO >, el_dim< ET, EO > >;
+using jacobian_t = Eigen::Matrix< val_t, Element< ET, EO >::native_dim, Element< ET, EO >::native_dim >;
 
 template < QuadratureTypes QT, q_o_t QO, ElementTypes ET >
-inline constexpr auto quad_size = std::remove_cvref_t< decltype(generateQuadrature< QT, QO, ET >()) >::size;
+inline constexpr auto quad_size = std::remove_cvref_t< decltype(getQuadrature< QT, QO, ET >()) >::size;
 } // namespace detail
 
 template < QuadratureTypes QT, q_o_t QO, BasisTypes BT, ElementTypes ET, el_o_t EO >
@@ -25,7 +25,7 @@ auto computePhysicalBasesAtQpoints(
 
     using jac_t = std::remove_cvref_t< decltype(jacobians) >::value_type;
 
-    const auto& quadrature = generateQuadrature< QT, QO, ET >();
+    const auto& quadrature = getQuadrature< QT, QO, ET >();
 
     for (size_t qp_ind = 0; qp_ind < quadrature.size; ++qp_ind)
     {
@@ -33,7 +33,7 @@ auto computePhysicalBasesAtQpoints(
         for (ptrdiff_t der_ind = 0; auto& der : ret_val)
         {
             der(qp_ind, Eigen::all) = ref_ders[0](qp_ind, Eigen::all) * jacobian_inv(der_ind, 0);
-            for (ptrdiff_t i = 1; i < detail::el_dim< ET, EO >; ++i)
+            for (ptrdiff_t i = 1; i < static_cast< ptrdiff_t >(Element< ET, EO >::native_dim); ++i)
                 der(qp_ind, Eigen::all) += ref_ders[i](qp_ind, Eigen::all) * jacobian_inv(der_ind, i);
             ++der_ind;
         }
@@ -46,7 +46,7 @@ template < QuadratureTypes QT, q_o_t QO, ElementTypes ET, el_o_t EO >
 auto computeElementJacobiansAtQpoints(const Element< ET, EO >& element)
 {
     const auto  jac_gen = getNatJacobiMatGenerator(element);
-    const auto& quad    = generateQuadrature< QT, QO, ET >();
+    const auto& quad    = getQuadrature< QT, QO, ET >();
 
     using ret_t = std::array< detail::jacobian_t< ET, EO >, quad.size >;
     ret_t ret_val; // NOLINT initialization follows immediately below

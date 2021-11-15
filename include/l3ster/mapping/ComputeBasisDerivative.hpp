@@ -6,9 +6,9 @@
 namespace lstr
 {
 template < el_locind_t I, BasisTypes BT, ElementTypes T, el_o_t O >
-auto computePhysBasisDers(const Element< T, O >& element, const Point< detail::el_dim< T, O > >& point)
+auto computePhysBasisDers(const Element< T, O >& element, const Point< Element< T, O >::native_dim >& point)
 {
-    constexpr auto nat_dim = detail::el_dim< T, O >;
+    constexpr auto nat_dim = Element< T, O >::native_dim;
     using vector_t         = Eigen::Matrix< val_t, nat_dim, 1 >;
     const auto jacobi_mat  = getNatJacobiMatGenerator(element)(point);
     vector_t   ref_ders;
@@ -21,10 +21,11 @@ auto computePhysBasisDers(const Element< T, O >& element, const Point< detail::e
 }
 
 template < ElementTypes T, el_o_t O >
-auto computePhysBasisDers(const Eigen::Matrix< val_t, detail::el_dim< T, O >, detail::el_dim< T, O > >&   jacobi_mat,
-                          const Eigen::Matrix< val_t, detail::el_dim< T, O >, Element< T, O >::n_nodes >& ref_ders)
+auto computePhysBasisDers(
+    const Eigen::Matrix< val_t, Element< T, O >::native_dim, Element< T, O >::native_dim >& jacobi_mat,
+    const Eigen::Matrix< val_t, Element< T, O >::native_dim, Element< T, O >::n_nodes >&    ref_ders)
 {
-    using ret_t = Eigen::Matrix< val_t, detail::el_dim< T, O >, Element< T, O >::n_nodes >;
+    using ret_t = Eigen::Matrix< val_t, Element< T, O >::native_dim, Element< T, O >::n_nodes >;
     return ret_t{jacobi_mat.inverse() * ref_ders};
 }
 } // namespace lstr

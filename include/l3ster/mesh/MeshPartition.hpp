@@ -364,7 +364,7 @@ MeshPartition::el_boundary_view_result_t MeshPartition::getElementBoundaryViewIm
 {
     constexpr auto miss       = std::numeric_limits< el_ns_t >::max();
     constexpr auto matchElDim = []< ElementTypes T_, el_o_t O_ >(const Element< T_, O_ >*) {
-        return detail::el_dim< T_, O_ > - 1 == detail::el_dim< T, O >;
+        return Element< T_, O_ >::native_dim - 1 == Element< T, O >::native_dim;
     };
 
     const auto boundary_nodes = getSortedArray(el.getNodes());

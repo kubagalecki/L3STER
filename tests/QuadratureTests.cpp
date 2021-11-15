@@ -64,7 +64,7 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 {
     SECTION("1 point quadrature")
     {
-        const auto& quadrature = generateQuadrature< QuadratureTypes::GLeg, 1, ElementTypes::Line >();
+        const auto& quadrature = getQuadrature< QuadratureTypes::GLeg, 1, ElementTypes::Line >();
 
         REQUIRE(quadrature.size == 1);
         REQUIRE(quadrature.dim == 1);
@@ -78,7 +78,7 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 
     SECTION("2 point quadrature")
     {
-        const auto& quadrature = generateQuadrature< QuadratureTypes::GLeg, 3, ElementTypes::Line >();
+        const auto& quadrature = getQuadrature< QuadratureTypes::GLeg, 3, ElementTypes::Line >();
 
         REQUIRE(quadrature.size == 2);
         REQUIRE(quadrature.dim == 1);
@@ -95,7 +95,7 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 
     SECTION("3 point quadrature")
     {
-        const auto& quadrature = generateQuadrature< QuadratureTypes::GLeg, 5, ElementTypes::Line >();
+        const auto& quadrature = getQuadrature< QuadratureTypes::GLeg, 5, ElementTypes::Line >();
 
         REQUIRE(quadrature.size == 3);
         REQUIRE(quadrature.dim == 1);
@@ -122,6 +122,10 @@ static constexpr auto wrapQuadEvaluator(const auto& eval)
         return std::apply(eval, arr);
     };
 }
+
+static inline constexpr auto zero_gen = []() noexcept {
+    return 0.;
+};
 
 TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]")
 {
@@ -160,7 +164,7 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
     SECTION("1 point quadrature")
     {
-        const auto& quadrature = generateQuadrature< QuadratureTypes::GLeg, 1, ElementTypes::Quad >();
+        const auto& quadrature = getQuadrature< QuadratureTypes::GLeg, 1, ElementTypes::Quad >();
 
         REQUIRE(quadrature.size == 1);
         REQUIRE(quadrature.dim == 2);
@@ -174,7 +178,7 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
     SECTION("4 point quadrature")
     {
-        const auto& quadrature = generateQuadrature< QuadratureTypes::GLeg, 3, ElementTypes::Quad >();
+        const auto& quadrature = getQuadrature< QuadratureTypes::GLeg, 3, ElementTypes::Quad >();
 
         REQUIRE(quadrature.size == 4);
         REQUIRE(quadrature.dim == 2);
@@ -184,15 +188,15 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
         CHECK(evalQuadrature(o2_fun, quadrature) == o2_int);
         CHECK(evalQuadrature(o3_fun, quadrature) == o3_int);
 
-        CHECK(evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, 0.) == o0_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, 0.) == o1_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, 0.) == o2_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, 0.) == o3_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, zero_gen) == o0_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, zero_gen) == o1_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, zero_gen) == o2_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, zero_gen) == o3_int);
     }
 
     SECTION("9 point quadrature")
     {
-        const auto& quadrature = generateQuadrature< QuadratureTypes::GLeg, 5, ElementTypes::Quad >();
+        const auto& quadrature = getQuadrature< QuadratureTypes::GLeg, 5, ElementTypes::Quad >();
 
         REQUIRE(quadrature.size == 9);
         REQUIRE(quadrature.dim == 2);
@@ -204,12 +208,12 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
         CHECK(evalQuadrature(o4_fun, quadrature) == o4_int);
         CHECK(evalQuadrature(o5_fun, quadrature) == o5_int);
 
-        CHECK(evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, 0.) == o0_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, 0.) == o1_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, 0.) == o2_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, 0.) == o3_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o4_fun), quadrature, 0.) == o4_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o5_fun), quadrature, 0.) == o5_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, zero_gen) == o0_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, zero_gen) == o1_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, zero_gen) == o2_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, zero_gen) == o3_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o4_fun), quadrature, zero_gen) == o4_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o5_fun), quadrature, zero_gen) == o5_int);
     }
 }
 
@@ -242,7 +246,7 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
 
     SECTION("1 point quadrature")
     {
-        const auto& quadrature = generateQuadrature< QuadratureTypes::GLeg, 1, ElementTypes::Hex >();
+        const auto& quadrature = getQuadrature< QuadratureTypes::GLeg, 1, ElementTypes::Hex >();
 
         REQUIRE(quadrature.size == 1);
         REQUIRE(quadrature.dim == 3);
@@ -257,7 +261,7 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
 
     SECTION("8 point quadrature")
     {
-        const auto& quadrature = generateQuadrature< QuadratureTypes::GLeg, 3, ElementTypes::Hex >();
+        const auto& quadrature = getQuadrature< QuadratureTypes::GLeg, 3, ElementTypes::Hex >();
 
         REQUIRE(quadrature.size == 8);
         REQUIRE(quadrature.dim == 3);
@@ -267,20 +271,20 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
         CHECK(evalQuadrature(o2_fun, quadrature) == o2_int);
         CHECK(evalQuadrature(o3_fun, quadrature) == o3_int);
 
-        CHECK(evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, 0.) == o0_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, 0.) == o1_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, 0.) == o2_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, 0.) == o3_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, zero_gen) == o0_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, zero_gen) == o1_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, zero_gen) == o2_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, zero_gen) == o3_int);
     }
 
     SECTION("512 point quadrature")
     {
-        const auto& quadrature = generateQuadrature< QuadratureTypes::GLeg, 15, ElementTypes::Hex >();
+        const auto& quadrature = getQuadrature< QuadratureTypes::GLeg, 15, ElementTypes::Hex >();
 
         REQUIRE(quadrature.size == 512);
         REQUIRE(quadrature.dim == 3);
 
         CHECK(evalQuadrature(trig_fun, quadrature) == trig_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(trig_fun), quadrature, 0.) == trig_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(trig_fun), quadrature, zero_gen) == trig_int);
     }
 }

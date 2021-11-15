@@ -1,6 +1,6 @@
 #include "catch2/catch.hpp"
 
-#include "l3ster/assembly/ComputePhysBasesAtQpoints.hpp"
+#include "l3ster/assembly/AssembleLocalMatrix.hpp"
 #include "l3ster/mapping/ComputeBasisDerivative.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 
@@ -42,7 +42,7 @@ TEST_CASE("Basis at QPs physical derivative computation", "[local_asm, mapping]"
     const auto part = mesh.getPartitions()[0];
     part.cvisit(
         []< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
-            const auto test_point = Point{generateQuadrature< QT, QO, ET >().getPoints().front()};
+            const auto test_point = Point{getQuadrature< QT, QO, ET >().getPoints().front()};
             const auto J          = getNatJacobiMatGenerator(element)(test_point);
             const auto bas_ders_at_testp =
                 computePhysBasisDers< ET, EO >(J, computeRefBasisDers< ET, EO, BT >(test_point));
@@ -53,4 +53,9 @@ TEST_CASE("Basis at QPs physical derivative computation", "[local_asm, mapping]"
                 CHECK((ders[i](0, Eigen::all) - bas_ders_at_testp(i, Eigen::all)).norm() == Approx{0.}.margin(1e-13));
         },
         {0}); // Only for the hex domain, this won't work for 2D elements in a 3D space
+}
+
+TEST_CASE("Assemble local matrix", "[local_asm]")
+{
+    // TODO
 }

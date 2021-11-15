@@ -2,7 +2,7 @@
 
 void BM_JacobianComputation(benchmark::State& state)
 {
-    const auto element = getExampleHexElement();
+    const auto element = getExampleHexElement< 1 >();
     const auto point   = Point{.5, .5, .5};
     for (auto _ : state)
     {
@@ -28,7 +28,7 @@ BENCHMARK(BM_ReferenceBasisComputation)->Name("Compute reference basis");
 
 void BM_SingleBasisDerivativeComputation(benchmark::State& state)
 {
-    const auto element = getExampleHexElement();
+    const auto element = getExampleHexElement< 1 >();
     const auto point   = Point{.5, .5, .5};
     for (auto _ : state)
     {
@@ -40,7 +40,7 @@ BENCHMARK(BM_SingleBasisDerivativeComputation)->Name("Compute single basis deriv
 
 void BM_AggregateBasisDerivativeComputation(benchmark::State& state)
 {
-    const auto element  = getExampleHexElement();
+    const auto element  = getExampleHexElement< 1 >();
     const auto point    = Point{.5, .5, .5};
     const auto J        = getNatJacobiMatGenerator(element)(point);
     const auto ref_ders = computeRefBasisDers< ElementTypes::Hex, 1, BasisTypes::Lagrange >(point);

@@ -67,20 +67,28 @@ auto evalQuadrature(Integrator&& integrator, const Quadrature< QLENGTH, QDIM >& 
 // This is a weighted reduction of `fun` over point-index pairs. This is meant to enable more efficient calculation,
 // where certain quantities (e.g. basis derivatives) can be precomputed collectively for all quadrature points, and then
 // accessed by index during quadrature evaluation
-template < typename Integrator, typename Zero, q_l_t QLENGTH, dim_t QDIM >
-auto evalQuadrature(Integrator&& integrator, const Quadrature< QLENGTH, QDIM >& quad, Zero zero) noexcept requires
+template < typename Integrator, typename ZeroGenerator, q_l_t QLENGTH, dim_t QDIM >
+auto evalQuadrature(Integrator&&                       integrator,
+                    const Quadrature< QLENGTH, QDIM >& quad,
+                    ZeroGenerator                      zero_gen) noexcept requires
     requires(Integrator                                          integr,
              Quadrature< QLENGTH, QDIM >::q_points_t::value_type qp,
              Quadrature< QLENGTH, QDIM >::weights_t::value_type  w,
              ptrdiff_t                                           index,
-             Zero                                                el0)
+             ZeroGenerator                                       zg)
 {
     {
-        el0 += integr(index, qp) * w
+        zg()
     }
-    noexcept->std::convertible_to< Zero >;
+    noexcept;
+    {
+        integr(index, qp)
+    }
+    noexcept;
+    requires requires(std::remove_cvref_t< decltype(zg()) > el0) { el0 += integr(index, qp) * w; };
 }
 {
+    auto zero = zero_gen();
     for (ptrdiff_t i = 0; const auto& qp : quad.getPoints())
     {
         zero += integrator(i, qp) * quad.getWeights()[i];

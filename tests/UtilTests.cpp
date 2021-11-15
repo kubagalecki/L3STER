@@ -1,12 +1,15 @@
 #include "l3ster/util/ConstexprVector.hpp"
+#include "l3ster/util/SetStackSize.hpp"
 
 #include "catch2/catch.hpp"
 
 #include <algorithm>
 
+using namespace lstr;
+
 static consteval auto getConstexprVecParams(int size, int cap)
 {
-    lstr::ConstexprVector< int > v;
+    ConstexprVector< int > v;
     for (int i = 0; i < cap; ++i)
         v.pushBack(i);
     for (int i = cap; i > size; --i)
@@ -16,8 +19,8 @@ static consteval auto getConstexprVecParams(int size, int cap)
 
 static consteval bool checkConstexprVecStorage()
 {
-    lstr::ConstexprVector< lstr::ConstexprVector< int > > v(3, lstr::ConstexprVector< int >{0, 1, 2});
-    bool                                                  ret = true;
+    ConstexprVector< ConstexprVector< int > > v(3, ConstexprVector< int >{0, 1, 2});
+    bool                                      ret = true;
     for (int i = 0; i < 3; ++i)
         for (int j = 0; j < 3; ++j)
             ret &= v[i][j] == j;
@@ -26,15 +29,15 @@ static consteval bool checkConstexprVecStorage()
 
 static consteval auto checkConstexprVectorReserve(int cap)
 {
-    lstr::ConstexprVector< int > v;
+    ConstexprVector< int > v;
     v.reserve(cap);
     return std::make_pair(v.size(), v.capacity());
 }
 
 static consteval bool checkConstexprVectorIters()
 {
-    lstr::ConstexprVector< int > v;
-    constexpr int                size = 10;
+    ConstexprVector< int > v;
+    constexpr int          size = 10;
     v.reserve(size);
     for (int i = 0; i < size; ++i)
         v.pushBack(i + 1);
@@ -75,4 +78,13 @@ TEST_CASE("Constexpr vector test", "[util]")
         constexpr bool result = checkConstexprVectorIters();
         CHECK(result);
     }
+}
+
+TEST_CASE("Stack size manipulation test", "[util]")
+{
+    const auto [initial, max] = getStackSize();
+    CHECK(initial <= max);
+    setMinStackSize(initial + 1);
+    const auto stack_params = getStackSize();
+    CHECK(initial + 1 == stack_params.first);
 }

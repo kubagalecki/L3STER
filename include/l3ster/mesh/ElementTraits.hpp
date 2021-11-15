@@ -100,11 +100,5 @@ struct ElementTraits< Element< ElementTypes::Line, O > >
 
     static constexpr boundary_table_t boundary_table = {{{0}, {O}}};
 };
-
-namespace detail
-{
-template < ElementTypes T, el_o_t O >
-inline constexpr auto el_dim = ElementTraits< Element< T, O > >::native_dim; // convenient shorthand
-} // namespace detail
 } // namespace lstr
 #endif // L3STER_MESH_ELEMENTTRAITS_HPP

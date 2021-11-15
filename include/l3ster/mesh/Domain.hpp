@@ -19,8 +19,8 @@ namespace lstr
 class Domain
 {
 public:
-    template < ElementTypes ELTYPE, el_o_t ELORDER >
-    using element_vector_t         = std::vector< Element< ELTYPE, ELORDER > >;
+    template < ElementTypes ET, el_o_t EO >
+    using element_vector_t         = std::vector< Element< ET, EO > >;
     using element_vector_variant_t = parametrize_type_over_element_types_and_orders_t< std::variant, element_vector_t >;
     using element_vector_variant_vector_t = std::vector< element_vector_variant_t >;
     using find_result_t                   = std::optional< element_ptr_variant_t >;
@@ -33,13 +33,13 @@ public:
         : element_vectors{std::move(element_vectors_)}, dim{dim_}
     {}
 
-    template < ElementTypes ELTYPE, el_o_t ELORDER >
-    void push(const Element< ELTYPE, ELORDER >& element);
-    template < ElementTypes ELTYPE, el_o_t ELORDER, typename... Args >
+    template < ElementTypes ET, el_o_t EO >
+    void push(const Element< ET, EO >& element);
+    template < ElementTypes ET, el_o_t EO, typename... Args >
     void emplaceBack(Args&&... args);
-    template < ElementTypes ELTYPE, el_o_t ELORDER >
+    template < ElementTypes ET, el_o_t EO >
     auto getBackInserter();
-    template < ElementTypes ELTYPE, el_o_t ELORDER >
+    template < ElementTypes ET, el_o_t EO >
     void reserve(size_t size);
 
     template < invocable_on_elements F, ExecutionPolicy_c ExecPolicy >
@@ -60,8 +60,8 @@ public:
     template < el_o_t O_CONV >
     [[nodiscard]] Domain getConversionAlloc() const;
 
-    template < ElementTypes ELTYPE, el_o_t ELORDER >
-    std::vector< Element< ELTYPE, ELORDER > >& getElementVector();
+    template < ElementTypes ET, el_o_t EO >
+    std::vector< Element< ET, EO > >& getElementVector();
 
 private:
     template < typename F, ExecutionPolicy_c ExecPolicy >
@@ -83,17 +83,17 @@ inline Domain::const_find_result_t constifyFound(const Domain::find_result_t& f)
 }
 } // namespace detail
 
-template < ElementTypes ELTYPE, el_o_t ELORDER >
-std::vector< Element< ELTYPE, ELORDER > >& Domain::getElementVector()
+template < ElementTypes ET, el_o_t EO >
+std::vector< Element< ET, EO > >& Domain::getElementVector()
 {
-    using el_vec_t = element_vector_t< ELTYPE, ELORDER >;
+    using el_vec_t = element_vector_t< ET, EO >;
     if (not element_vectors.empty())
     {
-        if (detail::el_dim< ELTYPE, ELORDER > != dim)
+        if (Element< ET, EO >::native_dim != dim)
             throw std::invalid_argument("Element dimension incompatible with domain dimension");
     }
     else
-        dim = detail::el_dim< ELTYPE, ELORDER >;
+        dim = Element< ET, EO >::native_dim;
 
     const auto vector_variant_it = std::find_if(element_vectors.begin(), element_vectors.end(), [](const auto& v) {
         return std::holds_alternative< el_vec_t >(v);
@@ -104,10 +104,10 @@ std::vector< Element< ELTYPE, ELORDER > >& Domain::getElementVector()
         return std::get< el_vec_t >(*vector_variant_it);
 }
 
-template < ElementTypes ELTYPE, el_o_t ELORDER >
-void Domain::push(const Element< ELTYPE, ELORDER >& element)
+template < ElementTypes ET, el_o_t EO >
+void Domain::push(const Element< ET, EO >& element)
 {
-    emplaceBack< ELTYPE, ELORDER >(element);
+    emplaceBack< ET, EO >(element);
 }
 
 template < ElementTypes T, el_o_t O, typename... ArgTypes >
@@ -124,24 +124,24 @@ void Domain::emplaceBack(ArgTypes&&... Args)
         });
 }
 
-template < ElementTypes ELTYPE, el_o_t ELORDER >
+template < ElementTypes ET, el_o_t EO >
 auto Domain::getBackInserter()
 {
-    return std::back_inserter(getElementVector< ELTYPE, ELORDER >());
+    return std::back_inserter(getElementVector< ET, EO >());
 }
 
-template < ElementTypes ELTYPE, el_o_t ELORDER >
+template < ElementTypes ET, el_o_t EO >
 void Domain::reserve(size_t size)
 {
-    using el_vec_t = element_vector_t< ELTYPE, ELORDER >;
+    using el_vec_t = element_vector_t< ET, EO >;
 
     if (not element_vectors.empty())
     {
-        if (detail::el_dim< ELTYPE, ELORDER > != dim)
+        if (Element< ET, EO >::native_dim != dim)
             throw std::invalid_argument("Pushing element to domain of different dimension");
     }
     else
-        dim = detail::el_dim< ELTYPE, ELORDER >;
+        dim = Element< ET, EO >::native_dim;
 
     const auto vector_variant_it =
         std::ranges::find_if(element_vectors, [](const auto& v) { return std::holds_alternative< el_vec_t >(v); });

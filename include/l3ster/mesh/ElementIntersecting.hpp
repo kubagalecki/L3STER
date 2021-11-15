@@ -69,7 +69,7 @@ consteval auto intersectSidesWithSubseqSides(std::integer_sequence< el_ns_t, SID
 template < ElementTypes T, el_o_t O >
 consteval auto makeElementEdgeTable()
 {
-    if constexpr (detail::el_dim< T, O > < 3)
+    if constexpr (Element< T, O >::native_dim < 3)
         return std::tuple<>{};
     else
         return intersectSidesWithSubseqSides< T, O >(
@@ -107,8 +107,8 @@ namespace detail
 template < ElementTypes T1, ElementTypes T2 >
 consteval dim_t getHighestMatchableDim()
 {
-    constexpr auto d1        = detail::el_dim< T1, 1 >;
-    constexpr auto d2        = detail::el_dim< T2, 1 >;
+    constexpr auto d1        = Element< T1, 1 >::native_dim;
+    constexpr auto d2        = Element< T2, 1 >::native_dim;
     constexpr auto lower_dim = d1 <= d2 ? d1 : d2;
     return d1 == d2 ? d1 - 1 : lower_dim;
 }
