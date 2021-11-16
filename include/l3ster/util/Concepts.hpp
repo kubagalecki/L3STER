@@ -23,6 +23,9 @@ struct is_array< std::array< T, N > > : std::true_type
 template < typename T >
 concept array = detail::is_array< T >::value;
 
+template < typename T, typename V >
+concept array_of = array< T > and std::same_as< typename T::value_type, V >;
+
 namespace detail
 {
     template < typename T >

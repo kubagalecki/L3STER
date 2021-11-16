@@ -8,7 +8,7 @@
 
 namespace lstr
 {
-template < BasisTypes BT, ElementTypes T, el_o_t O >
+template < ElementTypes T, el_o_t O >
 Point< 3 >
 mapToPhysicalSpace(const Element< T, O >& element, const Point< Element< T, O >::native_dim >& point) requires(
     contains({ElementTypes::Line, ElementTypes::Quad, ElementTypes::Hex}, T))
@@ -17,7 +17,7 @@ mapToPhysicalSpace(const Element< T, O >& element, const Point< Element< T, O >:
     const auto&           vertices = element.getData().vertices;
 
     const auto compute_dim = [&](ptrdiff_t dim) {
-        return valueAt< BT >(
+        return valueAt< BasisTypes::Lagrange >(
             o1_el, vertices | std::views::transform([&](const Point< 3 >& p) { return p[dim]; }), point);
     };
 

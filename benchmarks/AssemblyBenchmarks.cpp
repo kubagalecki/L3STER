@@ -112,17 +112,19 @@ BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 14, 4)
 template < el_o_t EO >
 void BM_NS3DLocalAssembly(benchmark::State& state)
 {
-    constexpr auto  QT            = QuadratureTypes::GLeg;
-    constexpr auto  BT            = BasisTypes::Lagrange;
-    const auto      element       = getExampleHexElement< EO >();
-    constexpr q_o_t QO            = 4 * EO - 2;
+    constexpr auto  QT = QuadratureTypes::GLeg;
+    constexpr auto  BT = BasisTypes::Lagrange;
+    constexpr q_o_t QO = 4 * EO - 2;
+
+    const auto element = getExampleHexElement< EO >();
+
     using nodal_vals_t            = Eigen::Matrix< val_t, element.n_nodes, 7 >;
     const nodal_vals_t nodal_vals = nodal_vals_t::Random();
 
     constexpr auto local_matrix_size = Element< ElementTypes ::Hex, EO >::n_nodes * 7;
-    setMinStackSize(getStackSize().first + sizeof(val_t) * local_matrix_size * local_matrix_size);
+    setMinStackSize(80'000'000 + 3 * sizeof(val_t) * local_matrix_size * local_matrix_size);
 
-    constexpr auto ns3d_kernel = [](const auto& vals, const auto& ders, const auto&) {
+    constexpr auto ns3d_kernel = [](const auto& vals, const auto& ders, const auto&) noexcept {
         constexpr size_t nf = 7;
         constexpr size_t ne = 8;
 
@@ -195,7 +197,7 @@ void BM_NS3DLocalAssembly(benchmark::State& state)
 
         return ret_val;
     };
-    const std::array der_indices{0l, 1l, 2l};
+    const std::array der_indices{0, 1, 2};
 
     for (auto _ : state)
     {
@@ -204,8 +206,8 @@ void BM_NS3DLocalAssembly(benchmark::State& state)
     }
 }
 BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, 1)->Name("Local NS3D system assembly [EO1]")->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, 2)->Name("Local NS3D system assembly [EO2]")->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, 3)->Name("Local NS3D system assembly [EO3]")->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, 4)->Name("Local NS3D system assembly [EO4]")->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, 5)->Name("Local NS3D system assembly [EO5]")->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, 6)->Name("Local NS3D system assembly [EO6]")->Unit(benchmark::kMicrosecond);
+BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, 2)->Name("Local NS3D system assembly [EO2]")->Unit(benchmark::kMillisecond);
+BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, 3)->Name("Local NS3D system assembly [EO3]")->Unit(benchmark::kMillisecond);
+BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, 4)->Name("Local NS3D system assembly [EO4]")->Unit(benchmark::kSecond);
+BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, 5)->Name("Local NS3D system assembly [EO5]")->Unit(benchmark::kSecond);
+BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, 6)->Name("Local NS3D system assembly [EO6]")->Unit(benchmark::kSecond);
