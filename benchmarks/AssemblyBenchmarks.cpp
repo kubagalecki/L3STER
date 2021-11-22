@@ -201,7 +201,7 @@ void BM_NS3DLocalAssembly(benchmark::State& state)
 
     for (auto _ : state)
     {
-        const auto local_system = assembleLocalMatrix< QT, QO, BT >(ns3d_kernel, element, nodal_vals, der_indices);
+        const auto local_system = assembleLocalSystem< QT, QO, BT >(ns3d_kernel, element, nodal_vals, der_indices);
         benchmark::DoNotOptimize(local_system);
     }
 }
