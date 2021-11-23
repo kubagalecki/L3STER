@@ -20,10 +20,8 @@ public:
     Quadrature() = default;
     Quadrature(const q_points_t& qpts, const weights_t& w) : points(qpts), weights(w) {}
 
-    const q_points_t& getQPoints() const { return points; }
-    const weights_t&  getWeights() const { return weights; }
-    void              setQPoints(const q_points_t& qp) { points = qp; }
-    void              setWeights(const weights_t& w) { weights = w; }
+    const auto& getPoints() const noexcept { return points; }
+    const auto& getWeights() const noexcept { return weights; }
 
 private:
     q_points_t points;

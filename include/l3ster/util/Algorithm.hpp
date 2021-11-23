@@ -10,14 +10,12 @@
 namespace lstr
 {
 template < std::random_access_iterator It, typename F >
-requires requires(It i, F f)
+std::vector< size_t > sortingPermutation(It first, It last, F&& compare) requires requires(It i, F f)
 {
     {
         f(*i, *i)
         } -> std::convertible_to< bool >;
 }
-
-std::vector< size_t > sortingPermutation(It first, It last, F&& compare)
 {
     std::vector< size_t > indices(std::distance(first, last));
     std::iota(begin(indices), end(indices), 0u);
@@ -34,14 +32,12 @@ std::vector< size_t > sortingPermutation(It first, It last)
 template < std::random_access_iterator                                It_in,
            std::input_iterator                                        It_perm,
            std::output_iterator< decltype(*std::declval< It_in >()) > It_out >
-requires requires(It_perm it)
+void copyPermuted(It_in first_in, It_in last_in, It_perm first_perm, It_out first_out) requires requires(It_perm it)
 {
     {
         *it
         } -> std::convertible_to< std::ptrdiff_t >;
 }
-
-void copyPermuted(It_in first_in, It_in last_in, It_perm first_perm, It_out first_out)
 {
     for (auto i = std::distance(first_in, last_in); i > 0; --i)
         *first_out++ = first_in[*first_perm++];
@@ -56,7 +52,7 @@ constexpr std::array< T, N > getSortedArray(const std::array< T, N >& array)
 }
 
 template < size_t TRIMMED_SIZE, typename T, size_t SIZE >
-requires(SIZE >= TRIMMED_SIZE) constexpr auto trimArray(const std::array< T, SIZE >& a)
+constexpr auto trimArray(const std::array< T, SIZE >& a) requires(SIZE >= TRIMMED_SIZE)
 {
     if constexpr (SIZE == TRIMMED_SIZE)
         return a;
@@ -70,14 +66,14 @@ requires(SIZE >= TRIMMED_SIZE) constexpr auto trimArray(const std::array< T, SIZ
 
 namespace detail
 {
-template < template < typename > typename TraitsPredicate, typename T >
-constexpr auto tuplifyIf(T&& arg)
-{
-    if constexpr (TraitsPredicate< std::decay_t< T > >::value)
-        return std::make_tuple(std::forward< T >(arg));
-    else
-        return std::tuple<>{};
-}
+    template < template < typename > typename TraitsPredicate, typename T >
+    constexpr auto tuplifyIf(T && arg)
+    {
+        if constexpr (TraitsPredicate< std::decay_t< T > >::value)
+            return std::make_tuple(std::forward< T >(arg));
+        else
+            return std::tuple<>{};
+    }
 } // namespace detail
 
 template < template < typename > typename TraitsPredicate, predicate_trait_specialized< TraitsPredicate >... T >
@@ -124,10 +120,13 @@ template < std::ranges::range        R1,
            typename Pred  = std::ranges::equal_to,
            typename Proj1 = std::identity,
            typename Proj2 = std::identity >
-requires std::indirectly_writable< O, size_t > and
+constexpr auto matchingPermutation(R1&&  r_pattern,
+                                   R2&&  r_match,
+                                   O     out,
+                                   Pred  pred  = {},
+                                   Proj1 proj1 = {},
+                                   Proj2 proj2 = {}) requires std::indirectly_writable< O, size_t > and
     std::indirectly_comparable< std::ranges::iterator_t< R1 >, std::ranges::iterator_t< R2 >, Pred, Proj1, Proj2 >
-constexpr auto
-matchingPermutation(R1&& r_pattern, R2&& r_match, O out, Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {})
 {
     O out_initial = out;
     std::ranges::for_each(r_match, [&](auto&& match_el) {
@@ -139,10 +138,16 @@ matchingPermutation(R1&& r_pattern, R2&& r_match, O out, Pred pred = {}, Proj1 p
 }
 
 template < typename F, std::integral T, T... I >
-requires(std::invocable< F, std::integral_constant< T, I > >and...) void forConstexpr(F&& f,
-                                                                                      std::integer_sequence< T, I... >)
+void forConstexpr(F&& f,
+                  std::integer_sequence< T, I... >) requires(std::invocable< F, std::integral_constant< T, I > >and...)
 {
     (f(std::integral_constant< T, I >{}), ...);
+}
+
+template < typename T >
+constexpr bool contains(std::initializer_list< T > list, T value)
+{
+    return std::ranges::any_of(list, [value = value](T t) { return t == value; });
 }
 } // namespace lstr
 #endif // L3STER_UTIL_ALGORITHM_HPP

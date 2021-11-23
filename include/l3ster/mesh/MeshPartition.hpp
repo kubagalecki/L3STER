@@ -363,9 +363,8 @@ template < ElementTypes T, el_o_t O >
 MeshPartition::el_boundary_view_result_t MeshPartition::getElementBoundaryViewImpl(const Element< T, O >& el) const
 {
     constexpr auto miss       = std::numeric_limits< el_ns_t >::max();
-    constexpr auto el_dim     = ElementTraits< Element< T, O > >::native_dim;
     constexpr auto matchElDim = []< ElementTypes T_, el_o_t O_ >(const Element< T_, O_ >*) {
-        return ElementTraits< Element< T_, O_ > >::native_dim - 1 == el_dim;
+        return Element< T_, O_ >::native_dim - 1 == Element< T, O >::native_dim;
     };
 
     const auto boundary_nodes = getSortedArray(el.getNodes());

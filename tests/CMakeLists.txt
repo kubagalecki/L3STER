@@ -28,6 +28,7 @@ include( Catch )
 
 add_executable( L3STER_tests TestsMain.cpp
                 HwlocTests.cpp
+                LocalAssemblyTests.cpp
                 MappingTests.cpp
                 MathTests.cpp
                 MeshSerializationTests.cpp

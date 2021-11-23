@@ -81,11 +81,9 @@ inline Domain deserializeDomain(const SerializedDomain& domain)
 
     dim_t domain_dim = 0;
     if (i > 0u)
-        std::visit(
-            [&]< ElementTypes T, el_o_t O >(const std::vector< Element< T, O > >&) {
-                domain_dim = ElementTraits< Element< T, O > >::native_dim;
-            },
-            elements[0]);
+        std::visit([&]< ElementTypes T, el_o_t O >(
+                       const std::vector< Element< T, O > >&) { domain_dim = Element< T, O >::native_dim; },
+                   elements[0]);
 
     return Domain{std::move(elements), domain_dim};
 }

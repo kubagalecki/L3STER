@@ -3,7 +3,7 @@
 
 #include "l3ster/util/Concepts.hpp"
 
-#include "Eigen/Dense"
+#include "l3ster/util/IncludeEigen.hpp"
 
 #include <algorithm>
 #include <array>

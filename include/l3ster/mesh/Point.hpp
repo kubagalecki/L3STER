@@ -3,7 +3,7 @@
 
 #include "l3ster/defs/Typedefs.h"
 
-#include "Eigen/Core"
+#include "l3ster/util/IncludeEigen.hpp"
 
 #include <concepts>
 

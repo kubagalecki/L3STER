@@ -7,7 +7,7 @@ FROM archlinux:latest
 
 RUN pacman -Syu --noconfirm git python3 patch cmake gcc gcc-fortran make gcovr
 RUN git clone https://github.com/spack/spack.git
-RUN spack/bin/spack external find --not-buildable cmake
+RUN spack/bin/spack external find
 RUN spack/bin/spack install --only dependencies trilinos cxxstd=17 +openmp +superlu-dist; spack/bin/spack clean -a
 RUN spack/bin/spack install trilinos cxxstd=17 +openmp +superlu-dist; spack/bin/spack gc -y; spack/bin/spack clean -a
 RUN spack/bin/spack install eigen
