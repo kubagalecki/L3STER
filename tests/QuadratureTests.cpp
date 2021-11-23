@@ -1,4 +1,4 @@
-#include "l3ster/assembly/ComputeRefBasesAtQpoints.hpp"
+#include "l3ster/local_assembly/ComputeRefBasesAtQpoints.hpp"
 #include "l3ster/quad/EvalQuadrature.hpp"
 
 #include "catch2/catch.hpp"

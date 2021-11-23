@@ -1,6 +1,6 @@
 #include "catch2/catch.hpp"
 
-#include "l3ster/assembly/AssembleLocalSystem.hpp"
+#include "l3ster/local_assembly/AssembleLocalSystem.hpp"
 #include "l3ster/mapping/ComputeBasisDerivative.hpp"
 #include "l3ster/mesh/NodePhysicalLocation.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"

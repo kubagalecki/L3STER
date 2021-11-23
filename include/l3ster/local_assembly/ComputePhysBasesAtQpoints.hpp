@@ -1,7 +1,7 @@
 #ifndef L3STER_ASSEMBLY_COMPUTEPHYSBASESATQPOINTS_HPP
 #define L3STER_ASSEMBLY_COMPUTEPHYSBASESATQPOINTS_HPP
 
-#include "l3ster/assembly/ComputeRefBasesAtQpoints.hpp"
+#include "l3ster/local_assembly/ComputeRefBasesAtQpoints.hpp"
 #include "l3ster/mapping/JacobiMat.hpp"
 
 namespace lstr

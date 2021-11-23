@@ -1,7 +1,7 @@
 #ifndef L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP
 #define L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP
 
-#include "l3ster/assembly/ComputePhysBasesAtQpoints.hpp"
+#include "l3ster/local_assembly/ComputePhysBasesAtQpoints.hpp"
 #include "l3ster/mapping/MapReferenceToPhysical.hpp"
 
 namespace lstr
