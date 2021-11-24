@@ -5,7 +5,7 @@
 
 int main(int argc, char* argv[])
 {
-    lstr::GlobalResource< lstr::MpiScopeGuard >::init(argc, argv);
+    lstr::GlobalResource< lstr::MpiScopeGuard >::initialize(argc, argv);
     lstr::MpiComm comm{};
     try
     {

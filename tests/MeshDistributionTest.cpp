@@ -8,7 +8,7 @@
 int main(int argc, char* argv[])
 {
     using namespace lstr;
-    GlobalResource< MpiScopeGuard >::init(argc, argv);
+    GlobalResource< MpiScopeGuard >::initialize(argc, argv);
     MpiComm comm{};
 
     const auto   part    = distributeMesh< 2 >(comm, L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag, {});
