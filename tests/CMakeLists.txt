@@ -82,6 +82,7 @@ add_mpi_test( "MpiBlockingCommunicationTest.cpp" "MPI_blocking_communication_tes
 add_mpi_test( "MpiAsyncCommunicationTest.cpp" "MPI_async_communication_test" "1;2;4" )
 add_mpi_test( "MeshSendRecvTest.cpp" "Mesh_send_recv_test" "2;4" )
 add_mpi_test( "MeshDistributionTest.cpp" "Mesh_distribution_test" "1;2;4" )
+add_mpi_test( "NodeThroughputInfoTest.cpp" "Node_throughput_calculation_test" "1;2;4" )
 
 #######################################################################################################################
 

@@ -8,10 +8,12 @@ namespace lstr
 template < std::ranges::random_access_range Rx,
            std::ranges::random_access_range Ry,
            std::ranges::random_access_range Rz >
-requires std::convertible_to< std::ranges::range_value_t< std::decay_t< Rx > >, val_t > and
+inline Mesh
+makeCubeMesh(Rx&& distx,
+             Ry&& disty,
+             Rz&& distz) requires std::convertible_to< std::ranges::range_value_t< std::decay_t< Rx > >, val_t > and
     std::convertible_to< std::ranges::range_value_t< std::decay_t< Ry > >, val_t > and
     std::convertible_to< std::ranges::range_value_t< std::decay_t< Rz > >, val_t >
-inline Mesh makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz)
 {
     const size_t n_dx = std::ranges::size(distx);
     const size_t n_dy = std::ranges::size(disty);
@@ -21,7 +23,7 @@ inline Mesh makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz)
     const size_t e_dz = n_dz - 1;
 
     MeshPartition::domain_map_t domains;
-    domains[0].reserve< ElementTypes ::Hex, 1 >(e_dx * e_dy * e_dz);
+    domains[0].reserve< ElementTypes::Hex, 1 >(e_dx * e_dy * e_dz);
     domains[1].reserve< ElementTypes::Quad, 1 >(e_dx * e_dy);
     domains[2].reserve< ElementTypes::Quad, 1 >(e_dx * e_dy);
     domains[3].reserve< ElementTypes::Quad, 1 >(e_dx * e_dz);

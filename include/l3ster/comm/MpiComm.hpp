@@ -91,9 +91,6 @@ public:
 
     void abort() { MPI_Abort(comm, MPI_ERR_UNKNOWN); }
 
-    [[nodiscard]] inline int getRank() const;
-    [[nodiscard]] inline int getSize() const;
-
     // send
     template < arithmetic T >
     void send(const T* buf, size_t count, int dest, int tag = 0) const;
@@ -114,18 +111,22 @@ public:
     template < arithmetic T >
     void receive(T* buf, size_t count, int source, int tag = 0) const;
     template < arithmetic T >
-    T receive(int source, int tag = 0) const;
+    [[nodiscard]] T receive(int source, int tag = 0) const;
     template < arithmetic T >
-    std::vector< T > receive(size_t count, int source, int tag = 0) const;
+    [[nodiscard]] std::vector< T > receive(size_t count, int source, int tag = 0) const;
     template < arithmetic T >
     [[nodiscard]] Request receiveAsync(T* buf, size_t count, int source, int tag = 0) const;
 
-    // reduce
+    // collective comms
     template < arithmetic T >
     void reduce(const T* send_buf, T* recv_buf, size_t count, int root, MPI_Op op) const;
+    template < arithmetic T >
+    void gather(const T* send_buf, T* recv_buf, size_t count, int root) const;
 
     // observers
-    [[nodiscard]] MPI_Comm& get() { return comm; }
+    [[nodiscard]] inline int getRank() const;
+    [[nodiscard]] inline int getSize() const;
+    [[nodiscard]] MPI_Comm&  get() { return comm; }
 
 private:
     MPI_Comm comm = MPI_COMM_WORLD;
@@ -204,6 +205,14 @@ void MpiComm::reduce(const T* send_buf, T* recv_buf, size_t count, int root, MPI
 {
     if (MPI_Reduce(send_buf, recv_buf, count, detail::MpiType< T >::value(), op, root, comm))
         throw std::runtime_error{"MPI reduce failed"};
+}
+
+template < arithmetic T >
+void MpiComm::gather(const T* send_buf, T* recv_buf, size_t count, int root) const
+{
+    const auto datatype = detail::MpiType< T >::value();
+    if (MPI_Gather(send_buf, count, datatype, recv_buf, count, datatype, root, comm))
+        throw std::runtime_error{"MPI gather failed"};
 }
 
 int MpiComm::getRank() const

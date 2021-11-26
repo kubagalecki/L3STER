@@ -13,7 +13,7 @@ class MetisGraphWrapper
     {
         void operator()(idx_t* ptr) const noexcept { METIS_Free(ptr); }
     };
-    using array_t = std::unique_ptr< idx_t[], Deleter >;
+    using array_t = std::unique_ptr< idx_t[], Deleter >; // NOLINT
 
 public:
     using span_t = std::span< const idx_t >;
@@ -74,7 +74,7 @@ inline void handleMetisErrorCode(int error)
     case METIS_ERROR_MEMORY:
         throw std::bad_alloc{};
     default:
-        throw std::runtime_error{"Metis failed to partition the mesh"};
+        throw std::runtime_error{"Metis runtime error"};
     }
 }
 
