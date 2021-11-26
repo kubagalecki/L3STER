@@ -54,6 +54,19 @@ auto prepMetisInput(const MeshPartition& part, const std::array< idx_t, 3 >& dom
     return std::make_tuple(std::move(e_ind), std::move(e_ptr), std::move(node_comm_vol), std::move(node_weight));
 }
 
+inline auto getMetisOptionsForPartitioning()
+{
+    std::array< idx_t, METIS_NOPTIONS > opts{};
+    METIS_SetDefaultOptions(opts.data());
+
+    opts[METIS_OPTION_OBJTYPE] = METIS_OBJTYPE_VOL;
+    opts[METIS_OPTION_NCUTS]   = 3;
+    opts[METIS_OPTION_NSEPS]   = 3;
+    opts[METIS_OPTION_NITER]   = 20;
+
+    return opts;
+}
+
 inline int invokeMetis(idx_t&                n_elements,
                        idx_t&                max_node,
                        std::vector< idx_t >& epart,
@@ -64,7 +77,8 @@ inline int invokeMetis(idx_t&                n_elements,
                        std::vector< idx_t >& node_weight,
                        idx_t&                n_parts)
 {
-    idx_t objval;
+    idx_t objval_discarded = 0;
+    auto  metis_options    = getMetisOptionsForPartitioning();
     return METIS_PartMeshNodal(&n_elements,
                                &max_node,
                                e_ptr.data(),
@@ -73,8 +87,8 @@ inline int invokeMetis(idx_t&                n_elements,
                                node_comm_vol.data(),
                                &n_parts,
                                nullptr,
-                               nullptr,
-                               &objval,
+                               metis_options.data(),
+                               &objval_discarded,
                                epart.data(),
                                npart.data());
 }
