@@ -15,6 +15,12 @@
 
 namespace lstr
 {
+template < auto V >
+struct ConstexprValue
+{
+    static constexpr auto value = V;
+};
+
 template < typename... T >
 struct type_set
 {};

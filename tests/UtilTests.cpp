@@ -1,9 +1,11 @@
+#include "l3ster/util/Common.hpp"
 #include "l3ster/util/ConstexprVector.hpp"
+#include "l3ster/util/Meta.hpp"
 #include "l3ster/util/SetStackSize.hpp"
 
 #include "catch2/catch.hpp"
 
-#include <algorithm>
+#include <random>
 
 using namespace lstr;
 
@@ -87,4 +89,30 @@ TEST_CASE("Stack size manipulation test", "[util]")
     setMinStackSize(initial + 1);
     const auto stack_params = getStackSize();
     CHECK(initial + 1 == stack_params.first);
+}
+
+TEMPLATE_TEST_CASE("Bitset (de-)serialization",
+                   "[util]",
+                   ConstexprValue< 10u >,
+                   ConstexprValue< 64u >,
+                   ConstexprValue< 100u >,
+                   ConstexprValue< 128u >,
+                   ConstexprValue< 257u >)
+{
+    constexpr auto size               = TestType::value;
+    constexpr auto n_runs             = 1 << 8;
+    constexpr auto make_random_bitset = [] {
+        std::bitset< size >                    retval;
+        std::uniform_int_distribution< short > dist{0, 1};
+        std::mt19937                           prng{std::random_device{}()};
+        for (unsigned i = 0; i < size; ++i)
+            retval[i] = dist(prng);
+        return retval;
+    };
+    for (int i = 0; i < n_runs; ++i)
+    {
+        const auto test_data = make_random_bitset();
+        const auto result    = trim_bitset< size >(deserialize_bitset(serialize_bitset(test_data)));
+        CHECK(test_data == result);
+    }
 }
