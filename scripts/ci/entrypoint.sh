@@ -41,4 +41,7 @@ else
     chmod +x codecov
     ./codecov -Z -X gcov || exit 1
   fi
+  cd ../
 fi
+cd ../
+rm -rf build/
