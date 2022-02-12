@@ -18,6 +18,7 @@ namespace lstr
 template < auto V >
 struct ConstexprValue
 {
+    using type                  = decltype(V);
     static constexpr auto value = V;
 };
 

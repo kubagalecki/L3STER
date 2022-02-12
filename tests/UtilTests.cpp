@@ -84,11 +84,33 @@ TEST_CASE("Constexpr vector test", "[util]")
 
 TEST_CASE("Stack size manipulation test", "[util]")
 {
-    const auto [initial, max] = getStackSize();
-    CHECK(initial <= max);
-    setMinStackSize(initial + 1);
-    const auto stack_params = getStackSize();
-    CHECK(initial + 1 == stack_params.first);
+    SECTION("Increase stack size by 1")
+    {
+        const auto& [initial, max] = getStackSize();
+        CHECK(initial <= max);
+        setMinStackSize(initial + 1);
+        const auto& [current, ignore] = getStackSize();
+        CHECK(initial + 1 == current);
+    }
+
+    SECTION("Increse beyond limit")
+    {
+        const auto& [initial, max] = getStackSize();
+        if (max < std::numeric_limits< std::decay_t< decltype(max) > >::max())
+        {
+            CHECK_THROWS(setMinStackSize(max + 1ul));
+            const auto& [current, ignore] = getStackSize();
+            CHECK(initial == current);
+        }
+    }
+
+    SECTION("Decreasing is a noop")
+    {
+        const auto& [initial, max] = getStackSize();
+        setMinStackSize(initial - 1);
+        const auto& [current, ignore] = getStackSize();
+        CHECK(initial == current);
+    }
 }
 
 TEMPLATE_TEST_CASE("Bitset (de-)serialization",
@@ -112,7 +134,7 @@ TEMPLATE_TEST_CASE("Bitset (de-)serialization",
     for (int i = 0; i < n_runs; ++i)
     {
         const auto test_data = make_random_bitset();
-        const auto result    = trim_bitset< size >(deserialize_bitset(serialize_bitset(test_data)));
+        const auto result    = trimBitset< size >(deserializeBitset(serializeBitset(test_data)));
         CHECK(test_data == result);
     }
 }

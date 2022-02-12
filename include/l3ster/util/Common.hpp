@@ -5,6 +5,7 @@
 #include <bitset>
 #include <concepts>
 #include <limits>
+#include <tuple>
 #include <type_traits>
 
 namespace lstr
@@ -38,13 +39,20 @@ constexpr bool exactlyOneOf(T... args) requires(std::convertible_to< T, bool >an
     return (static_cast< size_t >(static_cast< bool >(args)) + ...) == 1u;
 }
 
+template < size_t n_bits >
+constexpr size_t bitsetNUllongs()
+{
+    constexpr auto ull_bits = sizeof(unsigned long long) * 8u;
+    return n_bits / ull_bits + static_cast< bool >(n_bits % ull_bits);
+}
+
 template < std::size_t N >
-auto serialize_bitset(const std::bitset< N >& bits)
+auto serializeBitset(const std::bitset< N >& bits)
 {
     using ull                    = unsigned long long;
     constexpr auto ull_bits      = sizeof(ull) * 8u;
-    constexpr auto required_ulls = N / ull_bits + static_cast< bool >(N % ull_bits);
-    const auto     mask          = std::bitset< N >{std::numeric_limits< ull >::max()};
+    constexpr auto required_ulls = bitsetNUllongs< N >();
+    const auto     mask          = std::bitset< N >{std::numeric_limits< ull >::max()}; // 0xffffffffffffffff
 
     std::array< ull, required_ulls > retval;
     std::generate_n(
@@ -53,7 +61,7 @@ auto serialize_bitset(const std::bitset< N >& bits)
 }
 
 template < std::size_t N >
-auto deserialize_bitset(const std::array< unsigned long long, N >& data)
+auto deserializeBitset(const std::array< unsigned long long, N >& data)
 {
     using ull               = unsigned long long;
     constexpr auto ull_bits = sizeof(ull) * 8u;
@@ -68,7 +76,7 @@ auto deserialize_bitset(const std::array< unsigned long long, N >& data)
 }
 
 template < std::size_t N_out, std::size_t N_in >
-auto trim_bitset(const std::bitset< N_in >& in) requires(N_out <= N_in)
+auto trimBitset(const std::bitset< N_in >& in) requires(N_out <= N_in)
 {
     if constexpr (N_in <= sizeof(unsigned long long) * 8u)
         return std::bitset< N_out >{in.to_ullong()};
