@@ -12,5 +12,5 @@ RUN spack/bin/spack install --only dependencies trilinos cxxstd=17 +openmp +supe
 RUN spack/bin/spack install trilinos cxxstd=17 +openmp +superlu-dist; spack/bin/spack gc -y; spack/bin/spack clean -a
 RUN spack/bin/spack install eigen
 RUN spack/bin/spack install catch2
-RUN spack/bin/spack install intel-tbb cxxstd=17
+RUN spack/bin/spack install intel-oneapi-tbb
 RUN spack/bin/spack gc -y; spack/bin/spack clean -a

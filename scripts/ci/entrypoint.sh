@@ -1,7 +1,7 @@
 #!/bin/bash
 
 . /spack/share/spack/setup-env.sh
-spack load eigen catch2 intel-tbb trilinos
+spack load eigen catch2 tbb trilinos
 mkdir build
 cd build || exit 1
 if [ "$DEPLOYMENT_TESTS" ]; then
