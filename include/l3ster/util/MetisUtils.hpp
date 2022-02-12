@@ -47,6 +47,9 @@ MetisGraphWrapper::MetisGraphWrapper(const MetisGraphWrapper& other)
 
 MetisGraphWrapper& MetisGraphWrapper::operator=(const MetisGraphWrapper& other)
 {
+    if (this == &other)
+        return *this;
+
     xadj.reset(static_cast< idx_t* >(malloc((other.getXadj().size()) * sizeof(idx_t))));     // NOLINT
     adjncy.reset(static_cast< idx_t* >(malloc((other.getAdjncy().size()) * sizeof(idx_t)))); // NOLINT
     nvert = other.nvert;
@@ -77,7 +80,6 @@ inline void handleMetisErrorCode(int error)
         throw std::runtime_error{"Metis runtime error"};
     }
 }
-
 } // namespace detail
 } // namespace lstr
 #endif // L3STER_UTIL_METISUTILS_HPP
