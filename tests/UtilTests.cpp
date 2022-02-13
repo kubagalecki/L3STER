@@ -1,3 +1,4 @@
+#include "l3ster/util/BitsetManip.hpp"
 #include "l3ster/util/Common.hpp"
 #include "l3ster/util/ConstexprVector.hpp"
 #include "l3ster/util/Meta.hpp"
