@@ -149,5 +149,36 @@ constexpr bool contains(std::initializer_list< T > list, T value)
 {
     return std::ranges::any_of(list, [value = value](T t) { return t == value; });
 }
+
+template < std::ranges::forward_range                                                                   R,
+           std::indirect_binary_predicate< std::ranges::iterator_t< R >, std::ranges::iterator_t< R > > Cmp =
+               std::ranges::equal_to,
+           std::regular_invocable< std::ranges::range_value_t< R >, std::ranges::range_value_t< R > > Red =
+               std::plus<> >
+requires std::permutable< std::ranges::iterator_t< R > > and std::assignable_from<
+    std::ranges::range_reference_t< R >,
+    std::invoke_result_t< Red, std::ranges::range_value_t< R >, std::ranges::range_value_t< R > > >
+constexpr std::ranges::borrowed_subrange_t< R >
+reduceConsecutive(R&& range, Cmp&& comparator = {}, Red&& reduction = {})
+{
+    auto it          = range.begin();
+    auto write_begin = it;
+    while (it != range.end())
+    {
+        const auto adj_range_begin = std::adjacent_find(it, range.end(), comparator);
+        if (it != write_begin)
+            std::copy(it, adj_range_begin, write_begin);
+        std::advance(write_begin, std::distance(it, adj_range_begin));
+        if (adj_range_begin == range.end())
+            break;
+        auto adj_range_end = std::next(adj_range_begin);
+        while (std::next(adj_range_end) != range.end() and comparator(*adj_range_end, *std::next(adj_range_end)))
+            ++adj_range_end;
+        ++adj_range_end;
+        *write_begin++ = std::accumulate(std::next(adj_range_begin), adj_range_end, *adj_range_begin, reduction);
+        it             = adj_range_end;
+    }
+    return std::ranges::borrowed_subrange_t< R >(write_begin, range.end());
+}
 } // namespace lstr
 #endif // L3STER_UTIL_ALGORITHM_HPP

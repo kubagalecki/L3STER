@@ -24,7 +24,7 @@ auto serializeBitset(const std::bitset< N >& bits)
 
     std::array< ull, required_ulls > retval;
     std::generate_n(
-        rbegin(retval), retval.size(), [&, i = 0ul]() mutable { return (bits >> i++ * ull_bits & mask).to_ullong(); });
+        rbegin(retval), required_ulls, [&, i = 0ul]() mutable { return (bits >> i++ * ull_bits & mask).to_ullong(); });
     return retval;
 }
 
