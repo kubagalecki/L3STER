@@ -35,6 +35,12 @@ L3STER_MPI_TYPE_MAPPING_STRUCT(unsigned long long, MPI_UNSIGNED_LONG_LONG) // NO
 L3STER_MPI_TYPE_MAPPING_STRUCT(float, MPI_FLOAT)                           // NOLINT
 L3STER_MPI_TYPE_MAPPING_STRUCT(double, MPI_DOUBLE)                         // NOLINT
 L3STER_MPI_TYPE_MAPPING_STRUCT(long double, MPI_LONG_DOUBLE)               // NOLINT
+
+void handleMPIError(int error, const char* message)
+{
+    if (error) [[unlikely]]
+        throw std::runtime_error{message};
+}
 } // namespace detail
 
 struct MpiScopeGuard
@@ -78,10 +84,12 @@ public:
         Request& operator=(const Request&) = delete;
         inline Request(Request&&) noexcept;
         inline Request& operator=(Request&&) noexcept;
-        ~Request() { wait(); }
+        ~Request() { wait_ignore_err(); }
 
-        void        wait() { MPI_Wait(&request, MPI_STATUS_IGNORE); }
-        inline bool test();
+        void wait() { detail::handleMPIError(MPI_Wait(&request, MPI_STATUS_IGNORE), "MPI wait for request failed"); }
+        void wait_ignore_err() noexcept { MPI_Wait(&request, MPI_STATUS_IGNORE); }
+        void cancel() { detail::handleMPIError(MPI_Cancel(&request), "MPI async request cancellation failed"); }
+        [[nodiscard]] inline bool test();
 
     private:
         Request() = default;
@@ -122,6 +130,10 @@ public:
     void reduce(const T* send_buf, T* recv_buf, size_t count, int root, MPI_Op op) const;
     template < arithmetic T >
     void gather(const T* send_buf, T* recv_buf, size_t count, int root) const;
+    template < arithmetic T >
+    void broadcast(T* message, int size, int root) const;
+    template < arithmetic T >
+    [[nodiscard]] Request broadcastAsync(T* message, int size, int root) const;
 
     // observers
     [[nodiscard]] inline int getRank() const;
@@ -139,7 +151,7 @@ MpiComm::Request::Request(MpiComm::Request&& other) noexcept : request(other.req
 
 MpiComm::Request& MpiComm::Request::operator=(MpiComm::Request&& other) noexcept
 {
-    wait();
+    wait_ignore_err();
     request       = other.request;
     other.request = MPI_REQUEST_NULL;
     return *this;
@@ -148,31 +160,32 @@ MpiComm::Request& MpiComm::Request::operator=(MpiComm::Request&& other) noexcept
 bool MpiComm::Request::test()
 {
     int flag{};
-    MPI_Test(&request, &flag, MPI_STATUS_IGNORE);
+    detail::handleMPIError(MPI_Test(&request, &flag, MPI_STATUS_IGNORE), "MPI test async request failed");
     return flag;
 }
 
 template < arithmetic T >
 void MpiComm::send(const T* buf, size_t count, int dest, int tag) const
 {
-    if (MPI_Send(buf, count, detail::MpiType< T >::value(), dest, tag, comm))
-        throw std::runtime_error{"MPI send failed"};
+    const auto datatype = detail::MpiType< T >::value();
+    detail::handleMPIError(MPI_Send(buf, count, datatype, dest, tag, comm), "MPI send failed");
 }
 
 template < arithmetic T >
 MpiComm::Request MpiComm::sendAsync(const T* buf, size_t count, int dest, int tag) const
 {
-    Request request;
-    if (MPI_Isend(buf, count, detail::MpiType< T >::value(), dest, tag, comm, &request.request))
-        throw std::runtime_error{"MPI asynchronous send failed"};
+    const auto datatype = detail::MpiType< T >::value();
+    Request    request;
+    detail::handleMPIError(MPI_Isend(buf, count, datatype, dest, tag, comm, &request.request),
+                           "MPI asynchronous send failed");
     return request;
 }
 
 template < arithmetic T >
 void MpiComm::receive(T* buf, size_t count, int source, int tag) const
 {
-    if (MPI_Recv(buf, count, detail::MpiType< T >::value(), source, tag, comm, MPI_STATUS_IGNORE))
-        throw std::runtime_error{"MPI receive failed"};
+    const auto datatype = detail::MpiType< T >::value();
+    detail::handleMPIError(MPI_Recv(buf, count, datatype, source, tag, comm, MPI_STATUS_IGNORE), "MPI receive failed");
 }
 
 template < arithmetic T >
@@ -194,42 +207,57 @@ std::vector< T > MpiComm::receive(size_t count, int source, int tag) const
 template < arithmetic T >
 MpiComm::Request MpiComm::receiveAsync(T* buf, size_t count, int source, int tag) const
 {
-    Request request;
-    if (MPI_Irecv(buf, count, detail::MpiType< T >::value(), source, tag, comm, &request.request))
-        throw std::runtime_error{"MPI asynchronous receive failed"};
+    const auto datatype = detail::MpiType< T >::value();
+    Request    request;
+    detail::handleMPIError(MPI_Irecv(buf, count, datatype, source, tag, comm, &request.request),
+                           "MPI asynchronous receive failed");
     return request;
 }
 
 template < arithmetic T >
 void MpiComm::reduce(const T* send_buf, T* recv_buf, size_t count, int root, MPI_Op op) const
 {
-    if (MPI_Reduce(send_buf, recv_buf, count, detail::MpiType< T >::value(), op, root, comm))
-        throw std::runtime_error{"MPI reduce failed"};
+    const auto datatype = detail::MpiType< T >::value();
+    detail::handleMPIError(MPI_Reduce(send_buf, recv_buf, count, datatype, op, root, comm), "MPI reduce failed");
 }
 
 template < arithmetic T >
 void MpiComm::gather(const T* send_buf, T* recv_buf, size_t count, int root) const
 {
     const auto datatype = detail::MpiType< T >::value();
-    if (MPI_Gather(send_buf, count, datatype, recv_buf, count, datatype, root, comm))
-        throw std::runtime_error{"MPI gather failed"};
+    detail::handleMPIError(MPI_Gather(send_buf, count, datatype, recv_buf, count, datatype, root, comm),
+                           "MPI gather failed");
+}
+
+template < arithmetic T >
+void MpiComm::broadcast(T* message, int size, int root) const
+{
+    const auto datatype = detail::MpiType< T >::value();
+    detail::handleMPIError(MPI_Bcast(message, size, datatype, root, comm), "MPI broadcast failed");
+}
+
+template < arithmetic T >
+MpiComm::Request MpiComm::broadcastAsync(T* message, int size, int root) const
+{
+    const auto datatype = detail::MpiType< T >::value();
+    Request    request{};
+    detail::handleMPIError(MPI_Ibcast(message, size, datatype, root, comm, &request.request),
+                           "MPI asynchronous broadcast failed");
+    return request;
 }
 
 int MpiComm::getRank() const
 {
     int rank{};
-    if (MPI_Comm_rank(comm, &rank))
-        throw std::runtime_error{"MPI rank query failed"};
+    detail::handleMPIError(MPI_Comm_rank(comm, &rank), "MPI rank query failed");
     return rank;
 }
 
 int MpiComm::getSize() const
 {
     int size{};
-    if (MPI_Comm_size(comm, &size))
-        throw std::runtime_error{"MPI comm size query failed"};
+    detail::handleMPIError(MPI_Comm_size(comm, &size), "MPI comm size query failed");
     return size;
 }
 } // namespace lstr
-
 #endif // L3STER_COMM_MPICOMM_HPP

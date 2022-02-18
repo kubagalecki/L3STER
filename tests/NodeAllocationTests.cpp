@@ -5,7 +5,7 @@
 
 #include <vector>
 
-TEST_CASE("Node allocation tests", "[hwloc]")
+TEST_CASE("Node allocation", "[hwloc]")
 {
     auto&                    topo = lstr::GlobalResource< lstr::HwlocWrapper >::getMaybeUninitialized();
     lstr::NodeGlobalResource alloc{&topo, 0};

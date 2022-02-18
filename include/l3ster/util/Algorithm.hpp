@@ -161,24 +161,25 @@ requires std::permutable< std::ranges::iterator_t< R > > and std::assignable_fro
 constexpr std::ranges::borrowed_subrange_t< R >
 reduceConsecutive(R&& range, Cmp&& comparator = {}, Red&& reduction = {})
 {
-    auto it          = range.begin();
-    auto write_begin = it;
-    while (it != range.end())
+    auto it        = std::ranges::begin(range);
+    auto write_pos = it;
+    while (it != std::ranges::end(range))
     {
-        const auto adj_range_begin = std::adjacent_find(it, range.end(), comparator);
-        if (it != write_begin)
-            std::copy(it, adj_range_begin, write_begin);
-        std::advance(write_begin, std::distance(it, adj_range_begin));
-        if (adj_range_begin == range.end())
+        const auto adj_range_begin = std::adjacent_find(it, std::ranges::end(range), comparator);
+        if (it != write_pos)
+            std::copy(it, adj_range_begin, write_pos);
+        std::advance(write_pos, std::distance(it, adj_range_begin));
+        if (adj_range_begin == std::ranges::end(range))
             break;
-        auto adj_range_end = std::next(adj_range_begin);
-        while (std::next(adj_range_end) != range.end() and comparator(*adj_range_end, *std::next(adj_range_end)))
-            ++adj_range_end;
-        ++adj_range_end;
-        *write_begin++ = std::accumulate(std::next(adj_range_begin), adj_range_end, *adj_range_begin, reduction);
-        it             = adj_range_end;
+        auto next_adjacent = std::next(adj_range_begin);
+        *write_pos         = reduction(*adj_range_begin, *next_adjacent);
+        while (std::next(next_adjacent) != std::ranges::end(range) and
+               comparator(*next_adjacent, *std::next(next_adjacent)))
+            *write_pos = reduction(*write_pos, *++next_adjacent);
+        ++write_pos;
+        it = ++next_adjacent;
     }
-    return std::ranges::borrowed_subrange_t< R >(write_begin, range.end());
+    return std::ranges::borrowed_subrange_t< R >(write_pos, std::ranges::end(range));
 }
 } // namespace lstr
 #endif // L3STER_UTIL_ALGORITHM_HPP

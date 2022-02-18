@@ -375,6 +375,8 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
         };
         CHECK_NOTHROW(part.cvisit(validate_elorder));
         CHECK(part.getNodes().size() == 44745u);
+        for (size_t i = 0; i < part.getNodes().size() - 1; ++i)
+            CHECK(part.getNodes()[i] + 1 == part.getNodes()[i + 1]);
     }
 
     SECTION("procedurally generated mesh")
@@ -400,5 +402,7 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
                 throw std::logic_error{"Incorrect element order"};
         };
         CHECK_NOTHROW(part.cvisit(validate_elorder));
+        for (size_t i = 0; i < part.getNodes().size() - 1; ++i)
+            CHECK(part.getNodes()[i] + 1 == part.getNodes()[i + 1]);
     }
 }

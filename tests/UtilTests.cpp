@@ -52,7 +52,7 @@ static consteval bool checkConstexprVectorIters()
     return forward_result == backward_result && forward_result == (size + 1) * size / 2;
 }
 
-TEST_CASE("Constexpr vector test", "[util]")
+TEST_CASE("Constexpr vector", "[util]")
 {
     SECTION("Size & capcity")
     {
@@ -85,7 +85,7 @@ TEST_CASE("Constexpr vector test", "[util]")
     }
 }
 
-TEST_CASE("Stack size manipulation test", "[util]")
+TEST_CASE("Stack size manipulation", "[util]")
 {
     SECTION("Increase stack size by 1")
     {
@@ -116,7 +116,7 @@ TEST_CASE("Stack size manipulation test", "[util]")
     }
 }
 
-TEMPLATE_TEST_CASE("Bitset (de-)serialization tests",
+TEMPLATE_TEST_CASE("Bitset (de-)serialization",
                    "[util]",
                    ConstexprValue< 10u >,
                    ConstexprValue< 64u >,
@@ -142,7 +142,7 @@ TEMPLATE_TEST_CASE("Bitset (de-)serialization tests",
     }
 }
 
-TEST_CASE("MetisGraphWrapper tests", "[util]")
+TEST_CASE("MetisGraphWrapper", "[util]")
 {
     // Test data is a full graph of size n_nodes
     constexpr ptrdiff_t n_nodes     = 10;
@@ -254,5 +254,12 @@ TEST_CASE("Consecutive reduce algo", "[util]")
         REQUIRE(v.size() == 1);
         CHECK(v[0].first == 1);
         CHECK(v[0].second == 9);
+    }
+
+    SECTION("Empty")
+    {
+        std::vector< int > v;
+        v.erase(reduceConsecutive(v).begin(), v.end());
+        REQUIRE(v.size() == 0);
     }
 }

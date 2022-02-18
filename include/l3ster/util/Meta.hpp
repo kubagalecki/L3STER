@@ -22,6 +22,18 @@ struct ConstexprValue
     static constexpr auto value = V;
 };
 
+namespace detail
+{
+template < typename T >
+inline constexpr bool is_constexpr_value = false;
+
+template < auto V >
+inline constexpr bool is_constexpr_value< ConstexprValue< V > > = true;
+} // namespace detail
+
+template < typename T >
+concept ConctexprValue_c = detail::is_constexpr_value< T >;
+
 template < typename... T >
 struct type_set
 {};

@@ -16,7 +16,7 @@ if [ "$DEPLOYMENT_TESTS" ]; then
     -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchains/StaticAnalysis.cmake \
     ../tests || exit 1
   cmake --build . -- -j || exit 1
-  ctest --output-on-failure --repeat until-pass:2 --timeout 300 || exit 1
+  ctest --output-on-failure --repeat until-pass:2 --timeout 1500 || exit 1
 else
   cmake \
     -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TYPE" \
@@ -27,7 +27,7 @@ else
     .. || exit 1
   cmake --build . -- -j || exit 1
   cd tests || exit 1
-  ctest --output-on-failure --repeat until-pass:2 --timeout 600 || exit 1
+  ctest --output-on-failure --repeat until-pass:2 --timeout 1500 || exit 1
   if [ "$REPORT_COVERAGE" != "" ]; then
     chmod +x generate_coverage_report.sh
     ./generate_coverage_report.sh || exit 1

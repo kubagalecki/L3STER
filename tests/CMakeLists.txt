@@ -27,6 +27,7 @@ include( Catch )
 ### Define the Catch2-based target ###
 
 add_executable( L3STER_tests TestsMain.cpp
+                DofTests.cpp
                 HwlocTests.cpp
                 LocalAssemblyTests.cpp
                 MappingTests.cpp
@@ -78,11 +79,12 @@ function( add_mpi_test source name nprocs )
 endfunction()
 
 # Define individual tests
-add_mpi_test( "MpiBlockingCommunicationTest.cpp" "MPI_blocking_communication_test" "1;2;4" )
-add_mpi_test( "MpiAsyncCommunicationTest.cpp" "MPI_async_communication_test" "1;2;4" )
-add_mpi_test( "MeshSendRecvTest.cpp" "Mesh_send_recv_test" "2;4" )
-add_mpi_test( "MeshDistributionTest.cpp" "Mesh_distribution_test" "1;2;4" )
-add_mpi_test( "NodeThroughputInfoTest.cpp" "Node_throughput_calculation_test" "1;2;4" )
+add_mpi_test( "GlobalDofGatherTest.cpp" "Distribute_global_DOF_intervals" "2;4" )
+add_mpi_test( "MpiBlockingCommunicationTest.cpp" "MPI_blocking_communication" "1;2;4" )
+add_mpi_test( "MpiAsyncCommunicationTest.cpp" "MPI_async_communication" "1;2;4" )
+add_mpi_test( "MeshSendRecvTest.cpp" "Mesh_send_recv" "2;4" )
+add_mpi_test( "MeshDistributionTest.cpp" "Mesh_distribution" "1;2;4" )
+add_mpi_test( "NodeThroughputInfoTest.cpp" "Node_throughput_calculation" "1;2;4" )
 
 #######################################################################################################################
 

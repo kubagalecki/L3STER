@@ -8,7 +8,7 @@
 #include <atomic>
 #include <thread>
 
-TEST_CASE("hwloc topology test", "[hwloc]")
+TEST_CASE("hwloc topology", "[hwloc]")
 {
     auto& topology = lstr::GlobalResource< lstr::HwlocWrapper >::getMaybeUninitialized();
     REQUIRE(L3STER_N_NUMA_NODES == topology.getMachineSize());
@@ -32,7 +32,7 @@ TEST_CASE("hwloc topology test", "[hwloc]")
     CHECK(n_cpus == std::thread::hardware_concurrency());
 }
 
-TEST_CASE("hwloc thread-to-core binding test", "[hwloc]")
+TEST_CASE("hwloc thread-to-core binding", "[hwloc]")
 {
     auto&                      topology = lstr::GlobalResource< lstr::HwlocWrapper >::getMaybeUninitialized();
     std::vector< std::thread > thread_pool(std::thread::hardware_concurrency());
@@ -67,7 +67,7 @@ TEST_CASE("hwloc thread-to-core binding test", "[hwloc]")
     CHECK(hwloc_thread_binding_test_result);
 }
 
-TEST_CASE("hwloc thread-to-node binding test", "[hwloc]")
+TEST_CASE("hwloc thread-to-node binding", "[hwloc]")
 {
     auto&                      topology = lstr::GlobalResource< lstr::HwlocWrapper >::getMaybeUninitialized();
     std::vector< std::thread > thread_pool(topology.getMachineSize());
@@ -91,7 +91,7 @@ TEST_CASE("hwloc thread-to-node binding test", "[hwloc]")
     CHECK(hwloc_thread_binding_test_result);
 }
 
-TEST_CASE("hwloc memory binding test", "[hwloc]")
+TEST_CASE("hwloc memory binding", "[hwloc]")
 {
     auto&            topology = lstr::GlobalResource< lstr::HwlocWrapper >::getMaybeUninitialized();
     constexpr size_t size     = 42 * sizeof(size_t);

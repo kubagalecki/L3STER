@@ -7,7 +7,7 @@
 
 using namespace lstr;
 
-TEST_CASE("Reference bases at QPs test", "[local_asm]")
+TEST_CASE("Reference bases at QPs", "[local_asm]")
 {
     SECTION("Values")
     {
@@ -55,7 +55,7 @@ TEST_CASE("Physical basis derivative at QPs", "[local_asm, mapping]")
     part.cvisit(do_test, {0}); // Only for the hex domain, this won't work for 2D elements in a 3D space
 }
 
-TEST_CASE("Local system assembly tests", "[local_asm]")
+TEST_CASE("Local system assembly", "[local_asm]")
 {
     // Solve problems using a 1 element discretization and compare with known results
 
@@ -115,7 +115,7 @@ TEST_CASE("Local system assembly tests", "[local_asm]")
                 constexpr size_t max_nbn =
                     std::accumulate(begin(boundary_table), end(boundary_table), 0, [](size_t val, const auto& a) {
                         return val + a.size();
-                          });
+                    });
                 std::array< el_locind_t, max_nbn > ret_alloc{};
                 for (size_t index = 0; const auto& side_nodes : boundary_table)
                 {
