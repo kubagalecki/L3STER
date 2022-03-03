@@ -91,14 +91,14 @@ endfunction()
 #                                        packages which were requested but not built, set only if
 #                                        at least one package was not found
 #
-function( define_trilinos_target Verbosity )
+function( define_trilinos_target Verbosity Version )
 
     if ( Verbosity )
         message( STATUS "Detecting Trilinos" )
         list( APPEND CMAKE_MESSAGE_INDENT "  " )
     endif ()
 
-    find_package( Trilinos REQUIRED )
+    find_package( Trilinos ${Version} REQUIRED )
 
     if ( NOT ${Trilinos_CXX_COMPILER} STREQUAL ${CMAKE_CXX_COMPILER} )
         message( WARNING " Detected different C++ compiler than the one Trilinos was built with.\n"

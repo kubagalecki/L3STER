@@ -43,7 +43,7 @@ include( "cmake/ImportLibrary.cmake" )
 
 # Import libraries
 # Trilinos
-define_trilinos_target( ${L3STER_ENABLE_VERBOSITY} Tpetra Belos MueLu )
+define_trilinos_target( ${L3STER_ENABLE_VERBOSITY} 13.2 Tpetra Belos MueLu )
 list( APPEND L3STER_DEPENDENCY_LIST Trilinos )
 
 # Eigen

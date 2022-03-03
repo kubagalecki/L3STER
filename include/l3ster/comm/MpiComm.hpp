@@ -36,7 +36,7 @@ L3STER_MPI_TYPE_MAPPING_STRUCT(float, MPI_FLOAT)                           // NO
 L3STER_MPI_TYPE_MAPPING_STRUCT(double, MPI_DOUBLE)                         // NOLINT
 L3STER_MPI_TYPE_MAPPING_STRUCT(long double, MPI_LONG_DOUBLE)               // NOLINT
 
-void handleMPIError(int error, const char* message)
+inline void handleMPIError(int error, const char* message)
 {
     if (error) [[unlikely]]
         throw std::runtime_error{message};
