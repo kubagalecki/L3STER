@@ -1,15 +1,11 @@
-#ifndef L3STER_ASSEMBLY_DOFGLOBALDISTRIBUTION_HPP
-#define L3STER_ASSEMBLY_DOFGLOBALDISTRIBUTION_HPP
+#ifndef L3STER_ASSEMBLY_DOFINTERVALS_HPP
+#define L3STER_ASSEMBLY_DOFINTERVALS_HPP
 
 #include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/util/BitsetManip.hpp"
 
-#include <iostream>
-
-namespace lstr
-{
-namespace detail
+namespace lstr::detail
 {
 constexpr size_t getNFields(const auto& problem_def)
 {
@@ -301,6 +297,5 @@ void consolidateDofIntervals(std::vector< std::pair< std::array< n_id_t, 2 >, st
     resolve_overlapping();
     consolidate_samedof_overlappingdelim();
 }
-} // namespace detail
-} // namespace lstr
-#endif // L3STER_ASSEMBLY_DOFGLOBALDISTRIBUTION_HPP
+} // namespace lstr::detail
+#endif // L3STER_ASSEMBLY_DOFINTERVALS_HPP
