@@ -1,4 +1,4 @@
-#include "l3ster/dof/DofIntervals.hpp"
+#include "l3ster/global_assembly/DofIntervals.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/PartitionMesh.hpp"
 #include "l3ster/mesh/ReadMesh.hpp"

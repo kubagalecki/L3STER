@@ -1,5 +1,5 @@
-#ifndef L3STER_DOF_DOFGLOBALDISTRIBUTION_HPP
-#define L3STER_DOF_DOFGLOBALDISTRIBUTION_HPP
+#ifndef L3STER_ASSEMBLY_DOFGLOBALDISTRIBUTION_HPP
+#define L3STER_ASSEMBLY_DOFGLOBALDISTRIBUTION_HPP
 
 #include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
@@ -303,4 +303,4 @@ void consolidateDofIntervals(std::vector< std::pair< std::array< n_id_t, 2 >, st
 }
 } // namespace detail
 } // namespace lstr
-#endif // L3STER_DOF_DOFGLOBALDISTRIBUTION_HPP
+#endif // L3STER_ASSEMBLY_DOFGLOBALDISTRIBUTION_HPP
