@@ -1,4 +1,5 @@
 #include "l3ster/global_assembly/DofIntervals.hpp"
+#include "l3ster/global_assembly/NodeLocalGlobalConverter.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/PartitionMesh.hpp"
 #include "l3ster/mesh/ReadMesh.hpp"
@@ -149,5 +150,50 @@ TEMPLATE_TEST_CASE("Node DOF interval consolidation", "[dof]", ConstexprValue< 1
             return std::ranges::all_of(std::views::iota(lo, hi + 1), [&](auto node) { return node_covs[node] == cov; });
         });
         CHECK(intervals_are_correct);
+    }
+}
+
+TEST_CASE("Node ID local <-> global", "[dof]")
+{
+    constexpr auto check_partition_equivalence = [](const MeshPartition& p1, const MeshPartition& p2) {
+        CHECK(p1.getNodes() == p2.getNodes());
+        CHECK(p1.getGhostNodes() == p2.getGhostNodes());
+        p1.cvisit([&]< ElementTypes T, el_o_t O >(const Element< T, O >& el1) {
+            const auto el2 = p2.find(el1.getId());
+            if (not el2)
+                throw std::logic_error{"Converting nodes IDs between local and global has changed element IDs"};
+            const auto& el2_actual = *std::get< const Element< T, O >* >(
+                el2->first); // if this throws bad variant access we want it to propagate
+            CHECK(el1.getNodes() == el2_actual.getNodes());
+            CHECK(el1.getData().vertices == el2_actual.getData().vertices);
+        });
+    };
+    constexpr auto check_partition_contiguity = [](const MeshPartition& partition) {
+        std::vector< bool > visited(partition.getNodes().size() + partition.getGhostNodes().size());
+        partition.cvisit([&](const auto& element) {
+            for (auto node : element.getNodes())
+                visited[node] = true;
+        });
+        CHECK(std::ranges::all_of(visited, [](const auto& v) -> bool { return v; }));
+    };
+
+    constexpr std::array node_dist = {0., 1., 2., 4.};
+    constexpr size_t     n_parts   = 4;
+    auto                 mesh      = makeCubeMesh(node_dist);
+    auto&                p0        = mesh.getPartitions()[0];
+    p0.initDualGraph();
+    p0   = convertMeshToOrder< 2 >(p0);
+    mesh = partitionMesh(mesh, n_parts, {});
+
+    const auto original_mesh = mesh;
+    for (ptrdiff_t i = 0; auto& partition : mesh.getPartitions())
+    {
+        const auto converter = NodeLocalGlobalConverter{partition};
+
+        converter.convertToLocal(partition);
+        check_partition_contiguity(partition);
+
+        converter.convertToGlobal(partition);
+        check_partition_equivalence(partition, original_mesh.getPartitions()[i++]);
     }
 }

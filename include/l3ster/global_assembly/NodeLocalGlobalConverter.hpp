@@ -12,42 +12,37 @@ namespace lstr
 class NodeLocalGlobalConverter
 {
 public:
-    NodeLocalGlobalConverter(const MeshPartition* mesh_)
-        : mesh{mesh_}, id_map{mesh_->getNodes().size() + mesh_->getGhostNodes().size()}
+    NodeLocalGlobalConverter() = default;
+    NodeLocalGlobalConverter(const MeshPartition& mesh) { init(mesh); }
+    void init(const MeshPartition& mesh)
     {
+        id_map           = map_t{mesh.getNodes().size() + mesh.getGhostNodes().size()};
         n_id_t local_ind = 0;
-        for (auto gi : mesh->getNodes())
+        for (auto gi : mesh.getNodes())
             id_map.insert(std::make_pair(gi, local_ind++));
-        for (auto gi : mesh->getGhostNodes())
+        for (auto gi : mesh.getGhostNodes())
             id_map.insert(std::make_pair(gi, local_ind++));
     }
 
-    [[nodiscard]] n_id_t globalToLocal(n_id_t global) const { return id_map.find(global)->second; }
-    [[nodiscard]] n_id_t localToGlobal(n_id_t local) const
+    void convertToLocal(MeshPartition& mesh) const
     {
-        const auto n_owned_nodes = static_cast< n_id_t >(mesh->getNodes().size());
-        return local < n_owned_nodes ? mesh->getNodes()[local] : mesh->getGhostNodes()[local - n_owned_nodes];
-    }
-
-    // The argument of the conversion functions must be the same as the one passed to the constructor
-    void convertToLocal(MeshPartition& mesh_arg) const
-    {
-        mesh_arg.visit([this](auto& element) {
+        mesh.visit([this](auto& element) {
             for (auto& node : element.getNodes())
-                node = globalToLocal(node);
+                node = id_map.find(node)->second;
         });
     }
-    void convertToGlobal(MeshPartition& mesh_arg) const
+    void convertToGlobal(MeshPartition& mesh) const
     {
-        mesh_arg.visit([this](auto& element) {
+        const auto n_owned = static_cast< n_id_t >(mesh.getNodes().size());
+        mesh.visit([&](auto& element) {
             for (auto& node : element.getNodes())
-                node = localToGlobal(node);
+                node = node < n_owned ? mesh.getNodes()[node] : mesh.getGhostNodes()[node - n_owned];
         });
     }
 
 private:
-    const MeshPartition*                 mesh;
-    std::unordered_map< n_id_t, n_id_t > id_map;
+    using map_t = std::unordered_map< n_id_t, n_id_t >;
+    map_t id_map;
 };
 } // namespace lstr
 #endif // L3STER_ASSEMBLY_NODELOCALGLOBALCONVERTER_HPP
