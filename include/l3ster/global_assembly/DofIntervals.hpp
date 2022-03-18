@@ -297,5 +297,23 @@ void consolidateDofIntervals(std::vector< std::pair< std::array< n_id_t, 2 >, st
     resolve_overlapping();
     consolidate_samedof_overlappingdelim();
 }
+
+template < size_t n_fields >
+auto computeIntervalStarts(
+    const std::vector< std::pair< std::array< n_id_t, 2 >, std::bitset< n_fields > > >& intervals)
+{
+    std::vector< global_dof_t > retval(intervals.size());
+    std::transform_exclusive_scan(begin(intervals),
+                                  end(intervals),
+                                  begin(retval),
+                                  0,
+                                  std::plus< global_dof_t >{},
+                                  [](const auto& interval) -> global_dof_t {
+                                      const auto& [delim, cov] = interval;
+                                      const auto& [lo, hi]     = delim;
+                                      return (hi - lo + 1) * cov.count();
+                                  });
+    return retval;
+}
 } // namespace lstr::detail
 #endif // L3STER_ASSEMBLY_DOFINTERVALS_HPP

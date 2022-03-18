@@ -13,15 +13,13 @@ class NodeLocalGlobalConverter
 {
 public:
     NodeLocalGlobalConverter() = default;
-    NodeLocalGlobalConverter(const MeshPartition& mesh) { init(mesh); }
-    void init(const MeshPartition& mesh)
+    NodeLocalGlobalConverter(const MeshPartition& mesh) : id_map{mesh.getNodes().size() + mesh.getGhostNodes().size()}
     {
-        id_map           = map_t{mesh.getNodes().size() + mesh.getGhostNodes().size()};
         n_id_t local_ind = 0;
         for (auto gi : mesh.getNodes())
-            id_map.insert(std::make_pair(gi, local_ind++));
+            id_map.emplace(gi, local_ind++);
         for (auto gi : mesh.getGhostNodes())
-            id_map.insert(std::make_pair(gi, local_ind++));
+            id_map.emplace(gi, local_ind++);
     }
 
     void convertToLocal(MeshPartition& mesh) const
@@ -41,8 +39,7 @@ public:
     }
 
 private:
-    using map_t = std::unordered_map< n_id_t, n_id_t >;
-    map_t id_map;
+    std::unordered_map< n_id_t, n_id_t > id_map;
 };
 } // namespace lstr
 #endif // L3STER_ASSEMBLY_NODELOCALGLOBALCONVERTER_HPP

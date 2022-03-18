@@ -1,5 +1,4 @@
-#include "l3ster/global_assembly/DofIntervals.hpp"
-#include "l3ster/global_assembly/NodeLocalGlobalConverter.hpp"
+#include "l3ster/global_assembly/NodeDofMaps.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/PartitionMesh.hpp"
 #include "l3ster/mesh/ReadMesh.hpp"
@@ -195,5 +194,26 @@ TEST_CASE("Node ID local <-> global", "[dof]")
 
         converter.convertToGlobal(partition);
         check_partition_equivalence(partition, original_mesh.getPartitions()[i++]);
+    }
+}
+
+TEST_CASE("Global node to DOF", "[dof]")
+{
+    constexpr std::array node_dist = {0., 1., 2., 4.};
+    constexpr size_t     n_parts   = 4;
+    auto                 mesh      = makeCubeMesh(node_dist);
+    auto&                p0        = mesh.getPartitions()[0];
+
+    std::vector< std::pair< std::array< n_id_t, 2 >, std::bitset< 2 > > > dof_intervals;
+    n_id_t i1s = 0, i1e = node_dist.size() * node_dist.size() - 1, i2s = node_dist.size() * node_dist.size(),
+           i2e = p0.getNodes().size() - 1;
+    dof_intervals.emplace_back(std::array{i1s, i1e}, std::bitset< 2 >{0b1ull});
+    dof_intervals.emplace_back(std::array{i2s, i2e}, std::bitset< 2 >{0b1ull});
+
+    GlobalNodeToDofMap map{p0, dof_intervals};
+    for (auto n : p0.getNodes())
+    {
+        const auto& dofs = map(n);
+        CHECK(dofs[0] == static_cast< global_dof_t >(n));
     }
 }
