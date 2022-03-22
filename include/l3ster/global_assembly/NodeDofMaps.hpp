@@ -11,8 +11,7 @@ class GlobalNodeToDofMap
 {
 public:
     GlobalNodeToDofMap() = default;
-    GlobalNodeToDofMap(const MeshPartition&                                                          mesh,
-                       const std::vector< std::pair< std::array< n_id_t, 2 >, std::bitset< NF > > >& dof_intervals);
+    GlobalNodeToDofMap(const MeshPartition& mesh, const detail::node_interval_vector_t< NF >& dof_intervals);
 
     [[nodiscard]] auto operator()(n_id_t node) const { return map.find(node)->second; }
 
@@ -25,19 +24,17 @@ class LocalNodeToDofMap
 {
 public:
     LocalNodeToDofMap() = default;
-    LocalNodeToDofMap(const MeshPartition&                                                          mesh,
-                      const std::vector< std::pair< std::array< n_id_t, 2 >, std::bitset< NF > > >& dof_intervals);
+    LocalNodeToDofMap(const MeshPartition& mesh, const detail::node_interval_vector_t< NF >& dof_intervals);
 
     [[nodiscard]] auto operator()(n_id_t node) const { return map[node]; }
 
 private:
-    std::vector< std::array< global_dof_t, NF > > map;
+    std::vector< std::array< local_dof_t, NF > > map;
 };
 
 template < size_t NF >
-GlobalNodeToDofMap< NF >::GlobalNodeToDofMap(
-    const MeshPartition&                                                          mesh,
-    const std::vector< std::pair< std::array< n_id_t, 2 >, std::bitset< NF > > >& dof_intervals)
+GlobalNodeToDofMap< NF >::GlobalNodeToDofMap(const MeshPartition&                        mesh,
+                                             const detail::node_interval_vector_t< NF >& dof_intervals)
     : map(mesh.getNodes().size() + mesh.getGhostNodes().size())
 {
     const auto dof_interval_starts = detail::computeIntervalStarts(dof_intervals);
@@ -58,12 +55,7 @@ GlobalNodeToDofMap< NF >::GlobalNodeToDofMap(
 
         for (auto search_it = begin(dof_intervals); auto n : nodes)
         {
-            search_it = std::ranges::find_if(
-                search_it,
-                end(dof_intervals),
-                [&](n_id_t hi) { return hi >= n; },
-                [](const auto& interval) { return interval.first[1]; });
-
+            search_it               = detail::findNodeInterval(search_it, end(dof_intervals), n);
             const auto interval_ind = std::distance(begin(dof_intervals), search_it);
             const auto node_dofs    = compute_node_dofs(n, interval_ind);
             map.emplace(n, node_dofs);
@@ -74,22 +66,16 @@ GlobalNodeToDofMap< NF >::GlobalNodeToDofMap(
 }
 
 template < size_t NF >
-LocalNodeToDofMap< NF >::LocalNodeToDofMap(
-    const MeshPartition&                                                          mesh,
-    const std::vector< std::pair< std::array< n_id_t, 2 >, std::bitset< NF > > >& dof_intervals)
+LocalNodeToDofMap< NF >::LocalNodeToDofMap(const MeshPartition&                        mesh,
+                                           const detail::node_interval_vector_t< NF >& dof_intervals)
     : map(mesh.getNodes().size() + mesh.getGhostNodes().size())
 {
     auto add_entries = [&, entry = n_id_t{0}, dof = global_dof_t{0}](const std::vector< n_id_t >& nodes) mutable {
         for (auto search_it = begin(dof_intervals); auto n : nodes)
         {
-            search_it = std::ranges::find_if(
-                search_it,
-                end(dof_intervals),
-                [&](n_id_t hi) { return hi >= n; },
-                [](const auto& interval) { return interval.first[1]; });
-
-            std::array< global_dof_t, NF > node_dofs;
-            node_dofs.fill(std::numeric_limits< global_dof_t >::max());
+            search_it = detail::findNodeInterval(search_it, end(dof_intervals), n);
+            std::array< local_dof_t, NF > node_dofs;
+            node_dofs.fill(std::numeric_limits< local_dof_t >::max());
             const auto& cov = search_it->second;
             for (size_t i = 0; i < NF; ++i)
                 if (cov.test(i))

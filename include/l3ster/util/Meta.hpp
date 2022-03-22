@@ -32,7 +32,7 @@ inline constexpr bool is_constexpr_value< ConstexprValue< V > > = true;
 } // namespace detail
 
 template < typename T >
-concept ConctexprValue_c = detail::is_constexpr_value< T >;
+concept ConstexprValue_c = detail::is_constexpr_value< T >;
 
 template < typename... T >
 struct type_set

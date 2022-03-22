@@ -138,7 +138,7 @@ public:
     // observers
     [[nodiscard]] inline int getRank() const;
     [[nodiscard]] inline int getSize() const;
-    [[nodiscard]] MPI_Comm&  get() { return comm; }
+    [[nodiscard]] MPI_Comm   get() const { return comm; }
 
 private:
     MPI_Comm comm = MPI_COMM_WORLD;

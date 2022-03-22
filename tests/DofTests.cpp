@@ -1,3 +1,4 @@
+#include "l3ster/global_assembly/MakeTpetraMap.hpp"
 #include "l3ster/global_assembly/NodeDofMaps.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/PartitionMesh.hpp"
@@ -267,27 +268,26 @@ TEST_CASE("Local node to DOF", "[dof]")
     const auto check_dofs = [&](const std::vector< n_id_t >&         owned_nodes,
                                 const std::vector< n_id_t >&         ghost_nodes,
                                 const LocalNodeToDofMap< n_fields >& map) {
-        auto check_nodes =
-            [&, node_ind = n_id_t{0}, dof = global_dof_t{0}](const std::vector< n_id_t >& nodes) mutable {
-                for (auto node : nodes)
+        auto check_nodes = [&, node_ind = n_id_t{0}, dof = local_dof_t{0}](const std::vector< n_id_t >& nodes) mutable {
+            for (auto node : nodes)
+            {
+                std::array< local_dof_t, n_fields > expected_dofs;
+                expected_dofs.fill(std::numeric_limits< local_dof_t >::max());
+                if (node < i2_begin)
                 {
-                    std::array< global_dof_t, n_fields > expected_dofs;
-                    expected_dofs.fill(std::numeric_limits< global_dof_t >::max());
-                    if (node < i2_begin)
-                    {
-                        for (size_t i = 0; i < n_fields; ++i)
-                            if (i1_cov.test(i))
-                                expected_dofs[i] = dof++;
-                    }
-                    else
-                        for (size_t i = 0; i < n_fields; ++i)
-                            if (i2_cov.test(i))
-                                expected_dofs[i] = dof++;
-
-                    const auto computed_dofs = map(node_ind++);
-                    CHECK(computed_dofs == expected_dofs);
+                    for (size_t i = 0; i < n_fields; ++i)
+                        if (i1_cov.test(i))
+                            expected_dofs[i] = dof++;
                 }
-            };
+                else
+                    for (size_t i = 0; i < n_fields; ++i)
+                        if (i2_cov.test(i))
+                            expected_dofs[i] = dof++;
+
+                const auto computed_dofs = map(node_ind++);
+                CHECK(computed_dofs == expected_dofs);
+            }
+        };
         check_nodes(owned_nodes);
         check_nodes(ghost_nodes);
     };
@@ -297,7 +297,13 @@ TEST_CASE("Local node to DOF", "[dof]")
         const auto global_map = GlobalNodeToDofMap{p0, dof_intervals};
         const auto local_map  = LocalNodeToDofMap{p0, dof_intervals};
         for (auto node : p0.getNodes())
-            CHECK(global_map(node) == local_map(node));
+        {
+            auto global_dofs = global_map(node);
+            std::ranges::replace(
+                global_dofs, std::numeric_limits< global_dof_t >::max(), std::numeric_limits< local_dof_t >::max());
+            const auto local_dofs = local_map(node);
+            CHECK(std::ranges::equal(global_dofs, local_dofs));
+        }
     }
 
     SECTION("Partitioned")
