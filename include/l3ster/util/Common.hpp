@@ -54,5 +54,14 @@ struct Pair
     T1 first;
     T2 second;
 };
+
+template < std::integral T >
+std::vector< T > concatVectors(const std::vector< T >& v1, const std::vector< T >& v2)
+{
+    std::vector< T > retval(v1.size() + v2.size());
+    std::ranges::copy(v1, begin(retval));
+    std::ranges::copy(v2, begin(retval) + v1.size());
+    return retval;
+}
 } // namespace lstr
 #endif // L3STER_UTIL_COMMON_HPP

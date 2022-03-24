@@ -2,13 +2,18 @@
 #include "l3ster/util/BitsetManip.hpp"
 #include "l3ster/util/Common.hpp"
 #include "l3ster/util/ConstexprVector.hpp"
+#include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/Meta.hpp"
 #include "l3ster/util/MetisUtils.hpp"
 #include "l3ster/util/SetStackSize.hpp"
 
+#include "MakeRandomVector.hpp"
+
 #include "catch2/catch.hpp"
+#include "tbb/tbb.h"
 
 #include <random>
+#include <ranges>
 
 using namespace lstr;
 
@@ -261,5 +266,110 @@ TEST_CASE("Consecutive reduce algo", "[util]")
         std::vector< int > v;
         v.erase(reduceConsecutive(v).begin(), v.end());
         REQUIRE(v.size() == 0);
+    }
+}
+
+TEST_CASE("Dynamic bitset", "[util]")
+{
+    constexpr auto make_set_inds = [](size_t size) {
+        auto retval = makeRandomVector< size_t >(size / 2, 0, size - 1);
+        std::ranges::sort(retval);
+        auto del_range = std::ranges::unique(retval);
+        retval.erase(del_range.begin(), del_range.end());
+        return retval;
+    };
+    constexpr auto make_reset_inds = [](size_t size, const std::vector< size_t >& set_inds) {
+        std::vector< size_t > retval(size - set_inds.size());
+        std::ranges::set_difference(std::views::iota(size_t{0}, size), set_inds, begin(retval));
+        return retval;
+    };
+
+    constexpr auto check_are_set = [](const DynamicBitset& bitset, std::ranges::range auto&& inds) {
+        constexpr auto test_as_const = [](const DynamicBitset& bs, size_t pos) {
+            return bs[pos];
+        };
+        for (auto i : inds)
+        {
+            CHECK(bitset[i]);
+            CHECK(test_as_const(bitset, i));
+        }
+    };
+    constexpr auto check_are_reset = [](const DynamicBitset& bitset, std::ranges::range auto&& inds) {
+        constexpr auto test_as_const = [](const DynamicBitset& bs, size_t pos) {
+            return bs[pos];
+        };
+        for (auto i : inds)
+        {
+            CHECK_FALSE(bitset[i]);
+            CHECK_FALSE(test_as_const(bitset, i));
+        }
+    };
+
+    constexpr std::array sizes{10, 64, 128, 10001};
+
+    SECTION("Single-threaded")
+    {
+        DynamicBitset bitset;
+        for (size_t size : sizes)
+        {
+            bitset.resize(size);
+            for (auto i : std::views::iota(size_t{0}, bitset.size()))
+                bitset.reset(i);
+
+            const auto set_inds   = make_set_inds(size);
+            const auto reset_inds = make_reset_inds(size, set_inds);
+
+            const auto check_set_correctly = [&] {
+                check_are_set(bitset, set_inds);
+                check_are_reset(bitset, reset_inds);
+                CHECK(bitset.count() == set_inds.size());
+            };
+
+            for (auto i : set_inds)
+                bitset.set(i);
+            check_set_correctly();
+
+            for (auto i : set_inds)
+                bitset.reset(i);
+            check_are_reset(bitset, std::views::iota(size_t{0}, bitset.size()));
+            CHECK(bitset.count() == 0);
+
+            for (auto i : set_inds)
+                bitset[i] = true;
+            check_set_correctly();
+        }
+    }
+
+    SECTION("Multi-threaded")
+    {
+        for (size_t size : sizes)
+        {
+            DynamicBitset bitset{size};
+            const auto    set_inds   = make_set_inds(size);
+            const auto    reset_inds = make_reset_inds(size, set_inds);
+
+            namespace tbb = oneapi::tbb;
+            tbb::parallel_for(tbb::blocked_range< size_t >{0, set_inds.size()},
+                              [&](const tbb::blocked_range< size_t >& range) {
+                                  for (size_t i = range.begin(); i != range.end(); ++i)
+                                      bitset.atomicSet(set_inds[i], std::memory_order_relaxed);
+                              });
+            check_are_set(bitset, set_inds);
+            std::atomic_flag ok{true};
+            tbb::parallel_for(tbb::blocked_range< size_t >{0, set_inds.size()},
+                              [&](const tbb::blocked_range< size_t >& range) {
+                                  for (size_t i = range.begin(); i != range.end(); ++i)
+                                      if (not bitset.atomicTest(set_inds[i], std::memory_order_seq_cst))
+                                          ok.clear(std::memory_order_relaxed);
+                              });
+            CHECK(ok.test());
+
+            tbb::parallel_for(tbb::blocked_range< size_t >{0, set_inds.size()},
+                              [&](const tbb::blocked_range< size_t >& range) {
+                                  for (size_t i = range.begin(); i != range.end(); ++i)
+                                      bitset.atomicReset(set_inds[i], std::memory_order_relaxed);
+                              });
+            CHECK(bitset.count() == 0);
+        }
     }
 }

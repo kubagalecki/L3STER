@@ -86,7 +86,7 @@ add_mpi_test( "MeshSendRecvTest.cpp" "Mesh_send_recv" "2;4" )
 add_mpi_test( "MeshDistributionTest.cpp" "Mesh_distribution" "1;2;4" )
 add_mpi_test( "NodeThroughputInfoTest.cpp" "Node_throughput_calculation" "1;2;4" )
 add_mpi_test( "TpetraMapCreationTest.cpp" "Tpetra_Map_Creation" "1;2;4" )
-add_mpi_test( "GlobalAssemblyTest.cpp" "Global_assembly" "1;2;4" )
+#add_mpi_test( "GlobalAssemblyTest.cpp" "Global_assembly" "1;2;4" )
 
 #######################################################################################################################
 
