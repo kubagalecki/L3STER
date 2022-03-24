@@ -1,0 +1,2 @@
+called_from_lib:libtbb.so
+called_from_lib:libtbb_debug.so
