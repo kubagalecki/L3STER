@@ -329,7 +329,12 @@ TEST_CASE("Dynamic bitset", "[util]")
                 bitset.set(i);
             check_set_correctly();
 
-            for (auto i : set_inds)
+            for (auto i : std::views::iota(size_t{0}, bitset.size()))
+                bitset.flip(i);
+            check_are_set(bitset, reset_inds);
+            check_are_reset(bitset, set_inds);
+
+            for (auto i : reset_inds)
                 bitset.reset(i);
             check_are_reset(bitset, std::views::iota(size_t{0}, bitset.size()));
             CHECK(bitset.count() == 0);
@@ -355,19 +360,28 @@ TEST_CASE("Dynamic bitset", "[util]")
                                       bitset.atomicSet(set_inds[i], std::memory_order_relaxed);
                               });
             check_are_set(bitset, set_inds);
+            check_are_reset(bitset, reset_inds);
             std::atomic_flag ok{true};
             tbb::parallel_for(tbb::blocked_range< size_t >{0, set_inds.size()},
                               [&](const tbb::blocked_range< size_t >& range) {
                                   for (size_t i = range.begin(); i != range.end(); ++i)
-                                      if (not bitset.atomicTest(set_inds[i], std::memory_order_seq_cst))
+                                      if (not bitset.atomicTest(set_inds[i]))
                                           ok.clear(std::memory_order_relaxed);
                               });
             CHECK(ok.test());
 
-            tbb::parallel_for(tbb::blocked_range< size_t >{0, set_inds.size()},
+            tbb::parallel_for(tbb::blocked_range< size_t >{0, bitset.size()},
                               [&](const tbb::blocked_range< size_t >& range) {
                                   for (size_t i = range.begin(); i != range.end(); ++i)
-                                      bitset.atomicReset(set_inds[i], std::memory_order_relaxed);
+                                      bitset.atomicFlip(i, std::memory_order_relaxed);
+                              });
+            check_are_set(bitset, reset_inds);
+            check_are_reset(bitset, set_inds);
+
+            tbb::parallel_for(tbb::blocked_range< size_t >{0, reset_inds.size()},
+                              [&](const tbb::blocked_range< size_t >& range) {
+                                  for (size_t i = range.begin(); i != range.end(); ++i)
+                                      bitset.atomicReset(reset_inds[i], std::memory_order_relaxed);
                               });
             CHECK(bitset.count() == 0);
         }
