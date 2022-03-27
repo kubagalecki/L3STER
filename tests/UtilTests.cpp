@@ -345,19 +345,52 @@ TEST_CASE("Dynamic bitset", "[util]")
         }
     }
 
+    SECTION("Subview")
+    {
+        for (size_t size : sizes)
+        {
+            {
+                const DynamicBitset bitset{size};
+                const auto          subview = bitset.getSubView(1, size / 2);
+                CHECK(subview.count() == 0);
+                CHECK(bitset.getSubView(0, 0).count() == 0);
+                CHECK_FALSE(subview[0]);
+            }
+            {
+                DynamicBitset bitset{size};
+                auto          subview = bitset.getSubView(1, size / 2);
+                for (size_t i = 0; i < subview.size(); ++i)
+                {
+                    subview.set(i);
+                    CHECK(subview.test(i));
+                    CHECK(subview[i]);
+                    subview.reset(i);
+                    CHECK_FALSE(subview.test(i));
+                    subview.flip(i);
+                    CHECK(subview.test(i));
+                    subview.assign(i, false);
+                    CHECK_FALSE(subview.test(i));
+                    subview[i] = true;
+                    CHECK(subview.test(i));
+                }
+                CHECK(subview.count() == bitset.count());
+            }
+        }
+    }
+
     SECTION("Multi-threaded")
     {
         for (size_t size : sizes)
         {
             DynamicBitset bitset{size};
-            const auto    set_inds   = make_set_inds(size);
-            const auto    reset_inds = make_reset_inds(size, set_inds);
+            auto          atomic_view = bitset.getAtomicView();
+            const auto    set_inds    = make_set_inds(size);
+            const auto    reset_inds  = make_reset_inds(size, set_inds);
 
-            namespace tbb = oneapi::tbb;
             tbb::parallel_for(tbb::blocked_range< size_t >{0, set_inds.size()},
                               [&](const tbb::blocked_range< size_t >& range) {
                                   for (size_t i = range.begin(); i != range.end(); ++i)
-                                      bitset.atomicSet(set_inds[i], std::memory_order_relaxed);
+                                      atomic_view.set(set_inds[i], std::memory_order_relaxed);
                               });
             check_are_set(bitset, set_inds);
             check_are_reset(bitset, reset_inds);
@@ -365,7 +398,7 @@ TEST_CASE("Dynamic bitset", "[util]")
             tbb::parallel_for(tbb::blocked_range< size_t >{0, set_inds.size()},
                               [&](const tbb::blocked_range< size_t >& range) {
                                   for (size_t i = range.begin(); i != range.end(); ++i)
-                                      if (not bitset.atomicTest(set_inds[i]))
+                                      if (not atomic_view.test(set_inds[i]))
                                           ok.clear(std::memory_order_relaxed);
                               });
             CHECK(ok.test());
@@ -373,7 +406,7 @@ TEST_CASE("Dynamic bitset", "[util]")
             tbb::parallel_for(tbb::blocked_range< size_t >{0, bitset.size()},
                               [&](const tbb::blocked_range< size_t >& range) {
                                   for (size_t i = range.begin(); i != range.end(); ++i)
-                                      bitset.atomicFlip(i, std::memory_order_relaxed);
+                                      atomic_view.flip(i, std::memory_order_relaxed);
                               });
             check_are_set(bitset, reset_inds);
             check_are_reset(bitset, set_inds);
@@ -381,7 +414,7 @@ TEST_CASE("Dynamic bitset", "[util]")
             tbb::parallel_for(tbb::blocked_range< size_t >{0, reset_inds.size()},
                               [&](const tbb::blocked_range< size_t >& range) {
                                   for (size_t i = range.begin(); i != range.end(); ++i)
-                                      bitset.atomicReset(reset_inds[i], std::memory_order_relaxed);
+                                      atomic_view.reset(reset_inds[i], std::memory_order_relaxed);
                               });
             CHECK(bitset.count() == 0);
         }
