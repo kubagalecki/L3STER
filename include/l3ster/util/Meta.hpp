@@ -242,6 +242,20 @@ public:
 
 template < template < auto... > typename Inner, template < typename... > typename Outer, tuple_like auto... Params >
 using parametrize_over_combinations_t = parametrize_over_combinations< Inner, Outer, Params... >::type;
+
+template < array_of< bool > auto A >
+consteval auto getTrueInds()
+{
+    std::array< ptrdiff_t, std::ranges::count(A, true) > retval;
+    auto                                                 insert_it = retval.egin();
+    for (ptrdiff_t i = 0; bool v : A)
+    {
+        if (v)
+            *insert_it++ = i;
+        ++i;
+    }
+    return retval;
+}
 } // namespace lstr
 
 #endif // L3STER_UTIL_META_HPP

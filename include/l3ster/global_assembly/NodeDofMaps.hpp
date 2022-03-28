@@ -13,7 +13,7 @@ public:
     GlobalNodeToDofMap() = default;
     GlobalNodeToDofMap(const MeshPartition& mesh, const detail::node_interval_vector_t< NF >& dof_intervals);
 
-    [[nodiscard]] auto operator()(n_id_t node) const { return map.find(node)->second; }
+    [[nodiscard]] const auto& operator()(n_id_t node) const noexcept { return map.find(node)->second; }
 
 private:
     std::unordered_map< n_id_t, std::array< global_dof_t, NF > > map;
@@ -26,7 +26,7 @@ public:
     LocalNodeToDofMap() = default;
     LocalNodeToDofMap(const MeshPartition& mesh, const detail::node_interval_vector_t< NF >& dof_intervals);
 
-    [[nodiscard]] auto operator()(n_id_t node) const { return map[node]; }
+    [[nodiscard]] const auto& operator()(n_id_t node) const noexcept { return map[node]; }
 
 private:
     std::vector< std::array< local_dof_t, NF > > map;
