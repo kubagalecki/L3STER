@@ -25,16 +25,14 @@ int main(int argc, char* argv[])
         const auto n_ranks = comm.getSize();
         const auto rank    = comm.getRank();
 
-        constexpr auto problem_def     = ConstexprValue< [] {
-            return std::array{Pair{d_id_t{1}, std::array{false, false, false}},
-                              Pair{d_id_t{2}, std::array{false, false, true}},
-                              Pair{d_id_t{3}, std::array{false, true, false}},
-                              Pair{d_id_t{4}, std::array{false, true, true}},
-                              Pair{d_id_t{5}, std::array{true, false, false}},
-                              Pair{d_id_t{6}, std::array{true, false, true}},
-                              Pair{d_id_t{7}, std::array{true, true, false}},
-                              Pair{d_id_t{8}, std::array{true, true, true}}};
-        }() >{};
+        constexpr auto problem_def     = ConstexprValue< std::array{Pair{d_id_t{1}, std::array{false, false, false}},
+                                                                Pair{d_id_t{2}, std::array{false, false, true}},
+                                                                Pair{d_id_t{3}, std::array{false, true, false}},
+                                                                Pair{d_id_t{4}, std::array{false, true, true}},
+                                                                Pair{d_id_t{5}, std::array{true, false, false}},
+                                                                Pair{d_id_t{6}, std::array{true, false, true}},
+                                                                Pair{d_id_t{7}, std::array{true, true, false}},
+                                                                Pair{d_id_t{8}, std::array{true, true, true}}} >{};
         const auto     local_intervals = detail::computeLocalDofIntervals(mesh, problem_def);
         auto           global_data     = detail::gatherGlobalDofIntervals(local_intervals, problem_def, comm);
         auto& [_, global_intervals]    = global_data;

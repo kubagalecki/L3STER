@@ -12,10 +12,7 @@ int main(int argc, char* argv[])
     MpiComm comm{};
 
     const auto     mesh = distributeMesh< 2 >(comm, L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag, {});
-    constexpr auto problem_def   = ConstexprValue< [] {
-        constexpr std::array cov{false, true};
-        return std::array{Pair{d_id_t{1}, cov}};
-    }() >{};
+    constexpr auto problem_def   = ConstexprValue< std::array{Pair{d_id_t{1}, std::array{false, true}}} >{};
     const auto     dof_intervals = computeDofIntervals(mesh, problem_def, comm);
     const auto     tpetra_map    = makeTpetraMap(mesh.getNodes(), dof_intervals, comm);
     const auto     map_entries   = tpetra_map->getNodeElementList();

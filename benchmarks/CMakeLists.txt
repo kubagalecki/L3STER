@@ -1,8 +1,9 @@
 find_package( benchmark REQUIRED )
 
 add_executable( L3STER_benchmarks BenchmarksMain.cpp
-                AssemblyBenchmarks.cpp
                 ElementBenchmarks.cpp
+                GlobalAssemblyBenchmarks.cpp
+                LocalAssemblyBenchmarks.cpp
                 MeshBenchmarks.cpp
                 )
 target_include_directories( L3STER_benchmarks PRIVATE ${CMAKE_CURRENT_BINARY_DIR} )

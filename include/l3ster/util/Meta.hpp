@@ -22,18 +22,6 @@ struct ConstexprValue
     static constexpr auto value = V;
 };
 
-namespace detail
-{
-template < typename T >
-inline constexpr bool is_constexpr_value = false;
-
-template < auto V >
-inline constexpr bool is_constexpr_value< ConstexprValue< V > > = true;
-} // namespace detail
-
-template < typename T >
-concept ConstexprValue_c = detail::is_constexpr_value< T >;
-
 template < typename... T >
 struct type_set
 {};
@@ -52,7 +40,7 @@ requires(first <= last) constexpr auto make_interval_array()
     return interval;
 }
 
-template < array auto A >
+template < std::array A >
 requires std::integral< typename decltype(A)::value_type >
 constexpr auto int_seq_from_array()
 {
@@ -88,7 +76,7 @@ constexpr auto constifyVariant(const std::variant< T... >& v)
 }
 
 // Functionality related to parametrizing over all combinations of a pack of nttp arrays
-template < array auto A >
+template < std::array A >
 requires std::totally_ordered< typename decltype(A)::value_type >
 struct unique_els
 {
@@ -115,10 +103,10 @@ public:
     }();
 };
 
-template < array auto A >
+template < std::array A >
 constexpr inline auto unique_els_v = unique_els< A >::value;
 
-template < array auto... A >
+template < std::array... A >
 requires((A.size() == std::get< 0 >(std::tie(A...)).size()) and ...) struct tuplify
 {
     static constexpr size_t N = (A.size(), ...);
@@ -142,7 +130,7 @@ public:
     static constexpr auto value = tuplify_indices(std::make_index_sequence< N >{});
 };
 
-template < array auto... A >
+template < std::array... A >
 requires(std::totally_ordered< typename decltype(A)::value_type >and...) and
     ((A.size() > 0) and ...) struct all_combinations
 {
@@ -247,7 +235,7 @@ template < array_of< bool > auto A >
 consteval auto getTrueInds()
 {
     std::array< ptrdiff_t, std::ranges::count(A, true) > retval;
-    auto                                                 insert_it = retval.egin();
+    auto                                                 insert_it = retval.begin();
     for (ptrdiff_t i = 0; bool v : A)
     {
         if (v)

@@ -56,8 +56,8 @@ makeTpetraMap(const std::vector< n_id_t >&                      nodes,
     return Teuchos::rcp(new const map_t{detail::getInvalidSize(), dofs, 0, teuchos_comm}); // NOLINT
 }
 
-Teuchos::RCP< const Tpetra::Map< local_dof_t, global_dof_t > > makeTpetraMap(const std::vector< global_dof_t >& dofs,
-                                                                             const MpiComm&                     comm)
+inline Teuchos::RCP< const Tpetra::Map< local_dof_t, global_dof_t > >
+makeTpetraMap(const std::vector< global_dof_t >& dofs, const MpiComm& comm)
 {
     using map_t       = Tpetra::Map< local_dof_t, global_dof_t >;
     auto teuchos_comm = detail::makeTeuchosComm(comm);

@@ -56,12 +56,12 @@ struct Pair
 };
 
 template < std::integral T >
-std::vector< T > concatVectors(const std::vector< T >& v1, const std::vector< T >& v2)
+std::vector< T > concatVectors(std::vector< T > v1, const std::vector< T >& v2)
 {
-    std::vector< T > retval(v1.size() + v2.size());
-    std::ranges::copy(v1, begin(retval));
-    std::ranges::copy(v2, begin(retval) + v1.size());
-    return retval;
+    const auto v1_size_old = v1.size();
+    v1.resize(v1.size() + v2.size());
+    std::ranges::copy(v2, std::next(begin(v1), v1_size_old));
+    return v1;
 }
 } // namespace lstr
 #endif // L3STER_UTIL_COMMON_HPP

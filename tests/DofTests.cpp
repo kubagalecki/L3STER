@@ -17,9 +17,8 @@ TEST_CASE("Local node DOF interval calculation", "[dof]")
     const auto            mesh        = makeCubeMesh(node_dist);
     const auto&           part        = mesh.getPartitions()[0];
     constexpr std::size_t n_fields    = 2;
-    constexpr auto        problem_def = ConstexprValue< [] {
-        return std::array{Pair{d_id_t{0}, std::array{true, false}}, Pair{d_id_t{1}, std::array{false, true}}};
-    }() >{};
+    constexpr auto        problem_def = ConstexprValue< std::array{Pair{d_id_t{0}, std::array{true, false}},
+                                                            Pair{d_id_t{1}, std::array{false, true}}} >{};
     const auto            result      = detail::computeLocalDofIntervals(part, problem_def);
     REQUIRE(result.size() == 2);
     CHECK(result[0].first[0] == 0);
@@ -32,18 +31,16 @@ TEST_CASE("Local node DOF interval calculation", "[dof]")
 
 TEST_CASE("Node DOF intervals of parts sum up to whole", "[dof]")
 {
-    constexpr auto problem_def             = ConstexprValue< [] {
-        return std::array{Pair{d_id_t{1}, std::array{false, false, false}},
-                          Pair{d_id_t{2}, std::array{false, false, true}},
-                          Pair{d_id_t{3}, std::array{false, true, false}},
-                          Pair{d_id_t{4}, std::array{false, true, true}},
-                          Pair{d_id_t{5}, std::array{true, false, false}},
-                          Pair{d_id_t{6}, std::array{true, false, true}},
-                          Pair{d_id_t{7}, std::array{true, true, false}},
-                          Pair{d_id_t{8}, std::array{true, true, true}}};
-    }() >{};
-    auto           mesh                    = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube_multidom.msh), gmsh_tag);
-    auto&          full_part               = mesh.getPartitions()[0];
+    constexpr auto problem_def = ConstexprValue< std::array{Pair{d_id_t{1}, std::array{false, false, false}},
+                                                            Pair{d_id_t{2}, std::array{false, false, true}},
+                                                            Pair{d_id_t{3}, std::array{false, true, false}},
+                                                            Pair{d_id_t{4}, std::array{false, true, true}},
+                                                            Pair{d_id_t{5}, std::array{true, false, false}},
+                                                            Pair{d_id_t{6}, std::array{true, false, true}},
+                                                            Pair{d_id_t{7}, std::array{true, true, false}},
+                                                            Pair{d_id_t{8}, std::array{true, true, true}}} >{};
+    auto           mesh        = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube_multidom.msh), gmsh_tag);
+    auto&          full_part   = mesh.getPartitions()[0];
     const auto     unpartitioned_intervals = detail::computeLocalDofIntervals(full_part, problem_def);
 
     std::vector< d_id_t > boundaries(24);
@@ -62,12 +59,11 @@ TEST_CASE("Node DOF intervals of parts sum up to whole", "[dof]")
 
 TEMPLATE_TEST_CASE("Node DOF interval (de-)serialization", "[dof]", ConstexprValue< 10 >, ConstexprValue< 100 >)
 {
-    constexpr std::size_t n_fields          = TestType::value;
-    constexpr auto        dummy_problem_def = ConstexprValue< [] {
-        return std::array< Pair< d_id_t, std::array< bool, n_fields > >, 1 >{};
-    }() >{};
-    constexpr size_t      test_size         = 1u << 12;
-    auto                  original_intervals =
+    constexpr std::size_t n_fields = TestType::value;
+    constexpr auto        dummy_problem_def =
+        ConstexprValue< std::array< Pair< d_id_t, std::array< bool, n_fields > >, 1 >{} >{};
+    constexpr size_t test_size = 1u << 12;
+    auto             original_intervals =
         decltype(detail::computeLocalDofIntervals(std::declval< MeshPartition >(), dummy_problem_def)){};
     original_intervals.reserve(test_size);
     std::generate_n(begin(original_intervals), test_size, [prng = std::mt19937{std::random_device{}()}]() mutable {

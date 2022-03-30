@@ -3,6 +3,7 @@
 #include "l3ster/util/Common.hpp"
 #include "l3ster/util/ConstexprVector.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
+#include "l3ster/util/IndexMap.hpp"
 #include "l3ster/util/Meta.hpp"
 #include "l3ster/util/MetisUtils.hpp"
 #include "l3ster/util/SetStackSize.hpp"
@@ -419,4 +420,14 @@ TEST_CASE("Dynamic bitset", "[util]")
             CHECK(bitset.count() == 0);
         }
     }
+}
+
+TEST_CASE("Index map", "[util]")
+{
+    constexpr size_t           size = 42, base = 10;
+    std::array< size_t, size > vals;
+    std::ranges::generate(vals, [base = base]() mutable { return base++; });
+    const auto map = IndexMap{vals};
+    for (ptrdiff_t i : std::views::iota(base, base + size))
+        CHECK(map(i) == i - 10);
 }
