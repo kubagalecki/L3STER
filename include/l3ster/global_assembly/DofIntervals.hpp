@@ -10,21 +10,19 @@ namespace lstr
 namespace detail
 {
 template < size_t n_fields, size_t n_domains >
-constexpr size_t deduceNFields(const std::array< Pair< d_id_t, std::array< bool, n_fields > >, n_domains >& problem_def)
+consteval size_t deduceNFields(const std::array< Pair< d_id_t, std::array< bool, n_fields > >, n_domains >&)
 {
     return n_fields;
 }
 
 template < size_t n_fields, size_t n_domains >
-constexpr size_t
-deduceNDomains(const std::array< Pair< d_id_t, std::array< bool, n_fields > >, n_domains >& problem_def)
+consteval size_t deduceNDomains(const std::array< Pair< d_id_t, std::array< bool, n_fields > >, n_domains >&)
 {
     return n_domains;
 }
 
 template < size_t n_fields, size_t n_domains >
-constexpr size_t
-getFieldUllongSize(const std::array< Pair< d_id_t, std::array< bool, n_fields > >, n_domains >& problem_def)
+constexpr size_t getFieldUllongSize(const std::array< Pair< d_id_t, std::array< bool, n_fields > >, n_domains >&)
 {
     return bitsetNUllongs< n_fields >();
 }
@@ -46,21 +44,24 @@ auto computeDofIntervalsFromNodeData(const std::vector< n_id_t >&               
                                      const std::vector< std::bitset< deduceNFields(problem_def) > >& field_cov,
                                      ConstexprValue< problem_def >)
 {
-    constexpr size_t                   n_fields = deduceNFields(problem_def);
-    node_interval_vector_t< n_fields > retval;
-    constexpr size_t                   reserve_heuristic = 16;
+    node_interval_vector_t< deduceNFields(problem_def) > retval;
+    constexpr size_t                                     reserve_heuristic = 16;
     retval.reserve(nodes.size() / reserve_heuristic);
-    for (ptrdiff_t i = 0; i < static_cast< ptrdiff_t >(nodes.size() - 1); ++i)
+
+    auto node_it = begin(nodes);
+    while (node_it != end(nodes))
     {
-        std::array< n_id_t, 2 > int_delim{};
-        auto& [int_first, int_last] = int_delim;
-        int_first                   = nodes[i];
-        auto int_cov                = field_cov[i];
-        while (i < static_cast< ptrdiff_t >(nodes.size() - 1) and nodes[i] + 1 == nodes[i + 1] and
-               field_cov[i + 1] == int_cov)
-            ++i;
-        int_last = nodes[i];
-        retval.emplace_back(int_delim, int_cov);
+        auto cov_it = std::next(begin(field_cov), std::distance(begin(nodes), node_it));
+        node_it     = std::ranges::mismatch(std::ranges::subrange(node_it, end(nodes)), std::views::iota(*node_it)).in1;
+        const auto adj_cov_end = std::next(begin(field_cov), std::distance(begin(nodes), node_it));
+        while (cov_it != adj_cov_end)
+        {
+            const auto cov_pos_begin = std::distance(begin(field_cov), cov_it);
+            const auto current_cov   = *cov_it;
+            cov_it                 = std::find_if(cov_it, adj_cov_end, [&](const auto& c) { return c != current_cov; });
+            const auto cov_pos_end = std::distance(begin(field_cov), cov_it);
+            retval.emplace_back(std::array{nodes[cov_pos_begin], nodes[cov_pos_end - 1]}, current_cov);
+        }
     }
     retval.shrink_to_fit();
     return retval;
@@ -233,8 +234,8 @@ void consolidateDofIntervals(node_interval_vector_t< n_fields >& intervals)
     };
 
     const auto resolve_overlapping = [&intervals] {
-        // TODO: Optimize this function so that `overlap_range` only covers the intervals which *end* before it does.
-        // This will help reduce the n int the O(n^2) part of the algorithm
+        // TODO: Optimize this function so that `overlap_range` only covers the intervals which *end* before it
+        // does. This will help reduce the n int the O(n^2) part of the algorithm
 
         std::vector< interval_t > scratchpad;
         auto                      overlap_begin = intervals.begin();

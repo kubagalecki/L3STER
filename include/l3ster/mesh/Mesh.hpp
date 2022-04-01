@@ -12,6 +12,7 @@ namespace lstr
 class Mesh
 {
 public:
+    Mesh() = default;
     explicit Mesh(std::vector< MeshPartition > partitions_) : partitions{std::move(partitions_)} {}
 
     [[nodiscard]] const std::vector< MeshPartition >& getPartitions() const { return partitions; }
