@@ -5,12 +5,11 @@
 
 FROM archlinux:latest
 
-RUN pacman -Syu --noconfirm git python3 patch cmake gcc gcc-fortran make gcovr
+RUN pacman -Syu --noconfirm git python3 patch cmake gcc gcc-fortran make gcovr gettext xz libtool autoconf automake zlib perl libiconv pkgconf util-macros
 RUN git clone https://github.com/spack/spack.git
 RUN spack/bin/spack external find
-RUN . /spack/share/spack/setup-env.sh && spack install gcc && spack gc -y && spack clean -a && spack load gcc && spack compiler find
-RUN spack/bin/spack install --only dependencies trilinos@13.2.0%gcc@11.2 cxxstd=17 +openmp +rol ^parmetis ^hwloc; spack/bin/spack clean -a
-RUN spack/bin/spack install trilinos@13.2.0%gcc@11.2 cxxstd=17 +openmp +rol ^parmetis ^hwloc; spack/bin/spack gc -y; spack/bin/spack clean -a
+RUN spack/bin/spack install --only dependencies trilinos@13.2.0 cxxstd=17 +openmp +rol ^parmetis ^hwloc; spack/bin/spack clean -a
+RUN spack/bin/spack install trilinos@13.2.0 cxxstd=17 +openmp +rol ^parmetis ^hwloc; spack/bin/spack gc -y; spack/bin/spack clean -a
 RUN spack/bin/spack install eigen
 RUN spack/bin/spack install catch2
 RUN spack/bin/spack install intel-oneapi-tbb
