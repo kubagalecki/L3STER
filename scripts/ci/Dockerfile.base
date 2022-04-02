@@ -3,14 +3,25 @@
 # This way dependencies don't need to be rebuilt every CI run.
 ###############################################################
 
-FROM ubuntu:latest
+FROM archlinux:latest
 
-RUN sudo apt install git python3 patch cmake gcc g++ gfortran binutils gcovr
+RUN pacman -R --noconfirm gcc && pacman -Syu --noconfirm git python3 unzip patch cmake make gcovr gettext clang
 RUN git clone https://github.com/spack/spack.git
-RUN spack/bin/spack external find; spack/bin/spack compiler find
-RUN spack/bin/spack install --only dependencies trilinos@13.2.0 cxxstd=17 +openmp +rol ^parmetis ^hwloc; spack/bin/spack clean -a
-RUN spack/bin/spack install trilinos@13.2.0 cxxstd=17 +openmp +rol ^parmetis ^hwloc; spack/bin/spack gc -y; spack/bin/spack clean -a
-RUN spack/bin/spack install eigen
-RUN spack/bin/spack install catch2
-RUN spack/bin/spack install intel-oneapi-tbb
-RUN spack/bin/spack gc -y; spack/bin/spack clean -a
+RUN spack/bin/spack compiler find && \
+    spack/bin/spack external find cmake
+RUN . spack/share/spack/setup-env.sh && \
+    spack install gcc%clang && \
+    spack load gcc && \
+    spack compiler find && \
+    spack gc -y && \
+    spack clean -a
+RUN . spack/share/spack/setup-env.sh && \
+    spack install trilinos@13.2.0%gcc cxxstd=17 +openmp +rol ^parmetis ^hwloc && \
+    spack gc -y && \
+    spack clean -a
+RUN . spack/share/spack/setup-env.sh && \
+    spack install eigen%gcc && \
+    spack install catch2%gcc && \
+    spack install intel-oneapi-tbb%gcc && \
+    spack gc -y && \
+    spack clean -a

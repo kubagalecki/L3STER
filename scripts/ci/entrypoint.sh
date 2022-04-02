@@ -1,7 +1,7 @@
 #!/bin/bash
 
 . /spack/share/spack/setup-env.sh
-spack load eigen catch2 tbb trilinos
+spack load eigen catch2 tbb trilinos mpi
 TSAN_OPTIONS="suppressions=$(pwd)/scripts/ci/tsan_supressions"
 export TSAN_OPTIONS
 mkdir build
