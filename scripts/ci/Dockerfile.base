@@ -5,23 +5,16 @@
 
 FROM archlinux:latest
 
-RUN pacman -R --noconfirm gcc && pacman -Syu --noconfirm git python3 unzip patch cmake make gcovr gettext clang
-RUN git clone https://github.com/spack/spack.git
-RUN spack/bin/spack compiler find && \
-    spack/bin/spack external find cmake
+RUN pacman -Syu --noconfirm git python3 unzip patch cmake make gcovr gcc gcc-fortran
+RUN git clone https://github.com/spack/spack.git && . spack/share/spack/setup-env.sh && spack compiler find
 RUN . spack/share/spack/setup-env.sh && \
-    spack install gcc%clang && \
-    spack load gcc && \
-    spack compiler find && \
+    spack external find cmake && \
+    spack install trilinos@13.2.0 cxxstd=17 +openmp +rol ^parmetis ^hwloc && \
     spack gc -y && \
     spack clean -a
 RUN . spack/share/spack/setup-env.sh && \
-    spack install trilinos@13.2.0%gcc cxxstd=17 +openmp +rol ^parmetis ^hwloc && \
-    spack gc -y && \
-    spack clean -a
-RUN . spack/share/spack/setup-env.sh && \
-    spack install eigen%gcc && \
-    spack install catch2%gcc && \
-    spack install intel-oneapi-tbb%gcc && \
+    spack install eigen && \
+    spack install catch2 && \
+    spack install intel-oneapi-tbb && \
     spack gc -y && \
     spack clean -a
