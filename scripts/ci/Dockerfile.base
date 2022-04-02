@@ -3,11 +3,11 @@
 # This way dependencies don't need to be rebuilt every CI run.
 ###############################################################
 
-FROM archlinux:latest
+FROM ubuntu:latest
 
-RUN pacman -Syu --noconfirm git python3 patch cmake gcc gcc-fortran make gcovr gettext xz libtool autoconf automake zlib perl libiconv pkgconf util-macros
+RUN sudo apt install git python3 patch cmake gcc g++ gfortran binutils gcovr
 RUN git clone https://github.com/spack/spack.git
-RUN spack/bin/spack external find
+RUN spack/bin/spack external find; spack/bin/spack compiler find
 RUN spack/bin/spack install --only dependencies trilinos@13.2.0 cxxstd=17 +openmp +rol ^parmetis ^hwloc; spack/bin/spack clean -a
 RUN spack/bin/spack install trilinos@13.2.0 cxxstd=17 +openmp +rol ^parmetis ^hwloc; spack/bin/spack gc -y; spack/bin/spack clean -a
 RUN spack/bin/spack install eigen
