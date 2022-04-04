@@ -28,8 +28,8 @@ auto getElementDofs(const Element< T, O >& element, const GlobalNodeToDofMap< n_
 }
 
 template < auto problem_def >
-auto calculateCrsData(const MeshPartition& mesh,
-                      ConstexprValue< problem_def >,
+auto calculateCrsData(const MeshPartition&                                        mesh,
+                      ConstexprValue< problem_def >                               problem_def_ctwrapper,
                       const node_interval_vector_t< deduceNFields(problem_def) >& dof_intervals,
                       std::vector< global_dof_t >                                 global_dofs)
 {
@@ -48,9 +48,10 @@ auto calculateCrsData(const MeshPartition& mesh,
     const auto                                 node_to_dof_map         = GlobalNodeToDofMap{mesh, dof_intervals};
     const auto                                 global_to_local_dof_map = IndexMap{global_dofs};
 
-    const auto process_domain = [&]< size_t dom_ind >(std::integral_constant< size_t, dom_ind >) {
-        constexpr auto  domain_id        = problem_def[dom_ind].first;
-        constexpr auto& coverage         = problem_def[dom_ind].second;
+    const auto process_domain = [&]< auto dom_def >(ConstexprValue< dom_def >)
+    {
+        constexpr auto  domain_id        = dom_def.first;
+        constexpr auto& coverage         = dom_def.second;
         constexpr auto  covered_dof_inds = getTrueInds< coverage >();
 
         const auto process_element = [&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
@@ -64,7 +65,7 @@ auto calculateCrsData(const MeshPartition& mesh,
         };
         mesh.cvisit(process_element, {domain_id}, std::execution::par);
     };
-    forConstexpr(process_domain, std::make_index_sequence< problem_def.size() >{});
+    forConstexpr(process_domain, problem_def_ctwrapper);
     return row_entries;
 }
 

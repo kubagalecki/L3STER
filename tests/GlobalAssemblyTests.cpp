@@ -25,11 +25,10 @@ TEST_CASE("Sparsity pattern assembly", "[global_asm]")
 
     const auto                   node_to_dof_map = GlobalNodeToDofMap{mesh, dof_intervals};
     std::vector< DynamicBitset > dense_graph(dofs.size(), dofs.size());
-    const auto process_domain = [&]< size_t dom_ind >(std::integral_constant< decltype(dom_ind), dom_ind >) {
-        constexpr auto& problem_def = []< auto V >(ConstexprValue< V >)->const auto& { return V; }
-        (probdef_ctwrpr);
-        constexpr auto  domain_id        = problem_def[dom_ind].first;
-        constexpr auto& coverage         = problem_def[dom_ind].second;
+    const auto                   process_domain = [&]< auto dom_def >(ConstexprValue< dom_def >)
+    {
+        constexpr auto  domain_id        = dom_def.first;
+        constexpr auto& coverage         = dom_def.second;
         constexpr auto  covered_dof_inds = getTrueInds< coverage >();
 
         const auto process_element = [&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
@@ -40,8 +39,7 @@ TEST_CASE("Sparsity pattern assembly", "[global_asm]")
         };
         mesh.cvisit(process_element, {domain_id});
     };
-    forConstexpr(process_domain,
-                 std::make_index_sequence< []< auto V >(ConstexprValue< V >) { return V.size(); }(probdef_ctwrpr) >{});
+    forConstexpr(process_domain, probdef_ctwrpr);
 
     for (ptrdiff_t row = 0; const auto& row_dofs : sparse_graph)
     {

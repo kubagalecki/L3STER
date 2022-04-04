@@ -1,7 +1,7 @@
 #ifndef L3STER_UTIL_ALGORITHM_HPP
 #define L3STER_UTIL_ALGORITHM_HPP
 
-#include "Concepts.hpp"
+#include "l3ster/util/Meta.hpp"
 
 #include <iterator>
 #include <numeric>
@@ -138,10 +138,30 @@ constexpr auto matchingPermutation(R1&&  r_pattern,
 }
 
 template < typename F, std::integral T, T... I >
-void forConstexpr(F&& f,
-                  std::integer_sequence< T, I... >) requires(std::invocable< F, std::integral_constant< T, I > >and...)
+constexpr void
+forConstexpr(F&& f,
+             std::integer_sequence< T, I... >) requires(std::invocable< F, std::integral_constant< T, I > >and...)
 {
     (f(std::integral_constant< T, I >{}), ...);
+}
+
+template < typename F, std::ranges::sized_range auto R >
+constexpr void forConstexpr(F&& f, ConstexprValue< R >)
+{
+    constexpr auto access_range = [](std::ranges::range auto&& range, std::size_t index) {
+        if constexpr (std::ranges::random_access_range< std::decay_t< decltype(range) > >)
+            return range.begin()[index];
+        else
+        {
+            auto iter = range.begin();
+            for (; index > 0; --index)
+                ++iter;
+            return *iter;
+        }
+    };
+    forConstexpr(
+        [&]< std::size_t I >(std::integral_constant< std::size_t, I >) { f(ConstexprValue< access_range(R, I) >{}); },
+        std::make_index_sequence< std::ranges::size(R) >{});
 }
 
 template < typename T >

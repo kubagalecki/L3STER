@@ -3,13 +3,10 @@
 #ifndef L3STER_UTIL_META_HPP
 #define L3STER_UTIL_META_HPP
 
-#include "Common.hpp"
-#include "Concepts.hpp"
+#include "l3ster/util/Common.hpp"
+#include "l3ster/util/Concepts.hpp"
 
-#include <algorithm>
-#include <array>
 #include <numeric>
-#include <tuple>
 #include <utility>
 #include <variant>
 

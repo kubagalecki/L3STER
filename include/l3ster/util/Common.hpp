@@ -1,12 +1,14 @@
 #ifndef L3STER_UTIL_COMMON_HPP
 #define L3STER_UTIL_COMMON_HPP
 
+#include <algorithm>
 #include <array>
 #include <bitset>
 #include <concepts>
 #include <limits>
 #include <tuple>
 #include <type_traits>
+#include <vector>
 
 namespace lstr
 {
