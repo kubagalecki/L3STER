@@ -43,7 +43,7 @@ inline auto initElementVectorVariant(ElementTypes T, el_o_t O)
 {
     using ret_t = Domain::element_vector_variant_t;
     ret_t      ret_val;
-    const auto init_if = [&]< ElementTypes TYPE, el_o_t ORDER >(value_set< TYPE, ORDER >) {
+    const auto init_if = [&]< ElementTypes TYPE, el_o_t ORDER >(ValuePack< TYPE, ORDER >) {
         if (T == TYPE and O == ORDER)
         {
             ret_val.template emplace< std::vector< Element< TYPE, ORDER > > >();
@@ -53,7 +53,7 @@ inline auto initElementVectorVariant(ElementTypes T, el_o_t O)
             return false;
     };
 
-    const auto deduce = [&]< typename... Types >(type_set< Types... >) { (init_if(Types{}) or ...); };
+    const auto deduce = [&]< typename... Types >(TypePack< Types... >) { (init_if(Types{}) or ...); };
     deduce(type_order_combinations{});
     return ret_val;
 }

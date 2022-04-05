@@ -23,8 +23,8 @@ using element_ptr_variant_t  = parametrize_type_over_element_types_and_orders_t<
 using element_cptr_variant_t = parametrize_type_over_element_types_and_orders_t< std::variant, element_cptr_t >;
 
 template < ElementTypes TYPE, el_o_t ORDER >
-using type_order_set          = value_set< TYPE, ORDER >;
-using type_order_combinations = parametrize_type_over_element_types_and_orders_t< type_set, type_order_set >;
+using type_order_set          = ValuePack< TYPE, ORDER >;
+using type_order_combinations = parametrize_type_over_element_types_and_orders_t< TypePack, type_order_set >;
 
 namespace detail
 {
@@ -42,12 +42,12 @@ struct is_invocable_on_elements
             std::false_type >
     {};
 
-    using invocability_set = parametrize_type_over_element_types_and_orders_t< type_set, invocable_on_element >;
+    using invocability_set = parametrize_type_over_element_types_and_orders_t< TypePack, invocable_on_element >;
 
     template < typename >
     struct check_all;
     template < typename... T >
-    struct check_all< type_set< T... > >
+    struct check_all< TypePack< T... > >
     {
         static constexpr bool value = (T::value && ...);
     };
@@ -84,12 +84,12 @@ struct is_invocable_r_on_elements
             std::false_type >
     {};
 
-    using invocability_set = parametrize_type_over_element_types_and_orders_t< type_set, invocable_on_element >;
+    using invocability_set = parametrize_type_over_element_types_and_orders_t< TypePack, invocable_on_element >;
 
     template < typename >
     struct check_all;
     template < typename... T >
-    struct check_all< type_set< T... > >
+    struct check_all< TypePack< T... > >
     {
         static constexpr bool value = (T::value && ...);
     };
