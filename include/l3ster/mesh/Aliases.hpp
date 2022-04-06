@@ -11,8 +11,7 @@
 namespace lstr
 {
 template < template < typename... > typename T, template < ElementTypes, el_o_t > typename U >
-using parametrize_type_over_element_types_and_orders_t =
-    parametrize_over_combinations_t< U, T, element_types, element_orders >;
+using parametrize_type_over_element_types_and_orders_t = cart_prod_t< U, T, element_types, element_orders >;
 template < ElementTypes ELTYPE, el_o_t ELORDER >
 class Element;
 template < ElementTypes ELTYPE, el_o_t ELORDER >

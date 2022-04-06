@@ -45,9 +45,9 @@ struct IsTypePack< TypePack< V... > > : std::true_type
 } // namespace detail
 
 template < typename T >
-concept ValueSet_c = detail::IsValuePack< T >::value;
+concept ValuePack_c = detail::IsValuePack< T >::value;
 template < typename T >
-concept TypeSet_c = detail::IsTypePack< T >::value;
+concept TypePack_c = detail::IsTypePack< T >::value;
 
 namespace detail
 {
@@ -117,7 +117,7 @@ constexpr inline auto repetitions = [] {
 } // namespace detail
 
 template < std::array... Arrays >
-requires(sizeof...(Arrays) > 0) constexpr auto getCartesianProductComponents()
+requires(sizeof...(Arrays) > 0) constexpr auto getCartProdComponents()
 {
     constexpr auto deduction_helper = []< std::size_t... ArrInd >(std::index_sequence< ArrInd... >)
     {
@@ -161,43 +161,34 @@ auto zipArrays(ValuePack< V... >)
     return return_deduction_helper(std::make_index_sequence< detail::deduceArraySizes(V...) >{});
 }
 
-template < template < auto... > typename T, ValueSet_c Params >
-struct ApplyInner
+namespace detail
 {
-private:
-    template < ValueSet_c >
-    struct DeductionHelper
-    {};
-    template < auto... V >
-    struct DeductionHelper< ValuePack< V... > >
-    {
-        using type = T< V... >;
-    };
-
-public:
-    using type = typename DeductionHelper< Params >::type;
-};
-
-template < template < auto... > typename Inner, template < typename... > typename Outer, TypeSet_c Params >
-struct ApplyOuter
+template < template < auto... > typename T, ValuePack_c Params >
+struct ApplyValuesDeductionHelper;
+template < template < auto... > typename T, auto... Params >
+struct ApplyValuesDeductionHelper< T, ValuePack< Params... > >
 {
-private:
-    template < typename >
-    struct DeductionHelper
-    {};
-    template < ValueSet_c... VS >
-    struct DeductionHelper< TypePack< VS... > >
-    {
-        using type = Outer< typename ApplyInner< Inner, VS >::type... >;
-    };
-
-public:
-    using type = typename DeductionHelper< Params >::type;
+    using type = T< Params... >;
 };
+} // namespace detail
+template < template < auto... > typename T, ValuePack_c Params >
+using apply_values_t = typename detail::ApplyValuesDeductionHelper< T, Params >::type;
+
+namespace detail
+{
+template < template < auto... > typename Inner, template < typename... > typename Outer, TypePack_c Params >
+struct ApplyInnerOuterDeductionHelper;
+template < template < auto... > typename Inner, template < typename... > typename Outer, ValuePack_c... Params >
+struct ApplyInnerOuterDeductionHelper< Inner, Outer, TypePack< Params... > >
+{
+    using type = Outer< apply_values_t< Inner, Params >... >;
+};
+} // namespace detail
+template < template < auto... > typename Inner, template < typename... > typename Outer, TypePack_c Params >
+using apply_in_out_t = typename detail::ApplyInnerOuterDeductionHelper< Inner, Outer, Params >::type;
 
 template < template < auto... > typename Inner, template < typename... > typename Outer, std::array... Params >
-using parametrize_over_combinations_t =
-    typename ApplyOuter< Inner, Outer, decltype(zipArrays(getCartesianProductComponents< Params... >())) >::type;
+using cart_prod_t = apply_in_out_t< Inner, Outer, decltype(zipArrays(getCartProdComponents< Params... >())) >;
 
 template < array_of< bool > auto A >
 consteval auto getTrueInds()
