@@ -191,22 +191,16 @@ auto makeRankUpdateMatrix(const auto& kernel_result, const auto& basis_vals, con
     return ret_val;
 }
 
-template < QuadratureTypes QT,
-           q_o_t           QO,
-           BasisTypes      BT,
-           typename Kernel,
-           ElementTypes       ET,
-           el_o_t             EO,
-           std::integral auto N_FIELDS >
+template < q_l_t QL, BasisTypes BT, typename Kernel, ElementTypes ET, el_o_t EO, std::integral auto N_FIELDS >
 auto initLocalSystem(const array auto& der_indices)
 {
     constexpr auto n_ders = std::tuple_size_v< std::remove_cvref_t< decltype(der_indices) > >;
     using kernel_ret_t    = std::remove_cvref_t< decltype(
         [&](auto&& kernel, const auto& element, const auto& node_vals) {
-            const auto& quadrature = getQuadrature< QT, QO, ET >();
-            const auto& basis_vals = getRefBasesAtQpoints< QT, QO, ET, EO, BT >();
-            const auto  jac_array  = computeElementJacobiansAtQpoints< QT, QO >(element);
-            const auto  basis_ders = computePhysicalBasesAtQpoints< QT, QO, BT, ET, EO >(jac_array);
+            auto        quadrature = Quadrature< QL, Element< ET, EO >::native_dim >{};
+            const auto& basis_vals = computeRefBasesAtQpoints< BT, ET, EO >(quadrature);
+            const auto  jac_array  = computeElementJacobiansAtQpoints(element, quadrature);
+            const auto  basis_ders = computePhysicalBasesAtQpoints< BT, ET, EO >(jac_array, quadrature);
 
             const auto field_values =
                 detail::computeFieldValues< Kernel, ET, EO, N_FIELDS, n_ders >(basis_vals, node_vals);
@@ -228,31 +222,26 @@ auto initLocalSystem(const array auto& der_indices)
 }
 } // namespace detail
 
-template < QuadratureTypes QT,
-           q_o_t           QO,
-           BasisTypes      BT,
-           typename Kernel,
-           ElementTypes       ET,
-           el_o_t             EO,
-           std::integral auto N_FIELDS >
+template < BasisTypes BT, q_l_t QL, dim_t QD, typename Kernel, ElementTypes ET, el_o_t EO, std::integral auto N_FIELDS >
 auto assembleLocalSystem(Kernel&&                                                            kernel,
                          const Element< ET, EO >&                                            element,
                          const Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, N_FIELDS >& node_vals,
-                         const array auto&                                                   der_indices) requires
-    detail::ValidKernel_c< Kernel, ET, EO, N_FIELDS, std::tuple_size_v< std::remove_cvref_t< decltype(der_indices) > > >
+                         const array auto&                                                   der_indices,
+                         const Quadrature< QL, QD >& quadrature) requires detail::
+    ValidKernel_c< Kernel, ET, EO, N_FIELDS, std::tuple_size_v< std::remove_cvref_t< decltype(der_indices) > > > and
+    (ElementTraits< Element< ET, EO > >::native_dim == QD)
 {
     constexpr auto n_ders = std::tuple_size_v< std::remove_cvref_t< decltype(der_indices) > >;
 
-    const auto& quadrature = getQuadrature< QT, QO, ET >();
-    const auto& basis_vals = getRefBasesAtQpoints< QT, QO, ET, EO, BT >();
-    const auto  jac_array  = computeElementJacobiansAtQpoints< QT, QO >(element);
-    const auto  basis_ders = computePhysicalBasesAtQpoints< QT, QO, BT, ET, EO >(jac_array);
+    const auto basis_vals = detail::computeRefBasesAtQpoints< BT, ET, EO >(quadrature);
+    const auto jac_array  = computeElementJacobiansAtQpoints(element, quadrature);
+    const auto basis_ders = computePhysicalBasesAtQpoints< BT, ET, EO >(jac_array, quadrature);
 
     const auto field_values = detail::computeFieldValues< Kernel, ET, EO, N_FIELDS, n_ders >(basis_vals, node_vals);
     const auto field_ders =
         detail::computeFieldDerivatives< Kernel, ET, EO, N_FIELDS, n_ders >(basis_ders, node_vals, der_indices);
 
-    auto local_system  = detail::initLocalSystem< QT, QO, BT, Kernel, ET, EO, N_FIELDS >(der_indices);
+    auto local_system  = detail::initLocalSystem< QL, BT, Kernel, ET, EO, N_FIELDS >(der_indices);
     auto& [K_el, F_el] = local_system;
 
     for (ptrdiff_t qp_ind = 0; auto weight : quadrature.getWeights())
@@ -262,29 +251,34 @@ auto assembleLocalSystem(Kernel&&                                               
         const auto rank_update_matrix = detail::makeRankUpdateMatrix(A, basis_vals, basis_ders, qp_ind);
         const auto rank_update_weight = jac_array[qp_ind].determinant() * weight;
         K_el.template selfadjointView< Eigen::Lower >().rankUpdate(rank_update_matrix, rank_update_weight);
-        F_el += rank_update_weight * rank_update_matrix * F;
+        F_el += rank_update_matrix * F * rank_update_weight;
         ++qp_ind;
     }
 
     return local_system;
 }
 
-template < QuadratureTypes QT, q_o_t QO, BasisTypes BT, typename Kernel, ElementTypes ET, el_o_t EO, auto N_FIELDS >
-auto assembleLocalSystem(Kernel&&                                                            kernel,
-                         const Element< ET, EO >&                                            element,
-                         const Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, N_FIELDS >& node_vals) requires
-    detail::ValidDerivativeIndependentKernel_c< Kernel, N_FIELDS > or detail::ValidConstantKernel_c< Kernel >
+template < BasisTypes BT, q_l_t QL, dim_t QD, typename Kernel, ElementTypes ET, el_o_t EO, auto N_FIELDS >
+    auto assembleLocalSystem(Kernel&&                                                            kernel,
+                             const Element< ET, EO >&                                            element,
+                             const Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, N_FIELDS >& node_vals,
+                             const Quadrature< QL, QD >&
+                                 quadrature) requires(detail::ValidDerivativeIndependentKernel_c< Kernel, N_FIELDS > or
+                                                      detail::ValidConstantKernel_c< Kernel >) and
+    (ElementTraits< Element< ET, EO > >::native_dim == QD)
 {
-    return assembleLocalSystem< QT, QO, BT >(
-        std::forward< Kernel >(kernel), element, node_vals, std::array< ptrdiff_t, 0 >{});
+    return assembleLocalSystem< BT >(
+        std::forward< Kernel >(kernel), element, node_vals, std::array< ptrdiff_t, 0 >{}, quadrature);
 }
 
-template < QuadratureTypes QT, q_o_t QO, BasisTypes BT, typename Kernel, ElementTypes ET, el_o_t EO >
-auto assembleLocalSystem(Kernel&&                 kernel,
-                         const Element< ET, EO >& element) requires detail::ValidConstantKernel_c< Kernel >
+template < BasisTypes BT, q_l_t QL, dim_t QD, typename Kernel, ElementTypes ET, el_o_t EO >
+auto assembleLocalSystem(Kernel&&                    kernel,
+                         const Element< ET, EO >&    element,
+                         const Quadrature< QL, QD >& quadrature) requires detail::ValidConstantKernel_c< Kernel > and
+    (ElementTraits< Element< ET, EO > >::native_dim == QD)
 {
     using empty_t = Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, 0 >;
-    return assembleLocalSystem< QT, QO, BT >(std::forward< Kernel >(kernel), element, empty_t{});
+    return assembleLocalSystem< BT >(std::forward< Kernel >(kernel), element, empty_t{}, quadrature);
 }
 } // namespace lstr
 #endif // L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP

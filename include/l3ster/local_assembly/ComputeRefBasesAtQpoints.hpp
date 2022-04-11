@@ -8,13 +8,12 @@ namespace lstr
 {
 namespace detail
 {
-template < QuadratureTypes QT, q_o_t QO, ElementTypes ET, el_o_t EO, BasisTypes BT >
-auto computeRefBasesAtQpoints()
+template < BasisTypes BT, ElementTypes ET, el_o_t EO, q_l_t QL, dim_t QD >
+auto computeRefBasesAtQpoints(const Quadrature< QL, QD >& quad) requires(
+    ElementTraits< Element< ET, EO > >::native_dim == QD)
 {
-    const auto     quad    = getQuadrature< QT, QO, ET >();
-    constexpr auto n_qp    = quad.size;
     constexpr auto n_bases = Element< ET, EO >::n_nodes;
-    using ret_t            = Eigen::Matrix< val_t, n_qp, n_bases >;
+    using ret_t            = Eigen::Matrix< val_t, QL, n_bases >;
 
     ret_t ret_val;
     for (ptrdiff_t index = 0; const auto& qp : quad.getPoints())
@@ -25,13 +24,12 @@ auto computeRefBasesAtQpoints()
     return ret_val;
 }
 
-template < QuadratureTypes QT, q_o_t QO, ElementTypes ET, el_o_t EO, BasisTypes BT >
-auto computeRefBasisDersAtQpoints()
+template < BasisTypes BT, ElementTypes ET, el_o_t EO, q_l_t QL, dim_t QD >
+auto computeRefBasisDersAtQpoints(const Quadrature< QL, QD >& quad) requires(
+    ElementTraits< Element< ET, EO > >::native_dim == QD)
 {
-    const auto     quad    = getQuadrature< QT, QO, ET >();
-    constexpr auto n_qp    = quad.size;
     constexpr auto n_bases = Element< ET, EO >::n_nodes;
-    using values_at_qp_t   = Eigen::Matrix< val_t, n_qp, n_bases >;
+    using values_at_qp_t   = Eigen::Matrix< val_t, QL, n_bases >;
     using ret_t            = std::array< values_at_qp_t, Element< ET, EO >::native_dim >;
 
     ret_t ret_val;
@@ -46,17 +44,17 @@ auto computeRefBasisDersAtQpoints()
 }
 } // namespace detail
 
-template < QuadratureTypes QT, q_o_t QO, ElementTypes ET, el_o_t EO, BasisTypes BT >
+template < QuadratureTypes QT, q_o_t QO, BasisTypes BT, ElementTypes ET, el_o_t EO >
 const auto& getRefBasesAtQpoints()
 {
-    static const auto value = detail::computeRefBasesAtQpoints< QT, QO, ET, EO, BT >();
+    static const auto value = detail::computeRefBasesAtQpoints< BT, ET, EO >(getQuadrature< QT, QO, ET >());
     return value;
 }
 
-template < QuadratureTypes QT, q_o_t QO, ElementTypes ET, el_o_t EO, BasisTypes BT >
+template < QuadratureTypes QT, q_o_t QO, BasisTypes BT, ElementTypes ET, el_o_t EO >
 const auto& getRefBasisDersAtQpoints()
 {
-    static const auto value = detail::computeRefBasisDersAtQpoints< QT, QO, ET, EO, BT >();
+    static const auto value = detail::computeRefBasisDersAtQpoints< BT, ET, EO >(getQuadrature< QT, QO, ET >());
     return value;
 }
 } // namespace lstr
