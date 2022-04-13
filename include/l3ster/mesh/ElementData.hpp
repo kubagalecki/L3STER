@@ -1,8 +1,8 @@
 #ifndef L3STER_MESH_ELEMENTDATA_HPP
 #define L3STER_MESH_ELEMENTDATA_HPP
 
-#include "ElementTraits.hpp"
-#include "Point.hpp"
+#include "l3ster/mesh/ElementTraits.hpp"
+#include "l3ster/mesh/Point.hpp"
 
 namespace lstr
 {

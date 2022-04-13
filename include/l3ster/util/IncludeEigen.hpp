@@ -10,10 +10,10 @@ namespace lstr
 namespace detail
 {
 template < typename T >
-constexpr bool is_eigen_matrix_v = false;
+inline constexpr bool is_eigen_matrix_v = false;
 
 template < typename P1, int P2, int P3, int P4, int P5, int P6 >
-constexpr bool is_eigen_matrix_v< Eigen::Matrix< P1, P2, P3, P4, P5, P6 > > = true;
+inline constexpr bool is_eigen_matrix_v< Eigen::Matrix< P1, P2, P3, P4, P5, P6 > > = true;
 } // namespace detail
 
 template < typename T >

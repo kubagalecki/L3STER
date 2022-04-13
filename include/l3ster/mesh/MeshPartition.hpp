@@ -1,14 +1,13 @@
 #ifndef L3STER_MESH_MESHPARTITION_HPP
 #define L3STER_MESH_MESHPARTITION_HPP
 
-#include "BoundaryView.hpp"
-#include "Domain.hpp"
-#include "ElementSideMatching.hpp"
+#include "l3ster/mesh/BoundaryView.hpp"
+#include "l3ster/mesh/Domain.hpp"
+#include "l3ster/mesh/ElementSideMatching.hpp"
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/MetisUtils.hpp"
 
 #include <map>
-#include <variant>
 
 namespace lstr
 {
@@ -33,7 +32,7 @@ public:
     using node_vec_t                = std::vector< n_id_t >;
     using find_result_t             = std::optional< std::pair< element_ptr_variant_t, d_id_t > >;
     using cfind_result_t            = std::optional< std::pair< element_cptr_variant_t, d_id_t > >;
-    using el_boundary_view_result_t = std::pair< cfind_result_t, el_ns_t >;
+    using el_boundary_view_result_t = std::pair< cfind_result_t, el_side_t >;
 
     friend struct SerializedPartition;
 
@@ -362,7 +361,7 @@ MeshPartition::cfind_result_t MeshPartition::find(el_id_t id) const
 template < ElementTypes T, el_o_t O >
 MeshPartition::el_boundary_view_result_t MeshPartition::getElementBoundaryViewImpl(const Element< T, O >& el) const
 {
-    constexpr auto miss       = std::numeric_limits< el_ns_t >::max();
+    constexpr auto miss       = std::numeric_limits< el_side_t >::max();
     constexpr auto matchElDim = []< ElementTypes T_, el_o_t O_ >(const Element< T_, O_ >*) {
         return Element< T_, O_ >::native_dim - 1 == Element< T, O >::native_dim;
     };
@@ -391,11 +390,11 @@ MeshPartition::el_boundary_view_result_t MeshPartition::getElementBoundaryViewFa
                                                                                        d_id_t                 d) const
 {
     const auto boundary_nodes = getSortedArray(el.getNodes());
-    el_ns_t    side_index     = 0;
+    el_side_t  side_index     = 0;
 
     const auto is_domain_element = [&]< ElementTypes T_, el_o_t O_ >(const Element< T_, O_ >& domain_element) {
         side_index = detail::matchBoundaryNodesToElement(domain_element, boundary_nodes);
-        return side_index != std::numeric_limits< el_ns_t >::max();
+        return side_index != std::numeric_limits< el_side_t >::max();
     };
 
     return std::make_pair(

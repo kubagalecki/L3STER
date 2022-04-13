@@ -2,11 +2,9 @@
 #define L3STER_ASSEMBLY_COMPUTEREFBASESATQPOINTS_HPP
 
 #include "l3ster/basisfun/ReferenceBasisFunction.hpp"
-#include "l3ster/quad/GenerateQuadrature.hpp"
+#include "l3ster/quad/Quadrature.hpp"
 
 namespace lstr
-{
-namespace detail
 {
 template < BasisTypes BT, ElementTypes ET, el_o_t EO, q_l_t QL, dim_t QD >
 auto computeRefBasesAtQpoints(const Quadrature< QL, QD >& quad) requires(
@@ -41,21 +39,6 @@ auto computeRefBasisDersAtQpoints(const Quadrature< QL, QD >& quad) requires(
         ++index;
     }
     return ret_val;
-}
-} // namespace detail
-
-template < QuadratureTypes QT, q_o_t QO, BasisTypes BT, ElementTypes ET, el_o_t EO >
-const auto& getRefBasesAtQpoints()
-{
-    static const auto value = detail::computeRefBasesAtQpoints< BT, ET, EO >(getQuadrature< QT, QO, ET >());
-    return value;
-}
-
-template < QuadratureTypes QT, q_o_t QO, BasisTypes BT, ElementTypes ET, el_o_t EO >
-const auto& getRefBasisDersAtQpoints()
-{
-    static const auto value = detail::computeRefBasisDersAtQpoints< BT, ET, EO >(getQuadrature< QT, QO, ET >());
-    return value;
 }
 } // namespace lstr
 #endif // L3STER_ASSEMBLY_COMPUTEREFBASESATQPOINTS_HPP

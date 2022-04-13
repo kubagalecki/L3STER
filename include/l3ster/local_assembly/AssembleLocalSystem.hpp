@@ -2,117 +2,49 @@
 #define L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP
 
 #include "l3ster/local_assembly/ComputePhysBasesAtQpoints.hpp"
+#include "l3ster/local_assembly/KernelTraits.hpp"
+#include "l3ster/local_assembly/ReferenceBasisAtQuadrature.hpp"
 #include "l3ster/mapping/MapReferenceToPhysical.hpp"
 
 namespace lstr
 {
 namespace detail
 {
-template < typename Kernel, ElementTypes ET, el_o_t EO, std::integral auto N_FIELDS, size_t N_DERS >
-requires(N_DERS <= N_FIELDS) struct LocalKernelValidity
+template < typename Kernel, ElementTypes ET, el_o_t EO, KernelFieldDependence_c auto field_dep >
+auto computeFieldValues(const auto& basis_vals,
+                        const auto& node_vals) requires ValidKernel_c< Kernel, ET, EO, field_dep >
 {
-    static constexpr bool invocable_with_all =
-        std::is_nothrow_invocable_v< Kernel,
-                                     std::array< val_t, N_FIELDS >,
-                                     std::array< std::array< val_t, N_DERS >, Element< ET, EO >::native_dim >,
-                                     Point< 3 > >;
-    static constexpr bool invocable_with_vals_and_ders =
-        std::is_nothrow_invocable_v< Kernel,
-                                     std::array< val_t, N_FIELDS >,
-                                     std::array< std::array< val_t, N_DERS >, Element< ET, EO >::native_dim > >;
-    static constexpr bool invocable_with_vals = std::is_nothrow_invocable_v< Kernel, std::array< val_t, N_FIELDS > >;
-    static constexpr bool invocable_with_none = std::is_nothrow_invocable_v< Kernel >;
-
-    static constexpr bool is_valid_kernel =
-        exactlyOneOf(invocable_with_all, invocable_with_none, invocable_with_vals, invocable_with_vals_and_ders);
-};
-
-template < typename T >
-concept ValidKernelResult_c = pair< T > and array< typename T::first_type > and
-                              EigenMatrix_c< typename T::first_type::value_type > and
-                              EigenMatrix_c< typename T::second_type > and(T::second_type::ColsAtCompileTime == 1) and
-                              (T::first_type::value_type::RowsAtCompileTime == T::second_type::RowsAtCompileTime);
-
-template < typename Kernel, ElementTypes ET, el_o_t EO, auto N_FIELDS, size_t N_DERS >
-concept ValidFullKernel_c = requires(Kernel                                                                   kernel,
-                                     std::array< val_t, N_FIELDS >                                            node_vals,
-                                     std::array< std::array< val_t, N_DERS >, Element< ET, EO >::native_dim > node_ders,
-                                     Point< 3 >                                                               point)
-{
-    {
-        std::invoke(kernel, node_vals, node_ders, point)
-    }
-    noexcept->ValidKernelResult_c;
-};
-
-template < typename Kernel, ElementTypes ET, el_o_t EO, auto N_FIELDS, size_t N_DERS >
-concept ValidSpaceInependentKernel_c =
-    requires(Kernel                                                                   kernel,
-             std::array< val_t, N_FIELDS >                                            node_vals,
-             std::array< std::array< val_t, N_DERS >, Element< ET, EO >::native_dim > node_ders)
-{
-    {
-        std::invoke(kernel, node_vals, node_ders)
-    }
-    noexcept->ValidKernelResult_c;
-};
-
-template < typename Kernel, auto N_FIELDS >
-concept ValidDerivativeIndependentKernel_c = requires(Kernel kernel, std::array< val_t, N_FIELDS > node_vals)
-{
-    {
-        std::invoke(kernel, node_vals)
-    }
-    noexcept->ValidKernelResult_c;
-};
-
-template < typename Kernel >
-concept ValidConstantKernel_c = requires(Kernel kernel)
-{
-    {
-        std::invoke(kernel)
-    }
-    noexcept->ValidKernelResult_c;
-};
-
-template < typename Kernel, ElementTypes ET, el_o_t EO, auto N_FIELDS, size_t N_DERS >
-concept ValidKernel_c = LocalKernelValidity< Kernel, ET, EO, N_FIELDS, N_DERS >::is_valid_kernel and
-    (ValidFullKernel_c< Kernel, ET, EO, N_FIELDS, N_DERS > or
-     ValidSpaceInependentKernel_c< Kernel, ET, EO, N_FIELDS, N_DERS > or
-     ValidDerivativeIndependentKernel_c< Kernel, N_FIELDS > or ValidConstantKernel_c< Kernel >);
-
-template < typename Kernel, ElementTypes ET, el_o_t EO, std::integral auto N_FIELDS, size_t N_DERS >
-auto computeFieldValues(const auto& basis_vals, const auto& node_vals)
-{
-    constexpr auto n_qp = std::remove_cvref_t< decltype(basis_vals) >::RowsAtCompileTime;
-    if constexpr (N_FIELDS > 0 and (ValidFullKernel_c< Kernel, ET, EO, N_FIELDS, N_DERS > or
-                                    ValidSpaceInependentKernel_c< Kernel, ET, EO, N_FIELDS, N_DERS > or
-                                    ValidDerivativeIndependentKernel_c< Kernel, N_FIELDS >))
-        return Eigen::Matrix< val_t, n_qp, N_FIELDS >{basis_vals * node_vals};
-    else
+    constexpr auto n_fields = field_dep.n_fields;
+    constexpr auto n_qp     = std::remove_cvref_t< decltype(basis_vals) >::RowsAtCompileTime;
+    if constexpr (ConstantKernel_c< Kernel, ET, EO, field_dep >)
         return Eigen::Matrix< val_t, n_qp, 0 >{};
+    else
+        return Eigen::Matrix< val_t, n_qp, n_fields >{basis_vals * node_vals};
 }
 
-template < typename Kernel, ElementTypes ET, el_o_t EO, std::integral auto N_FIELDS, size_t N_DERS >
-auto computeFieldDerivatives(const auto& basis_ders, const auto& node_vals, const auto& der_indices)
+template < typename Kernel, ElementTypes ET, el_o_t EO, KernelFieldDependence_c auto field_dep >
+auto computeFieldDerivatives(const auto& basis_ders,
+                             const auto& node_vals) requires ValidKernel_c< Kernel, ET, EO, field_dep >
 {
-    constexpr auto n_qp = std::remove_cvref_t< decltype(basis_ders) >::value_type::RowsAtCompileTime;
-    if constexpr (N_DERS > 0 and (ValidFullKernel_c< Kernel, ET, EO, N_FIELDS, N_DERS > or
-                                  ValidSpaceInependentKernel_c< Kernel, ET, EO, N_FIELDS, N_DERS >))
+    constexpr auto  n_ders   = field_dep.der_inds.size();
+    constexpr auto  n_qp     = std::remove_cvref_t< decltype(basis_ders) >::value_type::RowsAtCompileTime;
+    constexpr auto& der_inds = field_dep.der_inds;
+    if constexpr (n_ders > 0 and
+                  (FullKernel_c< Kernel, ET, EO, field_dep > or SpaceIndependentKernel_c< Kernel, ET, EO, field_dep >))
     {
         // TODO
         // Note: this is a workaround for an Eigen bug (issue #2375). Once this is fixed, instead of making an explicit
         // copy, an indexed view should be used ( i.e. node_vals(Eigen::all, der_indices) )
         const auto node_vals_for_ders = [&] {
-            Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, N_DERS > ret_val{};
-            for (ptrdiff_t col_ind = 0; col_ind < static_cast< ptrdiff_t >(N_DERS); ++col_ind)
+            Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, n_ders > ret_val{};
+            for (ptrdiff_t col_ind = 0; col_ind < static_cast< ptrdiff_t >(n_ders); ++col_ind)
                 for (ptrdiff_t row = 0; row < static_cast< ptrdiff_t >(Element< ET, EO >::n_nodes); ++row)
-                    ret_val(row, col_ind) = node_vals(row, der_indices[col_ind]);
+                    ret_val(row, col_ind) = node_vals(row, der_inds[col_ind]);
             return ret_val;
         }();
 
-        using der_t = std::array< Eigen::Matrix< val_t, n_qp, N_DERS >, Element< ET, EO >::native_dim >;
-        der_t ret_val{};
+        using der_t = std::array< Eigen::Matrix< val_t, n_qp, n_ders >, Element< ET, EO >::native_dim >;
+        der_t ret_val;
         for (ptrdiff_t i = 0; i < Element< ET, EO >::native_dim; ++i)
             ret_val[i] = basis_ders[i] * node_vals_for_ders;
         return ret_val;
@@ -121,19 +53,19 @@ auto computeFieldDerivatives(const auto& basis_ders, const auto& node_vals, cons
         return std::array< Eigen::Matrix< val_t, n_qp, 0 >, Element< ET, EO >::native_dim >{};
 }
 
-template < std::integral auto N_FIELDS >
+template < KernelFieldDependence_c auto field_dep >
 auto computeFieldValuesAtQpoint(const auto& field_values, ptrdiff_t qp_ind)
 {
-    std::array< val_t, N_FIELDS > ret_val;
+    std::array< val_t, field_dep.n_fields > ret_val;
     for (ptrdiff_t i = 0; auto& v : ret_val)
         v = field_values(qp_ind, i++);
     return ret_val;
 }
 
-template < ElementTypes ET, el_o_t EO, size_t N_DERS >
+template < ElementTypes ET, KernelFieldDependence_c auto field_dep >
 auto computeFieldDerivativesAtQpoint(const auto& field_ders, ptrdiff_t qp_ind)
 {
-    std::array< std::array< val_t, N_DERS >, Element< ET, EO >::native_dim > ret_val;
+    std::array< std::array< val_t, field_dep.der_inds.size() >, Element< ET, 1 >::native_dim > ret_val;
     for (ptrdiff_t dim_ind = 0; auto& dim : ret_val)
     {
         for (ptrdiff_t i = 0; auto& der : dim)
@@ -143,7 +75,7 @@ auto computeFieldDerivativesAtQpoint(const auto& field_ders, ptrdiff_t qp_ind)
     return ret_val;
 }
 
-template < typename Kernel, ElementTypes ET, el_o_t EO, std::integral auto N_FIELDS, size_t N_DERS >
+template < typename Kernel, ElementTypes ET, el_o_t EO, KernelFieldDependence_c auto field_dep >
 auto evaluateKernel(Kernel&&    kernel,
                     const auto& element,
                     const auto& field_values,
@@ -151,22 +83,22 @@ auto evaluateKernel(Kernel&&    kernel,
                     const auto& quadrature,
                     ptrdiff_t   qp_ind)
 {
-    if constexpr (ValidFullKernel_c< Kernel, ET, EO, N_FIELDS, N_DERS >)
+    if constexpr (FullKernel_c< Kernel, ET, EO, field_dep >)
     {
-        const auto field_value_at_qp = computeFieldValuesAtQpoint< N_FIELDS >(field_values, qp_ind);
-        const auto field_ders_at_qp  = computeFieldDerivativesAtQpoint< ET, EO, N_DERS >(field_ders, qp_ind);
+        const auto field_value_at_qp = computeFieldValuesAtQpoint< field_dep >(field_values, qp_ind);
+        const auto field_ders_at_qp  = computeFieldDerivativesAtQpoint< ET, field_dep >(field_ders, qp_ind);
         const auto physical_qp       = mapToPhysicalSpace(element, Point{quadrature.getPoints()[qp_ind]});
         return std::invoke(std::forward< Kernel >(kernel), field_value_at_qp, field_ders_at_qp, physical_qp);
     }
-    else if constexpr (ValidSpaceInependentKernel_c< Kernel, ET, EO, N_FIELDS, N_DERS >)
+    else if constexpr (SpaceIndependentKernel_c< Kernel, ET, EO, field_dep >)
     {
-        const auto field_value_at_qp = computeFieldValuesAtQpoint< N_FIELDS >(field_values, qp_ind);
-        const auto field_ders_at_qp  = computeFieldDerivativesAtQpoint< ET, EO, N_DERS >(field_ders, qp_ind);
+        const auto field_value_at_qp = computeFieldValuesAtQpoint< field_dep >(field_values, qp_ind);
+        const auto field_ders_at_qp  = computeFieldDerivativesAtQpoint< ET, field_dep >(field_ders, qp_ind);
         return std::invoke(std::forward< Kernel >(kernel), field_value_at_qp, field_ders_at_qp);
     }
-    else if constexpr (ValidDerivativeIndependentKernel_c< Kernel, N_FIELDS >)
+    else if constexpr (DerivativeIndependentKernel_c< Kernel, ET, EO, field_dep >)
     {
-        const auto field_value_at_qp = computeFieldValuesAtQpoint< N_FIELDS >(field_values, qp_ind);
+        const auto field_value_at_qp = computeFieldValuesAtQpoint< field_dep >(field_values, qp_ind);
         return std::invoke(std::forward< Kernel >(kernel), field_value_at_qp);
     }
     else
@@ -191,62 +123,42 @@ auto makeRankUpdateMatrix(const auto& kernel_result, const auto& basis_vals, con
     return ret_val;
 }
 
-template < q_l_t QL, BasisTypes BT, typename Kernel, ElementTypes ET, el_o_t EO, std::integral auto N_FIELDS >
-auto initLocalSystem(const array auto& der_indices)
+template < typename Kernel, ElementTypes ET, el_o_t EO, KernelFieldDependence_c auto field_dep >
+requires ValidKernel_c< Kernel, ET, EO, field_dep >
+auto initLocalSystem()
 {
-    constexpr auto n_ders = std::tuple_size_v< std::remove_cvref_t< decltype(der_indices) > >;
-    using kernel_ret_t    = std::remove_cvref_t< decltype(
-        [&](auto&& kernel, const auto& element, const auto& node_vals) {
-            auto        quadrature = Quadrature< QL, Element< ET, EO >::native_dim >{};
-            const auto& basis_vals = computeRefBasesAtQpoints< BT, ET, EO >(quadrature);
-            const auto  jac_array  = computeElementJacobiansAtQpoints(element, quadrature);
-            const auto  basis_ders = computePhysicalBasesAtQpoints< BT, ET, EO >(jac_array, quadrature);
-
-            const auto field_values =
-                detail::computeFieldValues< Kernel, ET, EO, N_FIELDS, n_ders >(basis_vals, node_vals);
-            const auto field_ders =
-                detail::computeFieldDerivatives< Kernel, ET, EO, N_FIELDS, n_ders >(basis_ders, node_vals, der_indices);
-
-            return detail::evaluateKernel< Kernel, ET, EO, N_FIELDS, n_ders >(
-                kernel, element, field_values, field_ders, quadrature, 0);
-        }(std::declval< Kernel >(),
-          std::declval< Element< ET, EO > >(),
-          std::declval< Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, N_FIELDS > >())) >;
-
-    constexpr auto n_unknowns         = kernel_ret_t::first_type::value_type::ColsAtCompileTime;
-    constexpr auto local_problem_size = Element< ET, EO >::n_nodes * n_unknowns;
-
-    using k_el_t = Eigen::Matrix< val_t, local_problem_size, local_problem_size >;
-    using f_el_t = Eigen::Matrix< val_t, local_problem_size, 1 >;
+    constexpr auto local_problem_size = Element< ET, EO >::n_nodes * n_unknowns< Kernel, ET, EO, field_dep >;
+    using k_el_t                      = Eigen::Matrix< val_t, local_problem_size, local_problem_size >;
+    using f_el_t                      = Eigen::Matrix< val_t, local_problem_size, 1 >;
     return std::pair< k_el_t, f_el_t >{k_el_t::Zero(), f_el_t::Zero()};
 }
 } // namespace detail
 
-template < BasisTypes BT, q_l_t QL, dim_t QD, typename Kernel, ElementTypes ET, el_o_t EO, std::integral auto N_FIELDS >
-auto assembleLocalSystem(Kernel&&                                                            kernel,
-                         const Element< ET, EO >&                                            element,
-                         const Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, N_FIELDS >& node_vals,
-                         const array auto&                                                   der_indices,
-                         const Quadrature< QL, QD >& quadrature) requires detail::
-    ValidKernel_c< Kernel, ET, EO, N_FIELDS, std::tuple_size_v< std::remove_cvref_t< decltype(der_indices) > > > and
-    (ElementTraits< Element< ET, EO > >::native_dim == QD)
+template < detail::KernelFieldDependence_c auto field_dep,
+           typename Kernel,
+           q_l_t        QL,
+           dim_t        QD,
+           ElementTypes ET,
+           el_o_t       EO >
+auto assembleLocalSystem(Kernel&&                                                                      kernel,
+                         const Element< ET, EO >&                                                      element,
+                         const Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, field_dep.n_fields >& node_vals,
+                         const ReferenceBasisAtQuadrature< ET, EO, QL, QD >& basis_at_q) requires
+    detail::ValidKernel_c< Kernel, ET, EO, field_dep >
 {
-    constexpr auto n_ders = std::tuple_size_v< std::remove_cvref_t< decltype(der_indices) > >;
+    const auto& quadrature   = basis_at_q.quadrature;
+    const auto& basis_vals   = basis_at_q.basis_vals;
+    const auto& basis_ders   = basis_at_q.basis_ders;
+    const auto  jac_array    = computeElementJacobiansAtQpoints(element, quadrature);
+    const auto  field_values = detail::computeFieldValues< Kernel, ET, EO, field_dep >(basis_vals, node_vals);
+    const auto  field_ders   = detail::computeFieldDerivatives< Kernel, ET, EO, field_dep >(basis_ders, node_vals);
 
-    const auto basis_vals = detail::computeRefBasesAtQpoints< BT, ET, EO >(quadrature);
-    const auto jac_array  = computeElementJacobiansAtQpoints(element, quadrature);
-    const auto basis_ders = computePhysicalBasesAtQpoints< BT, ET, EO >(jac_array, quadrature);
-
-    const auto field_values = detail::computeFieldValues< Kernel, ET, EO, N_FIELDS, n_ders >(basis_vals, node_vals);
-    const auto field_ders =
-        detail::computeFieldDerivatives< Kernel, ET, EO, N_FIELDS, n_ders >(basis_ders, node_vals, der_indices);
-
-    auto local_system  = detail::initLocalSystem< QL, BT, Kernel, ET, EO, N_FIELDS >(der_indices);
+    auto local_system  = detail::initLocalSystem< Kernel, ET, EO, field_dep >();
     auto& [K_el, F_el] = local_system;
 
     for (ptrdiff_t qp_ind = 0; auto weight : quadrature.getWeights())
     {
-        const auto [A, F] = detail::evaluateKernel< Kernel, ET, EO, N_FIELDS, n_ders >(
+        const auto [A, F] = detail::evaluateKernel< Kernel, ET, EO, field_dep >(
             kernel, element, field_values, field_ders, quadrature, qp_ind);
         const auto rank_update_matrix = detail::makeRankUpdateMatrix(A, basis_vals, basis_ders, qp_ind);
         const auto rank_update_weight = jac_array[qp_ind].determinant() * weight;
@@ -258,27 +170,19 @@ auto assembleLocalSystem(Kernel&&                                               
     return local_system;
 }
 
-template < BasisTypes BT, q_l_t QL, dim_t QD, typename Kernel, ElementTypes ET, el_o_t EO, auto N_FIELDS >
-    auto assembleLocalSystem(Kernel&&                                                            kernel,
-                             const Element< ET, EO >&                                            element,
-                             const Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, N_FIELDS >& node_vals,
-                             const Quadrature< QL, QD >&
-                                 quadrature) requires(detail::ValidDerivativeIndependentKernel_c< Kernel, N_FIELDS > or
-                                                      detail::ValidConstantKernel_c< Kernel >) and
-    (ElementTraits< Element< ET, EO > >::native_dim == QD)
-{
-    return assembleLocalSystem< BT >(
-        std::forward< Kernel >(kernel), element, node_vals, std::array< ptrdiff_t, 0 >{}, quadrature);
-}
-
-template < BasisTypes BT, q_l_t QL, dim_t QD, typename Kernel, ElementTypes ET, el_o_t EO >
-auto assembleLocalSystem(Kernel&&                    kernel,
-                         const Element< ET, EO >&    element,
-                         const Quadrature< QL, QD >& quadrature) requires detail::ValidConstantKernel_c< Kernel > and
-    (ElementTraits< Element< ET, EO > >::native_dim == QD)
+template < detail::KernelFieldDependence_c auto field_dep,
+           typename Kernel,
+           q_l_t        QL,
+           dim_t        QD,
+           ElementTypes ET,
+           el_o_t       EO >
+auto assembleLocalSystem(Kernel&&                                            kernel,
+                         const Element< ET, EO >&                            element,
+                         const ReferenceBasisAtQuadrature< ET, EO, QL, QD >& basis_at_q) requires
+    detail::ConstantKernel_c< Kernel, ET, EO, field_dep >
 {
     using empty_t = Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, 0 >;
-    return assembleLocalSystem< BT >(std::forward< Kernel >(kernel), element, empty_t{}, quadrature);
+    return assembleLocalSystem< field_dep >(std::forward< Kernel >(kernel), element, empty_t{}, basis_at_q);
 }
 } // namespace lstr
 #endif // L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP

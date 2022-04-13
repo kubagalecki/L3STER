@@ -14,7 +14,7 @@ namespace lstr
 {
 namespace detail
 {
-template < ElementTypes T, el_o_t O, el_ns_t S1, el_ns_t S2 >
+template < ElementTypes T, el_o_t O, el_side_t S1, el_side_t S2 >
 consteval auto intersectElementSides()
 {
     auto face1 = std::get< S1 >(ElementTraits< Element< T, O > >::boundary_table);
@@ -30,7 +30,7 @@ consteval auto intersectElementSides()
     return std::make_pair(intersection_buf, intersection_size);
 }
 
-template < ElementTypes T, el_o_t O, el_ns_t S1, el_ns_t S2 >
+template < ElementTypes T, el_o_t O, el_side_t S1, el_side_t S2 >
 consteval auto getSideIntersection()
 {
     constexpr auto intersect_raw = intersectElementSides< T, O, S1, S2 >();
@@ -44,24 +44,24 @@ struct tuple_largerequal : public std::conditional_t< std::tuple_size_v< T > >= 
 template < tuple_like T >
 using tuple_le2 = tuple_largerequal< T, 2 >;
 
-template < ElementTypes T, el_o_t O, el_ns_t S, el_ns_t... SIDES >
-consteval auto intersectSideWith(std::integer_sequence< el_ns_t, SIDES... >)
+template < ElementTypes T, el_o_t O, el_side_t S, el_side_t... SIDES >
+consteval auto intersectSideWith(std::integer_sequence< el_side_t, SIDES... >)
 {
     return makeTupleIf< tuple_le2 >(getSideIntersection< T, O, S, SIDES >()...);
 }
 
-template < ElementTypes T, el_o_t O, el_ns_t S >
+template < ElementTypes T, el_o_t O, el_side_t S >
 consteval auto intersectSideWithSubseqSides()
 {
-    constexpr el_ns_t max_side_ind = ElementTraits< Element< T, O > >::n_sides - 1;
+    constexpr el_side_t max_side_ind = ElementTraits< Element< T, O > >::n_sides - 1;
     if constexpr (S < max_side_ind)
-        return intersectSideWith< T, O, S >(int_seq_interval< el_ns_t, S + el_ns_t{1}, max_side_ind >{});
+        return intersectSideWith< T, O, S >(int_seq_interval< el_side_t, S + el_side_t{1}, max_side_ind >{});
     else
         return std::tuple<>{};
 }
 
-template < ElementTypes T, el_o_t O, el_ns_t... SIDES >
-consteval auto intersectSidesWithSubseqSides(std::integer_sequence< el_ns_t, SIDES... >)
+template < ElementTypes T, el_o_t O, el_side_t... SIDES >
+consteval auto intersectSidesWithSubseqSides(std::integer_sequence< el_side_t, SIDES... >)
 {
     return std::tuple_cat(intersectSideWithSubseqSides< T, O, SIDES >()...);
 }
@@ -73,7 +73,7 @@ consteval auto makeElementEdgeTable()
         return std::tuple<>{};
     else
         return intersectSidesWithSubseqSides< T, O >(
-            std::make_integer_sequence< el_ns_t, ElementTraits< Element< T, O > >::n_sides - 1 >{});
+            std::make_integer_sequence< el_side_t, ElementTraits< Element< T, O > >::n_sides - 1 >{});
 }
 
 template < ElementTypes T, el_o_t O >
@@ -180,9 +180,8 @@ elementIntersection(const Element< T1, 1 >& el1, const Element< T2, 1 >& el2)
 consteval auto getPointMatcher()
 {
     return [](const Point< 3 >& p1, const Point< 3 >& p2) {
-        constexpr double             tolerance = 1e-12;
-        Eigen::Matrix< val_t, 3, 1 > dif_vec   = Eigen::Matrix< val_t, 3, 1 >{p1} - Eigen::Matrix< val_t, 3, 1 >{p2};
-        return dif_vec.norm() < tolerance;
+        constexpr double tolerance = 1e-12;
+        return (Eigen::Matrix< val_t, 3, 1 >{p1} - Eigen::Matrix< val_t, 3, 1 >{p2}).norm() < tolerance;
     };
 }
 } // namespace detail

@@ -4,29 +4,29 @@
 #include "l3ster/mapping/ComputeBasisDerivative.hpp"
 #include "l3ster/mesh/NodePhysicalLocation.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
+#include "l3ster/quad/GenerateQuadrature.hpp"
 
 using namespace lstr;
 
 TEST_CASE("Reference bases at QPs", "[local_asm]")
 {
+    constexpr auto   ET         = ElementTypes::Hex;
+    constexpr el_o_t EO         = 4;
+    constexpr auto   QT         = QuadratureTypes::GLeg;
+    constexpr el_o_t QO         = 4;
+    constexpr auto   BT         = BasisTypes::Lagrange;
+    const auto       quadrature = getQuadrature< QT, QO, ET >();
+
     SECTION("Values")
     {
-        constexpr auto   ET   = ElementTypes::Hex;
-        constexpr el_o_t EO   = 4;
-        constexpr auto   QT   = QuadratureTypes::GLeg;
-        constexpr el_o_t QO   = 4;
-        const auto&      vals = getRefBasesAtQpoints< QT, QO, BasisTypes::Lagrange, ET, EO >();
+        const auto vals = computeRefBasesAtQpoints< BT, ET, EO >(quadrature);
         for (ptrdiff_t basis = 0; basis < vals.rows(); ++basis)
             CHECK(vals(basis, Eigen::all).sum() == Approx{1.});
     }
 
     SECTION("Derivatives")
     {
-        constexpr auto   ET   = ElementTypes::Hex;
-        constexpr el_o_t EO   = 4;
-        constexpr auto   QT   = QuadratureTypes::GLeg;
-        constexpr el_o_t QO   = 4;
-        const auto&      ders = getRefBasisDersAtQpoints< QT, QO, BasisTypes::Lagrange, ET, EO >();
+        const auto ders = computeRefBasisDersAtQpoints< BT, ET, EO >(quadrature);
         for (const auto& der : ders)
             for (ptrdiff_t basis = 0; basis < der.rows(); ++basis)
                 CHECK(der(basis, Eigen::all).sum() == Approx{0.}.margin(1e-13));
@@ -61,15 +61,16 @@ TEST_CASE("Local system assembly", "[local_asm]")
 
     SECTION("Diffusion 2D")
     {
-        constexpr auto        ET         = ElementTypes::Quad;
-        constexpr el_o_t      EO         = 4;
-        constexpr auto        QT         = QuadratureTypes::GLeg;
-        constexpr q_o_t       QO         = 2 * EO;
-        const auto            quadrature = getQuadrature< QT, QO, ET >();
-        constexpr auto        BT         = BasisTypes::Lagrange;
-        constexpr auto        el_nodes   = typename Element< ET, EO >::node_array_t{};
+        constexpr auto        ET       = ElementTypes::Quad;
+        constexpr el_o_t      EO       = 4;
+        constexpr auto        QT       = QuadratureTypes::GLeg;
+        constexpr q_o_t       QO       = 2 * EO;
+        constexpr auto        BT       = BasisTypes::Lagrange;
+        constexpr auto        el_nodes = typename Element< ET, EO >::node_array_t{};
         ElementData< ET, EO > data{{Point{1., -1., 0.}, Point{2., -1., 0.}, Point{1., 1., 1.}, Point{2., 1., 1.}}};
         const auto            element = Element< ET, EO >{el_nodes, data, 0};
+
+        const auto& basis_at_q = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
 
         constexpr size_t nf                  = 3;
         constexpr size_t ne                  = 4;
@@ -105,7 +106,8 @@ TEST_CASE("Local system assembly", "[local_asm]")
             return p.x();
         };
 
-        auto system  = assembleLocalSystem< BT >(diffusion_kernel_2d, element, quadrature);
+        constexpr detail::KernelFieldDependence< 0 > field_dep{};
+        auto system  = assembleLocalSystem< field_dep >(diffusion_kernel_2d, element, basis_at_q);
         auto& [K, F] = system;
         K            = K.template selfadjointView< Eigen::Lower >();
         auto u       = F;

@@ -1,11 +1,8 @@
 #ifndef L3STER_MESH_MESH_HPP
 #define L3STER_MESH_MESH_HPP
 
-#include "MeshPartition.hpp"
-#include "Point.hpp"
-
-#include <utility>
-#include <vector>
+#include "l3ster/mesh/MeshPartition.hpp"
+#include "l3ster/mesh/Point.hpp"
 
 namespace lstr
 {

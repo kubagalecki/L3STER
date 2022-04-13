@@ -17,7 +17,7 @@ auto computePhysicalBasesAtQpoints(
     const std::array< detail::jacobian_t< ET, EO >, QL >& jacobians,
     const Quadrature< QL, QD >& quadrature) requires(ElementTraits< Element< ET, EO > >::native_dim == QD)
 {
-    const auto& ref_ders = detail::computeRefBasisDersAtQpoints< BT, ET, EO >(quadrature);
+    const auto& ref_ders = computeRefBasisDersAtQpoints< BT, ET, EO >(quadrature);
     using ret_t          = std::remove_cvref_t< decltype(ref_ders) >;
     ret_t ret_val; // NOLINT initialization at fill-in - note the innermost loop is unrolled by 1
 
