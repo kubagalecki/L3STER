@@ -19,7 +19,8 @@ constexpr auto getRefQuadSize()
 }
 
 template < QuadratureTypes QT, q_o_t QO >
-const auto& getReferenceQuadrature() requires(QT == QuadratureTypes::GLeg)
+const auto& getReferenceQuadrature()
+    requires(QT == QuadratureTypes::GLeg)
 {
     static const auto value = [] {
         constexpr size_t size = getRefQuadSize< QT, QO >();

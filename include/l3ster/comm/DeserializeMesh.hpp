@@ -53,7 +53,9 @@ inline auto initElementVectorVariant(ElementTypes T, el_o_t O)
             return false;
     };
 
-    const auto deduce = [&]< typename... Types >(TypePack< Types... >) { (init_if(Types{}) or ...); };
+    const auto deduce = [&]< typename... Types >(TypePack< Types... >) {
+        (init_if(Types{}) or ...);
+    };
     deduce(type_order_combinations{});
     return ret_val;
 }

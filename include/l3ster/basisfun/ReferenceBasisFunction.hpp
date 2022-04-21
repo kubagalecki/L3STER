@@ -154,10 +154,11 @@ val_t evaluateHexBasisFunDerZeta(const Point< 3 >& point)
 } // namespace detail
 
 template < ElementTypes T, el_o_t O, el_locind_t I, BasisTypes BT, DerDim DER_DIM = DerDim::NoDer >
-requires(I < Element< T, O >::n_nodes and
-         static_cast< dim_t >(DER_DIM) <= Element< T, O >::native_dim) struct ReferenceBasisFunction
+    requires(I < Element< T, O >::n_nodes and static_cast< dim_t >(DER_DIM) <= Element< T, O >::native_dim)
+struct ReferenceBasisFunction
 {
-    val_t operator()(const Point< Element< T, O >::native_dim >& point) const requires(DER_DIM == DerDim::NoDer)
+    val_t operator()(const Point< Element< T, O >::native_dim >& point) const
+        requires(DER_DIM == DerDim::NoDer)
     {
         if constexpr (T == ElementTypes::Line)
             return detail::evaluateLineBasisFun< O, I, BT >(point);
@@ -167,7 +168,8 @@ requires(I < Element< T, O >::n_nodes and
             return detail::evaluateHexBasisFun< O, I, BT >(point);
     }
 
-    val_t operator()(const Point< Element< T, O >::native_dim >& point) const requires(DER_DIM == DerDim::DX1)
+    val_t operator()(const Point< Element< T, O >::native_dim >& point) const
+        requires(DER_DIM == DerDim::DX1)
     {
         if constexpr (T == ElementTypes::Line)
             return detail::evaluateLineBasisFunDer< O, I, BT >(point);
@@ -177,7 +179,8 @@ requires(I < Element< T, O >::n_nodes and
             return detail::evaluateHexBasisFunDerXi< O, I, BT >(point);
     }
 
-    val_t operator()(const Point< Element< T, O >::native_dim >& point) const requires(DER_DIM == DerDim::DX2)
+    val_t operator()(const Point< Element< T, O >::native_dim >& point) const
+        requires(DER_DIM == DerDim::DX2)
     {
         if constexpr (T == ElementTypes::Quad)
             return detail::evaluateQuadBasisFunDerEta< O, I, BT >(point);
@@ -185,7 +188,8 @@ requires(I < Element< T, O >::n_nodes and
             return detail::evaluateHexBasisFunDerEta< O, I, BT >(point);
     }
 
-    val_t operator()(const Point< Element< T, O >::native_dim >& point) const requires(DER_DIM == DerDim::DX3)
+    val_t operator()(const Point< Element< T, O >::native_dim >& point) const
+        requires(DER_DIM == DerDim::DX3)
     {
         if constexpr (T == ElementTypes::Hex)
             return detail::evaluateHexBasisFunDerZeta< O, I, BT >(point);

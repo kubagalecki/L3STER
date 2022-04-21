@@ -20,7 +20,10 @@ struct MpiType;
     template <>                                                                                                        \
     struct MpiType< type >                                                                                             \
     {                                                                                                                  \
-        static MPI_Datatype value() { return mpitype; }                                                                \
+        static MPI_Datatype value()                                                                                    \
+        {                                                                                                              \
+            return mpitype;                                                                                            \
+        }                                                                                                              \
     };
 L3STER_MPI_TYPE_MAPPING_STRUCT(char, MPI_SIGNED_CHAR)                      // NOLINT
 L3STER_MPI_TYPE_MAPPING_STRUCT(unsigned char, MPI_UNSIGNED_CHAR)           // NOLINT
@@ -46,10 +49,10 @@ inline void handleMPIError(int error, const char* message)
 struct MpiScopeGuard
 {
     inline MpiScopeGuard(int& argc, char**& argv);
-    MpiScopeGuard(const MpiScopeGuard&) = delete;
-    MpiScopeGuard(MpiScopeGuard&&)      = delete;
+    MpiScopeGuard(const MpiScopeGuard&)            = delete;
+    MpiScopeGuard(MpiScopeGuard&&)                 = delete;
     MpiScopeGuard& operator=(const MpiScopeGuard&) = delete;
-    MpiScopeGuard& operator=(MpiScopeGuard&&) = delete;
+    MpiScopeGuard& operator=(MpiScopeGuard&&)      = delete;
     ~MpiScopeGuard() { MPI_Finalize(); }
 };
 
@@ -69,18 +72,18 @@ class MpiComm
 {
 public:
     explicit MpiComm(MPI_Comm comm_ = MPI_COMM_WORLD) : comm{comm_} {}
-    MpiComm(const MpiComm&) = delete;
-    MpiComm(MpiComm&&)      = delete;
+    MpiComm(const MpiComm&)            = delete;
+    MpiComm(MpiComm&&)                 = delete;
     MpiComm& operator=(const MpiComm&) = delete;
-    MpiComm& operator=(MpiComm&&) = delete;
-    ~MpiComm()                    = default;
+    MpiComm& operator=(MpiComm&&)      = delete;
+    ~MpiComm()                         = default;
 
     class Request
     {
     public:
         friend class MpiComm;
 
-        Request(const Request&) = delete;
+        Request(const Request&)            = delete;
         Request& operator=(const Request&) = delete;
         inline Request(Request&&) noexcept;
         inline Request& operator=(Request&&) noexcept;

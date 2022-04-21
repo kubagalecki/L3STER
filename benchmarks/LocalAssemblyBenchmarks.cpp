@@ -1,122 +1,46 @@
 #include "Common.hpp"
 
 template < q_o_t QO, el_o_t EO >
-void BM_PhysBasisDersComputation(benchmark::State& state)
+static void BM_PhysBasisDersComputation(benchmark::State& state)
 {
-    constexpr auto QT      = QuadratureTypes::GLeg;
-    constexpr auto BT      = BasisTypes::Lagrange;
-    const auto     element = getExampleHexElement< EO >();
+    constexpr auto QT        = QuadratureTypes::GLeg;
+    constexpr auto BT        = BasisTypes::Lagrange;
+    const auto     element   = getExampleHexElement< EO >();
+    const auto     ref_basis = getReferenceBasisAtDomainQuadrature< BT, ElementTypes::Hex, EO, QT, QO >();
+    const auto     jacobians = computeJacobiansAtQpoints(element, ref_basis.quadrature);
     for (auto _ : state)
     {
-        const auto ders = computePhysicalBasesAtQpoints< QT, QO, BT >(element);
+        const auto ders = computePhysBasisDersAtQpoints(ref_basis.basis_ders, jacobians);
         benchmark::DoNotOptimize(ders);
     }
 }
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 0, 1)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO1, QO0]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 2, 1)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO1, QO2]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 4, 1)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO1, QO4]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 6, 1)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO1, QO6]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 8, 1)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO1, QO8]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 10, 1)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO1, QO10]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 12, 1)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO1, QO12]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 14, 1)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO1, QO14]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 0, 2)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO2, QO0]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 2, 2)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO2, QO2]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 4, 2)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO2, QO4]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 6, 2)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO2, QO6]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 8, 2)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO2, QO8]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 10, 2)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO2, QO10]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 12, 2)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO2, QO12]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 14, 2)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO2, QO14]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 0, 3)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO3, QO0]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 2, 3)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO3, QO2]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 4, 3)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO3, QO4]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 6, 3)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO3, QO6]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 8, 3)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO3, QO8]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 10, 3)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO3, QO10]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 12, 3)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO3, QO12]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 14, 3)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO3, QO14]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 0, 4)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO4, QO0]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 2, 4)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO4, QO2]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 4, 4)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO4, QO4]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 6, 4)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO4, QO6]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 8, 4)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO4, QO8]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 10, 4)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO4, QO10]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 12, 4)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO4, QO12]")
-    ->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, 14, 4)
-    ->Name("Phys. basis der. at QPs computation [Hex, EO4, QO14]")
-    ->Unit(benchmark::kMicrosecond);
+#define DEF_PHYS_BAS_BENCH(QO, EO)                                                                                     \
+    BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, QO, EO)                                                            \
+        ->Name("Phys. basis der. at QPs computation [Hex, EO " #EO ", QO " #QO "]")                                    \
+        ->Unit(benchmark::kMicrosecond);
+#define DEF_PHYS_BAS_BENCH_SUITE(EO)                                                                                   \
+    DEF_PHYS_BAS_BENCH(0, EO);                                                                                         \
+    DEF_PHYS_BAS_BENCH(2, EO);                                                                                         \
+    DEF_PHYS_BAS_BENCH(4, EO);                                                                                         \
+    DEF_PHYS_BAS_BENCH(6, EO);                                                                                         \
+    DEF_PHYS_BAS_BENCH(8, EO);                                                                                         \
+    DEF_PHYS_BAS_BENCH(10, EO);                                                                                        \
+    DEF_PHYS_BAS_BENCH(12, EO);                                                                                        \
+    DEF_PHYS_BAS_BENCH(14, EO);
+DEF_PHYS_BAS_BENCH_SUITE(1)
+DEF_PHYS_BAS_BENCH_SUITE(2)
+DEF_PHYS_BAS_BENCH_SUITE(3)
+DEF_PHYS_BAS_BENCH_SUITE(4)
 
 template < el_o_t EO >
-void BM_NS3DLocalAssembly(benchmark::State& state)
+static void BM_NS3DLocalAssembly(benchmark::State& state)
 {
     constexpr auto  QT = QuadratureTypes::GLeg;
     constexpr auto  BT = BasisTypes::Lagrange;
     constexpr q_o_t QO = 4 * EO - 2;
 
-    const auto element = getExampleHexElement< EO >();
+    const auto  element         = getExampleHexElement< EO >();
+    const auto& ref_bas_at_quad = getReferenceBasisAtDomainQuadrature< BT, ElementTypes::Hex, EO, QT, QO >();
 
     using nodal_vals_t            = Eigen::Matrix< val_t, element.n_nodes, 7 >;
     const nodal_vals_t nodal_vals = nodal_vals_t::Random();
@@ -128,10 +52,11 @@ void BM_NS3DLocalAssembly(benchmark::State& state)
         constexpr size_t nf = 7;
         constexpr size_t ne = 8;
 
-        const auto& [u, v, w, p, ox, oy, oz] = vals;
-        const auto& [ux, vx, wx]             = ders[0];
-        const auto& [uy, vy, wy]             = ders[1];
-        const auto& [uz, vz, wz]             = ders[2];
+        const auto& [u, v, w, p, ox, oy, oz]        = vals;
+        const auto& [x_ders, y_ders, z_ders]        = ders;
+        const auto& [ux, vx, wx, px, oxx, oyx, ozx] = x_ders;
+        const auto& [uy, vy, wy, py, oxy, oyy, ozy] = y_ders;
+        const auto& [uz, vz, wz, pz, oxz, oyz, ozz] = z_ders;
 
         using A_t   = Eigen::Matrix< val_t, ne, nf >;
         using F_t   = Eigen::Matrix< val_t, ne, 1 >;
@@ -197,17 +122,20 @@ void BM_NS3DLocalAssembly(benchmark::State& state)
 
         return ret_val;
     };
-    const std::array der_indices{0, 1, 2};
 
     for (auto _ : state)
     {
-        const auto local_system = assembleLocalSystem< QT, QO, BT >(ns3d_kernel, element, nodal_vals, der_indices);
+        const auto local_system = assembleLocalSystem(ns3d_kernel, element, nodal_vals, ref_bas_at_quad, 0.);
         benchmark::DoNotOptimize(local_system);
     }
 }
-BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, 1)->Name("Local NS3D system assembly [EO1]")->Unit(benchmark::kMicrosecond);
-BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, 2)->Name("Local NS3D system assembly [EO2]")->Unit(benchmark::kMillisecond);
-BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, 3)->Name("Local NS3D system assembly [EO3]")->Unit(benchmark::kMillisecond);
-BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, 4)->Name("Local NS3D system assembly [EO4]")->Unit(benchmark::kSecond);
-BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, 5)->Name("Local NS3D system assembly [EO5]")->Unit(benchmark::kSecond);
-BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, 6)->Name("Local NS3D system assembly [EO6]")->Unit(benchmark::kSecond);
+#define NS3D_ASSEMBLY_BENCH(ELO, UNIT)                                                                                 \
+    BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, ELO)                                                                      \
+        ->Name("Local NS3D system assembly [Hex, EO " #ELO "]")                                                        \
+        ->Unit(benchmark::k##UNIT);
+NS3D_ASSEMBLY_BENCH(1, Millisecond);
+NS3D_ASSEMBLY_BENCH(2, Millisecond);
+NS3D_ASSEMBLY_BENCH(3, Millisecond);
+NS3D_ASSEMBLY_BENCH(4, Second);
+NS3D_ASSEMBLY_BENCH(5, Second);
+NS3D_ASSEMBLY_BENCH(6, Second);

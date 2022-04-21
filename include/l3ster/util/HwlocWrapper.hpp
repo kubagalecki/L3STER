@@ -17,10 +17,10 @@ namespace lstr
 struct HwlocWrapper
 {
     inline HwlocWrapper();
-    HwlocWrapper(const HwlocWrapper&) = delete;
-    HwlocWrapper(HwlocWrapper&&)      = delete;
+    HwlocWrapper(const HwlocWrapper&)            = delete;
+    HwlocWrapper(HwlocWrapper&&)                 = delete;
     HwlocWrapper& operator=(const HwlocWrapper&) = delete;
-    HwlocWrapper& operator=(HwlocWrapper&&) = delete;
+    HwlocWrapper& operator=(HwlocWrapper&&)      = delete;
     inline ~HwlocWrapper();
 
     [[nodiscard]] size_t         getMachineSize() const noexcept { return cpu_masks.size(); }
@@ -41,8 +41,9 @@ private:
     inline void groupCpus();
 
     template < typename F >
-    requires std::is_invocable_r_v< bool, F, hwloc_cpuset_t >
-    [[nodiscard]] std::pair< size_t, size_t > findCpuIf(const F&) const noexcept;
+    [[nodiscard]] std::pair< size_t, size_t > findCpuIf(const F&) const noexcept
+        requires std::is_invocable_r_v< bool, F, hwloc_cpuset_t >
+    ;
 
     std::vector< std::vector< hwloc_cpuset_t > > cpu_masks{};
     std::vector< hwloc_nodeset_t >               node_masks{};
@@ -54,10 +55,10 @@ namespace detail
 struct HwlocBitmapRaiiWrapper
 {
     HwlocBitmapRaiiWrapper() : bmp{hwloc_bitmap_alloc()} {}
-    HwlocBitmapRaiiWrapper(const HwlocBitmapRaiiWrapper&) = delete;
-    HwlocBitmapRaiiWrapper(HwlocBitmapRaiiWrapper&&)      = delete;
+    HwlocBitmapRaiiWrapper(const HwlocBitmapRaiiWrapper&)            = delete;
+    HwlocBitmapRaiiWrapper(HwlocBitmapRaiiWrapper&&)                 = delete;
     HwlocBitmapRaiiWrapper& operator=(const HwlocBitmapRaiiWrapper&) = delete;
-    HwlocBitmapRaiiWrapper& operator=(HwlocBitmapRaiiWrapper&&) = delete;
+    HwlocBitmapRaiiWrapper& operator=(HwlocBitmapRaiiWrapper&&)      = delete;
     ~HwlocBitmapRaiiWrapper() { hwloc_bitmap_free(bmp); }
 
     // clang-tidy warns about implicit conversion, but that's exactly the point [NOLINTNEXTLINE]
@@ -67,8 +68,8 @@ struct HwlocBitmapRaiiWrapper
 };
 
 template < typename F >
-requires std::is_invocable_v< F, hwloc_bitmap_t >
 void hwlocBitmapForEachWrapper(hwloc_bitmap_t bitmap, const F& fun)
+    requires std::is_invocable_v< F, hwloc_bitmap_t >
 {
     HwlocBitmapRaiiWrapper helper{};
     size_t                 index;
@@ -81,8 +82,8 @@ void hwlocBitmapForEachWrapper(hwloc_bitmap_t bitmap, const F& fun)
 }
 
 template < typename F >
-requires std::is_invocable_v< F, hwloc_const_bitmap_t >
 void hwlocBitmapForEachWrapper(hwloc_const_bitmap_t bitmap, const F& fun)
+    requires std::is_invocable_v< F, hwloc_const_bitmap_t >
 {
     HwlocBitmapRaiiWrapper helper{};
     size_t                 index;
@@ -192,9 +193,8 @@ inline void HwlocWrapper::groupCpus()
 }
 
 template < typename F >
-requires std::is_invocable_r_v< bool, F, hwloc_cpuset_t > std::pair< size_t, size_t >
-                                                          HwlocWrapper::findCpuIf(const F& fun)
-const noexcept
+std::pair< size_t, size_t > HwlocWrapper::findCpuIf(const F& fun) const noexcept
+    requires std::is_invocable_r_v< bool, F, hwloc_cpuset_t >
 {
     std::pair< size_t, size_t > ret_val;
     auto& [node, cpu] = ret_val;

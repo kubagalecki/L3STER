@@ -11,23 +11,22 @@ class GlobalResource
 {
 public:
     template < typename... Args >
-    static void initialize(Args&&... args) requires std::constructible_from< T, Args... >
+    static void initialize(Args&&... args)
+        requires std::constructible_from< T, Args... >
     {
         getInstance().emplace(std::forward< Args >(args)...);
     }
-
     static bool isInitialized() { return getInstance().has_value(); }
-
-    static T& get() { return *getInstance(); }
+    static T&   get() { return *getInstance(); }
     template < typename... Args >
-    static T& getMaybeUninitialized(Args&&... args) requires std::constructible_from< T, Args... >
+    static T& getMaybeUninitialized(Args&&... args)
+        requires std::constructible_from< T, Args... >
     {
         if (not isInitialized())
             initialize(std::forward< Args >(args)...);
         return get();
     }
-
-    static void destroy() { getInstance().reset(); }
+    static void finalize() { getInstance().reset(); }
 
 private:
     static std::optional< T >& getInstance()

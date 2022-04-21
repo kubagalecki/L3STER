@@ -12,24 +12,21 @@ namespace lstr
 namespace detail
 {
 template < typename T >
-concept NoexceptSimplyPlusable_c = requires(T a, T b)
-{
-    {
-        a + b
-    }
-    noexcept->std::convertible_to< T >;
-};
+concept NoexceptSimplyPlusable_c = requires(T a, T b) {
+                                       {
+                                           a + b
+                                           } noexcept -> std::convertible_to< T >;
+                                   };
 
 template < typename T, typename Q >
-concept QuadIntegrable_c = requires(T fun, Q::q_points_t::value_type point, Q::weights_t::value_type weight)
-{
-    {
-        std::apply(fun, point) * weight
-        } -> NoexceptSimplyPlusable_c;
-};
+concept QuadIntegrable_c = requires(T fun, Q::q_points_t::value_type point, Q::weights_t::value_type weight) {
+                               {
+                                   std::apply(fun, point) * weight
+                                   } -> NoexceptSimplyPlusable_c;
+                           };
 
 template < typename Integrator, typename Q >
-requires QuadIntegrable_c< Integrator, Q >
+    requires QuadIntegrable_c< Integrator, Q >
 struct QuadIntTraits
 {
     using pt_t = Q::q_points_t::value_type;
@@ -44,9 +41,9 @@ concept QuadKernelDefaultInitializable_c = std::default_initializable< typename 
 
 // This is a weighted reduction of `fun` over quadrature points
 template < typename Integrator, q_l_t QLENGTH, dim_t QDIM >
-auto evalQuadrature(Integrator&& integrator, const Quadrature< QLENGTH, QDIM >& quad) requires
-    detail::QuadIntegrable_c< Integrator, Quadrature< QLENGTH, QDIM > > and
-    detail::QuadKernelDefaultInitializable_c< Integrator, Quadrature< QLENGTH, QDIM > >
+auto evalQuadrature(Integrator&& integrator, const Quadrature< QLENGTH, QDIM >& quad)
+    requires detail::QuadIntegrable_c< Integrator, Quadrature< QLENGTH, QDIM > > and
+             detail::QuadKernelDefaultInitializable_c< Integrator, Quadrature< QLENGTH, QDIM > >
 {
     using quad_t   = Quadrature< QLENGTH, QDIM >;
     using point_t  = quad_t::q_points_t::value_type;
@@ -68,25 +65,20 @@ auto evalQuadrature(Integrator&& integrator, const Quadrature< QLENGTH, QDIM >& 
 // where certain quantities (e.g. basis derivatives) can be precomputed collectively for all quadrature points, and then
 // accessed by index during quadrature evaluation
 template < typename Integrator, typename ZeroGenerator, q_l_t QLENGTH, dim_t QDIM >
-auto evalQuadrature(Integrator&&                       integrator,
-                    const Quadrature< QLENGTH, QDIM >& quad,
-                    ZeroGenerator                      zero_gen) noexcept requires
-    requires(Integrator                                          integr,
-             Quadrature< QLENGTH, QDIM >::q_points_t::value_type qp,
-             Quadrature< QLENGTH, QDIM >::weights_t::value_type  w,
-             ptrdiff_t                                           index,
-             ZeroGenerator                                       zg)
-{
-    {
-        zg()
-    }
-    noexcept;
-    {
-        integr(index, qp)
-    }
-    noexcept;
-    requires requires(std::remove_cvref_t< decltype(zg()) > el0) { el0 += integr(index, qp) * w; };
-}
+auto evalQuadrature(Integrator&& integrator, const Quadrature< QLENGTH, QDIM >& quad, ZeroGenerator zero_gen) noexcept
+    requires requires(Integrator                                          integr,
+                      Quadrature< QLENGTH, QDIM >::q_points_t::value_type qp,
+                      Quadrature< QLENGTH, QDIM >::weights_t::value_type  w,
+                      ptrdiff_t                                           index,
+                      ZeroGenerator                                       zg) {
+                 {
+                     zg()
+                 } noexcept;
+                 {
+                     integr(index, qp)
+                 } noexcept;
+                 requires requires(std::remove_cvref_t< decltype(zg()) > el0) { el0 += integr(index, qp) * w; };
+             }
 {
     auto zero = zero_gen();
     for (ptrdiff_t i = 0; const auto& qp : quad.getPoints())

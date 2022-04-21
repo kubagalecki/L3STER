@@ -7,19 +7,20 @@ namespace lstr
 {
 namespace detail
 {
-template < std::floating_point T, size_t NPOINTS >
-requires(NPOINTS > 1) auto computeLobattoRuleAbsc()
+template < std::floating_point T, size_t n_points >
+auto computeLobattoRuleAbsc()
+    requires(n_points > 1)
 {
-    if constexpr (NPOINTS == 2)
+    if constexpr (n_points == 2)
         return std::array< T, 2 >{-1., 1.};
-    else if constexpr (NPOINTS == 3)
+    else if constexpr (n_points == 3)
         return std::array< T, 3 >{-1., 0., 1.};
     else
     {
-        std::array< T, NPOINTS > retval;
+        std::array< T, n_points > retval;
         retval.front()           = -1;
         retval.back()            = 1.;
-        const auto lobatto_roots = getLobattoPolynomial< T, NPOINTS - 2 >().roots();
+        const auto lobatto_roots = getLobattoPolynomial< T, n_points - 2 >().roots();
         std::ranges::transform(lobatto_roots, retval.begin() + 1, [](const std::complex< T >& c) { return c.real(); });
         return retval;
     }

@@ -44,7 +44,8 @@ auto deserializeBitset(const std::array< unsigned long long, N >& data)
 }
 
 template < std::size_t N_out, std::size_t N_in >
-auto trimBitset(const std::bitset< N_in >& in) requires(N_out <= N_in)
+auto trimBitset(const std::bitset< N_in >& in)
+    requires(N_out <= N_in)
 {
     if constexpr (N_in <= sizeof(unsigned long long) * 8u)
         return std::bitset< N_out >{in.to_ullong()};

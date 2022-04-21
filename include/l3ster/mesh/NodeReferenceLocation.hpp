@@ -45,7 +45,8 @@ auto makeHexNodeLocations()
 } // namespace detail
 
 template < ElementTypes T, el_o_t O >
-const auto& getNodeLocations() requires(T == ElementTypes::Line or T == ElementTypes::Quad or T == ElementTypes::Hex)
+const auto& getNodeLocations()
+    requires(T == ElementTypes::Line or T == ElementTypes::Quad or T == ElementTypes::Hex)
 {
     if constexpr (T == ElementTypes::Line)
     {

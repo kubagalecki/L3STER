@@ -51,37 +51,46 @@ concept TypePack_c = detail::IsTypePack< T >::value;
 
 namespace detail
 {
-    template < std::integral T, T first, T last >
-    requires(first <= last) constexpr auto make_interval_array()
-    {
-        std::array< T, last - first + 1 > interval;
-        std::iota(interval.begin(), interval.end(), first);
-        return interval;
-    }
+template < std::integral T, T first, T last >
+    requires(first <= last)
+constexpr auto make_interval_array()
+{
+    std::array< T, last - first + 1 > interval;
+    std::iota(interval.begin(), interval.end(), first);
+    return interval;
+}
 
-    template < std::array A >
+template < std::array A >
     requires std::integral< typename decltype(A)::value_type >
-    constexpr auto int_seq_from_array()
+constexpr auto int_seq_from_array()
+{
+    return []< size_t... I >(std::index_sequence< I... >)
     {
-        return []< size_t... I >(std::index_sequence< I... >)
-        {
-            return std::integer_sequence< typename decltype(A)::value_type, A[I]... >{};
-        }
-        (std::make_index_sequence< A.size() >{});
+        return std::integer_sequence< typename decltype(A)::value_type, A[I]... >{};
     }
+    (std::make_index_sequence< A.size() >{});
+}
 } // namespace detail
 
 template < std::integral T, T first, T last >
-requires(first <= last) using int_seq_interval =
-    decltype(detail::int_seq_from_array< detail::make_interval_array< T, first, last >() >());
+    requires(first <= last)
+using int_seq_interval = decltype(detail::int_seq_from_array< detail::make_interval_array< T, first, last >() >());
 
 namespace detail
 {
 template < typename T >
 struct Constify
 {
-    const T operator()(const T& in) requires(not std::is_pointer_v< T >) { return in; }
-    const std::pointer_traits< T >::element_type* operator()(T in) requires(std::is_pointer_v< T >) { return in; }
+    const T operator()(const T& in)
+        requires(not std::is_pointer_v< T >)
+    {
+        return in;
+    }
+    const std::pointer_traits< T >::element_type* operator()(T in)
+        requires(std::is_pointer_v< T >)
+    {
+        return in;
+    }
     using type = decltype(std::declval< Constify< T > >()(std::declval< T >()));
 };
 } // namespace detail
@@ -117,7 +126,8 @@ constexpr inline auto repetitions = [] {
 } // namespace detail
 
 template < std::array... Arrays >
-requires(sizeof...(Arrays) > 0) constexpr auto getCartProdComponents()
+    requires(sizeof...(Arrays) > 0)
+constexpr auto getCartProdComponents()
 {
     constexpr auto deduction_helper = []< std::size_t... ArrInd >(std::index_sequence< ArrInd... >)
     {

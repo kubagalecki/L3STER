@@ -1,5 +1,7 @@
-#include "l3ster/mapping/ComputeBasisDerivative.hpp"
-#include "l3ster/mapping/MapReferenceToPhysical.hpp"
+#include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
+#include "l3ster/mapping/ComputePhysBasisDer.hpp"
+#include "l3ster/mapping/ComputePhysBasisDersAtQpoints.hpp"
+#include "l3ster/mesh/primitives/CubeMesh.hpp"
 
 #include "TestDataPath.h"
 #include "catch2/catch.hpp"
@@ -188,111 +190,120 @@ TEST_CASE("Basis function derivatives", "[mapping]")
     constexpr auto LB = BasisTypes::Lagrange;
     SECTION("Line")
     {
-        const auto element = getLineElement();
-        const auto bf_der0 = computePhysBasisDers< 0, LB >(element, Point{0.});
-        const auto bf_der1 = computePhysBasisDers< 1, LB >(element, Point{0.});
-        CHECK(bf_der0[0] == Approx(-1.).epsilon(1e-13));
-        CHECK(bf_der1[0] == Approx(1.).epsilon(1e-13));
+        const auto element    = getLineElement();
+        const auto test_point = Point{0.};
+        const auto jac        = getNatJacobiMatGenerator(element)(test_point);
+        const auto ref_ders = computeRefBasisDers< decltype(element)::type, decltype(element)::order, LB >(test_point);
+        const auto bf_der   = computePhysBasisDers(jac, ref_ders);
+        CHECK(bf_der(0, 0) == Approx(-1.).epsilon(1e-13));
+        CHECK(bf_der(0, 1) == Approx(1.).epsilon(1e-13));
     }
 
     SECTION("Quad")
     {
-        const auto element = getQuadElement();
-        const auto point   = Point{0., 0.};
-        const auto bf_der0 = computePhysBasisDers< 0, LB >(element, point);
-        const auto bf_der1 = computePhysBasisDers< 1, LB >(element, point);
-        const auto bf_der2 = computePhysBasisDers< 2, LB >(element, point);
-        const auto bf_der3 = computePhysBasisDers< 3, LB >(element, point);
-        CHECK(bf_der0[0] == Approx(-.25).epsilon(1e-13));
-        CHECK(bf_der0[1] == Approx(-.25).epsilon(1e-13));
-        CHECK(bf_der1[0] == Approx(.5).epsilon(1e-13));
-        CHECK(bf_der1[1] == Approx(-.5).epsilon(1e-13));
-        CHECK(bf_der2[0] == Approx(-.5).epsilon(1e-13));
-        CHECK(bf_der2[1] == Approx(.5).epsilon(1e-13));
-        CHECK(bf_der3[0] == Approx(.25).epsilon(1e-13));
-        CHECK(bf_der3[1] == Approx(.25).epsilon(1e-13));
+        const auto element    = getQuadElement();
+        const auto test_point = Point{0., 0.};
+        const auto jac        = getNatJacobiMatGenerator(element)(test_point);
+        const auto ref_ders = computeRefBasisDers< decltype(element)::type, decltype(element)::order, LB >(test_point);
+        const auto bf_der   = computePhysBasisDers(jac, ref_ders);
+        CHECK(bf_der(0, 0) == Approx(-.25).epsilon(1e-13));
+        CHECK(bf_der(1, 0) == Approx(-.25).epsilon(1e-13));
+        CHECK(bf_der(0, 1) == Approx(.5).epsilon(1e-13));
+        CHECK(bf_der(1, 1) == Approx(-.5).epsilon(1e-13));
+        CHECK(bf_der(0, 2) == Approx(-.5).epsilon(1e-13));
+        CHECK(bf_der(1, 2) == Approx(.5).epsilon(1e-13));
+        CHECK(bf_der(0, 3) == Approx(.25).epsilon(1e-13));
+        CHECK(bf_der(1, 3) == Approx(.25).epsilon(1e-13));
     }
 
     SECTION("Hex")
     {
-        const auto element = Element< ElementTypes::Hex, 1 >{{0, 1, 2, 3, 4, 5, 6, 7},
-                                                             ElementData< ElementTypes::Hex, 1 >{{Point{0., 0., 0.},
-                                                                                                  Point{1., 0., 0.},
-                                                                                                  Point{0., 1., 0.},
-                                                                                                  Point{1., 1., 0.},
-                                                                                                  Point{0., 0., 1.},
-                                                                                                  Point{1., 0., 1.},
-                                                                                                  Point{0., 1., 1.},
-                                                                                                  Point{1., 1., 1.}}},
-                                                             0};
-        const auto point   = Point{0., 0., 0.};
-        const auto bf_der0 = computePhysBasisDers< 0, LB >(element, point);
-        const auto bf_der1 = computePhysBasisDers< 1, LB >(element, point);
-        const auto bf_der2 = computePhysBasisDers< 2, LB >(element, point);
-        const auto bf_der3 = computePhysBasisDers< 3, LB >(element, point);
-        const auto bf_der4 = computePhysBasisDers< 4, LB >(element, point);
-        const auto bf_der5 = computePhysBasisDers< 5, LB >(element, point);
-        const auto bf_der6 = computePhysBasisDers< 6, LB >(element, point);
-        const auto bf_der7 = computePhysBasisDers< 7, LB >(element, point);
-        CHECK(bf_der0[0] == Approx(-.25).epsilon(1e-13));
-        CHECK(bf_der0[1] == Approx(-.25).epsilon(1e-13));
-        CHECK(bf_der0[2] == Approx(-.25).epsilon(1e-13));
-        CHECK(bf_der1[0] == Approx(.25).epsilon(1e-13));
-        CHECK(bf_der1[1] == Approx(-.25).epsilon(1e-13));
-        CHECK(bf_der1[2] == Approx(-.25).epsilon(1e-13));
-        CHECK(bf_der2[0] == Approx(-.25).epsilon(1e-13));
-        CHECK(bf_der2[1] == Approx(.25).epsilon(1e-13));
-        CHECK(bf_der2[2] == Approx(-.25).epsilon(1e-13));
-        CHECK(bf_der3[0] == Approx(.25).epsilon(1e-13));
-        CHECK(bf_der3[1] == Approx(.25).epsilon(1e-13));
-        CHECK(bf_der3[2] == Approx(-.25).epsilon(1e-13));
-        CHECK(bf_der4[0] == Approx(-.25).epsilon(1e-13));
-        CHECK(bf_der4[1] == Approx(-.25).epsilon(1e-13));
-        CHECK(bf_der4[2] == Approx(.25).epsilon(1e-13));
-        CHECK(bf_der5[0] == Approx(.25).epsilon(1e-13));
-        CHECK(bf_der5[1] == Approx(-.25).epsilon(1e-13));
-        CHECK(bf_der5[2] == Approx(.25).epsilon(1e-13));
-        CHECK(bf_der6[0] == Approx(-.25).epsilon(1e-13));
-        CHECK(bf_der6[1] == Approx(.25).epsilon(1e-13));
-        CHECK(bf_der6[2] == Approx(.25).epsilon(1e-13));
-        CHECK(bf_der7[0] == Approx(.25).epsilon(1e-13));
-        CHECK(bf_der7[1] == Approx(.25).epsilon(1e-13));
-        CHECK(bf_der7[2] == Approx(.25).epsilon(1e-13));
+        const auto element    = Element< ElementTypes::Hex, 1 >{{0, 1, 2, 3, 4, 5, 6, 7},
+                                                                ElementData< ElementTypes::Hex, 1 >{{Point{0., 0., 0.},
+                                                                                                     Point{1., 0., 0.},
+                                                                                                     Point{0., 1., 0.},
+                                                                                                     Point{1., 1., 0.},
+                                                                                                     Point{0., 0., 1.},
+                                                                                                     Point{1., 0., 1.},
+                                                                                                     Point{0., 1., 1.},
+                                                                                                     Point{1., 1., 1.}}},
+                                                                0};
+        const auto test_point = Point{0., 0., 0.};
+        const auto jac        = getNatJacobiMatGenerator(element)(test_point);
+        const auto ref_ders = computeRefBasisDers< decltype(element)::type, decltype(element)::order, LB >(test_point);
+        const auto bf_der   = computePhysBasisDers(jac, ref_ders);
+        CHECK(bf_der(0, 0) == Approx(-.25).epsilon(1e-13));
+        CHECK(bf_der(1, 0) == Approx(-.25).epsilon(1e-13));
+        CHECK(bf_der(2, 0) == Approx(-.25).epsilon(1e-13));
+        CHECK(bf_der(0, 1) == Approx(.25).epsilon(1e-13));
+        CHECK(bf_der(1, 1) == Approx(-.25).epsilon(1e-13));
+        CHECK(bf_der(2, 1) == Approx(-.25).epsilon(1e-13));
+        CHECK(bf_der(0, 2) == Approx(-.25).epsilon(1e-13));
+        CHECK(bf_der(1, 2) == Approx(.25).epsilon(1e-13));
+        CHECK(bf_der(2, 2) == Approx(-.25).epsilon(1e-13));
+        CHECK(bf_der(0, 3) == Approx(.25).epsilon(1e-13));
+        CHECK(bf_der(1, 3) == Approx(.25).epsilon(1e-13));
+        CHECK(bf_der(2, 3) == Approx(-.25).epsilon(1e-13));
+        CHECK(bf_der(0, 4) == Approx(-.25).epsilon(1e-13));
+        CHECK(bf_der(1, 4) == Approx(-.25).epsilon(1e-13));
+        CHECK(bf_der(2, 4) == Approx(.25).epsilon(1e-13));
+        CHECK(bf_der(0, 5) == Approx(.25).epsilon(1e-13));
+        CHECK(bf_der(1, 5) == Approx(-.25).epsilon(1e-13));
+        CHECK(bf_der(2, 5) == Approx(.25).epsilon(1e-13));
+        CHECK(bf_der(0, 6) == Approx(-.25).epsilon(1e-13));
+        CHECK(bf_der(1, 6) == Approx(.25).epsilon(1e-13));
+        CHECK(bf_der(2, 6) == Approx(.25).epsilon(1e-13));
+        CHECK(bf_der(0, 7) == Approx(.25).epsilon(1e-13));
+        CHECK(bf_der(1, 7) == Approx(.25).epsilon(1e-13));
+        CHECK(bf_der(2, 7) == Approx(.25).epsilon(1e-13));
     }
+}
 
-    SECTION("Single consistent with aggregate")
+TEST_CASE("Reference basis at QPs", "[mapping]")
+{
+    constexpr auto   ET            = ElementTypes::Hex;
+    constexpr el_o_t EO            = 4;
+    constexpr auto   QT            = QuadratureTypes::GLeg;
+    constexpr el_o_t QO            = 4;
+    constexpr auto   BT            = BasisTypes::Lagrange;
+    const auto       ref_bas_at_qp = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
+
+    SECTION("Values")
     {
-        constexpr auto check_basis_ders =
-            []< ElementTypes T, el_o_t O >(const Element< T, O >&                                       element,
-                                           const Point< ElementTraits< Element< T, O > >::native_dim >& point) {
-                const auto jacobi_gen = getNatJacobiMatGenerator(element);
-                const auto J          = jacobi_gen(point);
-                const auto all_ders   = computePhysBasisDers< T, O >(J, computeRefBasisDers< T, O, LB >(point));
-                forConstexpr(
-                    [&]< el_locind_t I >(std::integral_constant< el_locind_t, I >) {
-                        const auto single_der = computePhysBasisDers< I, LB >(element, point);
-                        for (size_t i = 0; i < ElementTraits< Element< T, O > >::native_dim; ++i)
-                            CHECK(single_der[i] == Approx(all_ders(i, I)).epsilon(1e-13));
-                    },
-                    std::make_integer_sequence< el_locind_t, Element< T, O >::n_nodes >{});
-            };
-
-        SECTION("Line")
-        {
-            const auto element = getLineElement();
-            check_basis_ders(element, Point{0.});
-        }
-
-        SECTION("Quad")
-        {
-            const auto element = getQuadElement();
-            check_basis_ders(element, Point{0., 0.});
-        }
-
-        SECTION("Hex")
-        {
-            const auto element = getHexElement();
-            check_basis_ders(element, Point{0., 0., 0.});
-        }
+        for (ptrdiff_t basis = 0; basis < ref_bas_at_qp.basis_vals.rows(); ++basis)
+            CHECK(ref_bas_at_qp.basis_vals(basis, Eigen::all).sum() == Approx{1.});
     }
+
+    SECTION("Derivatives")
+    {
+        for (const auto& der : ref_bas_at_qp.basis_ders)
+            for (ptrdiff_t basis = 0; basis < der.rows(); ++basis)
+                CHECK(der(basis, Eigen::all).sum() == Approx{0.}.margin(1e-13));
+    }
+}
+
+TEST_CASE("Physical basis derivatives at QPs", "[mapping]")
+{
+    constexpr auto  QT = QuadratureTypes::GLeg;
+    constexpr q_o_t QO = 5;
+    constexpr auto  BT = BasisTypes::Lagrange;
+
+    constexpr auto do_test = []< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
+        const auto test_point        = Point{getQuadrature< QT, QO, ET >().getPoints().front()};
+        const auto J                 = getNatJacobiMatGenerator(element)(test_point);
+        const auto ref_basis_ders    = computeRefBasisDers< ET, EO, BT >(test_point);
+        const auto bas_ders_at_testp = computePhysBasisDers(J, ref_basis_ders);
+
+        const auto& ref_basis_at_qps = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
+        const auto  jacobians_at_qps = computeJacobiansAtQpoints(element, ref_basis_at_qps.quadrature);
+        const auto  phys_ders_at_qps = computePhysBasisDersAtQpoints(ref_basis_at_qps.basis_ders, jacobians_at_qps);
+
+        for (int i = 0; i < Element< ET, EO >::native_dim; ++i)
+            CHECK((phys_ders_at_qps[i](0, Eigen::all) - bas_ders_at_testp(i, Eigen::all)).norm() ==
+                  Approx{0.}.margin(1e-13));
+    };
+
+    const auto mesh = makeCubeMesh(std::vector{0., .25, .5, .75, 1.});
+    const auto part = mesh.getPartitions()[0];
+    part.cvisit(do_test, {0}); // Only for the hex domain, this won't work for 2D elements in a 3D space
 }

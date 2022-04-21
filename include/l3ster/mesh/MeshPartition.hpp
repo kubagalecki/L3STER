@@ -14,12 +14,11 @@ namespace lstr
 namespace detail
 {
 template < typename T >
-concept domain_predicate = requires(T op, const DomainView dv)
-{
-    {
-        op(dv)
-        } -> std::convertible_to< bool >;
-};
+concept domain_predicate = requires(T op, const DomainView dv) {
+                               {
+                                   std::invoke(op, dv)
+                                   } -> std::convertible_to< bool >;
+                           };
 
 template < typename T >
 concept inv_cel_dv = invocable_on_const_elements_and< T, const DomainView >;

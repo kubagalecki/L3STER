@@ -21,7 +21,8 @@ template < typename... T >
 OverloadSet(T&&...) -> OverloadSet< T... >;
 
 template < auto V >
-requires(std::is_enum_v< decltype(V) >) struct EnumTag
+    requires(std::is_enum_v< decltype(V) >)
+struct EnumTag
 {};
 
 template < typename T1, typename T2 >
@@ -36,7 +37,8 @@ template < typename T1, typename T2 >
 constexpr bool isSameObject(T1&&, T2&&) = delete;
 
 template < typename... T >
-constexpr bool exactlyOneOf(T... args) requires(std::convertible_to< T, bool >and...)
+constexpr bool exactlyOneOf(T... args)
+    requires(std::convertible_to< T, bool > and ...)
 {
     return (static_cast< size_t >(static_cast< bool >(args)) + ...) == 1u;
 }
@@ -50,7 +52,9 @@ struct Pair
     using first_type  = T1;
     using second_type = T2;
 
-    constexpr Pair() requires(std::is_default_constructible_v< T1 >and std::is_default_constructible_v< T2 >) = default;
+    constexpr Pair()
+        requires(std::is_default_constructible_v< T1 > and std::is_default_constructible_v< T2 >)
+    = default;
     constexpr Pair(T1 t1, T2 t2) : first{std::move(t1)}, second{std::move(t2)} {}
 
     T1 first;

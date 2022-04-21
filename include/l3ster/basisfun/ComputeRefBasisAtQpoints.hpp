@@ -1,5 +1,5 @@
-#ifndef L3STER_ASSEMBLY_COMPUTEREFBASESATQPOINTS_HPP
-#define L3STER_ASSEMBLY_COMPUTEREFBASESATQPOINTS_HPP
+#ifndef L3STER_BASISFUN_COMPUTEREFBASISATQPOINTS_HPP
+#define L3STER_BASISFUN_COMPUTEREFBASISATQPOINTS_HPP
 
 #include "l3ster/basisfun/ReferenceBasisFunction.hpp"
 #include "l3ster/quad/Quadrature.hpp"
@@ -7,8 +7,8 @@
 namespace lstr
 {
 template < BasisTypes BT, ElementTypes ET, el_o_t EO, q_l_t QL, dim_t QD >
-auto computeRefBasesAtQpoints(const Quadrature< QL, QD >& quad) requires(
-    ElementTraits< Element< ET, EO > >::native_dim == QD)
+auto computeRefBasisAtQpoints(const Quadrature< QL, QD >& quad)
+    requires(ElementTraits< Element< ET, EO > >::native_dim == QD)
 {
     constexpr auto n_bases = Element< ET, EO >::n_nodes;
     using ret_t            = Eigen::Matrix< val_t, QL, n_bases >;
@@ -23,8 +23,8 @@ auto computeRefBasesAtQpoints(const Quadrature< QL, QD >& quad) requires(
 }
 
 template < BasisTypes BT, ElementTypes ET, el_o_t EO, q_l_t QL, dim_t QD >
-auto computeRefBasisDersAtQpoints(const Quadrature< QL, QD >& quad) requires(
-    ElementTraits< Element< ET, EO > >::native_dim == QD)
+auto computeRefBasisDersAtQpoints(const Quadrature< QL, QD >& quad)
+    requires(ElementTraits< Element< ET, EO > >::native_dim == QD)
 {
     constexpr auto n_bases = Element< ET, EO >::n_nodes;
     using values_at_qp_t   = Eigen::Matrix< val_t, QL, n_bases >;
@@ -41,4 +41,4 @@ auto computeRefBasisDersAtQpoints(const Quadrature< QL, QD >& quad) requires(
     return ret_val;
 }
 } // namespace lstr
-#endif // L3STER_ASSEMBLY_COMPUTEREFBASESATQPOINTS_HPP
+#endif // L3STER_BASISFUN_COMPUTEREFBASISATQPOINTS_HPP

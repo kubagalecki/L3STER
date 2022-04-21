@@ -83,7 +83,8 @@ consteval auto getElementIndices()
 }
 
 template < ElementTypes T, el_o_t O, dim_t DIM >
-requires(DIM <= 3) consteval auto getElementOuterFeatures()
+consteval auto getElementOuterFeatures()
+    requires(DIM <= 3)
 {
     using el_traits_t     = ElementTraits< Element< T, O > >;
     constexpr auto el_dim = el_traits_t::native_dim;

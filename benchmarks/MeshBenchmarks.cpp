@@ -1,14 +1,14 @@
 #include "Common.hpp"
 #include "DataPath.h"
 
-void BM_MeshRead(benchmark::State& state)
+static void BM_MeshRead(benchmark::State& state)
 {
     for (auto _ : state)
         const auto temp = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
 }
 BENCHMARK(BM_MeshRead)->Unit(benchmark::kMillisecond)->Name("Read mesh");
 
-void BM_DualGraphGeneration(benchmark::State& state)
+static void BM_DualGraphGeneration(benchmark::State& state)
 {
     auto  mesh      = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     auto& partition = mesh.getPartitions()[0];
@@ -21,7 +21,7 @@ void BM_DualGraphGeneration(benchmark::State& state)
 }
 BENCHMARK(BM_DualGraphGeneration)->Unit(benchmark::kMillisecond)->Name("Generate dual graph");
 
-void BM_BoundaryViewGeneration(benchmark::State& state)
+static void BM_BoundaryViewGeneration(benchmark::State& state)
 {
     auto  mesh      = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     auto& partition = mesh.getPartitions()[0];
@@ -35,7 +35,7 @@ void BM_BoundaryViewGeneration(benchmark::State& state)
 }
 BENCHMARK(BM_BoundaryViewGeneration)->Unit(benchmark::kMillisecond)->Name("Generate boundary view");
 
-void BM_BoundaryViewGenerationFallback(benchmark::State& state)
+static void BM_BoundaryViewGenerationFallback(benchmark::State& state)
 {
     const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
 
@@ -47,7 +47,7 @@ void BM_BoundaryViewGenerationFallback(benchmark::State& state)
 }
 BENCHMARK(BM_BoundaryViewGenerationFallback)->Unit(benchmark::kSecond)->Name("Generate boundary view (fallback)");
 
-void BM_MeshOrderConversion(benchmark::State& state)
+static void BM_MeshOrderConversion(benchmark::State& state)
 {
     auto  mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     auto& part = mesh.getPartitions()[0];
@@ -61,7 +61,7 @@ void BM_MeshOrderConversion(benchmark::State& state)
 }
 BENCHMARK(BM_MeshOrderConversion)->Unit(benchmark::kSecond)->Name("Convert mesh to 2nd order");
 
-void BM_MeshPartitioning(benchmark::State& state)
+static void BM_MeshPartitioning(benchmark::State& state)
 {
     auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
 
@@ -73,7 +73,7 @@ void BM_MeshPartitioning(benchmark::State& state)
 }
 BENCHMARK(BM_MeshPartitioning)->Unit(benchmark::kMillisecond)->Name("Partition mesh in half");
 
-void BM_MeshSerialization(benchmark::State& state)
+static void BM_MeshSerialization(benchmark::State& state)
 {
     const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     for (auto _ : state)
@@ -84,7 +84,7 @@ void BM_MeshSerialization(benchmark::State& state)
 }
 BENCHMARK(BM_MeshSerialization)->Unit(benchmark::kMillisecond)->Name("Serialize mesh");
 
-void BM_MeshDeserialization(benchmark::State& state)
+static void BM_MeshDeserialization(benchmark::State& state)
 {
     const auto mesh       = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     const auto serialized = SerializedPartition{mesh.getPartitions()[0]};
@@ -97,7 +97,7 @@ void BM_MeshDeserialization(benchmark::State& state)
 BENCHMARK(BM_MeshDeserialization)->Unit(benchmark::kMillisecond)->Name("Deserialize mesh");
 
 template < typename ExecutionPolicy >
-void BM_CopyElementNodes(benchmark::State& state)
+static void BM_CopyElementNodes(benchmark::State& state)
 {
     const auto            mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     const auto&           part = mesh.getPartitions()[0];
@@ -121,8 +121,8 @@ void BM_CopyElementNodes(benchmark::State& state)
 BENCHMARK_TEMPLATE(BM_CopyElementNodes, std::execution::sequenced_policy)
     ->Unit(benchmark::kMicrosecond)
     ->UseRealTime()
-    ->Name("Make local node list copy [serial]");
+    ->Name("Loop over all elements [serial]");
 BENCHMARK_TEMPLATE(BM_CopyElementNodes, std::execution::parallel_policy)
     ->Unit(benchmark::kMicrosecond)
     ->UseRealTime()
-    ->Name("Make local node list copy [parallel]");
+    ->Name("Loop over all elements [parallel]");

@@ -10,7 +10,8 @@ namespace lstr
 {
 inline auto getStackSize()
 {
-    struct rlimit rl{};
+    struct rlimit rl
+    {};
     if (getrlimit(RLIMIT_STACK, &rl))
         throw std::runtime_error{"Could not determine the stack size"};
     return std::make_pair(rl.rlim_cur, rl.rlim_max);
@@ -24,7 +25,8 @@ inline void setMinStackSize(rlim_t requested_size)
     if (requested_size > max_stack_size)
         throw std::runtime_error{"Requested stack size exceeds system limits"};
 
-    struct rlimit rl{};
+    struct rlimit rl
+    {};
     rl.rlim_cur = requested_size;
     rl.rlim_max = max_stack_size;
     if (setrlimit(RLIMIT_STACK, &rl))

@@ -8,12 +8,11 @@ namespace lstr
 template < std::ranges::random_access_range Rx,
            std::ranges::random_access_range Ry,
            std::ranges::random_access_range Rz >
-inline Mesh
-makeCubeMesh(Rx&& distx,
-             Ry&& disty,
-             Rz&& distz) requires std::convertible_to< std::ranges::range_value_t< std::decay_t< Rx > >, val_t > and
-    std::convertible_to< std::ranges::range_value_t< std::decay_t< Ry > >, val_t > and
-    std::convertible_to< std::ranges::range_value_t< std::decay_t< Rz > >, val_t >
+inline Mesh makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz)
+    requires std::convertible_to< std::ranges::range_value_t< std::decay_t< Rx > >,
+                                  val_t >and std::convertible_to< std::ranges::range_value_t< std::decay_t< Ry > >,
+                                                                  val_t >and std::
+        convertible_to< std::ranges::range_value_t< std::decay_t< Rz > >, val_t >
 {
     const size_t n_dx = std::ranges::size(distx);
     const size_t n_dy = std::ranges::size(disty);
@@ -41,13 +40,13 @@ makeCubeMesh(Rx&& distx,
             for (auto ix : std::views::iota(0u, e_dx))
             {
                 const std::array< n_id_t, 8 >     nodes = {n_dx * n_dy * iz + n_dx * iy + ix,
-                                                       n_dx * n_dy * iz + n_dx * iy + ix + 1,
-                                                       n_dx * n_dy * iz + n_dx * (iy + 1) + ix,
-                                                       n_dx * n_dy * iz + n_dx * (iy + 1) + ix + 1,
-                                                       n_dx * n_dy * (iz + 1) + n_dx * iy + ix,
-                                                       n_dx * n_dy * (iz + 1) + n_dx * iy + ix + 1,
-                                                       n_dx * n_dy * (iz + 1) + n_dx * (iy + 1) + ix,
-                                                       n_dx * n_dy * (iz + 1) + n_dx * (iy + 1) + ix + 1};
+                                                           n_dx * n_dy * iz + n_dx * iy + ix + 1,
+                                                           n_dx * n_dy * iz + n_dx * (iy + 1) + ix,
+                                                           n_dx * n_dy * iz + n_dx * (iy + 1) + ix + 1,
+                                                           n_dx * n_dy * (iz + 1) + n_dx * iy + ix,
+                                                           n_dx * n_dy * (iz + 1) + n_dx * iy + ix + 1,
+                                                           n_dx * n_dy * (iz + 1) + n_dx * (iy + 1) + ix,
+                                                           n_dx * n_dy * (iz + 1) + n_dx * (iy + 1) + ix + 1};
                 const std::array< Point< 3 >, 8 > verts = {Point{distx[ix], disty[iy], distz[iz]},
                                                            Point{distx[ix + 1], disty[iy], distz[iz]},
                                                            Point{distx[ix], disty[iy + 1], distz[iz]},
@@ -89,9 +88,9 @@ makeCubeMesh(Rx&& distx,
         for (auto ix : std::views::iota(0u, e_dx))
         {
             const std::array< n_id_t, 4 >     nodes1 = {n_dx * n_dy * iz + ix,
-                                                    n_dx * n_dy * iz + ix + 1,
-                                                    n_dx * n_dy * (iz + 1) + ix,
-                                                    n_dx * n_dy * (iz + 1) + ix + 1};
+                                                        n_dx * n_dy * iz + ix + 1,
+                                                        n_dx * n_dy * (iz + 1) + ix,
+                                                        n_dx * n_dy * (iz + 1) + ix + 1};
             const std::array< Point< 3 >, 4 > verts1 = {Point{distx[ix], disty[0], distz[iz]},
                                                         Point{distx[ix + 1], disty[0], distz[iz]},
                                                         Point{distx[ix], disty[0], distz[iz + 1]},
@@ -113,9 +112,9 @@ makeCubeMesh(Rx&& distx,
         for (auto iy : std::views::iota(0u, e_dy))
         {
             const std::array< n_id_t, 4 >     nodes1 = {n_dx * n_dy * iz + n_dx * iy,
-                                                    n_dx * n_dy * iz + n_dx * (iy + 1),
-                                                    n_dx * n_dy * (iz + 1) + n_dx * iy,
-                                                    n_dx * n_dy * (iz + 1) + n_dx * (iy + 1)};
+                                                        n_dx * n_dy * iz + n_dx * (iy + 1),
+                                                        n_dx * n_dy * (iz + 1) + n_dx * iy,
+                                                        n_dx * n_dy * (iz + 1) + n_dx * (iy + 1)};
             const std::array< Point< 3 >, 4 > verts1 = {Point{distx[0], disty[iy], distz[iz]},
                                                         Point{distx[0], disty[iy + 1], distz[iz]},
                                                         Point{distx[0], disty[iy], distz[iz + 1]},
@@ -139,8 +138,9 @@ makeCubeMesh(Rx&& distx,
 }
 
 template < std::ranges::random_access_range R >
-requires std::convertible_to< std::ranges::range_value_t< std::decay_t< R > >, val_t >
-inline Mesh makeCubeMesh(R&& dist)
+    requires std::convertible_to< std::ranges::range_value_t< std::decay_t< R > >,
+                                  val_t > inline Mesh
+    makeCubeMesh(R&& dist)
 {
     return makeCubeMesh(dist, dist, dist);
 }

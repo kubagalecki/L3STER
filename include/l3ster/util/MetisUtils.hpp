@@ -20,7 +20,7 @@ public:
 
     inline MetisGraphWrapper(const MetisGraphWrapper& other);
     MetisGraphWrapper(MetisGraphWrapper&&) noexcept = default;
-    inline MetisGraphWrapper& operator              =(const MetisGraphWrapper& other);
+    inline MetisGraphWrapper& operator=(const MetisGraphWrapper& other);
     MetisGraphWrapper&        operator=(MetisGraphWrapper&&) noexcept = default;
     ~MetisGraphWrapper()                                              = default;
 

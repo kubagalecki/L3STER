@@ -136,14 +136,31 @@ public:
 
     public:
         [[nodiscard]] bool test(std::size_t pos) const noexcept { return m_target->test(pos + m_begin); }
-        void               set(std::size_t pos) noexcept requires(not is_const) { m_target->set(pos + m_begin); }
-        void               reset(std::size_t pos) noexcept requires(not is_const) { m_target->reset(pos + m_begin); }
-        void               flip(std::size_t pos) noexcept requires(not is_const) { m_target->flip(pos + m_begin); }
-        void assign(std::size_t pos, bool val) noexcept requires(not is_const) { m_target->assign(pos + m_begin, val); }
+        void               set(std::size_t pos) noexcept
+            requires(not is_const)
+        {
+            m_target->set(pos + m_begin);
+        }
+        void reset(std::size_t pos) noexcept
+            requires(not is_const)
+        {
+            m_target->reset(pos + m_begin);
+        }
+        void flip(std::size_t pos) noexcept
+            requires(not is_const)
+        {
+            m_target->flip(pos + m_begin);
+        }
+        void assign(std::size_t pos, bool val) noexcept
+            requires(not is_const)
+        {
+            m_target->assign(pos + m_begin, val);
+        }
 
         [[nodiscard]] size_t size() const noexcept { return m_end - m_begin; }
 
-        BitReference operator[](size_t pos) noexcept requires(not is_const)
+        BitReference operator[](size_t pos) noexcept
+            requires(not is_const)
         {
             return m_target->operator[](pos + m_begin);
         }

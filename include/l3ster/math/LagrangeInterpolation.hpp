@@ -10,8 +10,8 @@
 namespace lstr
 {
 template < std::floating_point T, size_t N >
-requires(N > 1) constexpr Polynomial< T, N - 1 > lagrangeInterp(const std::array< T, N >& x,
-                                                                const std::array< T, N >& y)
+constexpr Polynomial< T, N - 1 > lagrangeInterp(const std::array< T, N >& x, const std::array< T, N >& y)
+    requires(N > 1)
 {
     // Algorithm: Sum N polynomials l_i, such that l_i has roots at all x except x[i], and l_i(x[i]) == y[i]
     // Note: This method is accurate up until approximately N == 16
