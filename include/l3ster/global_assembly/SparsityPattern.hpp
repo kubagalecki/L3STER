@@ -33,14 +33,14 @@ auto calculateCrsData(const MeshPartition&                                      
                       const node_interval_vector_t< deduceNFields(problem_def) >& dof_intervals,
                       std::vector< global_dof_t >                                 global_dofs)
 {
-    constexpr auto merge_new_dofs = [](std::vector< global_dof_t >&         old_dofs,
-                                       const array_of< global_dof_t > auto& new_dofs) {
-        const auto old_size = static_cast< ptrdiff_t >(old_dofs.size());
-        old_dofs.resize(old_size + new_dofs.size());
-        const auto old_end = std::next(begin(old_dofs), old_size);
-        const auto new_end = std::set_difference(begin(new_dofs), end(new_dofs), begin(old_dofs), old_end, old_end);
-        std::inplace_merge(begin(old_dofs), old_end, new_end);
-        old_dofs.erase(new_end, end(old_dofs));
+    thread_local std::vector< global_dof_t > scratchpad;
+    constexpr auto                           merge_new_dofs = []< size_t n_new >(std::vector< global_dof_t >&             old_dofs,
+                                                       const std::array< global_dof_t, n_new >& new_dofs) {
+        scratchpad.resize(old_dofs.size() + n_new);
+        const auto union_end = std::ranges::set_union(old_dofs, new_dofs, begin(scratchpad)).out;
+        const auto union_range = std::ranges::subrange(begin(scratchpad), union_end);
+        old_dofs.resize(union_range.size());
+        std::ranges::copy(union_range, begin(old_dofs));
     };
 
     std::vector< std::vector< global_dof_t > > row_entries(global_dofs.size());
@@ -66,6 +66,7 @@ auto calculateCrsData(const MeshPartition&                                      
         mesh.cvisit(process_element, {domain_id}, std::execution::par);
     };
     forConstexpr(process_domain, problem_def_ctwrapper);
+    scratchpad = {};
     return row_entries;
 }
 
