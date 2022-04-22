@@ -222,10 +222,9 @@ constexpr DerDim derivativeByIndex(dim_t d)
 template < ElementTypes T, el_o_t O, BasisTypes BT >
 auto computeRefBasisDers(const Point< Element< T, O >::native_dim >& point)
 {
-    constexpr dim_t       nat_dim     = Element< T, O >::native_dim;
-    constexpr el_locind_t n_basis_fun = Element< T, O >::n_nodes;
-    using ret_t                       = Eigen::Matrix< val_t, nat_dim, n_basis_fun >;
-    ret_t ret_val; // NOLINT we want raw memory to be written to below
+    constexpr dim_t                                               nat_dim     = Element< T, O >::native_dim;
+    constexpr el_locind_t                                         n_basis_fun = Element< T, O >::n_nodes;
+    Eigen::Matrix< val_t, nat_dim, n_basis_fun, Eigen::RowMajor > ret_val;
     forConstexpr(
         [&]< el_locind_t I >(std::integral_constant< el_locind_t, I >) {
             forConstexpr(

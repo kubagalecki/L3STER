@@ -36,31 +36,32 @@ inline constexpr std::size_t n_unknowns =
     kernel_return_t< Kernel, ET, EO, n_fields >::first_type::value_type::ColsAtCompileTime;
 
 template < int n_nodes, int n_fields, int n_qp, size_t n_dims >
-auto computeFieldValsAndDers(const Eigen::Matrix< val_t, n_qp, n_nodes >&                       basis_vals,
-                             const std::array< Eigen::Matrix< val_t, n_qp, n_nodes >, n_dims >& basis_ders,
-                             const Eigen::Matrix< val_t, n_nodes, n_fields >&                   node_vals)
+auto computeFieldValsAndDers(
+    const Eigen::Matrix< val_t, n_qp, n_nodes, Eigen::RowMajor >&                       basis_vals,
+    const std::array< Eigen::Matrix< val_t, n_qp, n_nodes, Eigen::RowMajor >, n_dims >& basis_ders,
+    const Eigen::Matrix< val_t, n_nodes, n_fields >&                                    node_vals)
 {
-    using quantity_at_qps = Eigen::Matrix< val_t, n_qp, n_fields >;
+    using quantity_at_qps = Eigen::Matrix< val_t, n_qp, n_fields, Eigen::RowMajor >;
     std::pair< quantity_at_qps, std::array< quantity_at_qps, n_dims > > retval;
-    if constexpr (n_fields == 0)
-        return retval;
-    else
+    if constexpr (n_fields != 0)
     {
         retval.first = basis_vals * node_vals;
         for (size_t dim = 0; dim < n_dims; ++dim)
             retval.second[dim] = basis_ders[dim] * node_vals;
-        return retval;
     }
+    return retval;
 }
 
 template < int n_fields, int n_qp, size_t n_dims >
 auto extractFieldValsAndDersAtQpoint(
-    const std::pair< Eigen::Matrix< val_t, n_qp, n_fields >,
-                     std::array< Eigen::Matrix< val_t, n_qp, n_fields >, n_dims > >& field_vals_and_ders,
-    size_t                                                                           qp_ind)
+    const std::pair< Eigen::Matrix< val_t, n_qp, n_fields, Eigen::RowMajor >,
+                     std::array< Eigen::Matrix< val_t, n_qp, n_fields, Eigen::RowMajor >, n_dims > >&
+           field_vals_and_ders,
+    size_t qp_ind)
 {
     using quantity_at_qp        = std::array< val_t, n_fields >;
-    const auto extract_quantity = [&](const Eigen::Matrix< val_t, n_qp, n_fields >& quantity, quantity_at_qp& target) {
+    const auto extract_quantity = [&](const Eigen::Matrix< val_t, n_qp, n_fields, Eigen::RowMajor >& quantity,
+                                      quantity_at_qp&                                                target) {
         for (size_t i = 0; i < n_fields; ++i)
             target[i] = quantity(qp_ind, i);
     };
@@ -96,8 +97,7 @@ auto makeRankUpdateMatrix(const auto& kernel_result, const auto& basis_vals, con
     constexpr size_t n_equations = std::remove_cvref_t< decltype(kernel_result) >::value_type::RowsAtCompileTime;
     constexpr size_t n_unknowns  = std::remove_cvref_t< decltype(kernel_result) >::value_type::ColsAtCompileTime;
     constexpr size_t n_bases     = std::remove_cvref_t< decltype(basis_vals) >::ColsAtCompileTime;
-    using ret_t                  = Eigen::Matrix< val_t, n_bases * n_unknowns, n_equations, Eigen::RowMajor >;
-    ret_t ret_val; // NOLINT filled in directly below
+    Eigen::Matrix< val_t, n_bases * n_unknowns, n_equations, Eigen::RowMajor > ret_val;
     for (ptrdiff_t basis_ind = 0; basis_ind < static_cast< ptrdiff_t >(n_bases); ++basis_ind)
     {
         ret_val(Eigen::seqN(basis_ind * n_unknowns, Eigen::fix< n_unknowns >), Eigen::all) =

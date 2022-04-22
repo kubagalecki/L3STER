@@ -7,8 +7,8 @@
 namespace lstr
 {
 template < int native_dim, int n_bases >
-auto computePhysBasisDers(const Eigen::Matrix< val_t, native_dim, native_dim >& jacobi_mat,
-                          const Eigen::Matrix< val_t, native_dim, n_bases >&    ref_ders)
+auto computePhysBasisDers(const Eigen::Matrix< val_t, native_dim, native_dim >&               jacobi_mat,
+                          const Eigen::Matrix< val_t, native_dim, n_bases, Eigen::RowMajor >& ref_ders)
 {
     return Eigen::Matrix< val_t, native_dim, n_bases >{jacobi_mat.inverse() * ref_ders};
 }

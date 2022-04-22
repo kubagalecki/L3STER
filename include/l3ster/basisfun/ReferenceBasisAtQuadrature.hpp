@@ -10,8 +10,8 @@ template < ElementTypes ET, el_o_t EO, q_l_t QL, dim_t QD >
 struct ReferenceBasisAtQuadrature
 {
 private:
-    using basis_at_qp_t = Eigen::Matrix< val_t, QL, ElementTraits< Element< ET, EO > >::nodes_per_element >;
-    using basis_ders_t  = std::array< basis_at_qp_t, ElementTraits< Element< ET, EO > >::native_dim >;
+    using basis_at_qp_t = Eigen::Matrix< val_t, QL, Element< ET, EO >::n_nodes, Eigen::RowMajor >;
+    using basis_ders_t  = std::array< basis_at_qp_t, Element< ET, EO >::native_dim >;
 
 public:
     Quadrature< QL, QD > quadrature;

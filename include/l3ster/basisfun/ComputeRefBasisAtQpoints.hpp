@@ -11,7 +11,7 @@ auto computeRefBasisAtQpoints(const Quadrature< QL, QD >& quad)
     requires(ElementTraits< Element< ET, EO > >::native_dim == QD)
 {
     constexpr auto n_bases = Element< ET, EO >::n_nodes;
-    using ret_t            = Eigen::Matrix< val_t, QL, n_bases >;
+    using ret_t            = Eigen::Matrix< val_t, QL, n_bases, Eigen::RowMajor >;
 
     ret_t ret_val;
     for (ptrdiff_t index = 0; const auto& qp : quad.getPoints())
@@ -27,7 +27,7 @@ auto computeRefBasisDersAtQpoints(const Quadrature< QL, QD >& quad)
     requires(ElementTraits< Element< ET, EO > >::native_dim == QD)
 {
     constexpr auto n_bases = Element< ET, EO >::n_nodes;
-    using values_at_qp_t   = Eigen::Matrix< val_t, QL, n_bases >;
+    using values_at_qp_t   = Eigen::Matrix< val_t, QL, n_bases, Eigen::RowMajor >;
     using ret_t            = std::array< values_at_qp_t, Element< ET, EO >::native_dim >;
 
     ret_t ret_val;
