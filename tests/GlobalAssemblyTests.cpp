@@ -43,7 +43,7 @@ TEST_CASE("Sparsity pattern assembly", "[global_asm]")
 
     for (ptrdiff_t row = 0; const auto& row_dofs : sparse_graph)
     {
-        for ([[maybe_unused]] auto col : row_dofs)
+        for (auto col : row_dofs)
             CHECK(dense_graph[row].test(col));
         CHECK(dense_graph[row].count() == row_dofs.size());
         ++row;

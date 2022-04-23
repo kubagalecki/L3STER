@@ -8,8 +8,6 @@
 #include "Tpetra_FECrsMatrix.hpp"
 #include "Tpetra_FEMultiVector.hpp"
 
-#include "tbb/tbb.h"
-
 namespace lstr::detail
 {
 template < array_of< ptrdiff_t > auto dof_inds, ElementTypes T, el_o_t O, size_t n_fields >
@@ -33,18 +31,17 @@ auto calculateCrsData(const MeshPartition&                                      
                       const node_interval_vector_t< deduceNFields(problem_def) >& dof_intervals,
                       std::vector< global_dof_t >                                 global_dofs)
 {
-    thread_local std::vector< global_dof_t > scratchpad;
-    constexpr auto                           merge_new_dofs = []< size_t n_new >(std::vector< global_dof_t >&             old_dofs,
-                                                       const std::array< global_dof_t, n_new >& new_dofs) {
+    auto merge_new_dofs = [scratchpad = std::vector< global_dof_t >()]< size_t n_new >(
+                              std::vector< global_dof_t >&             old_dofs,
+                              const std::array< global_dof_t, n_new >& new_dofs) mutable {
         scratchpad.resize(old_dofs.size() + n_new);
-        const auto union_end = std::ranges::set_union(old_dofs, new_dofs, begin(scratchpad)).out;
+        const auto union_end   = std::ranges::set_union(old_dofs, new_dofs, begin(scratchpad)).out;
         const auto union_range = std::ranges::subrange(begin(scratchpad), union_end);
         old_dofs.resize(union_range.size());
         std::ranges::copy(union_range, begin(old_dofs));
     };
 
     std::vector< std::vector< global_dof_t > > row_entries(global_dofs.size());
-    std::vector< std::mutex >                  row_mutexes(global_dofs.size());
     const auto                                 node_to_dof_map         = GlobalNodeToDofMap{mesh, dof_intervals};
     const auto                                 global_to_local_dof_map = IndexMap{global_dofs};
 
@@ -56,17 +53,16 @@ auto calculateCrsData(const MeshPartition&                                      
 
         const auto process_element = [&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
             const auto element_dofs = getElementDofs< covered_dof_inds >(element, node_to_dof_map);
-            for (auto row : element_dofs)
+            for (size_t row_ind = 0; auto row : element_dofs)
             {
-                const auto             local_row = global_to_local_dof_map(row);
-                const std::scoped_lock lock{row_mutexes[local_row]};
+                const auto local_row = global_to_local_dof_map(row);
                 merge_new_dofs(row_entries[local_row], element_dofs);
+                ++row_ind;
             }
         };
-        mesh.cvisit(process_element, {domain_id}, std::execution::par);
+        mesh.cvisit(process_element, {domain_id});
     };
     forConstexpr(process_domain, problem_def_ctwrapper);
-    scratchpad = {};
     return row_entries;
 }
 

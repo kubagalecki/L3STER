@@ -3,9 +3,9 @@
 
 #include <algorithm>
 #include <array>
-#include <bitset>
 #include <concepts>
 #include <limits>
+#include <memory>
 #include <tuple>
 #include <type_traits>
 #include <vector>
@@ -69,5 +69,23 @@ std::vector< T > concatVectors(std::vector< T > v1, const std::vector< T >& v2)
     std::ranges::copy(v2, std::next(begin(v1), v1_size_old));
     return v1;
 }
+
+template < typename T >
+struct alignas(std::max< std::size_t >(64u /* cacheline size */, alignof(T))) CacheAligned
+{
+    template < typename... Args >
+    constexpr CacheAligned(Args&&... args)
+        requires std::constructible_from< T, Args... >
+    : value{std::forward< Args >(args)...}
+    {}
+
+    constexpr T&       operator*() noexcept { return value; }
+    constexpr const T& operator*() const noexcept { return value; }
+    constexpr T*       operator->() noexcept { return std::addressof(value); }
+    constexpr const T* operator->() const noexcept { return std::addressof(value); }
+
+private:
+    T value;
+};
 } // namespace lstr
 #endif // L3STER_UTIL_COMMON_HPP

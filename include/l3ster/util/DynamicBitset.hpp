@@ -1,8 +1,11 @@
 #ifndef L3STER_UTIL_DYNAMICBITSET_HPP
 #define L3STER_UTIL_DYNAMICBITSET_HPP
 
+#include "l3ster/util/Common.hpp"
+
 #include <atomic>
-#include <bitset>
+#include <bit>
+#include <climits>
 #include <cstdint>
 #include <numeric>
 #include <utility>
@@ -12,62 +15,62 @@ namespace lstr
 {
 class DynamicBitset
 {
-    using ull                             = unsigned long long;
-    static constexpr std::size_t ull_bits = sizeof(ull) * 8;
+    static constexpr std::size_t ul_bits = sizeof(unsigned long) * CHAR_BIT;
 
-    static inline std::size_t    countBits(ull n) { return std::bitset< ull_bits >{n}.count(); } // optimizes to popcnt
-    static inline std::ptrdiff_t getEntryInd(std::size_t pos) { return static_cast< std::ptrdiff_t >(pos / ull_bits); }
-    static inline std::uint8_t   getBitPos(std::size_t pos) { return pos % ull_bits; }
-    static inline ull            getMask(std::uint8_t bit_pos) { return 0b1ull << bit_pos; }
+    static inline std::ptrdiff_t getEntryInd(std::size_t pos) { return static_cast< std::ptrdiff_t >(pos / ul_bits); }
+    static inline std::uint8_t   getBitPos(std::size_t pos) { return pos % ul_bits; }
+    static inline unsigned long  getMask(std::uint8_t bit_pos) { return 0b1ul << bit_pos; }
     static inline auto           posInds(std::size_t pos) { return std::make_pair(getEntryInd(pos), getBitPos(pos)); }
-    static inline std::size_t    computeAllocUlls(std::size_t size)
+    static inline std::size_t    computeAllocUls(std::size_t size)
     {
-        return size % ull_bits == 0 ? size / ull_bits : size / ull_bits + 1;
+        return size % ul_bits == 0 ? size / ul_bits : size / ul_bits + 1;
     }
 
 public:
     DynamicBitset() = default;
-    DynamicBitset(std::size_t size_) : m_data(computeAllocUlls(size_), 0ull), m_size{size_} {}
+    DynamicBitset(std::size_t size_) : m_data(computeAllocUls(size_), 0ul), m_size{size_} {}
     void resize(std::size_t new_size)
     {
-        m_data.resize(computeAllocUlls(new_size), 0ull);
+        m_data.resize(computeAllocUls(new_size), 0ul);
         m_size = new_size;
     }
 
     [[nodiscard]] std::size_t count() const noexcept
     {
         return std::transform_reduce(
-            begin(m_data), end(m_data), std::size_t{0}, std::plus<>{}, [](AlignedUll v) { return countBits(v.value); });
+            begin(m_data), end(m_data), std::size_t{0}, std::plus<>{}, [](CacheAligned< unsigned long > v) {
+                return std::popcount(*v);
+            });
     }
     [[nodiscard]] std::size_t size() const noexcept { return m_size; }
 
     [[nodiscard]] bool test(std::size_t pos) const noexcept
     {
-        const auto [ull_ind, bit_pos] = posInds(pos);
-        return m_data[ull_ind].value & getMask(bit_pos);
+        const auto [ul_ind, bit_pos] = posInds(pos);
+        return *m_data[ul_ind] & getMask(bit_pos);
     }
     void set(std::size_t pos) noexcept
     {
-        const auto [ull_ind, bit_pos] = posInds(pos);
-        m_data[ull_ind].value |= getMask(bit_pos);
+        const auto [ul_ind, bit_pos] = posInds(pos);
+        *m_data[ul_ind] |= getMask(bit_pos);
     }
     void reset(std::size_t pos) noexcept
     {
-        const auto [ull_ind, bit_pos] = posInds(pos);
-        m_data[ull_ind].value &= ~getMask(bit_pos);
+        const auto [ul_ind, bit_pos] = posInds(pos);
+        *m_data[ul_ind] &= ~getMask(bit_pos);
     }
     void flip(std::size_t pos) noexcept
     {
-        const auto [ull_ind, bit_pos] = posInds(pos);
-        m_data[ull_ind].value ^= getMask(bit_pos);
+        const auto [ul_ind, bit_pos] = posInds(pos);
+        *m_data[ul_ind] ^= getMask(bit_pos);
     }
     void assign(std::size_t pos, bool val) noexcept
     {
-        const auto [ull_ind, bit_pos] = posInds(pos);
-        m_data[ull_ind].value &= ~getMask(bit_pos);
-        m_data[ull_ind].value |= static_cast< ull >(val) << bit_pos;
+        const auto [ul_ind, bit_pos] = posInds(pos);
+        *m_data[ul_ind] &= ~getMask(bit_pos);
+        *m_data[ul_ind] |= static_cast< unsigned long >(val) << bit_pos;
     }
-    void clear() noexcept { std::ranges::fill(m_data, AlignedUll{0}); }
+    void clear() noexcept { std::ranges::fill(m_data, CacheAligned< unsigned long >{0ul}); }
 
     class BitReference
     {
@@ -99,26 +102,26 @@ public:
     public:
         [[nodiscard]] bool test(std::size_t pos, std::memory_order order = std::memory_order_seq_cst) noexcept
         {
-            const auto [ull_ind, bit_pos] = posInds(pos);
-            std::atomic_ref atomic_val{m_target->m_data[ull_ind].value};
+            const auto [ul_ind, bit_pos] = posInds(pos);
+            std::atomic_ref atomic_val{*m_target->m_data[ul_ind]};
             return atomic_val.load(order) & getMask(bit_pos);
         }
         void set(std::size_t pos, std::memory_order order = std::memory_order_seq_cst) noexcept
         {
-            const auto [ull_ind, bit_pos] = posInds(pos);
-            std::atomic_ref atomic_val{m_target->m_data[ull_ind].value};
+            const auto [ul_ind, bit_pos] = posInds(pos);
+            std::atomic_ref atomic_val{*m_target->m_data[ul_ind]};
             atomic_val.fetch_or(getMask(bit_pos), order);
         }
         void reset(std::size_t pos, std::memory_order order = std::memory_order_seq_cst) noexcept
         {
-            const auto [ull_ind, bit_pos] = posInds(pos);
-            std::atomic_ref atomic_val{m_target->m_data[ull_ind].value};
+            const auto [ul_ind, bit_pos] = posInds(pos);
+            std::atomic_ref atomic_val{*m_target->m_data[ul_ind]};
             atomic_val.fetch_and(~getMask(bit_pos), order);
         }
         void flip(std::size_t pos, std::memory_order order = std::memory_order_seq_cst) noexcept
         {
-            const auto [ull_ind, bit_pos] = posInds(pos);
-            std::atomic_ref atomic_val{m_target->m_data[ull_ind].value};
+            const auto [ul_ind, bit_pos] = posInds(pos);
+            std::atomic_ref atomic_val{*m_target->m_data[ul_ind]};
             atomic_val.fetch_xor(getMask(bit_pos), order);
         }
 
@@ -174,32 +177,32 @@ public:
             if (m_begin == m_end)
                 return 0;
 
-            const auto [first_ull, first_bit] = posInds(m_begin);
-            const auto [last_ull, last_bit]   = posInds(m_end - 1);
+            const auto [first_ul, first_bit] = posInds(m_begin);
+            const auto [last_ul, last_bit]   = posInds(m_end - 1);
 
-            if (first_ull == last_ull)
+            if (first_ul == last_ul)
             {
-                ull mask{0};
+                unsigned long mask{0};
                 for (auto i = first_bit; i <= last_bit; ++i)
                     mask |= getMask(i);
-                return std::bitset< ull_bits >{m_target->m_data[first_ull].value & mask}.count();
+                return std::popcount(*m_target->m_data[first_ul] & mask);
             }
             else
             {
                 size_t retval = 0;
 
-                ull mask{0};
-                for (auto i = first_bit; i < ull_bits; ++i)
+                unsigned long mask{0};
+                for (auto i = first_bit; i < ul_bits; ++i)
                     mask |= getMask(i);
-                retval += std::bitset< ull_bits >{m_target->m_data[first_ull].value & mask}.count();
+                retval += std::popcount(*m_target->m_data[first_ul] & mask);
 
-                for (auto i = first_ull + 1; i < last_ull; ++i)
-                    retval += std::bitset< ull_bits >{m_target->m_data[i].value}.count();
+                for (auto i = first_ul + 1; i < last_ul; ++i)
+                    retval += std::popcount(*m_target->m_data[i]);
 
                 mask = 0;
                 for (std::uint8_t i = 0; i <= last_bit; ++i)
                     mask |= getMask(i);
-                retval += std::bitset< ull_bits >{m_target->m_data[last_ull].value & mask}.count();
+                retval += std::popcount(*m_target->m_data[last_ul] & mask);
 
                 return retval;
             }
@@ -219,14 +222,8 @@ public:
     }
 
 private:
-    struct AlignedUll
-    {
-        AlignedUll() = default;
-        AlignedUll(ull v) : value{v} {}
-        alignas(std::atomic_ref< ull >::required_alignment) ull value;
-    };
-    std::vector< AlignedUll > m_data;
-    std::size_t               m_size{};
+    std::vector< CacheAligned< unsigned long > > m_data;
+    std::size_t                                  m_size{};
 };
 } // namespace lstr
 #endif // L3STER_UTIL_DYNAMICBITSET_HPP
