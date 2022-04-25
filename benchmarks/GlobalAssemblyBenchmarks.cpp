@@ -15,6 +15,9 @@ static void BM_SparsityPatternAssembly(benchmark::State& state)
     const auto owned_plus_shared_dofs = detail::getNodeDofs(mesh.getNodes(), dof_intervals);
 
     for (auto _ : state)
-        benchmark::DoNotOptimize(detail::calculateCrsData(mesh, problem_def, dof_intervals, owned_plus_shared_dofs));
+    {
+        const auto entries = detail::calculateCrsData(mesh, problem_def, dof_intervals, owned_plus_shared_dofs);
+        benchmark::DoNotOptimize(entries);
+    }
 }
 BENCHMARK(BM_SparsityPatternAssembly)->Name("Sparsity pattern assembly")->UseRealTime()->Unit(benchmark::kMillisecond);

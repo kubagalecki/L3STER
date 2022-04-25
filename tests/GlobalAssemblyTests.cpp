@@ -41,11 +41,11 @@ TEST_CASE("Sparsity pattern assembly", "[global_asm]")
     };
     forConstexpr(process_domain, probdef_ctwrpr);
 
-    for (ptrdiff_t row = 0; const auto& row_dofs : sparse_graph)
+    for (size_t row = 0; row < sparse_graph.size(); ++row)
     {
+        const auto row_dofs = sparse_graph.getRowEntries(row);
         for (auto col : row_dofs)
             CHECK(dense_graph[row].test(col));
         CHECK(dense_graph[row].count() == row_dofs.size());
-        ++row;
     }
 }
