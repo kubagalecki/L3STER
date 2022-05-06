@@ -107,16 +107,17 @@ configure_file( TestDataPath.h.in TestDataPath.h )
 
 if ( L3STER_ENABLE_COVERAGE )
     set( script_file ${CMAKE_CURRENT_BINARY_DIR}/generate_coverage_report.sh )
+    set( gcovr_invocation "gcovr -x -d --exclude-unreachable-branches --exclude-throw-branches -r ${CMAKE_CURRENT_SOURCE_DIR}/../.. -e ${CMAKE_CURRENT_SOURCE_DIR} -o coverage_report.xml ./\n" )
     file( WRITE ${script_file}
-          "gcovr -x -d --exclude-unreachable-branches --exclude-throw-branches -r ${L3STER_SOURCE_DIR}/.. -e ${L3STER_SOURCE_DIR}/tests -o coverage_report.xml ./\n"
-          "rm gmon.out\n"
+          "${gcovr_invocation}"
+          "rm gmon.out\n\n"
           )
     foreach ( test ${L3STER_MPI_TESTS} )
         file( APPEND ${script_file}
               "cd ${test}\n"
-              "gcovr -x -d --exclude-unreachable-branches --exclude-throw-branches -r ${L3STER_SOURCE_DIR}/.. -e ${L3STER_SOURCE_DIR}/tests -o coverage_report.xml ./\n"
+              "${gcovr_invocation}"
               "rm ./profile_data*\n"
-              "cd ..\n"
+              "cd ..\n\n"
               )
     endforeach ()
 endif ()
