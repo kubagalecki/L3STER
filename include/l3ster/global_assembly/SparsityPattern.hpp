@@ -8,12 +8,14 @@
 #include "Tpetra_FECrsMatrix.hpp"
 #include "Tpetra_FEMultiVector.hpp"
 
+#include "tbb/tbb.h"
+
 #include <mutex>
 
 namespace lstr::detail
 {
-template < array_of< ptrdiff_t > auto dof_inds, ElementTypes T, el_o_t O, size_t n_fields >
-auto getElementDofs(const Element< T, O >& element, const GlobalNodeToDofMap< n_fields >& map)
+template < array_of< ptrdiff_t > auto dof_inds, ElementTypes T, el_o_t O, typename map_t >
+auto getElementDofs(const Element< T, O >& element, const map_t& map)
 {
     auto nodes_copy = element.getNodes();
     std::ranges::sort(nodes_copy);
@@ -84,7 +86,7 @@ template < auto problem_def >
 auto calculateCrsData(const MeshPartition&                                        mesh,
                       ConstexprValue< problem_def >                               problem_def_ctwrapper,
                       const node_interval_vector_t< deduceNFields(problem_def) >& dof_intervals,
-                      std::vector< global_dof_t >                                 global_dofs)
+                      std::vector< global_dof_t >                                 owned_plus_shared_dofs)
 {
     using scratchpad_t = std::vector< global_dof_t >;
     std::mutex                   scratchpad_registry_mutex;
@@ -99,7 +101,7 @@ auto calculateCrsData(const MeshPartition&                                      
             *scr_ptr = scratchpad_t();
     };
 
-    CrsEntries row_entries(global_dofs.size());
+    CrsEntries row_entries(owned_plus_shared_dofs.size());
     const auto merge_new_dofs = [&]< size_t n_new >(size_t row, const std::array< global_dof_t, n_new >& new_dofs) {
         thread_local scratchpad_t scratchpad;
         if (scratchpad.empty())
@@ -114,8 +116,8 @@ auto calculateCrsData(const MeshPartition&                                      
     };
 
     const auto                node_to_dof_map         = GlobalNodeToDofMap{mesh, dof_intervals};
-    const auto                global_to_local_dof_map = IndexMap{global_dofs};
-    std::vector< std::mutex > row_mutexes(global_dofs.size());
+    const auto                global_to_local_dof_map = IndexMap{owned_plus_shared_dofs};
+    std::vector< std::mutex > row_mutexes(owned_plus_shared_dofs.size());
 
     const auto process_domain = [&]< auto dom_def >(ConstexprValue< dom_def >)
     {
@@ -152,8 +154,10 @@ inline Kokkos::DualView< size_t* > getRowSizes(const CrsEntries& entries)
     Kokkos::DualView< size_t* > retval{"sparse graph row sizes", entries.size()};
     auto                        host_view = retval.view_host();
     retval.modify_host();
-    for (size_t row = 0; row < entries.size(); ++row)
-        host_view(row) = entries.getRowEntries(row).size();
+    tbb::parallel_for(tbb::blocked_range< size_t >{0, entries.size()}, [&](const tbb::blocked_range< size_t >& range) {
+        for (size_t row = range.begin(); row != range.end(); ++row)
+            host_view(row) = entries.getRowEntries(row).size();
+    });
     retval.sync_device();
     return retval;
 }
@@ -165,14 +169,11 @@ makeSparsityPattern(const MeshPartition&                                        
                     const node_interval_vector_t< deduceNFields(problem_def) >& dof_intervals,
                     const MpiComm&                                              comm)
 {
-    auto       owned_dofs   = detail::getNodeDofs(mesh.getNodes(), dof_intervals);
-    auto       owned_map    = makeTpetraMap(owned_dofs, comm);
-    const auto n_owned_dofs = owned_dofs.size();
-
+    auto owned_dofs = detail::getNodeDofs(mesh.getNodes(), dof_intervals);
+    auto owned_map  = makeTpetraMap(owned_dofs, comm);
     auto owned_plus_shared_dofs =
         concatVectors(std::move(owned_dofs), detail::getNodeDofs(mesh.getGhostNodes(), dof_intervals));
     auto owned_plus_shared_map = makeTpetraMap(owned_plus_shared_dofs, comm);
-    std::ranges::inplace_merge(owned_plus_shared_dofs, std::next(begin(owned_plus_shared_dofs), n_owned_dofs));
 
     const auto row_entries = calculateCrsData(mesh, problemdef_ctwrapper, dof_intervals, owned_plus_shared_dofs);
     const auto row_sizes   = getRowSizes(row_entries);
@@ -183,8 +184,10 @@ makeSparsityPattern(const MeshPartition&                                        
     for (ptrdiff_t local_row = 0; local_row < static_cast< ptrdiff_t >(owned_plus_shared_dofs.size()); ++local_row)
     {
         const auto row_inds = row_entries.getRowEntries(local_row);
-        retval->insertGlobalIndices(owned_plus_shared_dofs[local_row],
-                                    Teuchos::ArrayView{row_inds.data(), row_inds.size()});
+        retval->insertGlobalIndices(
+            owned_plus_shared_dofs[local_row],
+            Teuchos::ArrayView{row_inds.data(),
+                               static_cast< Teuchos::ArrayView< size_t >::size_type >(row_inds.size())});
     }
     retval->endAssembly();
     return retval;

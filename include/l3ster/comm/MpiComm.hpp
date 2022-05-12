@@ -100,7 +100,7 @@ public:
         MPI_Request request = MPI_REQUEST_NULL;
     };
 
-    void abort() { MPI_Abort(comm, MPI_ERR_UNKNOWN); }
+    void abort() const { MPI_Abort(comm, MPI_ERR_UNKNOWN); }
 
     // send
     template < arithmetic T >
@@ -129,6 +129,7 @@ public:
     [[nodiscard]] Request receiveAsync(T* buf, size_t count, int source, int tag = 0) const;
 
     // collective comms
+    void barrier() const { MPI_Barrier(comm); }
     template < arithmetic T >
     void reduce(const T* send_buf, T* recv_buf, size_t count, int root, MPI_Op op) const;
     template < arithmetic T >

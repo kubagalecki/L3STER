@@ -5,8 +5,6 @@
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/util/GlobalResource.hpp"
 
-#include "TestDataPath.h"
-
 #include <algorithm>
 #include <iostream>
 #include <random>

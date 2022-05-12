@@ -4,6 +4,8 @@
 #include "l3ster/global_assembly/DofIntervals.hpp"
 #include "l3ster/global_assembly/NodeLocalGlobalConverter.hpp"
 
+#include "Tpetra_CrsGraph.hpp"
+
 namespace lstr
 {
 template < size_t NF > // number of fields
@@ -25,6 +27,20 @@ class LocalNodeToDofMap
 public:
     LocalNodeToDofMap() = default;
     LocalNodeToDofMap(const MeshPartition& mesh, const detail::node_interval_vector_t< NF >& dof_intervals);
+
+    [[nodiscard]] const auto& operator()(n_id_t node) const noexcept { return map[node]; }
+
+private:
+    std::vector< std::array< local_dof_t, NF > > map;
+};
+
+template < size_t NF >
+class LocalNodeToColumnDofMap
+{
+public:
+    LocalNodeToColumnDofMap(const MeshPartition&                            mesh,
+                            const Teuchos::RCP< const Tpetra::CrsGraph<> >& graph,
+                            const GlobalNodeToDofMap< NF >&                 global_dof_row_map);
 
     [[nodiscard]] const auto& operator()(n_id_t node) const noexcept { return map[node]; }
 
@@ -68,19 +84,38 @@ GlobalNodeToDofMap< NF >::GlobalNodeToDofMap(const MeshPartition&               
 template < size_t NF >
 LocalNodeToDofMap< NF >::LocalNodeToDofMap(const MeshPartition&                        mesh,
                                            const detail::node_interval_vector_t< NF >& dof_intervals)
-    : map(mesh.getNodes().size() + mesh.getGhostNodes().size())
 {
-    auto add_entries = [&, entry = n_id_t{0}, dof = global_dof_t{0}](const std::vector< n_id_t >& nodes) mutable {
-        for (auto search_it = begin(dof_intervals); auto n : nodes)
+    map.reserve(mesh.getNodes().size() + mesh.getGhostNodes().size());
+    auto add_entries = [&, dof = global_dof_t{0}](const std::vector< n_id_t >& nodes) mutable {
+        for (auto search_it = begin(dof_intervals); auto node : nodes)
         {
-            search_it = detail::findNodeInterval(search_it, end(dof_intervals), n);
-            std::array< local_dof_t, NF > node_dofs;
-            node_dofs.fill(std::numeric_limits< local_dof_t >::max());
-            const auto& cov = search_it->second;
-            for (size_t i = 0; i < NF; ++i)
-                if (cov.test(i))
-                    node_dofs[i] = dof++;
-            map[entry++] = node_dofs;
+            search_it             = detail::findNodeInterval(search_it, end(dof_intervals), node);
+            const auto& cov       = search_it->second;
+            auto&       node_dofs = map.emplace_back();
+            for (size_t i = 0; auto& node_dof : node_dofs)
+                node_dof = cov.test(i++) ? dof++ : std::numeric_limits< local_dof_t >::max();
+        }
+    };
+    add_entries(mesh.getNodes());
+    add_entries(mesh.getGhostNodes());
+}
+
+template < size_t NF >
+LocalNodeToColumnDofMap< NF >::LocalNodeToColumnDofMap(const MeshPartition&                            mesh,
+                                                       const Teuchos::RCP< const Tpetra::CrsGraph<> >& graph,
+                                                       const GlobalNodeToDofMap< NF >& global_dof_row_map)
+{
+    map.reserve(mesh.getNodes().size() + mesh.getGhostNodes().size());
+    auto add_entries = [&,
+                        &column_map = std::as_const(*graph->getColMap())](const std::vector< n_id_t >& nodes) mutable {
+        for (auto node : nodes)
+        {
+            const auto& node_dofs    = global_dof_row_map(node);
+            auto&       node_dof_col = map.emplace_back();
+            for (ptrdiff_t i = 0; auto row_dof : node_dofs)
+                node_dof_col[i++] = row_dof == std::numeric_limits< decltype(row_dof) >::max()
+                                      ? std::numeric_limits< local_dof_t >::max()
+                                      : column_map.getLocalElement(row_dof);
         }
     };
     add_entries(mesh.getNodes());

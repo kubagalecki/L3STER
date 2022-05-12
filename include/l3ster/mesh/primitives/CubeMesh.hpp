@@ -33,9 +33,9 @@ inline Mesh makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz)
     el_id_t el_ind = 0;
 
     // volume elements
-    for (auto iz : std::views::iota(0u, e_dx))
+    for (auto iz : std::views::iota(0u, e_dz))
     {
-        for (auto iy : std::views::iota(0u, e_dx))
+        for (auto iy : std::views::iota(0u, e_dy))
         {
             for (auto ix : std::views::iota(0u, e_dx))
             {
@@ -132,15 +132,13 @@ inline Mesh makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz)
 
     std::vector< n_id_t > nodes(n_dx * n_dy * n_dz);
     std::iota(begin(nodes), end(nodes), 0u);
-    std::vector< MeshPartition > parts;
-    parts.emplace_back(std::move(domains), std::move(nodes), std::vector< n_id_t >{});
-    return Mesh{std::move(parts)};
+    return Mesh{{MeshPartition{std::move(domains), std::move(nodes), std::vector< n_id_t >{}}}};
 }
 
 template < std::ranges::random_access_range R >
+inline Mesh makeCubeMesh(R&& dist)
     requires std::convertible_to< std::ranges::range_value_t< std::decay_t< R > >,
-                                  val_t > inline Mesh
-    makeCubeMesh(R&& dist)
+                                  val_t >
 {
     return makeCubeMesh(dist, dist, dist);
 }

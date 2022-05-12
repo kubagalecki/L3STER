@@ -3,8 +3,6 @@
 
 #include "l3ster/global_assembly/NodeDofMaps.hpp"
 
-#include "Tpetra_Map.hpp"
-
 namespace lstr
 {
 namespace detail
