@@ -1,5 +1,5 @@
 #include "l3ster/global_assembly/MakeTpetraMap.hpp"
-#include "l3ster/global_assembly/NodeDofMaps.hpp"
+#include "l3ster/global_assembly/NodeToDofMap.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/PartitionMesh.hpp"
 #include "l3ster/mesh/ReadMesh.hpp"
@@ -149,52 +149,7 @@ TEMPLATE_TEST_CASE("Node DOF interval consolidation", "[dof]", ConstexprValue< 1
     }
 }
 
-TEST_CASE("Node ID local <-> global", "[dof]")
-{
-    constexpr auto check_partition_equivalence = [](const MeshPartition& p1, const MeshPartition& p2) {
-        CHECK(p1.getNodes() == p2.getNodes());
-        CHECK(p1.getGhostNodes() == p2.getGhostNodes());
-        p1.cvisit([&]< ElementTypes T, el_o_t O >(const Element< T, O >& el1) {
-            const auto el2 = p2.find(el1.getId());
-            if (not el2)
-                throw std::logic_error{"Converting nodes IDs between local and global has changed element IDs"};
-            const auto& el2_actual = *std::get< const Element< T, O >* >(
-                el2->first); // if this throws bad variant access we want it to propagate
-            CHECK(el1.getNodes() == el2_actual.getNodes());
-            CHECK(el1.getData().vertices == el2_actual.getData().vertices);
-        });
-    };
-    constexpr auto check_partition_contiguity = [](const MeshPartition& partition) {
-        std::vector< bool > visited(partition.getNodes().size() + partition.getGhostNodes().size());
-        partition.cvisit([&](const auto& element) {
-            for (auto node : element.getNodes())
-                visited[node] = true;
-        });
-        CHECK(std::ranges::all_of(visited, [](const auto& v) -> bool { return v; }));
-    };
-
-    constexpr std::array node_dist = {0., 1., 2., 3., 4.};
-    constexpr size_t     n_parts   = 4;
-    auto                 mesh      = makeCubeMesh(node_dist);
-    auto&                p0        = mesh.getPartitions()[0];
-    p0.initDualGraph();
-    p0   = convertMeshToOrder< 2 >(p0);
-    mesh = partitionMesh(mesh, n_parts, {});
-
-    const auto original_mesh = mesh;
-    for (ptrdiff_t i = 0; auto& partition : mesh.getPartitions())
-    {
-        const auto converter = NodeLocalGlobalConverter{partition};
-
-        converter.convertToLocal(partition);
-        check_partition_contiguity(partition);
-
-        converter.convertToGlobal(partition);
-        check_partition_equivalence(partition, original_mesh.getPartitions()[i++]);
-    }
-}
-
-TEST_CASE("Global node to DOF", "[dof]")
+TEST_CASE("Node to DOF", "[dof]")
 {
     constexpr std::array node_dist = {0., 1., 2., 3., 4.};
     constexpr size_t     n_parts   = 4;
@@ -209,7 +164,7 @@ TEST_CASE("Global node to DOF", "[dof]")
     dof_intervals.emplace_back(std::array{i1_begin, i1_end}, i1_cov);
     dof_intervals.emplace_back(std::array{i2_begin, i2_end}, i2_cov);
 
-    const auto check_dofs = [&](const std::vector< n_id_t >& nodes, const GlobalNodeToDofMap< n_fields >& map) {
+    const auto check_dofs = [&](const std::vector< n_id_t >& nodes, const NodeToDofMap< n_fields >& map) {
         for (auto node : nodes)
         {
             const auto  computed_dofs = map(node);
@@ -230,7 +185,7 @@ TEST_CASE("Global node to DOF", "[dof]")
 
     SECTION("Unpartitioned")
     {
-        const auto map = GlobalNodeToDofMap{p0, dof_intervals};
+        const auto map = NodeToDofMap{p0, dof_intervals};
         check_dofs(p0.getNodes(), map);
     }
 
@@ -239,76 +194,9 @@ TEST_CASE("Global node to DOF", "[dof]")
         mesh = partitionMesh(mesh, n_parts, {});
         for (const auto& part : mesh.getPartitions())
         {
-            const auto map = GlobalNodeToDofMap{part, dof_intervals};
+            const auto map = NodeToDofMap{part, dof_intervals};
             check_dofs(part.getNodes(), map);
             check_dofs(part.getGhostNodes(), map);
-        }
-    }
-}
-
-TEST_CASE("Local node to DOF", "[dof]")
-{
-    constexpr std::array node_dist = {0., 1., 2.};
-    constexpr size_t     n_parts   = 4;
-    auto                 mesh      = makeCubeMesh(node_dist);
-    auto&                p0        = mesh.getPartitions()[0];
-
-    constexpr size_t                                                             n_fields = 3;
-    std::vector< std::pair< std::array< n_id_t, 2 >, std::bitset< n_fields > > > dof_intervals;
-    n_id_t i1_begin = 0, i1_end = node_dist.size() * node_dist.size() - 1, i2_begin = i1_end + 1,
-           i2_end = p0.getNodes().size() - 1;
-    std::bitset< n_fields > i1_cov{0b110ull}, i2_cov{0b101ull};
-    dof_intervals.emplace_back(std::array{i1_begin, i1_end}, i1_cov);
-    dof_intervals.emplace_back(std::array{i2_begin, i2_end}, i2_cov);
-
-    const auto check_dofs = [&](const std::vector< n_id_t >&         owned_nodes,
-                                const std::vector< n_id_t >&         ghost_nodes,
-                                const LocalNodeToDofMap< n_fields >& map) {
-        auto check_nodes = [&, node_ind = n_id_t{0}, dof = local_dof_t{0}](const std::vector< n_id_t >& nodes) mutable {
-            for (auto node : nodes)
-            {
-                std::array< local_dof_t, n_fields > expected_dofs;
-                expected_dofs.fill(std::numeric_limits< local_dof_t >::max());
-                if (node < i2_begin)
-                {
-                    for (size_t i = 0; i < n_fields; ++i)
-                        if (i1_cov.test(i))
-                            expected_dofs[i] = dof++;
-                }
-                else
-                    for (size_t i = 0; i < n_fields; ++i)
-                        if (i2_cov.test(i))
-                            expected_dofs[i] = dof++;
-
-                const auto computed_dofs = map(node_ind++);
-                CHECK(computed_dofs == expected_dofs);
-            }
-        };
-        check_nodes(owned_nodes);
-        check_nodes(ghost_nodes);
-    };
-
-    SECTION("Unpartitioned")
-    {
-        const auto global_map = GlobalNodeToDofMap{p0, dof_intervals};
-        const auto local_map  = LocalNodeToDofMap{p0, dof_intervals};
-        for (auto node : p0.getNodes())
-        {
-            auto global_dofs = global_map(node);
-            std::ranges::replace(
-                global_dofs, std::numeric_limits< global_dof_t >::max(), std::numeric_limits< local_dof_t >::max());
-            const auto local_dofs = local_map(node);
-            CHECK(std::ranges::equal(global_dofs, local_dofs));
-        }
-    }
-
-    SECTION("Partitioned")
-    {
-        mesh = partitionMesh(mesh, n_parts, {});
-        for (const auto& part : mesh.getPartitions())
-        {
-            const auto local_map = LocalNodeToDofMap{part, dof_intervals};
-            check_dofs(part.getNodes(), part.getGhostNodes(), local_map);
         }
     }
 }

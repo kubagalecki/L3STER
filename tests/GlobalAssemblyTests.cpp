@@ -1,4 +1,4 @@
-#include "l3ster/global_assembly/SparsityPattern.hpp"
+#include "l3ster/global_assembly/SparsityGraph.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 

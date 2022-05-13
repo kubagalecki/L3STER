@@ -1,7 +1,7 @@
 #ifndef L3STER_ASSEMBLY_MAKETPETRAMAP_HPP
 #define L3STER_ASSEMBLY_MAKETPETRAMAP_HPP
 
-#include "l3ster/global_assembly/NodeDofMaps.hpp"
+#include "l3ster/global_assembly/NodeToDofMap.hpp"
 
 namespace lstr
 {

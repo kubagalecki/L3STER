@@ -88,7 +88,6 @@ add_mpi_test( "MeshDistributionTest.cpp" "Mesh_distribution" "1;2;4" )
 add_mpi_test( "NodeThroughputInfoTest.cpp" "Node_throughput_calculation" "1;2;4" )
 add_mpi_test( "TpetraMapCreationTest.cpp" "Tpetra_Map_Creation" "1;2;4" )
 add_mpi_test( "SparsityGraphTest.cpp" "Sparsity_Graph" "1;2;4" )
-add_mpi_test( "ColumnDofTest.cpp" "Column_DOFs" "1;2;4" )
 
 #######################################################################################################################
 

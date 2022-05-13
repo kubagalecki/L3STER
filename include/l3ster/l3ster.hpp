@@ -7,7 +7,7 @@
 #include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 #include "l3ster/comm/DeserializeMesh.hpp"
 #include "l3ster/comm/MpiComm.hpp"
-#include "l3ster/global_assembly/SparsityPattern.hpp"
+#include "l3ster/global_assembly/SparsityGraph.hpp"
 #include "l3ster/local_assembly/AssembleLocalSystem.hpp"
 #include "l3ster/mapping/ComputePhysBasisDer.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"

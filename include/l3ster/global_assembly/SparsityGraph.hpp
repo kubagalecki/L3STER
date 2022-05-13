@@ -1,5 +1,5 @@
-#ifndef L3STER_ASSEMBLY_SPARSITYPATTERN_HPP
-#define L3STER_ASSEMBLY_SPARSITYPATTERN_HPP
+#ifndef L3STER_ASSEMBLY_SPARSITYGRAPH_HPP
+#define L3STER_ASSEMBLY_SPARSITYGRAPH_HPP
 
 #include "l3ster/global_assembly/MakeTpetraMap.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
@@ -115,7 +115,7 @@ auto calculateCrsData(const MeshPartition&                                      
         std::memcpy(new_dofs_write_range.data(), union_range.data(), new_dofs_write_range.size_bytes());
     };
 
-    const auto                node_to_dof_map         = GlobalNodeToDofMap{mesh, dof_intervals};
+    const auto                node_to_dof_map         = NodeToDofMap{mesh, dof_intervals};
     const auto                global_to_local_dof_map = IndexMap{owned_plus_shared_dofs};
     std::vector< std::mutex > row_mutexes(owned_plus_shared_dofs.size());
 
@@ -164,10 +164,10 @@ inline Kokkos::DualView< size_t* > getRowSizes(const CrsEntries& entries)
 
 template < auto problem_def >
 Teuchos::RCP< const Tpetra::CrsGraph< local_dof_t, global_dof_t > >
-makeSparsityPattern(const MeshPartition&                                        mesh,
-                    ConstexprValue< problem_def >                               problemdef_ctwrapper,
-                    const node_interval_vector_t< deduceNFields(problem_def) >& dof_intervals,
-                    const MpiComm&                                              comm)
+makeSparsityGraph(const MeshPartition&                                        mesh,
+                  ConstexprValue< problem_def >                               problemdef_ctwrapper,
+                  const node_interval_vector_t< deduceNFields(problem_def) >& dof_intervals,
+                  const MpiComm&                                              comm)
 {
     auto owned_dofs = detail::getNodeDofs(mesh.getNodes(), dof_intervals);
     auto owned_map  = makeTpetraMap(owned_dofs, comm);
@@ -193,4 +193,4 @@ makeSparsityPattern(const MeshPartition&                                        
     return retval;
 }
 } // namespace lstr::detail
-#endif // L3STER_ASSEMBLY_SPARSITYPATTERN_HPP
+#endif // L3STER_ASSEMBLY_SPARSITYGRAPH_HPP

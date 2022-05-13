@@ -1,5 +1,5 @@
+#include "l3ster/global_assembly/SparsityGraph.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
-#include "l3ster/global_assembly/SparsityPattern.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/util/GlobalResource.hpp"
 
@@ -22,7 +22,7 @@ int main(int argc, char* argv[])
                                                             Pair{d_id_t{3}, std::array{true, true}}} >{};
     const auto     dof_intervals  = computeDofIntervals(my_partition, problem_def, comm);
     const auto     all_dofs       = detail::getNodeDofs(mesh.getPartitions()[0].getNodes(), dof_intervals);
-    const auto     sparsity_graph = detail::makeSparsityPattern(my_partition, problem_def, dof_intervals, comm);
+    const auto     sparsity_graph = detail::makeSparsityGraph(my_partition, problem_def, dof_intervals, comm);
     const auto     dense_graph    = DenseGraph{mesh.getPartitions()[0], problem_def, dof_intervals, all_dofs};
 
     try
