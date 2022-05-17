@@ -113,7 +113,7 @@ template < typename Kernel, ElementTypes ET, el_o_t EO, size_t n_fields >
 auto initLocalSystem()
 {
     constexpr auto local_problem_size = Element< ET, EO >::n_nodes * n_unknowns< Kernel, ET, EO, n_fields >;
-    using k_el_t                      = Eigen::Matrix< val_t, local_problem_size, local_problem_size >;
+    using k_el_t                      = Eigen::Matrix< val_t, local_problem_size, local_problem_size, Eigen::RowMajor >;
     using f_el_t                      = Eigen::Matrix< val_t, local_problem_size, 1 >;
     return std::pair< k_el_t, f_el_t >{k_el_t::Zero(), f_el_t::Zero()};
 }
@@ -133,10 +133,10 @@ auto assembleLocalSystem(Kernel&&                                               
     const auto  basis_ders          = computePhysBasisDersAtQpoints(basis_at_q.basis_ders, jac_at_qp);
     const auto  field_vals_and_ders = detail::computeFieldValsAndDers(basis_vals, basis_ders, node_vals);
 
-    auto       local_system = detail::initLocalSystem< Kernel, ET, EO, n_fields >();
-    const auto process_qp   = [&](ptrdiff_t qp_ind) {
-        auto& [K_el, F_el] = local_system;
-        const auto [A, F]  = detail::evaluateKernel(kernel, element, field_vals_and_ders, quadrature, qp_ind, time);
+    auto local_system     = detail::initLocalSystem< Kernel, ET, EO, n_fields >();
+    auto& [K_el, F_el]    = local_system;
+    const auto process_qp = [&](ptrdiff_t qp_ind) {
+        const auto [A, F] = detail::evaluateKernel(kernel, element, field_vals_and_ders, quadrature, qp_ind, time);
         const auto rank_update_matrix = detail::makeRankUpdateMatrix(A, basis_vals, basis_ders, qp_ind);
         const auto rank_update_weight = jac_at_qp[qp_ind].determinant() * quadrature.getWeights()[qp_ind];
         K_el.template selfadjointView< Eigen::Lower >().rankUpdate(rank_update_matrix, rank_update_weight);
@@ -145,6 +145,7 @@ auto assembleLocalSystem(Kernel&&                                               
 
     for (ptrdiff_t qp_ind = 0; qp_ind < static_cast< ptrdiff_t >(quadrature.size); ++qp_ind)
         process_qp(qp_ind);
+    K_el = K_el.template selfadjointView< Eigen::Lower >();
     return local_system;
 }
 } // namespace lstr

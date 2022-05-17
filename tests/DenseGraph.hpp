@@ -24,7 +24,7 @@ public:
             constexpr auto  covered_dof_inds = getTrueInds< coverage >();
 
             const auto process_element = [&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
-                const auto element_dofs = detail::getElementDofs< covered_dof_inds >(element, node_to_dof_map);
+                const auto element_dofs = detail::getSortedElementDofs< covered_dof_inds >(element, node_to_dof_map);
                 for (auto row : element_dofs)
                     for (auto col : element_dofs)
                         getRow(row).set(col);

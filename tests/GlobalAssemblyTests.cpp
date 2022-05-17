@@ -29,6 +29,8 @@ TEST_CASE("Sparsity pattern buffer", "[global_asm]")
     const auto read_buf      = crs_entries.getRowEntries(test_row);
     const auto expected_vals = std::views::counted(test_buf.get(), row_size);
     CHECK(std::ranges::equal(read_buf, expected_vals));
+
+    CHECK_NOTHROW(detail::CrsEntries{0});
 }
 
 TEST_CASE("Sparsity pattern assembly", "[global_asm]")

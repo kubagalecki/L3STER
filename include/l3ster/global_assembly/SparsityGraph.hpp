@@ -14,13 +14,26 @@
 
 namespace lstr::detail
 {
-template < array_of< ptrdiff_t > auto dof_inds, ElementTypes T, el_o_t O, typename map_t >
-auto getElementDofs(const Element< T, O >& element, const map_t& map)
+template < array_of< ptrdiff_t > auto dof_inds, ElementTypes T, el_o_t O, size_t n_total_dofs >
+auto getSortedElementDofs(const Element< T, O >& element, const NodeToDofMap< n_total_dofs >& map)
 {
     auto nodes_copy = element.getNodes();
     std::ranges::sort(nodes_copy);
     std::array< global_dof_t, dof_inds.size() * Element< T, O >::n_nodes > retval;
     for (auto insert_it = retval.begin(); auto node : nodes_copy)
+    {
+        const auto& full_dofs = map(node);
+        for (auto ind : dof_inds)
+            *insert_it++ = full_dofs[ind];
+    }
+    return retval;
+}
+
+template < array_of< ptrdiff_t > auto dof_inds, ElementTypes T, el_o_t O, size_t n_total_dofs >
+auto getUnsortedElementDofs(const Element< T, O >& element, const NodeToDofMap< n_total_dofs >& map)
+{
+    std::array< global_dof_t, dof_inds.size() * Element< T, O >::n_nodes > retval;
+    for (auto insert_it = retval.begin(); auto node : element.getNodes())
     {
         const auto& full_dofs = map(node);
         for (auto ind : dof_inds)
@@ -45,7 +58,7 @@ public:
         : buf{std::make_unique_for_overwrite< global_dof_t[] >(buf_size)},
           buf_sizes{std::make_unique< size_t[] >(n_rows_)},
           overflowed{std::make_unique< std::vector< global_dof_t >[] >(n_rows_)},
-          row_buf_size{buf_size / n_rows_},
+          row_buf_size{buf_size / (n_rows_ == 0 ? size_t{1} : n_rows_)},
           n_rows{n_rows_}
     {}
 
@@ -126,7 +139,7 @@ auto calculateCrsData(const MeshPartition&                                      
         constexpr auto  covered_dof_inds = getTrueInds< coverage >();
 
         const auto process_element = [&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
-            const auto element_dofs = getElementDofs< covered_dof_inds >(element, node_to_dof_map);
+            const auto element_dofs = getSortedElementDofs< covered_dof_inds >(element, node_to_dof_map);
             std::bitset< std::tuple_size_v< decltype(element_dofs) > > processed_rows;
             do
                 for (size_t row_ind = 0; auto row : element_dofs)
@@ -163,7 +176,7 @@ inline Kokkos::DualView< size_t* > getRowSizes(const CrsEntries& entries)
 }
 
 template < auto problem_def >
-Teuchos::RCP< const Tpetra::CrsGraph< local_dof_t, global_dof_t > >
+Teuchos::RCP< const Tpetra::FECrsGraph< local_dof_t, global_dof_t > >
 makeSparsityGraph(const MeshPartition&                                        mesh,
                   ConstexprValue< problem_def >                               problemdef_ctwrapper,
                   const node_interval_vector_t< deduceNFields(problem_def) >& dof_intervals,
