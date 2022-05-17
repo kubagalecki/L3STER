@@ -133,8 +133,8 @@ public:
 
     constexpr void pushBack(const_reference value) { emplaceBack(value); }
     template < typename... Arg >
-    requires std::constructible_from< T, Arg... >
     constexpr reference emplaceBack(Arg&&... args)
+        requires std::constructible_from< T, Arg... >
     {
         if (m_capacity == m_size)
             grow();
@@ -156,8 +156,8 @@ private:
     size_type      m_size{0}, m_capacity{0};
 
     template < typename... Arg >
-    requires std::constructible_from< T, Arg... >
     constexpr void construct(size_type i, Arg&&... args)
+        requires std::constructible_from< T, Arg... >
     {
         std::construct_at(m_data + i, std::forward< Arg >(args)...);
     }

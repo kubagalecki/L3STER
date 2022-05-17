@@ -91,14 +91,14 @@ endfunction()
 #                                        packages which were requested but not built, set only if
 #                                        at least one package was not found
 #
-function( define_trilinos_target Verbosity )
+function( define_trilinos_target Verbosity Version )
 
     if ( Verbosity )
         message( STATUS "Detecting Trilinos" )
         list( APPEND CMAKE_MESSAGE_INDENT "  " )
     endif ()
 
-    find_package( Trilinos REQUIRED )
+    find_package( Trilinos ${Version} REQUIRED )
 
     if ( NOT ${Trilinos_CXX_COMPILER} STREQUAL ${CMAKE_CXX_COMPILER} )
         message( WARNING " Detected different C++ compiler than the one Trilinos was built with.\n"
@@ -132,6 +132,13 @@ function( define_trilinos_target Verbosity )
         string( STRIP ${Trilinos_CXX_COMPILER_FLAGS} Trilinos_CXX_COMPILER_FLAGS )
         string( REPLACE " " ";" Trilinos_CXX_COMPILER_FLAGS ${Trilinos_CXX_COMPILER_FLAGS} )
         target_compile_options( Trilinos INTERFACE ${Trilinos_CXX_COMPILER_FLAGS} )
+        string( FIND "${Trilinos_CXX_COMPILER_FLAGS}" "-fopenmp" FOPENMP_FLAG_POS )
+        if ( NOT ${FOPENMP_FLAG_POS} EQUAL -1 )
+            set( Trilinos_HAS_OPENMP true )
+        endif ()
+    endif ()
+    if ( Trilinos_HAS_OPENMP )
+        target_link_options( Trilinos INTERFACE "-fopenmp" )
     endif ()
 
     if ( Trilinos_BUILD_SHARED_LIBS AND Trilinos_SHARED_LIB_RPATH_COMMAND )

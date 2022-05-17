@@ -1,7 +1,7 @@
 #ifndef L3STER_UTIL_ALGORITHM_HPP
 #define L3STER_UTIL_ALGORITHM_HPP
 
-#include "Concepts.hpp"
+#include "l3ster/util/Meta.hpp"
 
 #include <iterator>
 #include <numeric>
@@ -10,12 +10,12 @@
 namespace lstr
 {
 template < std::random_access_iterator It, typename F >
-std::vector< size_t > sortingPermutation(It first, It last, F&& compare) requires requires(It i, F f)
-{
-    {
-        f(*i, *i)
-        } -> std::convertible_to< bool >;
-}
+std::vector< size_t > sortingPermutation(It first, It last, F&& compare)
+    requires requires(It i, F f) {
+                 {
+                     f(*i, *i)
+                     } -> std::convertible_to< bool >;
+             }
 {
     std::vector< size_t > indices(std::distance(first, last));
     std::iota(begin(indices), end(indices), 0u);
@@ -32,12 +32,12 @@ std::vector< size_t > sortingPermutation(It first, It last)
 template < std::random_access_iterator                                It_in,
            std::input_iterator                                        It_perm,
            std::output_iterator< decltype(*std::declval< It_in >()) > It_out >
-void copyPermuted(It_in first_in, It_in last_in, It_perm first_perm, It_out first_out) requires requires(It_perm it)
-{
-    {
-        *it
-        } -> std::convertible_to< std::ptrdiff_t >;
-}
+void copyPermuted(It_in first_in, It_in last_in, It_perm first_perm, It_out first_out)
+    requires requires(It_perm it) {
+                 {
+                     *it
+                     } -> std::convertible_to< std::ptrdiff_t >;
+             }
 {
     for (auto i = std::distance(first_in, last_in); i > 0; --i)
         *first_out++ = first_in[*first_perm++];
@@ -51,29 +51,30 @@ constexpr std::array< T, N > getSortedArray(const std::array< T, N >& array)
     return sorted;
 }
 
-template < size_t TRIMMED_SIZE, typename T, size_t SIZE >
-constexpr auto trimArray(const std::array< T, SIZE >& a) requires(SIZE >= TRIMMED_SIZE)
+template < size_t trimmed_size, typename T, size_t size >
+constexpr auto trimArray(const std::array< T, size >& a)
+    requires(size >= trimmed_size)
 {
-    if constexpr (SIZE == TRIMMED_SIZE)
+    if constexpr (size == trimmed_size)
         return a;
     else
     {
-        std::array< T, TRIMMED_SIZE > trimmed;
-        std::copy(a.cbegin(), a.cbegin() + TRIMMED_SIZE, trimmed.begin());
+        std::array< T, trimmed_size > trimmed;
+        std::copy(a.cbegin(), a.cbegin() + trimmed_size, trimmed.begin());
         return trimmed;
     }
 }
 
 namespace detail
 {
-    template < template < typename > typename TraitsPredicate, typename T >
-    constexpr auto tuplifyIf(T && arg)
-    {
-        if constexpr (TraitsPredicate< std::decay_t< T > >::value)
-            return std::make_tuple(std::forward< T >(arg));
-        else
-            return std::tuple<>{};
-    }
+template < template < typename > typename TraitsPredicate, typename T >
+constexpr auto tuplifyIf(T&& arg)
+{
+    if constexpr (TraitsPredicate< std::decay_t< T > >::value)
+        return std::make_tuple(std::forward< T >(arg));
+    else
+        return std::tuple<>{};
+}
 } // namespace detail
 
 template < template < typename > typename TraitsPredicate, predicate_trait_specialized< TraitsPredicate >... T >
@@ -85,7 +86,10 @@ constexpr auto makeTupleIf(T&&... arg)
 template < tuple_like T, tuple_invocable< T > F >
 constexpr decltype(auto) forEachTuple(T& t, F&& f)
 {
-    [&]< size_t... I >(std::index_sequence< I... >) { (f(std::get< I >(t)), ...); }
+    [&]< size_t... I >(std::index_sequence< I... >)
+    {
+        (f(std::get< I >(t)), ...);
+    }
     (std::make_index_sequence< std::tuple_size_v< T > >{});
     return std::forward< F >(f);
 }
@@ -120,13 +124,13 @@ template < std::ranges::range        R1,
            typename Pred  = std::ranges::equal_to,
            typename Proj1 = std::identity,
            typename Proj2 = std::identity >
-constexpr auto matchingPermutation(R1&&  r_pattern,
-                                   R2&&  r_match,
-                                   O     out,
-                                   Pred  pred  = {},
-                                   Proj1 proj1 = {},
-                                   Proj2 proj2 = {}) requires std::indirectly_writable< O, size_t > and
-    std::indirectly_comparable< std::ranges::iterator_t< R1 >, std::ranges::iterator_t< R2 >, Pred, Proj1, Proj2 >
+constexpr auto
+matchingPermutation(R1&& r_pattern, R2&& r_match, O out, Pred pred = {}, Proj1 proj1 = {}, Proj2 proj2 = {})
+    requires std::indirectly_writable< O, size_t > and std::indirectly_comparable< std::ranges::iterator_t< R1 >,
+                                                                                   std::ranges::iterator_t< R2 >,
+                                                                                   Pred,
+                                                                                   Proj1,
+                                                                                   Proj2 >
 {
     O out_initial = out;
     std::ranges::for_each(r_match, [&](auto&& match_el) {
@@ -138,16 +142,69 @@ constexpr auto matchingPermutation(R1&&  r_pattern,
 }
 
 template < typename F, std::integral T, T... I >
-void forConstexpr(F&& f,
-                  std::integer_sequence< T, I... >) requires(std::invocable< F, std::integral_constant< T, I > >and...)
+constexpr void forConstexpr(F&& f, std::integer_sequence< T, I... >)
+    requires(std::invocable< F, std::integral_constant< T, I > > and ...)
 {
     (f(std::integral_constant< T, I >{}), ...);
+}
+
+template < typename F, std::ranges::sized_range auto R >
+constexpr void forConstexpr(F&& f, ConstexprValue< R >)
+{
+    constexpr auto access_range = [](std::ranges::range auto&& range, std::size_t index) {
+        if constexpr (std::ranges::random_access_range< std::decay_t< decltype(range) > >)
+            return range.begin()[index];
+        else
+        {
+            auto iter = range.begin();
+            for (; index > 0; --index)
+                ++iter;
+            return *iter;
+        }
+    };
+    forConstexpr(
+        [&]< std::size_t I >(std::integral_constant< std::size_t, I >) { f(ConstexprValue< access_range(R, I) >{}); },
+        std::make_index_sequence< std::ranges::size(R) >{});
 }
 
 template < typename T >
 constexpr bool contains(std::initializer_list< T > list, T value)
 {
     return std::ranges::any_of(list, [value = value](T t) { return t == value; });
+}
+
+template <
+    std::ranges::forward_range                                                                   R,
+    std::indirect_binary_predicate< std::ranges::iterator_t< R >, std::ranges::iterator_t< R > > Cmp =
+        std::ranges::equal_to,
+    std::regular_invocable< std::ranges::range_value_t< R >, std::ranges::range_value_t< R > > Red = std::plus<> >
+    requires std::permutable< std::ranges::iterator_t< R > > and
+             std::assignable_from< std::ranges::range_reference_t< R >,
+                                   std::invoke_result_t< Red,
+                                                         std::ranges::range_value_t< R >,
+                                                         std::ranges::range_value_t< R > > > constexpr std::ranges::
+        borrowed_subrange_t< R >
+        reduceConsecutive(R&& range, Cmp&& comparator = {}, Red&& reduction = {})
+{
+    auto it        = std::ranges::begin(range);
+    auto write_pos = it;
+    while (it != std::ranges::end(range))
+    {
+        const auto adj_range_begin = std::adjacent_find(it, std::ranges::end(range), comparator);
+        if (it != write_pos)
+            std::copy(it, adj_range_begin, write_pos);
+        std::advance(write_pos, std::distance(it, adj_range_begin));
+        if (adj_range_begin == std::ranges::end(range))
+            break;
+        auto next_adjacent = std::next(adj_range_begin);
+        *write_pos         = reduction(*adj_range_begin, *next_adjacent);
+        while (std::next(next_adjacent) != std::ranges::end(range) and
+               comparator(*next_adjacent, *std::next(next_adjacent)))
+            *write_pos = reduction(*write_pos, *++next_adjacent);
+        ++write_pos;
+        it = ++next_adjacent;
+    }
+    return std::ranges::borrowed_subrange_t< R >(write_pos, std::ranges::end(range));
 }
 } // namespace lstr
 #endif // L3STER_UTIL_ALGORITHM_HPP

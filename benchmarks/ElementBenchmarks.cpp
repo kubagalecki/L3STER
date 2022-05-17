@@ -1,6 +1,6 @@
 #include "Common.hpp"
 
-void BM_JacobianComputation(benchmark::State& state)
+static void BM_JacobianComputation(benchmark::State& state)
 {
     const auto element = getExampleHexElement< 1 >();
     const auto point   = Point{.5, .5, .5};
@@ -13,7 +13,7 @@ void BM_JacobianComputation(benchmark::State& state)
 }
 BENCHMARK(BM_JacobianComputation)->Name("Compute Jacobian");
 
-void BM_ReferenceBasisComputation(benchmark::State& state)
+static void BM_ReferenceBasisComputation(benchmark::State& state)
 {
     constexpr auto   T     = ElementTypes::Hex;
     constexpr el_o_t O     = 1;
@@ -26,19 +26,7 @@ void BM_ReferenceBasisComputation(benchmark::State& state)
 }
 BENCHMARK(BM_ReferenceBasisComputation)->Name("Compute reference basis");
 
-void BM_SingleBasisDerivativeComputation(benchmark::State& state)
-{
-    const auto element = getExampleHexElement< 1 >();
-    const auto point   = Point{.5, .5, .5};
-    for (auto _ : state)
-    {
-        const auto ders = computePhysBasisDers< 0, BasisTypes::Lagrange >(element, point);
-        benchmark::DoNotOptimize(ders);
-    }
-}
-BENCHMARK(BM_SingleBasisDerivativeComputation)->Name("Compute single basis derivative");
-
-void BM_AggregateBasisDerivativeComputation(benchmark::State& state)
+static void BM_BasisPhysicalDerivativeComputation(benchmark::State& state)
 {
     const auto element  = getExampleHexElement< 1 >();
     const auto point    = Point{.5, .5, .5};
@@ -46,8 +34,8 @@ void BM_AggregateBasisDerivativeComputation(benchmark::State& state)
     const auto ref_ders = computeRefBasisDers< ElementTypes::Hex, 1, BasisTypes::Lagrange >(point);
     for (auto _ : state)
     {
-        const auto ders = computePhysBasisDers< ElementTypes::Hex, 1 >(J, ref_ders);
+        const auto ders = computePhysBasisDers(J, ref_ders);
         benchmark::DoNotOptimize(ders);
     }
 }
-BENCHMARK(BM_AggregateBasisDerivativeComputation)->Name("Compute basis derivatives as aggregate");
+BENCHMARK(BM_BasisPhysicalDerivativeComputation)->Name("Compute basis physical derivatives");

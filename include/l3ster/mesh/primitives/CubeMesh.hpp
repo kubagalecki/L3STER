@@ -8,10 +8,11 @@ namespace lstr
 template < std::ranges::random_access_range Rx,
            std::ranges::random_access_range Ry,
            std::ranges::random_access_range Rz >
-requires std::convertible_to< std::ranges::range_value_t< std::decay_t< Rx > >, val_t > and
-    std::convertible_to< std::ranges::range_value_t< std::decay_t< Ry > >, val_t > and
-    std::convertible_to< std::ranges::range_value_t< std::decay_t< Rz > >, val_t >
 inline Mesh makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz)
+    requires std::convertible_to< std::ranges::range_value_t< std::decay_t< Rx > >,
+                                  val_t >and std::convertible_to< std::ranges::range_value_t< std::decay_t< Ry > >,
+                                                                  val_t >and std::
+        convertible_to< std::ranges::range_value_t< std::decay_t< Rz > >, val_t >
 {
     const size_t n_dx = std::ranges::size(distx);
     const size_t n_dy = std::ranges::size(disty);
@@ -21,7 +22,7 @@ inline Mesh makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz)
     const size_t e_dz = n_dz - 1;
 
     MeshPartition::domain_map_t domains;
-    domains[0].reserve< ElementTypes ::Hex, 1 >(e_dx * e_dy * e_dz);
+    domains[0].reserve< ElementTypes::Hex, 1 >(e_dx * e_dy * e_dz);
     domains[1].reserve< ElementTypes::Quad, 1 >(e_dx * e_dy);
     domains[2].reserve< ElementTypes::Quad, 1 >(e_dx * e_dy);
     domains[3].reserve< ElementTypes::Quad, 1 >(e_dx * e_dz);
@@ -32,20 +33,20 @@ inline Mesh makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz)
     el_id_t el_ind = 0;
 
     // volume elements
-    for (auto iz : std::views::iota(0u, e_dx))
+    for (auto iz : std::views::iota(0u, e_dz))
     {
-        for (auto iy : std::views::iota(0u, e_dx))
+        for (auto iy : std::views::iota(0u, e_dy))
         {
             for (auto ix : std::views::iota(0u, e_dx))
             {
                 const std::array< n_id_t, 8 >     nodes = {n_dx * n_dy * iz + n_dx * iy + ix,
-                                                       n_dx * n_dy * iz + n_dx * iy + ix + 1,
-                                                       n_dx * n_dy * iz + n_dx * (iy + 1) + ix,
-                                                       n_dx * n_dy * iz + n_dx * (iy + 1) + ix + 1,
-                                                       n_dx * n_dy * (iz + 1) + n_dx * iy + ix,
-                                                       n_dx * n_dy * (iz + 1) + n_dx * iy + ix + 1,
-                                                       n_dx * n_dy * (iz + 1) + n_dx * (iy + 1) + ix,
-                                                       n_dx * n_dy * (iz + 1) + n_dx * (iy + 1) + ix + 1};
+                                                           n_dx * n_dy * iz + n_dx * iy + ix + 1,
+                                                           n_dx * n_dy * iz + n_dx * (iy + 1) + ix,
+                                                           n_dx * n_dy * iz + n_dx * (iy + 1) + ix + 1,
+                                                           n_dx * n_dy * (iz + 1) + n_dx * iy + ix,
+                                                           n_dx * n_dy * (iz + 1) + n_dx * iy + ix + 1,
+                                                           n_dx * n_dy * (iz + 1) + n_dx * (iy + 1) + ix,
+                                                           n_dx * n_dy * (iz + 1) + n_dx * (iy + 1) + ix + 1};
                 const std::array< Point< 3 >, 8 > verts = {Point{distx[ix], disty[iy], distz[iz]},
                                                            Point{distx[ix + 1], disty[iy], distz[iz]},
                                                            Point{distx[ix], disty[iy + 1], distz[iz]},
@@ -87,9 +88,9 @@ inline Mesh makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz)
         for (auto ix : std::views::iota(0u, e_dx))
         {
             const std::array< n_id_t, 4 >     nodes1 = {n_dx * n_dy * iz + ix,
-                                                    n_dx * n_dy * iz + ix + 1,
-                                                    n_dx * n_dy * (iz + 1) + ix,
-                                                    n_dx * n_dy * (iz + 1) + ix + 1};
+                                                        n_dx * n_dy * iz + ix + 1,
+                                                        n_dx * n_dy * (iz + 1) + ix,
+                                                        n_dx * n_dy * (iz + 1) + ix + 1};
             const std::array< Point< 3 >, 4 > verts1 = {Point{distx[ix], disty[0], distz[iz]},
                                                         Point{distx[ix + 1], disty[0], distz[iz]},
                                                         Point{distx[ix], disty[0], distz[iz + 1]},
@@ -111,9 +112,9 @@ inline Mesh makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz)
         for (auto iy : std::views::iota(0u, e_dy))
         {
             const std::array< n_id_t, 4 >     nodes1 = {n_dx * n_dy * iz + n_dx * iy,
-                                                    n_dx * n_dy * iz + n_dx * (iy + 1),
-                                                    n_dx * n_dy * (iz + 1) + n_dx * iy,
-                                                    n_dx * n_dy * (iz + 1) + n_dx * (iy + 1)};
+                                                        n_dx * n_dy * iz + n_dx * (iy + 1),
+                                                        n_dx * n_dy * (iz + 1) + n_dx * iy,
+                                                        n_dx * n_dy * (iz + 1) + n_dx * (iy + 1)};
             const std::array< Point< 3 >, 4 > verts1 = {Point{distx[0], disty[iy], distz[iz]},
                                                         Point{distx[0], disty[iy + 1], distz[iz]},
                                                         Point{distx[0], disty[iy], distz[iz + 1]},
@@ -131,14 +132,13 @@ inline Mesh makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz)
 
     std::vector< n_id_t > nodes(n_dx * n_dy * n_dz);
     std::iota(begin(nodes), end(nodes), 0u);
-    std::vector< MeshPartition > parts;
-    parts.emplace_back(std::move(domains), std::move(nodes), std::vector< n_id_t >{});
-    return Mesh{std::move(parts)};
+    return Mesh{{MeshPartition{std::move(domains), std::move(nodes), std::vector< n_id_t >{}}}};
 }
 
 template < std::ranges::random_access_range R >
-requires std::convertible_to< std::ranges::range_value_t< std::decay_t< R > >, val_t >
 inline Mesh makeCubeMesh(R&& dist)
+    requires std::convertible_to< std::ranges::range_value_t< std::decay_t< R > >,
+                                  val_t >
 {
     return makeCubeMesh(dist, dist, dist);
 }

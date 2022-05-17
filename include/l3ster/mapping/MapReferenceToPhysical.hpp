@@ -9,9 +9,8 @@
 namespace lstr
 {
 template < ElementTypes T, el_o_t O >
-Point< 3 >
-mapToPhysicalSpace(const Element< T, O >& element, const Point< Element< T, O >::native_dim >& point) requires(
-    contains({ElementTypes::Line, ElementTypes::Quad, ElementTypes::Hex}, T))
+Point< 3 > mapToPhysicalSpace(const Element< T, O >& element, const Point< Element< T, O >::native_dim >& point)
+    requires(contains({ElementTypes::Line, ElementTypes::Quad, ElementTypes::Hex}, T))
 {
     const Element< T, 1 > o1_el{{}, element.getData(), {}};
     const auto&           vertices = element.getData().vertices;

@@ -13,14 +13,14 @@ class MetisGraphWrapper
     {
         void operator()(idx_t* ptr) const noexcept { METIS_Free(ptr); }
     };
-    using array_t = std::unique_ptr< idx_t[], Deleter >;
+    using array_t = std::unique_ptr< idx_t[], Deleter >; // NOLINT
 
 public:
     using span_t = std::span< const idx_t >;
 
     inline MetisGraphWrapper(const MetisGraphWrapper& other);
     MetisGraphWrapper(MetisGraphWrapper&&) noexcept = default;
-    inline MetisGraphWrapper& operator              =(const MetisGraphWrapper& other);
+    inline MetisGraphWrapper& operator=(const MetisGraphWrapper& other);
     MetisGraphWrapper&        operator=(MetisGraphWrapper&&) noexcept = default;
     ~MetisGraphWrapper()                                              = default;
 
@@ -47,6 +47,9 @@ MetisGraphWrapper::MetisGraphWrapper(const MetisGraphWrapper& other)
 
 MetisGraphWrapper& MetisGraphWrapper::operator=(const MetisGraphWrapper& other)
 {
+    if (this == &other)
+        return *this;
+
     xadj.reset(static_cast< idx_t* >(malloc((other.getXadj().size()) * sizeof(idx_t))));     // NOLINT
     adjncy.reset(static_cast< idx_t* >(malloc((other.getAdjncy().size()) * sizeof(idx_t)))); // NOLINT
     nvert = other.nvert;
@@ -74,10 +77,9 @@ inline void handleMetisErrorCode(int error)
     case METIS_ERROR_MEMORY:
         throw std::bad_alloc{};
     default:
-        throw std::runtime_error{"Metis failed to partition the mesh"};
+        throw std::runtime_error{"Metis runtime error"};
     }
 }
-
 } // namespace detail
 } // namespace lstr
 #endif // L3STER_UTIL_METISUTILS_HPP

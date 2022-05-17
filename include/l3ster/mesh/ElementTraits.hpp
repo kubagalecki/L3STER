@@ -1,8 +1,8 @@
 #ifndef L3STER_MESH_ELEMENTTRAITS_HPP
 #define L3STER_MESH_ELEMENTTRAITS_HPP
 
-#include "ElementTypes.hpp"
-#include "Point.hpp"
+#include "l3ster/mesh/ElementTypes.hpp"
+#include "l3ster/mesh/Point.hpp"
 
 namespace lstr
 {
@@ -19,7 +19,7 @@ struct ElementTraits< Element< ElementTypes::Hex, O > >
     static constexpr el_o_t       order             = O;
     static constexpr n_id_t       nodes_per_element = (O + 1) * (O + 1) * (O + 1);
     static constexpr dim_t        native_dim        = 3;
-    static constexpr el_ns_t      n_sides           = 6;
+    static constexpr el_side_t    n_sides           = 6;
 
     using boundary_table_t = std::array< std::array< el_locind_t, (O + 1) * (O + 1) >, n_sides >;
 
@@ -61,7 +61,7 @@ struct ElementTraits< Element< ElementTypes::Quad, O > >
     static constexpr el_o_t       order             = O;
     static constexpr n_id_t       nodes_per_element = (O + 1) * (O + 1);
     static constexpr dim_t        native_dim        = 2;
-    static constexpr el_ns_t      n_sides           = 4;
+    static constexpr el_side_t    n_sides           = 4;
 
     using boundary_table_t = std::array< std::array< el_locind_t, O + 1 >, n_sides >;
 
@@ -94,7 +94,7 @@ struct ElementTraits< Element< ElementTypes::Line, O > >
     static constexpr el_o_t       order             = O;
     static constexpr n_id_t       nodes_per_element = (O + 1);
     static constexpr dim_t        native_dim        = 1;
-    static constexpr el_ns_t      n_sides           = 2;
+    static constexpr el_side_t    n_sides           = 2;
 
     using boundary_table_t = std::array< std::array< el_locind_t, 1 >, n_sides >;
 

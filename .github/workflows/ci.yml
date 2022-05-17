@@ -8,7 +8,7 @@ env:
 jobs:
   build_base_container:
     name: Build base container
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v2
       - uses: whoan/docker-build-with-cache-action@v5
@@ -22,7 +22,7 @@ jobs:
   unit_tests_and_static_analysis:
     name: Static analysis and unit tests
     needs: build_base_container
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       CMAKE_BUILD_TYPE: Release
       CMAKE_TOOLCHAIN_PATH: ../cmake/toolchains/StaticAnalysis.cmake
@@ -35,7 +35,8 @@ jobs:
   sanitizers:
     name: Sanitizers
     needs: unit_tests_and_static_analysis
-    runs-on: ubuntu-latest
+    continue-on-error: true
+    runs-on: self-hosted
     env:
       CMAKE_BUILD_TYPE: ${{ matrix.build_type }}
       CMAKE_TOOLCHAIN_PATH: "../cmake/toolchains/${{ matrix.sanitizer }}Sanitizer.cmake"
@@ -52,7 +53,7 @@ jobs:
   coverage:
     name: Code coverage
     needs: sanitizers
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       CMAKE_BUILD_TYPE: Debug
       CMAKE_TOOLCHAIN_PATH: ../cmake/toolchains/Coverage.cmake
@@ -67,7 +68,7 @@ jobs:
   deployment:
     name: Deployment tests
     needs: unit_tests_and_static_analysis
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       DEPLOYMENT_TESTS: true
     steps:

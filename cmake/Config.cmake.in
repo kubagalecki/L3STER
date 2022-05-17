@@ -2,7 +2,7 @@
 
 # Dependencies
 include( CMakeFindDependencyMacro )
-find_dependency( Eigen3 3.3 REQUIRED )
+find_dependency( Eigen3 3.4 REQUIRED )
 find_dependency( TBB REQUIRED )
 
 #

@@ -13,11 +13,11 @@ class NodeGlobalResource final : public std::pmr::memory_resource
 {
 public:
     explicit NodeGlobalResource(HwlocWrapper* topo_ptr_, size_t node_) : topo_ptr{topo_ptr_}, node{node_} {}
-    NodeGlobalResource(const NodeGlobalResource&) = delete;
-    NodeGlobalResource(NodeGlobalResource&&)      = delete;
+    NodeGlobalResource(const NodeGlobalResource&)            = delete;
+    NodeGlobalResource(NodeGlobalResource&&)                 = delete;
     NodeGlobalResource& operator=(const NodeGlobalResource&) = delete;
-    NodeGlobalResource& operator=(NodeGlobalResource&&) = delete;
-    ~NodeGlobalResource() final                         = default;
+    NodeGlobalResource& operator=(NodeGlobalResource&&)      = delete;
+    ~NodeGlobalResource() final                              = default;
 
     [[nodiscard]] inline void* do_allocate(size_t bytes, size_t alignment) final;
     inline void                do_deallocate(void* p, size_t bytes, size_t alignment) final;

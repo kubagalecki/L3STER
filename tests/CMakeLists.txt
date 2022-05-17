@@ -27,6 +27,8 @@ include( Catch )
 ### Define the Catch2-based target ###
 
 add_executable( L3STER_tests TestsMain.cpp
+                DofTests.cpp
+                GlobalAssemblyTests.cpp
                 HwlocTests.cpp
                 LocalAssemblyTests.cpp
                 MappingTests.cpp
@@ -57,7 +59,7 @@ function( add_mpi_test source name nprocs )
     target_compile_options( ${test_target} PRIVATE -fno-sanitize=all )
     target_link_options( ${test_target} PRIVATE -fno-sanitize=all )
     target_link_libraries( ${test_target} L3STER::L3STER )
-    set( test_env GMON_OUT_PREFIX=profile_data )
+    set( test_env "GMON_OUT_PREFIX=profile_data;OMP_PROC_BIND=false" )
     set( test_driver mpiexec )
     if ( ${ARGC} EQUAL 4 )
         set( args ${ARGV4} )
@@ -72,16 +74,21 @@ function( add_mpi_test source name nprocs )
                   COMMAND ${test_driver} ${test_params}
                   WORKING_DIRECTORY ${test_dir}
                   )
-        set_tests_properties( ${test_name} PROPERTIES ENVIRONMENT ${test_env} )
+        set_tests_properties( ${test_name} PROPERTIES ENVIRONMENT "${test_env}" )
     endforeach ()
     set( L3STER_MPI_TESTS ${L3STER_MPI_TESTS} PARENT_SCOPE )
 endfunction()
 
 # Define individual tests
-add_mpi_test( "MpiBlockingCommunicationTest.cpp" "MPI_blocking_communication_test" "1;2;4" )
-add_mpi_test( "MpiAsyncCommunicationTest.cpp" "MPI_async_communication_test" "1;2;4" )
-add_mpi_test( "MeshSendRecvTest.cpp" "Mesh_send_recv_test" "2;4" )
-add_mpi_test( "MeshDistributionTest.cpp" "Mesh_distribution_test" "1;2;4" )
+add_mpi_test( "GlobalDofGatherTest.cpp" "Distribute_global_DOF_intervals" "2;4" )
+add_mpi_test( "MpiBlockingCommunicationTest.cpp" "MPI_blocking_communication" "1;2;4" )
+add_mpi_test( "MpiAsyncCommunicationTest.cpp" "MPI_async_communication" "1;2;4" )
+add_mpi_test( "MeshSendRecvTest.cpp" "Mesh_send_recv" "2;4" )
+add_mpi_test( "MeshDistributionTest.cpp" "Mesh_distribution" "1;2;4" )
+add_mpi_test( "NodeThroughputInfoTest.cpp" "Node_throughput_calculation" "1;2;4" )
+add_mpi_test( "TpetraMapCreationTest.cpp" "Tpetra_Map_Creation" "1;2;4" )
+add_mpi_test( "SparsityGraphTest.cpp" "Sparsity_Graph" "1;2;4" )
+add_mpi_test( "GlobalAssemblyMPITest.cpp" "Galerkin_diffusion_1D_assembly_test" "1;2;4" )
 
 #######################################################################################################################
 
@@ -102,16 +109,17 @@ configure_file( TestDataPath.h.in TestDataPath.h )
 
 if ( L3STER_ENABLE_COVERAGE )
     set( script_file ${CMAKE_CURRENT_BINARY_DIR}/generate_coverage_report.sh )
+    set( gcovr_invocation "gcovr -x -d --exclude-unreachable-branches --exclude-throw-branches -r ${CMAKE_CURRENT_SOURCE_DIR}/../.. -e ${CMAKE_CURRENT_SOURCE_DIR} -o coverage_report.xml ./\n" )
     file( WRITE ${script_file}
-          "gcovr -x -d --exclude-unreachable-branches --exclude-throw-branches -r ${L3STER_SOURCE_DIR}/.. -e ${L3STER_SOURCE_DIR}/tests -o coverage_report.xml ./\n"
-          "rm gmon.out\n"
+          "${gcovr_invocation}"
+          "rm gmon.out\n\n"
           )
     foreach ( test ${L3STER_MPI_TESTS} )
         file( APPEND ${script_file}
               "cd ${test}\n"
-              "gcovr -x -d --exclude-unreachable-branches --exclude-throw-branches -r ${L3STER_SOURCE_DIR}/.. -e ${L3STER_SOURCE_DIR}/tests -o coverage_report.xml ./\n"
+              "${gcovr_invocation}"
               "rm ./profile_data*\n"
-              "cd ..\n"
+              "cd ..\n\n"
               )
     endforeach ()
 endif ()

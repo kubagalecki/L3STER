@@ -5,7 +5,7 @@
 
 int main(int argc, char* argv[])
 {
-    lstr::GlobalResource< lstr::MpiScopeGuard >::init(argc, argv);
+    lstr::GlobalResource< lstr::MpiScopeGuard >::initialize(argc, argv);
     lstr::MpiComm comm{};
     try
     {
@@ -30,7 +30,7 @@ int main(int argc, char* argv[])
 
         return EXIT_SUCCESS;
     }
-    catch (const std::runtime_error& e)
+    catch (const std::exception& e)
     {
         std::cerr << e.what();
         comm.abort();

@@ -12,7 +12,7 @@ int main(int argc, char* argv[])
     const auto& read_part   = read_mesh.getPartitions()[0];
     const auto  serial_part = lstr::SerializedPartition{read_part};
 
-    lstr::GlobalResource< lstr::MpiScopeGuard >::init(argc, argv);
+    lstr::GlobalResource< lstr::MpiScopeGuard >::initialize(argc, argv);
     lstr::MpiComm comm{};
     if (comm.getSize() <= 1)
     {

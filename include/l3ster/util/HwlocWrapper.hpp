@@ -4,6 +4,7 @@
 #include "hwloc.h"
 
 #include <algorithm>
+#include <concepts>
 #include <limits>
 #include <stdexcept>
 #include <type_traits>
@@ -16,10 +17,10 @@ namespace lstr
 struct HwlocWrapper
 {
     inline HwlocWrapper();
-    HwlocWrapper(const HwlocWrapper&) = delete;
-    HwlocWrapper(HwlocWrapper&&)      = delete;
+    HwlocWrapper(const HwlocWrapper&)            = delete;
+    HwlocWrapper(HwlocWrapper&&)                 = delete;
     HwlocWrapper& operator=(const HwlocWrapper&) = delete;
-    HwlocWrapper& operator=(HwlocWrapper&&) = delete;
+    HwlocWrapper& operator=(HwlocWrapper&&)      = delete;
     inline ~HwlocWrapper();
 
     [[nodiscard]] size_t         getMachineSize() const noexcept { return cpu_masks.size(); }
@@ -40,8 +41,9 @@ private:
     inline void groupCpus();
 
     template < typename F >
-    requires std::is_invocable_r_v< bool, F, hwloc_cpuset_t >
-    [[nodiscard]] std::pair< size_t, size_t > findCpuIf(const F&) const noexcept;
+    [[nodiscard]] std::pair< size_t, size_t > findCpuIf(const F&) const noexcept
+        requires std::is_invocable_r_v< bool, F, hwloc_cpuset_t >
+    ;
 
     std::vector< std::vector< hwloc_cpuset_t > > cpu_masks{};
     std::vector< hwloc_nodeset_t >               node_masks{};
@@ -53,10 +55,10 @@ namespace detail
 struct HwlocBitmapRaiiWrapper
 {
     HwlocBitmapRaiiWrapper() : bmp{hwloc_bitmap_alloc()} {}
-    HwlocBitmapRaiiWrapper(const HwlocBitmapRaiiWrapper&) = delete;
-    HwlocBitmapRaiiWrapper(HwlocBitmapRaiiWrapper&&)      = delete;
+    HwlocBitmapRaiiWrapper(const HwlocBitmapRaiiWrapper&)            = delete;
+    HwlocBitmapRaiiWrapper(HwlocBitmapRaiiWrapper&&)                 = delete;
     HwlocBitmapRaiiWrapper& operator=(const HwlocBitmapRaiiWrapper&) = delete;
-    HwlocBitmapRaiiWrapper& operator=(HwlocBitmapRaiiWrapper&&) = delete;
+    HwlocBitmapRaiiWrapper& operator=(HwlocBitmapRaiiWrapper&&)      = delete;
     ~HwlocBitmapRaiiWrapper() { hwloc_bitmap_free(bmp); }
 
     // clang-tidy warns about implicit conversion, but that's exactly the point [NOLINTNEXTLINE]
@@ -66,8 +68,8 @@ struct HwlocBitmapRaiiWrapper
 };
 
 template < typename F >
-requires std::is_invocable_v< F, hwloc_bitmap_t >
 void hwlocBitmapForEachWrapper(hwloc_bitmap_t bitmap, const F& fun)
+    requires std::is_invocable_v< F, hwloc_bitmap_t >
 {
     HwlocBitmapRaiiWrapper helper{};
     size_t                 index;
@@ -80,8 +82,8 @@ void hwlocBitmapForEachWrapper(hwloc_bitmap_t bitmap, const F& fun)
 }
 
 template < typename F >
-requires std::is_invocable_v< F, hwloc_const_bitmap_t >
 void hwlocBitmapForEachWrapper(hwloc_const_bitmap_t bitmap, const F& fun)
+    requires std::is_invocable_v< F, hwloc_const_bitmap_t >
 {
     HwlocBitmapRaiiWrapper helper{};
     size_t                 index;
@@ -91,6 +93,13 @@ void hwlocBitmapForEachWrapper(hwloc_const_bitmap_t bitmap, const F& fun)
         fun(helper);
     }
     hwloc_bitmap_foreach_end();
+}
+
+template < std::derived_from< std::exception > Exception_t >
+void handleHwlocError(int error, const char* err_msg)
+{
+    if (error)
+        throw Exception_t{err_msg};
 }
 } // namespace detail
 
@@ -111,23 +120,24 @@ inline HwlocWrapper::~HwlocWrapper()
 
 inline void HwlocWrapper::bindThreadToCore(size_t node, size_t cpu) const
 {
-    if (hwloc_set_cpubind(topo, cpu_masks[node][cpu], HWLOC_CPUBIND_THREAD))
-        throw std::runtime_error{"failed to bind thread to core"};
+    const auto err = hwloc_set_cpubind(topo, cpu_masks[node][cpu], HWLOC_CPUBIND_THREAD);
+    detail::handleHwlocError< std::runtime_error >(err, "failed to bind thread to core");
 }
 
 inline void HwlocWrapper::bindThreadToNode(size_t node) const
 {
     detail::HwlocBitmapRaiiWrapper cpu_set{};
     hwloc_cpuset_from_nodeset(topo, cpu_set, node_masks[node]);
-    if (hwloc_set_cpubind(topo, cpu_set, HWLOC_CPUBIND_THREAD))
-        throw std::runtime_error{"failed to bind thread to NUMA node"};
+    const auto err = hwloc_set_cpubind(topo, cpu_set, HWLOC_CPUBIND_THREAD);
+    detail::handleHwlocError< std::runtime_error >(err, "failed to bind thread to NUMA node");
 }
 
 inline std::pair< size_t, size_t > HwlocWrapper::getLastThreadLocation() const
 {
     detail::HwlocBitmapRaiiWrapper cpu{};
-    if (hwloc_get_last_cpu_location(topo, cpu, HWLOC_CPUBIND_THREAD))
-        throw std::runtime_error("hwloc failed to obtain the last location of the current thread");
+    const auto                     err = hwloc_get_last_cpu_location(topo, cpu, HWLOC_CPUBIND_THREAD);
+    detail::handleHwlocError< std::runtime_error >(err,
+                                                   "hwloc failed to obtain the last location of the current thread");
     const auto ret_val = findCpuIf([&](hwloc_const_cpuset_t set) { return hwloc_bitmap_isequal(set, cpu); });
     if (ret_val.first == std::numeric_limits< size_t >::max())
         throw std::logic_error{"The thread location provided by hwloc seems to lie outside of the machine's topology"};
@@ -141,8 +151,8 @@ inline void* HwlocWrapper::allocateOnNode(size_t size, size_t node) const noexce
 
 inline void HwlocWrapper::initTopology()
 {
-    if (hwloc_topology_init(&topo) || hwloc_topology_load(topo))
-        throw std::runtime_error{"hwloc failed to obtain topology information"};
+    const auto err = hwloc_topology_init(&topo) or hwloc_topology_load(topo);
+    detail::handleHwlocError< std::runtime_error >(err, "hwloc failed to obtain topology information");
 }
 
 inline void HwlocWrapper::populateTopologyInfo() noexcept
@@ -183,9 +193,8 @@ inline void HwlocWrapper::groupCpus()
 }
 
 template < typename F >
-requires std::is_invocable_r_v< bool, F, hwloc_cpuset_t > std::pair< size_t, size_t >
-                                                          HwlocWrapper::findCpuIf(const F& fun)
-const noexcept
+std::pair< size_t, size_t > HwlocWrapper::findCpuIf(const F& fun) const noexcept
+    requires std::is_invocable_r_v< bool, F, hwloc_cpuset_t >
 {
     std::pair< size_t, size_t > ret_val;
     auto& [node, cpu] = ret_val;

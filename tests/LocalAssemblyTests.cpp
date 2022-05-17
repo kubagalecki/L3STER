@@ -1,61 +1,14 @@
 #include "catch2/catch.hpp"
 
+#include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 #include "l3ster/local_assembly/AssembleLocalSystem.hpp"
-#include "l3ster/mapping/ComputeBasisDerivative.hpp"
+#include "l3ster/mapping/ComputePhysBasisDer.hpp"
 #include "l3ster/mesh/NodePhysicalLocation.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 
 using namespace lstr;
 
-TEST_CASE("Reference bases at QPs test", "[local_asm]")
-{
-    SECTION("Values")
-    {
-        constexpr auto   ET   = ElementTypes::Hex;
-        constexpr el_o_t EO   = 4;
-        constexpr auto   QT   = QuadratureTypes::GLeg;
-        constexpr el_o_t QO   = 4;
-        const auto&      vals = getRefBasesAtQpoints< QT, QO, ET, EO, BasisTypes::Lagrange >();
-        for (ptrdiff_t basis = 0; basis < vals.rows(); ++basis)
-            CHECK(vals(basis, Eigen::all).sum() == Approx{1.});
-    }
-
-    SECTION("Derivatives")
-    {
-        constexpr auto   ET   = ElementTypes::Hex;
-        constexpr el_o_t EO   = 4;
-        constexpr auto   QT   = QuadratureTypes::GLeg;
-        constexpr el_o_t QO   = 4;
-        const auto&      ders = getRefBasisDersAtQpoints< QT, QO, ET, EO, BasisTypes::Lagrange >();
-        for (const auto& der : ders)
-            for (ptrdiff_t basis = 0; basis < der.rows(); ++basis)
-                CHECK(der(basis, Eigen::all).sum() == Approx{0.}.margin(1e-13));
-    }
-}
-
-TEST_CASE("Physical basis derivative at QPs", "[local_asm, mapping]")
-{
-    constexpr auto  QT = QuadratureTypes::GLeg;
-    constexpr q_o_t QO = 5;
-    constexpr auto  BT = BasisTypes::Lagrange;
-
-    constexpr auto do_test = []< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
-        const auto test_point        = Point{getQuadrature< QT, QO, ET >().getPoints().front()};
-        const auto J                 = getNatJacobiMatGenerator(element)(test_point);
-        const auto bas_ders_at_testp = computePhysBasisDers< ET, EO >(J, computeRefBasisDers< ET, EO, BT >(test_point));
-
-        const auto ders = computePhysicalBasesAtQpoints< QT, QO, BT >(element);
-
-        for (int i = 0; i < ElementTraits< Element< ET, EO > >::native_dim; ++i)
-            CHECK((ders[i](0, Eigen::all) - bas_ders_at_testp(i, Eigen::all)).norm() == Approx{0.}.margin(1e-13));
-    };
-
-    const auto mesh = makeCubeMesh(std::vector{0., .25, .5, .75, 1.});
-    const auto part = mesh.getPartitions()[0];
-    part.cvisit(do_test, {0}); // Only for the hex domain, this won't work for 2D elements in a 3D space
-}
-
-TEST_CASE("Local system assembly tests", "[local_asm]")
+TEST_CASE("Local system assembly", "[local_asm]")
 {
     // Solve problems using a 1 element discretization and compare with known results
 
@@ -70,10 +23,12 @@ TEST_CASE("Local system assembly tests", "[local_asm]")
         ElementData< ET, EO > data{{Point{1., -1., 0.}, Point{2., -1., 0.}, Point{1., 1., 1.}, Point{2., 1., 1.}}};
         const auto            element = Element< ET, EO >{el_nodes, data, 0};
 
+        const auto& basis_at_q = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
+
         constexpr size_t nf                  = 3;
         constexpr size_t ne                  = 4;
         constexpr size_t dim                 = 2;
-        constexpr auto   diffusion_kernel_2d = []() noexcept {
+        constexpr auto   diffusion_kernel_2d = [](const auto&, const auto&, const auto&) noexcept {
             using A_t   = Eigen::Matrix< val_t, ne, nf >;
             using F_t   = Eigen::Matrix< val_t, ne, 1 >;
             using ret_t = std::pair< std::array< A_t, dim + 1 >, F_t >;
@@ -104,7 +59,8 @@ TEST_CASE("Local system assembly tests", "[local_asm]")
             return p.x();
         };
 
-        auto system  = assembleLocalSystem< QT, QO, BT >(diffusion_kernel_2d, element);
+        auto system = assembleLocalSystem(
+            diffusion_kernel_2d, element, Eigen::Matrix< val_t, element.n_nodes, 0 >{}, basis_at_q, 0.);
         auto& [K, F] = system;
         K            = K.template selfadjointView< Eigen::Lower >();
         auto u       = F;
@@ -115,7 +71,7 @@ TEST_CASE("Local system assembly tests", "[local_asm]")
                 constexpr size_t max_nbn =
                     std::accumulate(begin(boundary_table), end(boundary_table), 0, [](size_t val, const auto& a) {
                         return val + a.size();
-                          });
+                    });
                 std::array< el_locind_t, max_nbn > ret_alloc{};
                 for (size_t index = 0; const auto& side_nodes : boundary_table)
                 {

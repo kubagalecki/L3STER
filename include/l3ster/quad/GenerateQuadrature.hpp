@@ -3,19 +3,21 @@
 #ifndef L3STER_QUAD_GENERATEQUADRATURE_HPP
 #define L3STER_QUAD_GENERATEQUADRATURE_HPP
 
-#include "ReferenceQuadrature.hpp"
 #include "l3ster/mesh/Element.hpp"
+#include "l3ster/quad/ReferenceQuadrature.hpp"
 
 namespace lstr
 {
 template < QuadratureTypes QT, q_o_t QO, ElementTypes ET >
-const auto& getQuadrature() requires(ET == ElementTypes::Line)
+const auto& getQuadrature()
+    requires(ET == ElementTypes::Line)
 {
     return getReferenceQuadrature< QT, QO >();
 }
 
 template < QuadratureTypes QT, q_o_t QO, ElementTypes ET >
-const auto& getQuadrature() requires(ET == ElementTypes::Quad)
+const auto& getQuadrature()
+    requires(ET == ElementTypes::Quad)
 {
     static const auto value = [] {
         const auto& ref_quadrature   = getReferenceQuadrature< QT, QO >();
@@ -44,7 +46,8 @@ const auto& getQuadrature() requires(ET == ElementTypes::Quad)
 }
 
 template < QuadratureTypes QT, q_o_t QO, ElementTypes ET >
-const auto& getQuadrature() requires(ET == ElementTypes::Hex)
+const auto& getQuadrature()
+    requires(ET == ElementTypes::Hex)
 {
     static const auto value = [] {
         const auto& ref_quadrature   = getReferenceQuadrature< QT, QO >();

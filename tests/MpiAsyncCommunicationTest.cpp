@@ -6,7 +6,7 @@
 
 int main(int argc, char* argv[])
 {
-    lstr::GlobalResource< lstr::MpiScopeGuard >::init(argc, argv);
+    lstr::GlobalResource< lstr::MpiScopeGuard >::initialize(argc, argv);
     lstr::MpiComm comm{};
     try
     {
@@ -39,16 +39,19 @@ int main(int argc, char* argv[])
         }
         else
         {
-            char msg_in, msg_out = 'a';
+            char msg_in{}, msg_out = 'a';
             comm.receiveAsync(&msg_in, 1, 0).wait();
             if (msg_in != 'z')
                 throw std::logic_error{"Message corrupted in transit"};
             comm.sendAsync(&msg_out, 1, 0).wait();
         }
+        auto request_to_cancel = comm.sendAsync(&argc, 1, 0);
+        request_to_cancel.cancel();
+        request_to_cancel.wait();
 
         return EXIT_SUCCESS;
     }
-    catch (const std::runtime_error& e)
+    catch (const std::exception& e)
     {
         std::cerr << e.what();
         comm.abort();
