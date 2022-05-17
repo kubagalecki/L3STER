@@ -1,5 +1,15 @@
 name: tests
-on: push
+on:
+  push:
+    branches:
+      - '*'
+      - '!main'
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+
 env:
   DOCKER_BASE: "${{ secrets.DOCKER_HUB_USERNAME }}/${{ secrets.DOCKER_HUB_IMAGE }}:latest"
   OMPI_ALLOW_RUN_AS_ROOT: 1
