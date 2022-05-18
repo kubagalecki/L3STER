@@ -1,7 +1,7 @@
 #ifndef L3STER_SIMSTRUCTURE_BCDEF_HPP
 #define L3STER_SIMSTRUCTURE_BCDEF_HPP
 
-#include "simstructure/EquationDef.hpp"
+#include "EquationDef.hpp"
 
 namespace lstr::def
 {

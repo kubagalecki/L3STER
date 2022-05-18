@@ -1,8 +1,8 @@
 #ifndef L3STER_SIMSTRUCTURE_SUBITERDEF_HPP
 #define L3STER_SIMSTRUCTURE_SUBITERDEF_HPP
 
-#include "simstructure/ConvergenceDef.hpp"
-#include "simstructure/SystemDef.hpp"
+#include "ConvergenceDef.hpp"
+#include "SystemDef.hpp"
 
 namespace lstr::def
 {

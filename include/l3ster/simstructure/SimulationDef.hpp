@@ -1,8 +1,8 @@
 #ifndef L3STER_SIMSTRUCTURE_SIMULATIONDEF_HPP
 #define L3STER_SIMSTRUCTURE_SIMULATIONDEF_HPP
 
-#include "simstructure/MeshDef.hpp"
-#include "simstructure/ProblemDef.hpp"
+#include "MeshDef.hpp"
+#include "ProblemDef.hpp"
 
 namespace lstr::def
 {

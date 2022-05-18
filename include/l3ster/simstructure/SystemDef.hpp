@@ -1,8 +1,8 @@
 #ifndef L3STER_SIMSTRUCTURE_SYSTEMDEF_HPP
 #define L3STER_SIMSTRUCTURE_SYSTEMDEF_HPP
 
-#include "simstructure/AlgebraicSolverDef.hpp"
-#include "simstructure/PhysicsDef.hpp"
+#include "AlgebraicSolverDef.hpp"
+#include "PhysicsDef.hpp"
 
 namespace lstr::def
 {

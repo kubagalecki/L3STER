@@ -3,8 +3,8 @@
 
 #include <utility>
 
-#include "simstructure/IOGraphDef.hpp"
-#include "simstructure/SubiterDef.hpp"
+#include "IOGraphDef.hpp"
+#include "SubiterDef.hpp"
 
 namespace lstr::def
 {

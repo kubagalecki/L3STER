@@ -1,7 +1,7 @@
 #ifndef L3STER_SIMSTRUCTURE_IOGRAPHDEF_HPP
 #define L3STER_SIMSTRUCTURE_IOGRAPHDEF_HPP
 
-#include "simstructure/FieldDef.hpp"
+#include "FieldDef.hpp"
 #include "util/ConstexprVector.hpp"
 
 #include <algorithm>

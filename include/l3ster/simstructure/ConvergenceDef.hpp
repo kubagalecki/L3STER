@@ -1,7 +1,7 @@
 #ifndef L3STER_SIMSTRUCTURE_CONVERGENCEDEF_HPP
 #define L3STER_SIMSTRUCTURE_CONVERGENCEDEF_HPP
 
-#include "simstructure/PhysicsDef.hpp"
+#include "PhysicsDef.hpp"
 
 #include <limits>
 

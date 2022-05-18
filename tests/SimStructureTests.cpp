@@ -1,4 +1,4 @@
-#include "simstructure/SimulationDef.hpp"
+#include "l3ster/simstructure/SimulationDef.hpp"
 
 #include "catch2/catch.hpp"
 

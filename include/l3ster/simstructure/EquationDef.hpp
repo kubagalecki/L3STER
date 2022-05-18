@@ -1,8 +1,8 @@
 #ifndef L3STER_SIMSTRUCTURE_EQUATIONDEF_HPP
 #define L3STER_SIMSTRUCTURE_EQUATIONDEF_HPP
 
-#include "simstructure/FieldDef.hpp"
-#include "simstructure/TimeSchemeDef.hpp"
+#include "FieldDef.hpp"
+#include "TimeSchemeDef.hpp"
 
 #include <tuple>
 

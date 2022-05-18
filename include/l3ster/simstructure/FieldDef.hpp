@@ -1,7 +1,7 @@
 #ifndef L3STER_SIMSTRUCTURE_FIELDDEF_HPP
 #define L3STER_SIMSTRUCTURE_FIELDDEF_HPP
 
-#include "simstructure/TimeDef.hpp"
+#include "TimeDef.hpp"
 
 #include <array>
 #include <concepts>

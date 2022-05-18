@@ -1,8 +1,8 @@
 #ifndef L3STER_SIMSTRUCTURE_PHYSICSDEF_HPP
 #define L3STER_SIMSTRUCTURE_PHYSICSDEF_HPP
 
-#include "simstructure/BCDef.hpp"
-#include "simstructure/EquationDef.hpp"
+#include "BCDef.hpp"
+#include "EquationDef.hpp"
 
 namespace lstr::def
 {
