@@ -192,7 +192,7 @@ makeSparsityGraph(const MeshPartition&                                        me
     const auto row_sizes   = getRowSizes(row_entries);
 
     using graph_t = Tpetra::FECrsGraph< local_dof_t, global_dof_t >;
-    auto retval   = Teuchos::rcp(new graph_t{owned_map, owned_plus_shared_map, row_sizes}); // NOLINT
+    auto retval   = makeTeuchosRCP< graph_t >(owned_map, owned_plus_shared_map, row_sizes);
     retval->beginAssembly();
     for (ptrdiff_t local_row = 0; local_row < static_cast< ptrdiff_t >(owned_plus_shared_dofs.size()); ++local_row)
     {

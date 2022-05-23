@@ -2,6 +2,7 @@
 #define L3STER_ASSEMBLY_MAKETPETRAMAP_HPP
 
 #include "l3ster/global_assembly/NodeToDofMap.hpp"
+#include "l3ster/util/TrilinosUtils.hpp"
 
 namespace lstr
 {
@@ -33,7 +34,7 @@ std::vector< global_dof_t > getNodeDofs(const std::vector< n_id_t >&            
 
 inline Teuchos::RCP< const Teuchos::MpiComm< int > > makeTeuchosComm(const MpiComm& comm)
 {
-    return Teuchos::rcp(new const Teuchos::MpiComm< int >{comm.get()}); // NOLINT
+    return makeTeuchosRCP< const Teuchos::MpiComm< int > >(comm.get()); // NOLINT
 }
 
 inline Tpetra::global_size_t getInvalidSize()
@@ -51,7 +52,7 @@ makeTpetraMap(const std::vector< n_id_t >&                      nodes,
     using map_t             = Tpetra::Map< local_dof_t, global_dof_t >;
     const auto dofs         = detail::getNodeDofs(nodes, dof_intervals);
     auto       teuchos_comm = detail::makeTeuchosComm(comm);
-    return Teuchos::rcp(new const map_t{detail::getInvalidSize(), dofs, 0, teuchos_comm}); // NOLINT
+    return makeTeuchosRCP< const map_t >(detail::getInvalidSize(), dofs, 0, teuchos_comm);
 }
 
 inline Teuchos::RCP< const Tpetra::Map< local_dof_t, global_dof_t > >
@@ -59,7 +60,7 @@ makeTpetraMap(const std::vector< global_dof_t >& dofs, const MpiComm& comm)
 {
     using map_t       = Tpetra::Map< local_dof_t, global_dof_t >;
     auto teuchos_comm = detail::makeTeuchosComm(comm);
-    return Teuchos::rcp(new const map_t{detail::getInvalidSize(), dofs, 0, teuchos_comm}); // NOLINT
+    return makeTeuchosRCP< const map_t >(detail::getInvalidSize(), dofs, 0, teuchos_comm);
 }
 } // namespace lstr
 #endif // L3STER_ASSEMBLY_MAKETPETRAMAP_HPP
