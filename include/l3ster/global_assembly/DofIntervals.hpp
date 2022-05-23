@@ -10,26 +10,35 @@ namespace lstr
 namespace detail
 {
 template < size_t n_fields, size_t n_domains >
-consteval size_t deduceNFields(const std::array< Pair< d_id_t, std::array< bool, n_fields > >, n_domains >&)
+using problem_def_t = std::array< Pair< d_id_t, std::array< bool, n_fields > >, n_domains >;
+
+template < typename T >
+inline constexpr bool is_problem_def = false;
+template < size_t n_fields, size_t n_domains >
+inline constexpr bool is_problem_def< problem_def_t< n_fields, n_domains > > = true;
+template < typename T >
+concept ProblemDef_c = is_problem_def< T >;
+
+template < size_t n_fields, size_t n_domains >
+consteval size_t deduceNFields(const problem_def_t< n_fields, n_domains >&)
 {
     return n_fields;
 }
 
 template < size_t n_fields, size_t n_domains >
-consteval size_t deduceNDomains(const std::array< Pair< d_id_t, std::array< bool, n_fields > >, n_domains >&)
+consteval size_t deduceNDomains(const problem_def_t< n_fields, n_domains >&)
 {
     return n_domains;
 }
 
 template < size_t n_fields, size_t n_domains >
-constexpr size_t getFieldUllongSize(const std::array< Pair< d_id_t, std::array< bool, n_fields > >, n_domains >&)
+constexpr size_t getFieldUllongSize(const problem_def_t< n_fields, n_domains >&)
 {
     return bitsetNUllongs< n_fields >();
 }
 
 template < size_t n_fields, size_t n_domains >
-constexpr size_t
-getSerialDofIntervalSize(const std::array< Pair< d_id_t, std::array< bool, n_fields > >, n_domains >& problem_def)
+constexpr size_t getSerialDofIntervalSize(const problem_def_t< n_fields, n_domains >& problem_def)
 {
     return getFieldUllongSize(problem_def) + 2u;
 }
@@ -39,7 +48,7 @@ using node_interval_t = std::pair< std::array< n_id_t, 2 >, std::bitset< n_field
 template < size_t n_fields >
 using node_interval_vector_t = std::vector< node_interval_t< n_fields > >;
 
-template < auto problem_def >
+template < ProblemDef_c auto problem_def >
 auto computeDofIntervalsFromNodeData(const std::vector< n_id_t >&                                    nodes,
                                      const std::vector< std::bitset< deduceNFields(problem_def) > >& field_cov,
                                      ConstexprValue< problem_def >)
@@ -67,7 +76,7 @@ auto computeDofIntervalsFromNodeData(const std::vector< n_id_t >&               
     return retval;
 }
 
-template < auto problem_def >
+template < ProblemDef_c auto problem_def >
 auto computeLocalDofIntervals(const MeshPartition& mesh, ConstexprValue< problem_def > problemdef_ctwrapper)
 {
     constexpr size_t n_fields  = deduceNFields(problem_def);
@@ -133,7 +142,7 @@ auto deserializeDofIntervals(const std::ranges::sized_range auto& serial_data, a
     }
 }
 
-template < auto problem_def >
+template < ProblemDef_c auto problem_def >
 auto gatherGlobalDofIntervals(const auto&                   local_intervals,
                               ConstexprValue< problem_def > problemdef_ctwrapper,
                               const MpiComm&                comm)
@@ -343,7 +352,7 @@ I findNodeInterval(I begin, S end, n_id_t node)
 }
 } // namespace detail
 
-template < auto problem_def >
+template < detail::ProblemDef_c auto problem_def >
 auto computeDofIntervals(const MeshPartition&          mesh,
                          ConstexprValue< problem_def > problemdef_ctwrapper,
                          const MpiComm&                comm)

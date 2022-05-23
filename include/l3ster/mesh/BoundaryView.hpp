@@ -1,10 +1,10 @@
 #ifndef L3STER_MESH_BOUNDARYVIEW_HPP
 #define L3STER_MESH_BOUNDARYVIEW_HPP
 
-#include <utility>
+#include "l3ster/mesh/Aliases.hpp"
+#include "l3ster/mesh/BoundaryElementView.hpp"
 
-#include "Aliases.hpp"
-#include "BoundaryElementView.hpp"
+#include <utility>
 
 namespace lstr
 {
@@ -33,5 +33,4 @@ decltype(auto) BoundaryView::visit(F&& visitor) const
     return std::forward< F >(visitor);
 }
 } // namespace lstr
-
 #endif // L3STER_MESH_BOUNDARYVIEW_HPP
