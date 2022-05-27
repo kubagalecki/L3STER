@@ -1,53 +1,65 @@
 #ifndef L3STER_BCS_GETDIRICHLETDOFS_HPP
 #define L3STER_BCS_GETDIRICHLETDOFS_HPP
 
-#include "l3ster/global_assembly/NodeToDofMap.hpp"
-#include "l3ster/mesh/BoundaryView.hpp"
+#include "l3ster/global_assembly/SparsityGraph.hpp"
 
-namespace lstr
+namespace lstr::detail
 {
-template < detail::ProblemDef_c auto dirichlet_def >
-auto getDirichletDofs(const MeshPartition&                                        mesh,
-                      const NodeToDofMap< detail::deduceNFields(dirichlet_def) >& dof_map,
-                      ConstexprValue< dirichlet_def >                             dirichlet_def_ctwrapper)
+template < detail::ProblemDef_c auto problem_def, detail::ProblemDef_c auto dirichlet_def >
+auto getDirichletDofs(const MeshPartition&                                      mesh,
+                      const Teuchos::RCP< const Tpetra::FECrsGraph<> >&         sparsity_graph,
+                      const NodeToDofMap< detail::deduceNFields(problem_def) >& dof_map,
+                      ConstexprValue< problem_def >                             problem_def_ctwrapper,
+                      ConstexprValue< dirichlet_def >                           dirichlet_def_ctwrapper)
 {
-    std::vector< global_dof_t > owned_dbcs, shared_dbcs;
-    const auto                  process_domain = [&]< auto domain_def >(ConstexprValue< domain_def >)
-    {
-        constexpr auto  domain_id        = domain_def.first;
-        constexpr auto& coverage         = domain_def.second;
-        constexpr auto  covered_dof_inds = getTrueInds< coverage >();
-        const auto      get_node_dofs    = [&](n_id_t node) {
-            std::array< global_dof_t, std::tuple_size_v< decltype(covered_dof_inds) > > dofs;
-            const auto&                                                                 full_node_dofs = dof_map(node);
-            for (auto insert_it = dofs.begin(); auto ind : covered_dof_inds)
-                *insert_it++ = full_node_dofs[ind];
-            return dofs;
+    const auto mark_owned_dirichlet_dofs = [&] {
+        auto dirichlet_dofs = makeTeuchosRCP< Tpetra::FEMultiVector<> >(
+            sparsity_graph->getColMap(), sparsity_graph->getImporter(), size_t{1});
+        dirichlet_dofs->beginAssembly();
+        const auto process_domain = [&]< auto domain_def >(ConstexprValue< domain_def >)
+        {
+            constexpr auto  domain_id        = domain_def.first;
+            constexpr auto& coverage         = domain_def.second;
+            constexpr auto  covered_dof_inds = getTrueInds< coverage >();
+            const auto      process_element  = [&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
+                const auto el_dirichlet_dofs = getUnsortedElementDofs< covered_dof_inds >(element, dof_map);
+                for (auto dof : el_dirichlet_dofs)
+                    dirichlet_dofs->replaceGlobalValue(dof, 0, 1.);
+            };
+            mesh.cvisit(process_element, {domain_id});
         };
-        const auto process_node = [&](n_id_t node) {
-            const auto node_dofs = get_node_dofs(node);
-            if (std::ranges::binary_search(mesh.getGhostNodes(), node))
-                std::ranges::copy(node_dofs, std::back_inserter(shared_dbcs));
-            else
-                std::ranges::copy(node_dofs, std::back_inserter(owned_dbcs));
-        };
-        const auto process_element = [&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
-            for (auto node : element.getNodes())
-                process_node(node);
-        };
-        mesh.cvisit(process_element, {domain_id});
+        forConstexpr(process_domain, dirichlet_def_ctwrapper);
+        dirichlet_dofs->endAssembly();
+        return dirichlet_dofs;
     };
-    forConstexpr(process_domain, dirichlet_def_ctwrapper);
+    const auto mark_dirichlet_dof_cols = [&](const Teuchos::RCP< const Tpetra::Vector<> >& owned_dirichlet_dofs) {
+        const auto dirichlet_dof_cols = makeTeuchosRCP< Tpetra::Vector<> >(sparsity_graph->getColMap());
+        const auto importer           = Tpetra::Import<>{owned_dirichlet_dofs->getMap(), dirichlet_dof_cols->getMap()};
+        dirichlet_dof_cols->doImport(*owned_dirichlet_dofs, importer, Tpetra::REPLACE);
+        return dirichlet_dof_cols;
+    };
+    constexpr auto extract_marked_dofs = [](const Teuchos::RCP< const Tpetra::Vector<> >& marked_dofs) {
+        constexpr auto is_marked = [](val_t v) {
+            return v > .5;
+        };
+        const auto                  entries = marked_dofs->getData();
+        const auto                  n_ones  = std::ranges::count_if(entries, is_marked);
+        std::vector< global_dof_t > retval;
+        retval.reserve(n_ones);
+        for (local_dof_t local_dof = 0; auto v : entries)
+        {
+            if (is_marked(v))
+                retval.push_back(marked_dofs->getMap()->getGlobalElement(local_dof));
+            ++local_dof;
+        }
+        std::ranges::sort(retval);
+        return retval;
+    };
 
-    constexpr auto uniquify_vec = [](std::vector< global_dof_t >& vec) {
-        std::ranges::sort(vec);
-        const auto erase_range = std::ranges::unique(vec);
-        vec.erase(begin(erase_range), end(erase_range));
-        vec.shrink_to_fit();
-    };
-    uniquify_vec(owned_dbcs);
-    uniquify_vec(shared_dbcs);
-    return std::make_pair(std::move(owned_dbcs), std::move(shared_dbcs));
+    const auto marked_owned_dirichlet_dofs = mark_owned_dirichlet_dofs();
+    const auto marked_col_dirichlet_dofs   = mark_dirichlet_dof_cols(marked_owned_dirichlet_dofs->getVector(0));
+    return std::make_pair(extract_marked_dofs(marked_owned_dirichlet_dofs->getVector(0)),
+                          extract_marked_dofs(marked_col_dirichlet_dofs));
 }
-} // namespace lstr
+} // namespace lstr::detail
 #endif // L3STER_BCS_GETDIRICHLETDOFS_HPP

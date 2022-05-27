@@ -175,7 +175,7 @@ inline Kokkos::DualView< size_t* > getRowSizes(const CrsEntries& entries)
     return retval;
 }
 
-template < auto problem_def >
+template < detail::ProblemDef_c auto problem_def >
 Teuchos::RCP< const Tpetra::FECrsGraph< local_dof_t, global_dof_t > >
 makeSparsityGraph(const MeshPartition&                                        mesh,
                   ConstexprValue< problem_def >                               problemdef_ctwrapper,

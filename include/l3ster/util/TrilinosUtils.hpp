@@ -3,7 +3,7 @@
 
 #include "l3ster/defs/Typedefs.h"
 
-#include "Tpetra_CrsGraph.hpp"
+#include "Tpetra_CrsMatrix.hpp"
 
 #include <concepts>
 #include <ranges>
@@ -15,6 +15,20 @@ Teuchos::RCP< T > makeTeuchosRCP(Args&&... args)
     requires std::constructible_from< T, Args... >
 {
     return Teuchos::rcp(new T{std::forward< Args >(args)...});
+}
+
+inline Teuchos::ArrayView< const local_dof_t > getLocalRowView(const Tpetra::CrsGraph<>& graph, local_dof_t row)
+{
+    Teuchos::ArrayView< const local_dof_t > retval;
+    graph.getLocalRowView(row, retval);
+    return retval;
+}
+
+inline auto getLocalRowView(const Tpetra::CrsMatrix<>& matrix, local_dof_t row)
+{
+    std::pair< Teuchos::ArrayView< const local_dof_t >, Teuchos::ArrayView< const val_t > > retval;
+    matrix.getLocalRowView(row, retval.first, retval.second);
+    return retval;
 }
 
 template < std::predicate< global_dof_t > RowPred, std::predicate< global_dof_t > ColPred >

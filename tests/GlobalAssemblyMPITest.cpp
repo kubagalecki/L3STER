@@ -36,7 +36,7 @@ int main(int argc, char* argv[])
     my_partition.cvisit([&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
         if constexpr (T == ElementTypes::Line and O == 1)
             contributeLocalSystem< std::array{ptrdiff_t{0}} >(
-                local_system, element, map, glob_mat, glob_rhs->getVectorNonConst(0));
+                local_system, element, map, *glob_mat, *glob_rhs->getVectorNonConst(0));
     });
     glob_mat->endAssembly();
     glob_rhs->endAssembly();
