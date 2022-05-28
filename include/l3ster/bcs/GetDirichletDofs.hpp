@@ -13,7 +13,7 @@ auto getDirichletDofs(const MeshPartition&                                      
                       ConstexprValue< dirichlet_def >                           dirichlet_def_ctwrapper)
 {
     const auto mark_owned_dirichlet_dofs = [&] {
-        auto dirichlet_dofs = makeTeuchosRCP< Tpetra::FEMultiVector<> >(
+        const auto dirichlet_dofs = makeTeuchosRCP< Tpetra::FEMultiVector<> >(
             sparsity_graph->getColMap(), sparsity_graph->getImporter(), size_t{1});
         dirichlet_dofs->beginAssembly();
         const auto process_domain = [&]< auto domain_def >(ConstexprValue< domain_def >)

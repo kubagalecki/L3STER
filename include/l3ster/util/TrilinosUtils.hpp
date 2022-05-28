@@ -31,6 +31,16 @@ inline auto getLocalRowView(const Tpetra::CrsMatrix<>& matrix, local_dof_t row)
     return retval;
 }
 
+template < std::ranges::contiguous_range Rc, std::ranges::contiguous_range Rv >
+void replaceLocalValues(Tpetra::CrsMatrix<>& matrix, local_dof_t local_row, Rc&& cols, Rv&& vals)
+    requires(std::same_as< std::ranges::range_value_t< Rc >, local_dof_t > and
+             std::same_as< std::ranges::range_value_t< Rv >, val_t >)
+{
+    const Teuchos::ArrayView< const local_dof_t > cols_view{std::ranges::data(cols), std::ranges::ssize(cols)};
+    const Teuchos::ArrayView< const val_t >       vals_view{std::ranges::data(vals), std::ranges::ssize(vals)};
+    matrix.replaceLocalValues(local_row, cols_view, vals_view);
+}
+
 template < std::predicate< global_dof_t > RowPred, std::predicate< global_dof_t > ColPred >
 Teuchos::RCP< const Tpetra::CrsGraph<> >
 getSubgraph(const Teuchos::RCP< const Tpetra::CrsGraph<> >& full_graph, RowPred&& is_row, ColPred&& is_col)

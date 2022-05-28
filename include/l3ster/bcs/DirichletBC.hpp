@@ -67,9 +67,8 @@ DirichletBCAlgebraic::DirichletBCAlgebraic(const Teuchos::RCP< const Tpetra::Crs
         bc_local_col_inds_offsets.push_back(bc_local_col_inds_offsets.back());
     };
     const auto process_non_dbc_row = [&](local_dof_t local_row) {
-        Teuchos::ArrayView< const local_dof_t > local_cols_full, local_cols_dbc;
-        sparsity_graph->getLocalRowView(local_row, local_cols_full);
-        dirichlet_col_matrix->getCrsGraph()->getLocalRowView(local_row, local_cols_dbc);
+        const auto local_cols_full = getLocalRowView(*sparsity_graph, local_row);
+        const auto local_cols_dbc  = getLocalRowView(*dirichlet_col_matrix->getCrsGraph(), local_row);
         for (local_dof_t dbc_mat_col_local : local_cols_dbc)
         {
             const auto dbc_mat_col_global = dirichlet_col_matrix->getColMap()->getGlobalElement(dbc_mat_col_local);
@@ -101,45 +100,37 @@ void DirichletBCAlgebraic::apply(const Tpetra::Vector<>& bc_vals,
     std::vector< local_dof_t > cols_to_zero_out(col_copy_vals.size());
 
     const auto process_dbc_row = [&](local_dof_t local_row) {
-        Teuchos::ArrayView< const local_dof_t > local_cols;
-        matrix.getCrsGraph()->getLocalRowView(local_row, local_cols);
+        const auto local_cols = getLocalRowView(*matrix.getCrsGraph(), local_row);
         const auto global_row = matrix.getRowMap()->getGlobalElement(local_row);
         const auto diag_ind   = std::distance(local_cols.begin(), std::ranges::find_if(local_cols, [&](local_dof_t c) {
                                                 return matrix.getColMap()->getGlobalElement(c) == global_row;
                                             }));
         local_vals[diag_ind]  = 1.;
-        const auto local_vals_view = Teuchos::ArrayView< val_t >{local_vals.data(), local_cols.size()};
-        matrix.replaceLocalValues(local_row, local_cols, local_vals_view);
+        replaceLocalValues(matrix, local_row, local_cols, local_vals | std::views::take(local_cols.size()));
         local_vals[diag_ind] = 0.;
         rhs.replaceLocalValue(local_row, bc_vals.getData()[local_row]);
-    };
-    const auto get_local_row_view = [&](local_dof_t local_row) {
-        std::pair< Teuchos::ArrayView< const local_dof_t >, Teuchos::ArrayView< const val_t > > retval;
-        matrix.getLocalRowView(local_row, retval.first, retval.second);
-        return retval;
     };
     const auto fill_subgraph_row = [&](local_dof_t                              local_row,
                                        const std::span< const local_dof_t >&    copy_inds,
                                        const Teuchos::ArrayView< const val_t >& local_vals_view) {
         std::ranges::transform(copy_inds, col_copy_vals.begin(), [&](local_dof_t i) { return local_vals_view[i]; });
-        const auto copy_ssize = static_cast< Teuchos::ArrayView< val_t >::size_type >(copy_inds.size());
-        const auto copy_view  = Teuchos::ArrayView{col_copy_vals.data(), copy_ssize};
-        Teuchos::ArrayView< const local_dof_t > copy_cols;
-        dirichlet_col_matrix->getCrsGraph()->getLocalRowView(local_row, copy_cols);
-        dirichlet_col_matrix->replaceLocalValues(local_row, copy_cols, copy_view);
+        const auto copy_cols = getLocalRowView(*dirichlet_col_matrix->getCrsGraph(), local_row);
+        replaceLocalValues(
+            *dirichlet_col_matrix, local_row, copy_cols, col_copy_vals | std::views::take(copy_inds.size()));
     };
     const auto zero_dirichlet_cols = [&](local_dof_t                                    local_row,
                                          const std::span< const local_dof_t >&          copy_inds,
                                          const Teuchos::ArrayView< const local_dof_t >& local_cols) {
         std::ranges::transform(copy_inds, cols_to_zero_out.begin(), [&](local_dof_t i) { return local_cols[i]; });
-        const auto zero_ssize = static_cast< Teuchos::ArrayView< val_t >::size_type >(copy_inds.size());
-        const Teuchos::ArrayView< const local_dof_t > cols_view{cols_to_zero_out.data(), zero_ssize};
-        const Teuchos::ArrayView< const val_t >       vals_view{local_vals.data(), zero_ssize};
-        matrix.replaceLocalValues(local_row, cols_view, vals_view);
+        const auto replace_size = copy_inds.size();
+        replaceLocalValues(matrix,
+                           local_row,
+                           cols_to_zero_out | std::views::take(replace_size),
+                           local_vals | std::views::take(replace_size));
     };
     const auto process_non_dbc_row = [&](local_dof_t local_row) {
         const auto copycol_inds  = getLocalColInds(local_row);
-        const auto local_entries = get_local_row_view(local_row);
+        const auto local_entries = getLocalRowView(matrix, local_row);
         fill_subgraph_row(local_row, copycol_inds, local_entries.second);
         zero_dirichlet_cols(local_row, copycol_inds, local_entries.first);
     };
