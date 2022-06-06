@@ -10,6 +10,12 @@
 
 namespace lstr
 {
+template < std::ranges::contiguous_range R >
+auto asTeuchosView(R&& range)
+{
+    return Teuchos::ArrayView{std::ranges::data(range), std::ranges::ssize(range)};
+}
+
 template < typename T, typename... Args >
 Teuchos::RCP< T > makeTeuchosRCP(Args&&... args)
     requires std::constructible_from< T, Args... >
@@ -36,9 +42,7 @@ void replaceLocalValues(Tpetra::CrsMatrix<>& matrix, local_dof_t local_row, Rc&&
     requires(std::same_as< std::ranges::range_value_t< Rc >, local_dof_t > and
              std::same_as< std::ranges::range_value_t< Rv >, val_t >)
 {
-    const Teuchos::ArrayView< const local_dof_t > cols_view{std::ranges::data(cols), std::ranges::ssize(cols)};
-    const Teuchos::ArrayView< const val_t >       vals_view{std::ranges::data(vals), std::ranges::ssize(vals)};
-    matrix.replaceLocalValues(local_row, cols_view, vals_view);
+    matrix.replaceLocalValues(local_row, asTeuchosView(cols), asTeuchosView(vals));
 }
 
 template < std::predicate< global_dof_t > RowPred, std::predicate< global_dof_t > ColPred >
