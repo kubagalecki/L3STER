@@ -87,5 +87,12 @@ struct alignas(std::max< std::size_t >(64u /* cacheline size */, alignof(T))) Ca
 private:
     T value;
 };
+
+enum class Space
+{
+    X,
+    Y,
+    Z
+};
 } // namespace lstr
 #endif // L3STER_UTIL_COMMON_HPP

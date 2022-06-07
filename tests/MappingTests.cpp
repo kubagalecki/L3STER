@@ -2,6 +2,7 @@
 #include "l3ster/mapping/ComputePhysBasisDer.hpp"
 #include "l3ster/mapping/ComputePhysBasisDersAtQpoints.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
+#include "l3ster/mesh/primitives/SquareMesh.hpp"
 
 #include "TestDataPath.h"
 #include "catch2/catch.hpp"
@@ -259,7 +260,7 @@ TEST_CASE("Basis function derivatives", "[mapping]")
     }
 }
 
-TEST_CASE("Reference basis at QPs", "[mapping]")
+TEST_CASE("Reference basis at domain QPs", "[mapping]")
 {
     constexpr auto   ET            = ElementTypes::Hex;
     constexpr el_o_t EO            = 4;
@@ -279,6 +280,36 @@ TEST_CASE("Reference basis at QPs", "[mapping]")
         for (const auto& der : ref_bas_at_qp.basis_ders)
             for (ptrdiff_t basis = 0; basis < der.rows(); ++basis)
                 CHECK(der(basis, Eigen::all).sum() == Approx{0.}.margin(1e-13));
+    }
+}
+
+TEST_CASE("Reference basis at boundary QPs", "[mapping]")
+{
+    constexpr auto  QT = QuadratureTypes::GLeg;
+    constexpr q_o_t QO = 5;
+    constexpr auto  BT = BasisTypes::Lagrange;
+
+    SECTION("2D")
+    {
+        const auto mesh = makeSquareMesh(std::array{0., .25, .5, .75, 1.});
+        const auto part = mesh.getPartitions()[0];
+
+        const auto b_bottom = part.getBoundaryView(1);
+        const auto b_top    = part.getBoundaryView(2);
+        const auto b_left   = part.getBoundaryView(3);
+        const auto b_right  = part.getBoundaryView(4);
+    }
+    SECTION("3D")
+    {
+        const auto mesh = makeCubeMesh(std::array{0., .25, .5, .75, 1.});
+        const auto part = mesh.getPartitions()[0];
+
+        const auto b_front  = part.getBoundaryView(1);
+        const auto b_back   = part.getBoundaryView(2);
+        const auto b_bottom = part.getBoundaryView(3);
+        const auto b_top    = part.getBoundaryView(4);
+        const auto b_left   = part.getBoundaryView(5);
+        const auto b_right  = part.getBoundaryView(6);
     }
 }
 
@@ -303,7 +334,7 @@ TEST_CASE("Physical basis derivatives at QPs", "[mapping]")
                   Approx{0.}.margin(1e-13));
     };
 
-    const auto mesh = makeCubeMesh(std::vector{0., .25, .5, .75, 1.});
+    const auto mesh = makeCubeMesh(std::array{0., .25, .5, .75, 1.});
     const auto part = mesh.getPartitions()[0];
     part.cvisit(do_test, {0}); // Only for the hex domain, this won't work for 2D elements in a 3D space
 }
