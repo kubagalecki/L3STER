@@ -1,6 +1,8 @@
 #include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 #include "l3ster/mapping/ComputePhysBasisDer.hpp"
 #include "l3ster/mapping/ComputePhysBasisDersAtQpoints.hpp"
+#include "l3ster/mapping/MapReferenceToPhysical.hpp"
+#include "l3ster/mesh/ReadMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 
@@ -289,27 +291,110 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
     constexpr q_o_t QO = 5;
     constexpr auto  BT = BasisTypes::Lagrange;
 
-    SECTION("2D")
-    {
-        const auto mesh = makeSquareMesh(std::array{0., .25, .5, .75, 1.});
-        const auto part = mesh.getPartitions()[0];
+    constexpr auto check_all_in_plane = [](const BoundaryView& view, Space normal, val_t offs) {
+        const auto space_ind = [](Space s) {
+            switch (s)
+            {
+            case Space::X:
+                return 0;
+            case Space::Y:
+                return 1;
+            case Space::Z:
+                return 2;
+            }
+            __builtin_unreachable();
+            return 42;
+        }(normal);
+        const auto element_checker = [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
+            if constexpr (ET == ElementTypes::Quad or ET == ElementTypes::Hex)
+            {
+                const auto& ref_q =
+                    getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.element_side).quadrature;
+                const auto compute_phys_qp = [&](const auto& qp_ref) {
+                    return mapToPhysicalSpace(*el_view.element, Point{qp_ref});
+                };
+                for (auto qp : ref_q.getPoints())
+                    CHECK(mapToPhysicalSpace(*el_view.element, Point{qp})[space_ind] == Approx{offs}.epsilon(1e-15));
+            }
+        };
+        view.visit(element_checker);
+    };
 
-        const auto b_bottom = part.getBoundaryView(1);
-        const auto b_top    = part.getBoundaryView(2);
-        const auto b_left   = part.getBoundaryView(3);
-        const auto b_right  = part.getBoundaryView(4);
+    SECTION("Generated")
+    {
+        const auto node_pos = std::array{0., .25, .5, .75, 1.};
+
+        SECTION("2D")
+        {
+            const auto mesh = makeSquareMesh(node_pos);
+            const auto part = mesh.getPartitions()[0];
+
+            const auto b_bottom = part.getBoundaryView(1);
+            const auto b_top    = part.getBoundaryView(2);
+            const auto b_left   = part.getBoundaryView(3);
+            const auto b_right  = part.getBoundaryView(4);
+
+            check_all_in_plane(b_bottom, Space::Y, node_pos.front());
+            check_all_in_plane(b_top, Space::Y, node_pos.back());
+            check_all_in_plane(b_left, Space::X, node_pos.front());
+            check_all_in_plane(b_right, Space::X, node_pos.back());
+        }
+        SECTION("3D - generated")
+        {
+            const auto mesh = makeCubeMesh(node_pos);
+            const auto part = mesh.getPartitions()[0];
+
+            const auto b_front  = part.getBoundaryView(1);
+            const auto b_back   = part.getBoundaryView(2);
+            const auto b_bottom = part.getBoundaryView(3);
+            const auto b_top    = part.getBoundaryView(4);
+            const auto b_left   = part.getBoundaryView(5);
+            const auto b_right  = part.getBoundaryView(6);
+
+            check_all_in_plane(b_front, Space::Z, node_pos.front());
+            check_all_in_plane(b_back, Space::Z, node_pos.back());
+            check_all_in_plane(b_bottom, Space::Y, node_pos.front());
+            check_all_in_plane(b_top, Space::Y, node_pos.back());
+            check_all_in_plane(b_left, Space::X, node_pos.front());
+            check_all_in_plane(b_right, Space::X, node_pos.back());
+        }
     }
-    SECTION("3D")
+    SECTION("Read from gmsh")
     {
-        const auto mesh = makeCubeMesh(std::array{0., .25, .5, .75, 1.});
-        const auto part = mesh.getPartitions()[0];
+        SECTION("2D")
+        {
+            const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag);
+            const auto part = mesh.getPartitions()[0];
 
-        const auto b_front  = part.getBoundaryView(1);
-        const auto b_back   = part.getBoundaryView(2);
-        const auto b_bottom = part.getBoundaryView(3);
-        const auto b_top    = part.getBoundaryView(4);
-        const auto b_left   = part.getBoundaryView(5);
-        const auto b_right  = part.getBoundaryView(6);
+            const auto b_bottom = part.getBoundaryView(5);
+            const auto b_top    = part.getBoundaryView(3);
+            const auto b_left   = part.getBoundaryView(2);
+            const auto b_right  = part.getBoundaryView(4);
+
+            check_all_in_plane(b_bottom, Space::Y, -.5);
+            check_all_in_plane(b_top, Space::Y, .5);
+            check_all_in_plane(b_left, Space::X, -.5);
+            check_all_in_plane(b_right, Space::X, .5);
+        }
+        SECTION("3D")
+        {
+            const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), gmsh_tag);
+            const auto part = mesh.getPartitions()[0];
+
+            const auto b_front  = part.getBoundaryView(2);
+            const auto b_back   = part.getBoundaryView(3);
+            const auto b_bottom = part.getBoundaryView(4);
+            const auto b_top    = part.getBoundaryView(5);
+            const auto b_left   = part.getBoundaryView(7);
+            const auto b_right  = part.getBoundaryView(6);
+
+            check_all_in_plane(b_front, Space::Z, -1.);
+            check_all_in_plane(b_back, Space::Z, 1.);
+            check_all_in_plane(b_bottom, Space::Y, -1.);
+            check_all_in_plane(b_top, Space::Y, 1.);
+            check_all_in_plane(b_left, Space::X, -1.);
+            check_all_in_plane(b_right, Space::X, 1.);
+        }
     }
 }
 

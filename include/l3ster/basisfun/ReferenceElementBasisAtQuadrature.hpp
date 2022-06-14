@@ -26,10 +26,10 @@ auto getReferenceBoundaryQpCoords(const Quadrature< QL, QD >& ref_qp)
 {
     using retval_t = Eigen::Matrix< val_t, QD + 1, QL >;
     retval_t retval;
-    for (int c = 0; c < QL; ++c)
+    for (int c = 0; c < static_cast< int >(QL); ++c)
     {
         int r = 0;
-        for (; r < QD; ++r)
+        for (; r < static_cast< int >(QD); ++r)
             retval(r, c) = ref_qp.getPoints()[c][r];
         retval(r, c) = 0.;
     }
@@ -71,7 +71,7 @@ auto rotate3D90(const Eigen::Matrix< val_t, 3, C >& mat, Space axis) -> Eigen::M
 }
 
 template < int R, int C >
-void translate(Eigen::Matrix< val_t, 2, C >& mat, const Eigen::Matrix< val_t, R, 1 >& t)
+void translate(Eigen::Matrix< val_t, R, C >& mat, const Eigen::Matrix< val_t, R, 1 >& t)
 {
     for (int c = 0; c < C; ++c)
         for (int r = 0; r < R; ++r)
@@ -104,7 +104,7 @@ const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t side)
         constexpr auto boundary_type   = ET == ElementTypes::Hex ? ElementTypes::Quad : ElementTypes::Line;
         const auto     boundary_quad   = getQuadrature< QT, QO, boundary_type >();
         const auto     ref_quad_coords = detail::getReferenceBoundaryQpCoords(boundary_quad);
-        using ref_basis_t              = ReferenceBasisAtQuadrature< ET, EO, boundary_quad.size, boundary_quad.dim >;
+        using ref_basis_t = ReferenceBasisAtQuadrature< ET, EO, boundary_quad.size, boundary_quad.dim + 1 >;
 
         constexpr auto                        n_el_sides = ElementTraits< Element< ET, EO > >::n_sides;
         std::array< ref_basis_t, n_el_sides > quadrature_array;
