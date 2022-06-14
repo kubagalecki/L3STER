@@ -155,7 +155,7 @@ auto calculateCrsData(const MeshPartition&                                      
                 }
             while (not processed_rows.all());
         };
-        mesh.cvisit(process_element, {domain_id}, std::execution::par);
+        mesh.visit(process_element, domain_id, std::execution::par);
     };
     forConstexpr(process_domain, problem_def_ctwrapper);
     dealloc_scratchpads();

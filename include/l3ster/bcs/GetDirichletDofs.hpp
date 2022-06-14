@@ -26,7 +26,7 @@ auto getDirichletDofs(const MeshPartition&                                      
                 for (auto dof : el_dirichlet_dofs)
                     dirichlet_dofs->replaceGlobalValue(dof, 0, 1.);
             };
-            mesh.cvisit(process_element, {domain_id});
+            mesh.visit(process_element, domain_id);
         };
         forConstexpr(process_domain, dirichlet_def_ctwrapper);
         dirichlet_dofs->endAssembly();

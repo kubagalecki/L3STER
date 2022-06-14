@@ -63,9 +63,10 @@ auto rotate3D90(const Eigen::Matrix< val_t, 3, C >& mat, Space axis) -> Eigen::M
         rot_mat(0, 2) = 1.;
         rot_mat(2, 0) = -1.;
         break;
-    // case Space::Z: not needed, the input in 3D is perpendicular to the Z axis
-    default:
-        __builtin_unreachable();
+    case Space::Z: // not actually needed, the input in 3D is perpendicular to the Z axis
+        rot_mat(2, 2) = 1.;
+        rot_mat(0, 1) = -1.;
+        rot_mat(1, 0) = 1.;
     }
     return rot_mat * mat;
 }
@@ -131,8 +132,6 @@ const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t side)
                     qp_coords = detail::rotate2D90(ref_quad_coords);
                     detail::translate(qp_coords, Eigen::Vector2d(1., 0.));
                     break;
-                default:
-                    __builtin_unreachable();
                 }
             }
             else if constexpr (ET == ElementTypes::Hex)
@@ -140,11 +139,11 @@ const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t side)
                 switch (side_ind)
                 {
                 case 0:
-                    qp_coords = ref_quad_coords;
+                    qp_coords = detail::rotate3D90(ref_quad_coords, Space::Z);
                     detail::translate(qp_coords, Eigen::Vector3d(0., 0., -1.));
                     break;
                 case 1:
-                    qp_coords = ref_quad_coords;
+                    qp_coords = detail::rotate3D90(ref_quad_coords, Space::Z);
                     detail::translate(qp_coords, Eigen::Vector3d(0., 0., 1.));
                     break;
                 case 2:
@@ -163,8 +162,6 @@ const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t side)
                     qp_coords = detail::rotate3D90(ref_quad_coords, Space::Y);
                     detail::translate(qp_coords, Eigen::Vector3d(1., 0., 0.));
                     break;
-                default:
-                    __builtin_unreachable();
                 }
             }
             const auto quadrature      = detail::makeQuadratureFromCoordsMat(qp_coords, boundary_quad.getWeights());

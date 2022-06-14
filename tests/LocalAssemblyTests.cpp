@@ -1,6 +1,7 @@
 #include "catch2/catch.hpp"
 
 #include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
+#include "l3ster/bcs/BoundarySystemAssembly.hpp"
 #include "l3ster/local_assembly/AssembleLocalSystem.hpp"
 #include "l3ster/mapping/ComputePhysBasisDer.hpp"
 #include "l3ster/mesh/NodePhysicalLocation.hpp"

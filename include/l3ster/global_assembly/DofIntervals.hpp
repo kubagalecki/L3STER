@@ -97,7 +97,7 @@ auto computeLocalDofIntervals(const MeshPartition& mesh, ConstexprValue< problem
     std::vector< field_coverage_t > field_coverage(n_nodes);
     for (const auto& [dom_id, fields] : problem_def_converted)
     {
-        mesh.cvisit(
+        mesh.visit(
             [&](const auto& element) {
                 for (auto node : element.getNodes())
                 {
@@ -105,7 +105,7 @@ auto computeLocalDofIntervals(const MeshPartition& mesh, ConstexprValue< problem
                     field_coverage[local_node_id] |= fields;
                 }
             },
-            {dom_id});
+            dom_id);
     }
 
     return computeDofIntervalsFromNodeData(std::move(node_ids), std::move(field_coverage), problemdef_ctwrapper);

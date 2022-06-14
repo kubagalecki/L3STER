@@ -39,7 +39,7 @@ int main(int argc, char* argv[])
     input_vectors.beginAssembly();
     {
         auto rhs = input_vectors.getVectorNonConst(0);
-        my_partition.cvisit(
+        my_partition.visit(
             [&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
                 if constexpr (T == ElementTypes::Hex and O == 1)
                 {
@@ -54,7 +54,7 @@ int main(int argc, char* argv[])
                     contributeLocalSystem< std::array{ptrdiff_t{0}} >(local_system, element, map, *matrix, *rhs);
                 }
             },
-            {0});
+            std::views::single(0));
     }
     matrix->endAssembly();
     input_vectors.endAssembly();

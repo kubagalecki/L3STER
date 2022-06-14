@@ -6,8 +6,8 @@
 
 **Currently under construction.**
 
-The name L3STER is derived from "**L**east-**S**quares **S**calable **S**pec**K**ral **E**lement f**R**amework".
-The goal of the project is to develop, based on the least-squares spectral *h/p* element method, a scalable C++ framework for the numerical solution of partial differential equations.
+The name L3STER is derived from "**L**east-**S**quares **S**calable **S**pec**T**ral/*hp* **E**lement f**R**amework".
+The goal of the project is to develop, based on the least-squares spectral/*hp* element method, a scalable C++ framework for the numerical solution of partial differential equations.
 Although the aim is to develop a generic framework, the author's intended classes of applications are as follows:
 - incompressible flow with stabilized boundary conditions
 - optimal control problems involving fluid-structure interaction

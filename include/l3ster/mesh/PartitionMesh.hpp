@@ -23,7 +23,7 @@ template < std::invocable< const DomainView > F >
 std::array< idx_t, 3 > getDomainData(const MeshPartition& part, F&& domain_predicate)
 {
     idx_t n_elements = 0, topology_size = 0, max_node = 0;
-    part.cvisit(
+    part.visit(
         [&](const auto& el) {
             ++n_elements;
             topology_size += el.getNodes().size();
@@ -42,7 +42,7 @@ auto prepMetisInput(const MeshPartition& part, const std::array< idx_t, 3 >& dom
     e_ind.reserve(topology_size);
     e_ptr.reserve(n_elements + 1);
     e_ptr.push_back(0);
-    part.cvisit(
+    part.visit(
         [&](const auto& element) {
             constexpr auto element_size = std::tuple_size_v< std::decay_t< decltype(element.getNodes()) > >;
             for (auto node : element.getNodes())
@@ -121,7 +121,7 @@ auto distributeDomainElements(const MeshPartition&                      part,
                               std::invocable< const DomainView > auto&& domain_predicate)
 {
     std::vector< MeshPartition::domain_map_t > new_domain_maps(n_parts);
-    part.cvisit([&, index = 0u](const auto& element, const DomainView& dv) mutable {
+    part.visit([&, index = 0u](const auto& element, const DomainView& dv) mutable {
         if (domain_predicate(dv))
             new_domain_maps[epart[index++]][dv.getID()].push(element);
     });
@@ -141,8 +141,8 @@ std::vector< el_id_t > getElementIds(const MeshPartition& part, size_t n_element
 {
     std::vector< el_id_t > element_ids;
     element_ids.reserve(n_elements);
-    part.cvisit([&](const auto& element) { element_ids.push_back(element.getId()); },
-                std::forward< F >(domain_predicate));
+    part.visit([&](const auto& element) { element_ids.push_back(element.getId()); },
+               std::forward< F >(domain_predicate));
     return element_ids;
 }
 
@@ -166,7 +166,7 @@ inline void assignBoundaryElements(const MeshPartition&                        p
         return epart[std::distance(cbegin(element_ids),
                                    std::lower_bound(cbegin(element_ids), cend(element_ids), el_id))];
     };
-    part.cvisit(
+    part.visit(
         [&](const auto& boundary_el, const DomainView& dv) {
             const auto domain_el   = part.getElementBoundaryView(boundary_el, dv.getID()).first->first;
             const auto domain_part = lookup_el_part(std::visit([](const auto& el) { return el->getId(); }, domain_el));
@@ -195,7 +195,7 @@ inline std::vector< MeshPartition > assignNodes(idx_t                           
         std::ranges::fill(node_types, NodeType::None);
         for (const auto& [ignore, domain] : new_dom_map)
         {
-            domain.cvisit(
+            domain.visit(
                 [&](const auto& element) {
                     for (auto node : element.getNodes())
                     {

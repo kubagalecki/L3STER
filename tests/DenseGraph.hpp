@@ -29,7 +29,7 @@ public:
                     for (auto col : element_dofs)
                         getRow(row).set(col);
             };
-            mesh.cvisit(process_element, {domain_id});
+            mesh.visit(process_element, domain_id);
         };
         forConstexpr(process_domain, problemdef_ctwrpr);
     }

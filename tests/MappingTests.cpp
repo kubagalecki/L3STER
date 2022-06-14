@@ -41,6 +41,56 @@ static auto getHexElement()
                                            0};
 }
 
+TEST_CASE("Reference to physical mapping", "[mesh]")
+{
+    constexpr auto el_o = 2;
+    SECTION("1D")
+    {
+        constexpr auto el_t                = ElementTypes::Line;
+        using element_type                 = Element< el_t, el_o >;
+        constexpr auto            el_nodes = typename element_type::node_array_t{};
+        ElementData< el_t, el_o > data{{Point{1., 1., 1.}, Point{.5, .5, .5}}};
+        const auto                element = element_type{el_nodes, data, 0};
+        const auto                mapped  = mapToPhysicalSpace(element, Point{0.});
+        CHECK(mapped.x() == Approx(.75).epsilon(1e-15));
+        CHECK(mapped.y() == Approx(.75).epsilon(1e-15));
+        CHECK(mapped.z() == Approx(.75).epsilon(1e-15));
+    }
+
+    SECTION("2D")
+    {
+        constexpr auto el_t                = ElementTypes::Quad;
+        using element_type                 = Element< el_t, el_o >;
+        constexpr auto            el_nodes = typename element_type::node_array_t{};
+        ElementData< el_t, el_o > data{{Point{1., -1., 0.}, Point{2., -1., 0.}, Point{1., 1., 1.}, Point{2., 1., 1.}}};
+        const auto                element = element_type{el_nodes, data, 0};
+        const auto                mapped  = mapToPhysicalSpace(element, Point{.5, -.5});
+        CHECK(mapped.x() == Approx(1.75).epsilon(1e-15));
+        CHECK(mapped.y() == Approx(-.5).epsilon(1e-15));
+        CHECK(mapped.z() == Approx(.25).epsilon(1e-15));
+    }
+
+    SECTION("3D")
+    {
+        constexpr auto el_t                = ElementTypes::Hex;
+        using element_type                 = Element< el_t, el_o >;
+        constexpr auto            el_nodes = typename element_type::node_array_t{};
+        ElementData< el_t, el_o > data{{Point{.5, .5, .5},
+                                        Point{1., .5, .5},
+                                        Point{.5, 1., .5},
+                                        Point{1., 1., .5},
+                                        Point{.5, .5, 1.},
+                                        Point{1., .5, 1.},
+                                        Point{.5, 1., 1.},
+                                        Point{1., 1., 1.}}};
+        const auto                element = element_type{el_nodes, data, 0};
+        const auto                mapped  = mapToPhysicalSpace(element, Point{0., 0., 0.});
+        CHECK(mapped.x() == Approx(.75).epsilon(1e-15));
+        CHECK(mapped.y() == Approx(.75).epsilon(1e-15));
+        CHECK(mapped.z() == Approx(.75).epsilon(1e-15));
+    }
+}
+
 TEST_CASE("Jacobi matrix computation", "[mapping]")
 {
     SECTION("Line")
@@ -293,17 +343,20 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
 
     constexpr auto check_all_in_plane = [](const BoundaryView& view, Space normal, val_t offs) {
         const auto space_ind = [](Space s) {
+            int retval{};
             switch (s)
             {
             case Space::X:
-                return 0;
+                retval = 0;
+                break;
             case Space::Y:
-                return 1;
+                retval = 1;
+                break;
             case Space::Z:
-                return 2;
+                retval = 2;
+                break;
             }
-            __builtin_unreachable();
-            return 42;
+            return retval;
         }(normal);
         const auto element_checker = [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
             if constexpr (ET == ElementTypes::Quad or ET == ElementTypes::Hex)
@@ -421,5 +474,6 @@ TEST_CASE("Physical basis derivatives at QPs", "[mapping]")
 
     const auto mesh = makeCubeMesh(std::array{0., .25, .5, .75, 1.});
     const auto part = mesh.getPartitions()[0];
-    part.cvisit(do_test, {0}); // Only for the hex domain, this won't work for 2D elements in a 3D space
+    part.visit(do_test,
+               std::views::single(0)); // Only for the hex domain, this won't work for 2D elements in a 3D space
 }

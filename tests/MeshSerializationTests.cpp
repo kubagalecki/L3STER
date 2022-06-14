@@ -10,7 +10,7 @@ bool operator==(const lstr::MeshPartition& p1, const lstr::MeshPartition& p2)
 
     bool result = true;
 
-    p1.cvisit([&]< ElementTypes T1, el_o_t O1 >(const Element< T1, O1 >& el1, DomainView dv) {
+    p1.visit([&]< ElementTypes T1, el_o_t O1 >(const Element< T1, O1 >& el1, DomainView dv) {
         const auto matched = p2.find(el1.getId());
 
         if (not matched or dv.getID() != matched->second)

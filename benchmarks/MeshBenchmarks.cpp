@@ -106,7 +106,7 @@ static void BM_CopyElementNodes(benchmark::State& state)
     const auto element_op_counter = [&]< ElementTypes T, el_o_t O >(const Element< T, O >&) {
         progress_counter.fetch_add(Element< T, O >::n_nodes, std::memory_order_relaxed);
     };
-    part.cvisit(element_op_counter, std::execution::par);
+    part.visit(element_op_counter, std::execution::par);
 
     const auto read_element = [&]< ElementTypes T, el_o_t O >(const Element< T, O >& el) {
         auto nodes_copy = el.getNodes();
@@ -114,7 +114,7 @@ static void BM_CopyElementNodes(benchmark::State& state)
     };
 
     for (auto _ : state)
-        part.cvisit(read_element, ExecutionPolicy{});
+        part.visit(read_element, ExecutionPolicy{});
 
     state.SetBytesProcessed(progress_counter.load() * sizeof(n_id_t) * state.iterations());
 }
