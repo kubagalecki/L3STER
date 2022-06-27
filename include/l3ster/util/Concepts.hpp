@@ -134,6 +134,9 @@ template < typename T >
 concept arithmetic = std::is_arithmetic_v< T >;
 
 template < typename T >
-concept ExecutionPolicy_c = std::is_execution_policy_v< T >;
+concept ExecutionPolicy_c = std::is_execution_policy_v< std::remove_cvref_t< T > >;
+
+template < typename T >
+concept SequencedPolicy_c = std::same_as< std::execution::sequenced_policy, std::remove_cvref_t< T > >;
 } // namespace lstr
 #endif // L3STER_UTIL_CONCEPTS_HPP

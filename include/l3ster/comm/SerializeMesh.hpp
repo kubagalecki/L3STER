@@ -96,7 +96,7 @@ SerializedDomain::SerializedDomain(const Domain& domain)
     element_ids.resize(id_size);
 
     detail::ElementSerializer serializer{element_nodes.data(), element_data.data(), element_ids.data()};
-    domain.cvisit(serializer, std::execution::seq);
+    domain.visit(serializer, std::execution::seq);
 }
 
 struct SerializedPartition

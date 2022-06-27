@@ -1,9 +1,9 @@
 #ifndef L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP
 #define L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP
 
-#include "l3ster/local_assembly/SpaceTimePoint.hpp"
-#include "l3ster/mapping/ComputePhysBasisDersAtQpoints.hpp"
-#include "l3ster/mapping/MapReferenceToPhysical.hpp"
+#include "../mapping/ComputePhysBasisDersAtQpoints.hpp"
+#include "../mapping/MapReferenceToPhysical.hpp"
+#include "SpaceTimePoint.hpp"
 
 namespace lstr
 {

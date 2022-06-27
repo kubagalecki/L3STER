@@ -1,7 +1,7 @@
 #ifndef L3STER_ASSEMBLY_SPARSITYGRAPH_HPP
 #define L3STER_ASSEMBLY_SPARSITYGRAPH_HPP
 
-#include "l3ster/global_assembly/MakeTpetraMap.hpp"
+#include "l3ster/assembly/MakeTpetraMap.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/IndexMap.hpp"
 
@@ -155,7 +155,7 @@ auto calculateCrsData(const MeshPartition&                                      
                 }
             while (not processed_rows.all());
         };
-        mesh.cvisit(process_element, {domain_id}, std::execution::par);
+        mesh.visit(process_element, domain_id, std::execution::par);
     };
     forConstexpr(process_domain, problem_def_ctwrapper);
     dealloc_scratchpads();
@@ -175,7 +175,7 @@ inline Kokkos::DualView< size_t* > getRowSizes(const CrsEntries& entries)
     return retval;
 }
 
-template < auto problem_def >
+template < detail::ProblemDef_c auto problem_def >
 Teuchos::RCP< const Tpetra::FECrsGraph< local_dof_t, global_dof_t > >
 makeSparsityGraph(const MeshPartition&                                        mesh,
                   ConstexprValue< problem_def >                               problemdef_ctwrapper,
@@ -192,7 +192,7 @@ makeSparsityGraph(const MeshPartition&                                        me
     const auto row_sizes   = getRowSizes(row_entries);
 
     using graph_t = Tpetra::FECrsGraph< local_dof_t, global_dof_t >;
-    auto retval   = Teuchos::rcp(new graph_t{owned_map, owned_plus_shared_map, row_sizes}); // NOLINT
+    auto retval   = makeTeuchosRCP< graph_t >(owned_map, owned_plus_shared_map, row_sizes);
     retval->beginAssembly();
     for (ptrdiff_t local_row = 0; local_row < static_cast< ptrdiff_t >(owned_plus_shared_dofs.size()); ++local_row)
     {

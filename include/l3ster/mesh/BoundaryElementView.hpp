@@ -1,8 +1,8 @@
 #ifndef L3STER_MESH_BOUNDARYELEMENTVIEW_HPP
 #define L3STER_MESH_BOUNDARYELEMENTVIEW_HPP
 
-#include "Aliases.hpp"
-#include "Element.hpp"
+#include "l3ster/mesh/Aliases.hpp"
+#include "l3ster/mesh/Element.hpp"
 
 namespace lstr
 {
@@ -19,5 +19,4 @@ struct BoundaryElementView
     el_side_t                         element_side;
 };
 } // namespace lstr
-
 #endif // L3STER_MESH_BOUNDARYELEMENTVIEW_HPP

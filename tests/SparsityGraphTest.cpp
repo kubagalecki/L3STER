@@ -1,4 +1,4 @@
-#include "l3ster/global_assembly/SparsityGraph.hpp"
+#include "l3ster/assembly/SparsityGraph.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/util/GlobalResource.hpp"

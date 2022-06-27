@@ -65,7 +65,7 @@ function( add_mpi_test source name nprocs )
         set( args ${ARGV4} )
     endif ()
     foreach ( np ${nprocs} )
-        set( test_params "-n;${np};--oversubscribe;$<TARGET_FILE:${test_target}>;${args}" )
+        set( test_params "-n;${np};$<TARGET_FILE:${test_target}>;${args}" )
         set( test_name ${name}_np_${np} )
         set( test_dir ${CMAKE_CURRENT_BINARY_DIR}/${test_name} )
         file( MAKE_DIRECTORY ${test_dir} )
@@ -89,6 +89,7 @@ add_mpi_test( "NodeThroughputInfoTest.cpp" "Node_throughput_calculation" "1;2;4"
 add_mpi_test( "TpetraMapCreationTest.cpp" "Tpetra_Map_Creation" "1;2;4" )
 add_mpi_test( "SparsityGraphTest.cpp" "Sparsity_Graph" "1;2;4" )
 add_mpi_test( "GlobalAssemblyMPITest.cpp" "Galerkin_diffusion_1D_assembly_test" "1;2;4" )
+add_mpi_test( "DirichletBCTest.cpp" "Dirichlet_BC_application_test" "1;2;4" )
 
 #######################################################################################################################
 

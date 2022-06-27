@@ -1,6 +1,6 @@
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/comm/MpiComm.hpp"
-#include "l3ster/global_assembly/DofIntervals.hpp"
+#include "l3ster/assembly/DofIntervals.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/util/GlobalResource.hpp"

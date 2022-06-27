@@ -20,7 +20,7 @@ template < el_o_t O_C >
     std::vector< bool > converted(mesh.getNElements(), false);
 
     const auto convert_domain = [&](const Domain& old_domain, Domain& new_domain) {
-        old_domain.cvisit(
+        old_domain.visit(
             [&]< ElementTypes T, el_o_t O >(const Element< T, O >& el) {
                 if constexpr (O == 1)
                 {

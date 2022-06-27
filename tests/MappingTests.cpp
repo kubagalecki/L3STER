@@ -1,7 +1,10 @@
 #include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 #include "l3ster/mapping/ComputePhysBasisDer.hpp"
 #include "l3ster/mapping/ComputePhysBasisDersAtQpoints.hpp"
+#include "l3ster/mapping/MapReferenceToPhysical.hpp"
+#include "l3ster/mesh/ReadMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
+#include "l3ster/mesh/primitives/SquareMesh.hpp"
 
 #include "TestDataPath.h"
 #include "catch2/catch.hpp"
@@ -36,6 +39,56 @@ static auto getHexElement()
                                                                                 Point{0., 1., 1.},
                                                                                 Point{2., 2., 2.}}},
                                            0};
+}
+
+TEST_CASE("Reference to physical mapping", "[mesh]")
+{
+    constexpr auto el_o = 2;
+    SECTION("1D")
+    {
+        constexpr auto el_t                = ElementTypes::Line;
+        using element_type                 = Element< el_t, el_o >;
+        constexpr auto            el_nodes = typename element_type::node_array_t{};
+        ElementData< el_t, el_o > data{{Point{1., 1., 1.}, Point{.5, .5, .5}}};
+        const auto                element = element_type{el_nodes, data, 0};
+        const auto                mapped  = mapToPhysicalSpace(element, Point{0.});
+        CHECK(mapped.x() == Approx(.75).epsilon(1e-15));
+        CHECK(mapped.y() == Approx(.75).epsilon(1e-15));
+        CHECK(mapped.z() == Approx(.75).epsilon(1e-15));
+    }
+
+    SECTION("2D")
+    {
+        constexpr auto el_t                = ElementTypes::Quad;
+        using element_type                 = Element< el_t, el_o >;
+        constexpr auto            el_nodes = typename element_type::node_array_t{};
+        ElementData< el_t, el_o > data{{Point{1., -1., 0.}, Point{2., -1., 0.}, Point{1., 1., 1.}, Point{2., 1., 1.}}};
+        const auto                element = element_type{el_nodes, data, 0};
+        const auto                mapped  = mapToPhysicalSpace(element, Point{.5, -.5});
+        CHECK(mapped.x() == Approx(1.75).epsilon(1e-15));
+        CHECK(mapped.y() == Approx(-.5).epsilon(1e-15));
+        CHECK(mapped.z() == Approx(.25).epsilon(1e-15));
+    }
+
+    SECTION("3D")
+    {
+        constexpr auto el_t                = ElementTypes::Hex;
+        using element_type                 = Element< el_t, el_o >;
+        constexpr auto            el_nodes = typename element_type::node_array_t{};
+        ElementData< el_t, el_o > data{{Point{.5, .5, .5},
+                                        Point{1., .5, .5},
+                                        Point{.5, 1., .5},
+                                        Point{1., 1., .5},
+                                        Point{.5, .5, 1.},
+                                        Point{1., .5, 1.},
+                                        Point{.5, 1., 1.},
+                                        Point{1., 1., 1.}}};
+        const auto                element = element_type{el_nodes, data, 0};
+        const auto                mapped  = mapToPhysicalSpace(element, Point{0., 0., 0.});
+        CHECK(mapped.x() == Approx(.75).epsilon(1e-15));
+        CHECK(mapped.y() == Approx(.75).epsilon(1e-15));
+        CHECK(mapped.z() == Approx(.75).epsilon(1e-15));
+    }
 }
 
 TEST_CASE("Jacobi matrix computation", "[mapping]")
@@ -259,7 +312,7 @@ TEST_CASE("Basis function derivatives", "[mapping]")
     }
 }
 
-TEST_CASE("Reference basis at QPs", "[mapping]")
+TEST_CASE("Reference basis at domain QPs", "[mapping]")
 {
     constexpr auto   ET            = ElementTypes::Hex;
     constexpr el_o_t EO            = 4;
@@ -279,6 +332,122 @@ TEST_CASE("Reference basis at QPs", "[mapping]")
         for (const auto& der : ref_bas_at_qp.basis_ders)
             for (ptrdiff_t basis = 0; basis < der.rows(); ++basis)
                 CHECK(der(basis, Eigen::all).sum() == Approx{0.}.margin(1e-13));
+    }
+}
+
+TEST_CASE("Reference basis at boundary QPs", "[mapping]")
+{
+    constexpr auto  QT = QuadratureTypes::GLeg;
+    constexpr q_o_t QO = 5;
+    constexpr auto  BT = BasisTypes::Lagrange;
+
+    constexpr auto check_all_in_plane = [](const BoundaryView& view, Space normal, val_t offs) {
+        const auto space_ind = [](Space s) {
+            int retval{};
+            switch (s)
+            {
+            case Space::X:
+                retval = 0;
+                break;
+            case Space::Y:
+                retval = 1;
+                break;
+            case Space::Z:
+                retval = 2;
+                break;
+            }
+            return retval;
+        }(normal);
+        const auto element_checker = [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
+            if constexpr (ET == ElementTypes::Quad or ET == ElementTypes::Hex)
+            {
+                const auto& ref_q =
+                    getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.element_side).quadrature;
+                const auto compute_phys_qp = [&](const auto& qp_ref) {
+                    return mapToPhysicalSpace(*el_view.element, Point{qp_ref});
+                };
+                for (auto qp : ref_q.getPoints())
+                    CHECK(mapToPhysicalSpace(*el_view.element, Point{qp})[space_ind] == Approx{offs}.epsilon(1e-15));
+            }
+        };
+        view.visit(element_checker);
+    };
+
+    SECTION("Generated")
+    {
+        const auto node_pos = std::array{0., .25, .5, .75, 1.};
+
+        SECTION("2D")
+        {
+            const auto mesh = makeSquareMesh(node_pos);
+            const auto part = mesh.getPartitions()[0];
+
+            const auto b_bottom = part.getBoundaryView(1);
+            const auto b_top    = part.getBoundaryView(2);
+            const auto b_left   = part.getBoundaryView(3);
+            const auto b_right  = part.getBoundaryView(4);
+
+            check_all_in_plane(b_bottom, Space::Y, node_pos.front());
+            check_all_in_plane(b_top, Space::Y, node_pos.back());
+            check_all_in_plane(b_left, Space::X, node_pos.front());
+            check_all_in_plane(b_right, Space::X, node_pos.back());
+        }
+        SECTION("3D - generated")
+        {
+            const auto mesh = makeCubeMesh(node_pos);
+            const auto part = mesh.getPartitions()[0];
+
+            const auto b_front  = part.getBoundaryView(1);
+            const auto b_back   = part.getBoundaryView(2);
+            const auto b_bottom = part.getBoundaryView(3);
+            const auto b_top    = part.getBoundaryView(4);
+            const auto b_left   = part.getBoundaryView(5);
+            const auto b_right  = part.getBoundaryView(6);
+
+            check_all_in_plane(b_front, Space::Z, node_pos.front());
+            check_all_in_plane(b_back, Space::Z, node_pos.back());
+            check_all_in_plane(b_bottom, Space::Y, node_pos.front());
+            check_all_in_plane(b_top, Space::Y, node_pos.back());
+            check_all_in_plane(b_left, Space::X, node_pos.front());
+            check_all_in_plane(b_right, Space::X, node_pos.back());
+        }
+    }
+    SECTION("Read from gmsh")
+    {
+        SECTION("2D")
+        {
+            const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag);
+            const auto part = mesh.getPartitions()[0];
+
+            const auto b_bottom = part.getBoundaryView(5);
+            const auto b_top    = part.getBoundaryView(3);
+            const auto b_left   = part.getBoundaryView(2);
+            const auto b_right  = part.getBoundaryView(4);
+
+            check_all_in_plane(b_bottom, Space::Y, -.5);
+            check_all_in_plane(b_top, Space::Y, .5);
+            check_all_in_plane(b_left, Space::X, -.5);
+            check_all_in_plane(b_right, Space::X, .5);
+        }
+        SECTION("3D")
+        {
+            const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), gmsh_tag);
+            const auto part = mesh.getPartitions()[0];
+
+            const auto b_front  = part.getBoundaryView(2);
+            const auto b_back   = part.getBoundaryView(3);
+            const auto b_bottom = part.getBoundaryView(4);
+            const auto b_top    = part.getBoundaryView(5);
+            const auto b_left   = part.getBoundaryView(7);
+            const auto b_right  = part.getBoundaryView(6);
+
+            check_all_in_plane(b_front, Space::Z, -1.);
+            check_all_in_plane(b_back, Space::Z, 1.);
+            check_all_in_plane(b_bottom, Space::Y, -1.);
+            check_all_in_plane(b_top, Space::Y, 1.);
+            check_all_in_plane(b_left, Space::X, -1.);
+            check_all_in_plane(b_right, Space::X, 1.);
+        }
     }
 }
 
@@ -303,7 +472,8 @@ TEST_CASE("Physical basis derivatives at QPs", "[mapping]")
                   Approx{0.}.margin(1e-13));
     };
 
-    const auto mesh = makeCubeMesh(std::vector{0., .25, .5, .75, 1.});
+    const auto mesh = makeCubeMesh(std::array{0., .25, .5, .75, 1.});
     const auto part = mesh.getPartitions()[0];
-    part.cvisit(do_test, {0}); // Only for the hex domain, this won't work for 2D elements in a 3D space
+    part.visit(do_test,
+               std::views::single(0)); // Only for the hex domain, this won't work for 2D elements in a 3D space
 }

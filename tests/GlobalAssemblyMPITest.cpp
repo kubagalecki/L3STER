@@ -1,5 +1,5 @@
+#include "l3ster/assembly/ContributeLocalSystem.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
-#include "l3ster/global_assembly/ContributeLocalSystem.hpp"
 #include "l3ster/mesh/primitives/LineMesh.hpp"
 #include "l3ster/util/GlobalResource.hpp"
 
@@ -19,9 +19,9 @@ int main(int argc, char* argv[])
     const auto     map            = NodeToDofMap{my_partition, dof_intervals};
     const auto     sparsity_graph = detail::makeSparsityGraph(my_partition, problem_def, dof_intervals, comm);
 
-    const auto glob_mat = Teuchos::rcp(new Tpetra::FECrsMatrix< val_t, local_dof_t, global_dof_t >{sparsity_graph});
-    const auto glob_rhs = Teuchos::rcp(new Tpetra::FEMultiVector< val_t, local_dof_t, global_dof_t >{
-        sparsity_graph->getRowMap(), sparsity_graph->getImporter(), 1});
+    const auto glob_mat = makeTeuchosRCP< Tpetra::FECrsMatrix< val_t, local_dof_t, global_dof_t > >(sparsity_graph);
+    const auto glob_rhs = makeTeuchosRCP< Tpetra::FEMultiVector< val_t, local_dof_t, global_dof_t > >(
+        sparsity_graph->getRowMap(), sparsity_graph->getImporter(), 1u);
 
     glob_mat->beginAssembly();
     glob_rhs->beginAssembly();
@@ -33,9 +33,10 @@ int main(int argc, char* argv[])
     local_matrix(1, 1)              = 1.;
     local_rhs[0]                    = 1.;
     local_rhs[1]                    = 1.;
-    my_partition.cvisit([&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
+    my_partition.visit([&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
         if constexpr (T == ElementTypes::Line and O == 1)
-            contributeLocalSystem< std::array{ptrdiff_t{0}} >(local_system, element, map, glob_mat, glob_rhs);
+            contributeLocalSystem< std::array{ptrdiff_t{0}} >(
+                local_system, element, map, *glob_mat, *glob_rhs->getVectorNonConst(0));
     });
     glob_mat->endAssembly();
     glob_rhs->endAssembly();
