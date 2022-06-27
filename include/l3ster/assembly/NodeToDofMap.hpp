@@ -12,7 +12,7 @@ class NodeToDofMap
 {
 public:
     NodeToDofMap() = default;
-    NodeToDofMap(const MeshPartition& mesh, const detail::node_interval_vector_t< NF >& dof_intervals);
+    inline NodeToDofMap(const MeshPartition& mesh, const detail::node_interval_vector_t< NF >& dof_intervals);
 
     [[nodiscard]] const auto& operator()(n_id_t node) const noexcept { return map.find(node)->second; }
 
