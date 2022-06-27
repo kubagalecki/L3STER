@@ -1,7 +1,7 @@
 #ifndef L3STER_DENSEGRAPH_HPP
 #define L3STER_DENSEGRAPH_HPP
 
-#include "l3ster/global_assembly/SparsityGraph.hpp"
+#include "l3ster/assembly/SparsityGraph.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
 
 namespace lstr

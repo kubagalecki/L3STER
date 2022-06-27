@@ -1,8 +1,8 @@
 #ifndef L3STER_CONTRIBUTELOCALSYSTEM_HPP
 #define L3STER_CONTRIBUTELOCALSYSTEM_HPP
 
-#include "l3ster/global_assembly/SparsityGraph.hpp"
-#include "l3ster/local_assembly/AssembleLocalSystem.hpp"
+#include "l3ster/assembly/AssembleLocalSystem.hpp"
+#include "l3ster/assembly/SparsityGraph.hpp"
 
 namespace lstr
 {

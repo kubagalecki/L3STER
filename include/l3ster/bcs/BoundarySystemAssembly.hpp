@@ -1,7 +1,7 @@
 #ifndef L3STER_ASSEMBLY_BOUNDARYSYSTEMASSEMBLY_HPP
 #define L3STER_ASSEMBLY_BOUNDARYSYSTEMASSEMBLY_HPP
 
-#include "l3ster/local_assembly/AssembleLocalSystem.hpp"
+#include "l3ster/assembly/AssembleLocalSystem.hpp"
 
 namespace lstr
 {

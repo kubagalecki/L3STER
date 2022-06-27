@@ -1,7 +1,7 @@
 #include "l3ster/bcs/DirichletBC.hpp"
+#include "l3ster/assembly/ContributeLocalSystem.hpp"
 #include "l3ster/bcs/GetDirichletDofs.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
-#include "l3ster/global_assembly/ContributeLocalSystem.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/util/GlobalResource.hpp"
 

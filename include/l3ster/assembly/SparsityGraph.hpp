@@ -1,7 +1,7 @@
 #ifndef L3STER_ASSEMBLY_SPARSITYGRAPH_HPP
 #define L3STER_ASSEMBLY_SPARSITYGRAPH_HPP
 
-#include "l3ster/global_assembly/MakeTpetraMap.hpp"
+#include "l3ster/assembly/MakeTpetraMap.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/IndexMap.hpp"
 

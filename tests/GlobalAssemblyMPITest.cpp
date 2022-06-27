@@ -1,5 +1,5 @@
 #include "l3ster/comm/DistributeMesh.hpp"
-#include "l3ster/global_assembly/ContributeLocalSystem.hpp"
+#include "l3ster/assembly/ContributeLocalSystem.hpp"
 #include "l3ster/mesh/primitives/LineMesh.hpp"
 #include "l3ster/util/GlobalResource.hpp"
 

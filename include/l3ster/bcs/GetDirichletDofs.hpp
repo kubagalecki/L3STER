@@ -1,7 +1,7 @@
 #ifndef L3STER_BCS_GETDIRICHLETDOFS_HPP
 #define L3STER_BCS_GETDIRICHLETDOFS_HPP
 
-#include "l3ster/global_assembly/SparsityGraph.hpp"
+#include "l3ster/assembly/SparsityGraph.hpp"
 
 namespace lstr::detail
 {
