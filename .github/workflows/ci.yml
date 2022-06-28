@@ -1,14 +1,5 @@
 name: tests
-on:
-  push:
-    branches:
-      - '*'
-      - '!main'
-  pull_request:
-    types:
-      - closed
-    branches:
-      - main
+on: [ push, pull_request ]
 
 env:
   DOCKER_BASE: "${{ secrets.DOCKER_HUB_USERNAME }}/${{ secrets.DOCKER_HUB_IMAGE }}:latest"
