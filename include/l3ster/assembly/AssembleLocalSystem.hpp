@@ -1,9 +1,9 @@
 #ifndef L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP
 #define L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP
 
-#include "../mapping/ComputePhysBasisDersAtQpoints.hpp"
-#include "../mapping/MapReferenceToPhysical.hpp"
-#include "SpaceTimePoint.hpp"
+#include "l3ster/assembly/SpaceTimePoint.hpp"
+#include "l3ster/mapping/ComputePhysBasisDersAtQpoints.hpp"
+#include "l3ster/mapping/MapReferenceToPhysical.hpp"
 
 namespace lstr
 {
@@ -35,11 +35,11 @@ template < typename Kernel, ElementTypes ET, el_o_t EO, size_t n_fields >
 inline constexpr std::size_t n_unknowns =
     kernel_return_t< Kernel, ET, EO, n_fields >::first_type::value_type::ColsAtCompileTime;
 
-template < int n_nodes, int n_fields, int n_qp, size_t n_dims >
+template < int n_nodes, int n_fields, int n_qp, size_t n_dims, int rcmaj >
 auto computeFieldValsAndDers(
     const Eigen::Matrix< val_t, n_qp, n_nodes, Eigen::RowMajor >&                       basis_vals,
     const std::array< Eigen::Matrix< val_t, n_qp, n_nodes, Eigen::RowMajor >, n_dims >& basis_ders,
-    const Eigen::Matrix< val_t, n_nodes, n_fields >&                                    node_vals)
+    const Eigen::Matrix< val_t, n_nodes, n_fields, rcmaj >&                             node_vals)
 {
     using quantity_at_qps = Eigen::Matrix< val_t, n_qp, n_fields, Eigen::RowMajor >;
     std::pair< quantity_at_qps, std::array< quantity_at_qps, n_dims > > retval;
@@ -119,10 +119,10 @@ auto initLocalSystem()
 }
 } // namespace detail
 
-template < typename Kernel, ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
+template < typename Kernel, ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields, int rcmaj >
 auto assembleLocalSystem(Kernel&&                                                                       kernel,
                          const Element< ET, EO >&                                                       element,
-                         const Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, n_fields >&            node_vals,
+                         const Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, n_fields, rcmaj >&     node_vals,
                          const ReferenceBasisAtQuadrature< ET, EO, QL, Element< ET, EO >::native_dim >& basis_at_q,
                          val_t                                                                          time)
     requires detail::Kernel_c< Kernel, ET, EO, n_fields >

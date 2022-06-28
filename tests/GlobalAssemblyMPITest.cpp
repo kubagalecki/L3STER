@@ -1,4 +1,5 @@
-#include "l3ster/assembly/ContributeLocalSystem.hpp"
+#include "l3ster/assembly/GatherGlobalValues.hpp"
+#include "l3ster/assembly/ScatterLocalSystem.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/LineMesh.hpp"
 #include "l3ster/util/GlobalResource.hpp"
@@ -6,6 +7,9 @@
 int main(int argc, char* argv[])
 {
     using namespace lstr;
+    constexpr auto approx = [](val_t v1, val_t v2) {
+        return std::fabs(v1 - v2) < 1e-15;
+    };
 
     GlobalResource< MpiScopeGuard >::initialize(argc, argv);
     const MpiComm comm;
@@ -25,6 +29,23 @@ int main(int argc, char* argv[])
 
     glob_mat->beginAssembly();
     glob_rhs->beginAssembly();
+
+    auto glob_vals = Tpetra::Vector< val_t, local_dof_t, global_dof_t >(glob_rhs->getMap());
+    {
+        auto glob_vals_view = glob_vals.getDataNonConst();
+        for (ptrdiff_t i = 0; i < glob_vals_view.size(); ++i)
+            glob_vals_view[i] = static_cast< val_t >(glob_vals.getMap()->getGlobalElement(i));
+    }
+    const auto check_glob_gather = [&](const auto& element) {
+        const auto local_vals = gatherGlobalValues< std::array{size_t{0}} >(element, map, glob_vals);
+        if (not std::ranges::equal(
+                element.getNodes(), local_vals, std::equal_to<>{}, [](n_id_t n) { return static_cast< val_t >(n); }))
+        {
+            std::cerr << "Incorrect gather of node values for element\n";
+            comm.abort();
+        }
+    };
+
     std::pair< Eigen::Matrix< val_t, 2, 2, Eigen::RowMajor >, Eigen::Matrix< val_t, 2, 1 > > local_system;
     auto& [local_matrix, local_rhs] = local_system;
     local_matrix(0, 0)              = 1.;
@@ -35,15 +56,14 @@ int main(int argc, char* argv[])
     local_rhs[1]                    = 1.;
     my_partition.visit([&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
         if constexpr (T == ElementTypes::Line and O == 1)
-            contributeLocalSystem< std::array{ptrdiff_t{0}} >(
+        {
+            check_glob_gather(element);
+            scatterLocalSystem< std::array{size_t{0}} >(
                 local_system, element, map, *glob_mat, *glob_rhs->getVectorNonConst(0));
+        }
     });
     glob_mat->endAssembly();
     glob_rhs->endAssembly();
-
-    constexpr auto approx = [](val_t v1, val_t v2) {
-        return std::fabs(v1 - v2) < 1e-15;
-    };
 
     try
     {
