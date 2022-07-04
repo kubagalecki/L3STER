@@ -94,85 +94,106 @@ auto makeQuadratureFromCoordsMat(const Eigen::Matrix< val_t, R, C >& coords, con
 
 template < BasisTypes BT, ElementTypes ET, el_o_t EO, QuadratureTypes QT, q_o_t QO >
 const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t side)
-    requires(ET == ElementTypes::Quad or ET == ElementTypes::Hex)
 {
-    // Assumption: quadratures constructed for integration over all sides of the element have the same number of points.
-    // If at some point in the future, e.g., pyramids are supported, this will not be true. In that event, quadratures
-    // for the individual sides will need to be stored in a tuple, and the result will need to be a variant. Until then,
-    // an array + known return value is much simpler.
+    if constexpr (ET == ElementTypes::Quad or ET == ElementTypes::Hex)
+    {
+        // Assumption: quadratures constructed for integration over all sides of the element have the same number of
+        // points. If at some point in the future, e.g., pyramids are supported, this will not be true. In that event,
+        // quadratures for the individual sides will need to be stored in a tuple, and the result will need to be a
+        // variant. Until then, an array + known return value is much simpler.
 
-    static const auto values = [] {
-        constexpr auto boundary_type   = ET == ElementTypes::Hex ? ElementTypes::Quad : ElementTypes::Line;
-        const auto     boundary_quad   = getQuadrature< QT, QO, boundary_type >();
-        const auto     ref_quad_coords = detail::getReferenceBoundaryQpCoords(boundary_quad);
-        using ref_basis_t = ReferenceBasisAtQuadrature< ET, EO, boundary_quad.size, boundary_quad.dim + 1 >;
+        static const auto values = [] {
+            constexpr auto boundary_type   = ET == ElementTypes::Hex ? ElementTypes::Quad : ElementTypes::Line;
+            const auto     boundary_quad   = getQuadrature< QT, QO, boundary_type >();
+            const auto     ref_quad_coords = detail::getReferenceBoundaryQpCoords(boundary_quad);
+            using ref_basis_t = ReferenceBasisAtQuadrature< ET, EO, boundary_quad.size, boundary_quad.dim + 1 >;
 
-        constexpr auto                        n_el_sides = ElementTraits< Element< ET, EO > >::n_sides;
-        std::array< ref_basis_t, n_el_sides > quadrature_array;
-        for (el_side_t side_ind = 0; side_ind < n_el_sides; ++side_ind)
-        {
-            std::remove_const_t< decltype(ref_quad_coords) > qp_coords;
-            if constexpr (ET == ElementTypes::Quad)
+            constexpr auto                        n_el_sides = ElementTraits< Element< ET, EO > >::n_sides;
+            std::array< ref_basis_t, n_el_sides > quadrature_array;
+            for (el_side_t side_ind = 0; side_ind < n_el_sides; ++side_ind)
             {
-                switch (side_ind)
+                std::remove_const_t< decltype(ref_quad_coords) > qp_coords;
+                if constexpr (ET == ElementTypes::Quad)
                 {
-                case 0:
-                    qp_coords = ref_quad_coords;
-                    detail::translate(qp_coords, Eigen::Vector2d(0., -1.));
-                    break;
-                case 1:
-                    qp_coords = ref_quad_coords;
-                    detail::translate(qp_coords, Eigen::Vector2d(0., 1.));
-                    break;
-                case 2:
-                    qp_coords = detail::rotate2D90(ref_quad_coords);
-                    detail::translate(qp_coords, Eigen::Vector2d(-1., 0.));
-                    break;
-                case 3:
-                    qp_coords = detail::rotate2D90(ref_quad_coords);
-                    detail::translate(qp_coords, Eigen::Vector2d(1., 0.));
-                    break;
+                    switch (side_ind)
+                    {
+                    case 0:
+                        qp_coords = ref_quad_coords;
+                        detail::translate(qp_coords, Eigen::Vector2d(0., -1.));
+                        break;
+                    case 1:
+                        qp_coords = ref_quad_coords;
+                        detail::translate(qp_coords, Eigen::Vector2d(0., 1.));
+                        break;
+                    case 2:
+                        qp_coords = detail::rotate2D90(ref_quad_coords);
+                        detail::translate(qp_coords, Eigen::Vector2d(-1., 0.));
+                        break;
+                    case 3:
+                        qp_coords = detail::rotate2D90(ref_quad_coords);
+                        detail::translate(qp_coords, Eigen::Vector2d(1., 0.));
+                        break;
+                    }
                 }
-            }
-            else if constexpr (ET == ElementTypes::Hex)
-            {
-                switch (side_ind)
+                else if constexpr (ET == ElementTypes::Hex)
                 {
-                case 0:
-                    qp_coords = detail::rotate3D90(ref_quad_coords, Space::Z);
-                    detail::translate(qp_coords, Eigen::Vector3d(0., 0., -1.));
-                    break;
-                case 1:
-                    qp_coords = detail::rotate3D90(ref_quad_coords, Space::Z);
-                    detail::translate(qp_coords, Eigen::Vector3d(0., 0., 1.));
-                    break;
-                case 2:
-                    qp_coords = detail::rotate3D90(ref_quad_coords, Space::X);
-                    detail::translate(qp_coords, Eigen::Vector3d(0., -1., 0.));
-                    break;
-                case 3:
-                    qp_coords = detail::rotate3D90(ref_quad_coords, Space::X);
-                    detail::translate(qp_coords, Eigen::Vector3d(0., 1., 0.));
-                    break;
-                case 4:
-                    qp_coords = detail::rotate3D90(ref_quad_coords, Space::Y);
-                    detail::translate(qp_coords, Eigen::Vector3d(-1., 0., 0.));
-                    break;
-                case 5:
-                    qp_coords = detail::rotate3D90(ref_quad_coords, Space::Y);
-                    detail::translate(qp_coords, Eigen::Vector3d(1., 0., 0.));
-                    break;
+                    switch (side_ind)
+                    {
+                    case 0:
+                        qp_coords = detail::rotate3D90(ref_quad_coords, Space::Z);
+                        detail::translate(qp_coords, Eigen::Vector3d(0., 0., -1.));
+                        break;
+                    case 1:
+                        qp_coords = detail::rotate3D90(ref_quad_coords, Space::Z);
+                        detail::translate(qp_coords, Eigen::Vector3d(0., 0., 1.));
+                        break;
+                    case 2:
+                        qp_coords = detail::rotate3D90(ref_quad_coords, Space::X);
+                        detail::translate(qp_coords, Eigen::Vector3d(0., -1., 0.));
+                        break;
+                    case 3:
+                        qp_coords = detail::rotate3D90(ref_quad_coords, Space::X);
+                        detail::translate(qp_coords, Eigen::Vector3d(0., 1., 0.));
+                        break;
+                    case 4:
+                        qp_coords = detail::rotate3D90(ref_quad_coords, Space::Y);
+                        detail::translate(qp_coords, Eigen::Vector3d(-1., 0., 0.));
+                        break;
+                    case 5:
+                        qp_coords = detail::rotate3D90(ref_quad_coords, Space::Y);
+                        detail::translate(qp_coords, Eigen::Vector3d(1., 0., 0.));
+                        break;
+                    }
                 }
+                const auto quadrature      = detail::makeQuadratureFromCoordsMat(qp_coords, boundary_quad.getWeights());
+                const auto basis_vals      = computeRefBasisAtQpoints< BT, ET, EO >(quadrature);
+                const auto basis_ders      = computeRefBasisDersAtQpoints< BT, ET, EO >(quadrature);
+                quadrature_array[side_ind] = ReferenceBasisAtQuadrature< ET, EO, quadrature.size, quadrature.dim >{
+                    .quadrature = quadrature, .basis_vals = basis_vals, .basis_ders = basis_ders};
             }
-            const auto quadrature      = detail::makeQuadratureFromCoordsMat(qp_coords, boundary_quad.getWeights());
-            const auto basis_vals      = computeRefBasisAtQpoints< BT, ET, EO >(quadrature);
-            const auto basis_ders      = computeRefBasisDersAtQpoints< BT, ET, EO >(quadrature);
-            quadrature_array[side_ind] = ReferenceBasisAtQuadrature< ET, EO, quadrature.size, quadrature.dim >{
-                .quadrature = quadrature, .basis_vals = basis_vals, .basis_ders = basis_ders};
-        }
-        return quadrature_array;
-    }();
-    return values[side];
+            return quadrature_array;
+        }();
+        return values[side];
+    }
+    else if (ET == ElementTypes::Line)
+    {
+        static const auto values = [] {
+            using ref_basis_t      = ReferenceBasisAtQuadrature< ElementTypes::Line, EO, 1, 1 >;
+            constexpr auto compute = [](const Quadrature< 1, 1 >& quad) {
+                const auto basis_vals = computeRefBasisAtQpoints< BT, ET, EO >(quad);
+                const auto basis_ders = computeRefBasisDersAtQpoints< BT, ET, EO >(quad);
+                return ReferenceBasisAtQuadrature< ET, EO, 1, 1 >{
+                    .quadrature = quad, .basis_vals = basis_vals, .basis_ders = basis_ders};
+            };
+            std::array< ref_basis_t, 2 > quadrature_array;
+            quadrature_array[0] = compute(
+                Quadrature< 1, 1 >{Quadrature< 1, 1 >::q_points_t{std::array< val_t, 1 >{-1.}}, std::array{1.}});
+            quadrature_array[1] =
+                compute(Quadrature< 1, 1 >{Quadrature< 1, 1 >::q_points_t{std::array< val_t, 1 >{1.}}, std::array{1.}});
+            return quadrature_array;
+        }();
+        return values[side];
+    }
 }
 } // namespace lstr
 #endif // L3STER_BASISFUN_REFERENCEELEMENTBASISATQUADRATURE_HPP

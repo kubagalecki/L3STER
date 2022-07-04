@@ -88,7 +88,7 @@ add_mpi_test( "MeshDistributionTest.cpp" "Mesh_distribution" "1;2;4" )
 add_mpi_test( "NodeThroughputInfoTest.cpp" "Node_throughput_calculation" "1;2;4" )
 add_mpi_test( "TpetraMapCreationTest.cpp" "Tpetra_Map_Creation" "1;2;4" )
 add_mpi_test( "SparsityGraphTest.cpp" "Sparsity_Graph" "1;2;4" )
-add_mpi_test( "GlobalAssemblyMPITest.cpp" "Galerkin_diffusion_1D_assembly_test" "1;2;4" )
+add_mpi_test( "GlobalAssemblyComponentsTest.cpp" "Galerkin_diffusion_1D_assembly_test" "1;2;4" )
 add_mpi_test( "DirichletBCTest.cpp" "Dirichlet_BC_application_test" "1;2;4" )
 
 #######################################################################################################################
