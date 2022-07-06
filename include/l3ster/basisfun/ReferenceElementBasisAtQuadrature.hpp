@@ -175,7 +175,7 @@ const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t side)
         }();
         return values[side];
     }
-    else if (ET == ElementTypes::Line)
+    else if constexpr (ET == ElementTypes::Line)
     {
         static const auto values = [] {
             using ref_basis_t      = ReferenceBasisAtQuadrature< ElementTypes::Line, EO, 1, 1 >;
