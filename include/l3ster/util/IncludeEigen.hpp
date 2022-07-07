@@ -18,5 +18,8 @@ inline constexpr bool is_eigen_matrix_v< Eigen::Matrix< P1, P2, P3, P4, P5, P6 >
 
 template < typename T >
 concept EigenMatrix_c = detail::is_eigen_matrix_v< T >;
+
+template < typename T >
+concept EigenVector_c = EigenMatrix_c< T > and (T::ColsAtCompileTime == 1);
 } // namespace lstr
 #endif // L3STER_UTIL_INCLUDEEIGEN_HPP

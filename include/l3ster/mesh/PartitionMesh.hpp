@@ -1,7 +1,7 @@
 #ifndef L3STER_MESH_PARTITIONMESH_HPP
 #define L3STER_MESH_PARTITIONMESH_HPP
 
-#include "Mesh.hpp"
+#include "l3ster/mesh/Mesh.hpp"
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/MetisUtils.hpp"
 

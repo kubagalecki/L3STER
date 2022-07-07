@@ -19,13 +19,17 @@ struct ConstexprValue
     static constexpr auto value = V;
 };
 
-template < typename... >
+template < typename... Types >
 struct TypePack
-{};
+{
+    static constexpr auto size = sizeof...(Types);
+};
 
-template < auto... >
+template < auto... Vals >
 struct ValuePack
-{};
+{
+    static constexpr auto size = sizeof...(Vals);
+};
 
 namespace detail
 {

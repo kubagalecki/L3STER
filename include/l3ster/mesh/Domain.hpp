@@ -48,6 +48,16 @@ public:
     template < invocable_on_const_elements F, ExecutionPolicy_c ExecPolicy >
     void visit(F&& element_visitor, ExecPolicy&& policy) const;
 
+    // Note: `zero` must be the neutral element for the reduction
+    template < typename Zero, typename Proj, typename Red, ExecutionPolicy_c ExecPolicy >
+    Zero reduce(Zero zero, Proj&& projection, Red&& reduction, ExecPolicy&& policy) const
+        requires invocable_on_const_elements_r< Proj, Zero > and requires {
+                                                                     {
+                                                                         reduction(zero, zero)
+                                                                         } -> std::convertible_to< Zero >;
+                                                                 }
+    ;
+
     template < invocable_on_const_elements_r< bool > F, ExecutionPolicy_c ExecPolicy >
     [[nodiscard]] find_result_t find(F&& predicate, ExecPolicy&& policy);
     template < invocable_on_const_elements_r< bool > F, ExecutionPolicy_c ExecPolicy >
@@ -176,6 +186,24 @@ void Domain::visit(F&& element_visitor, ExecPolicy&& policy) const
         std::ranges::for_each(element_vectors, invoke_visitor);
     else
         std::for_each(policy, begin(element_vectors), end(element_vectors), invoke_visitor);
+}
+
+template < typename Zero, typename Proj, typename Red, ExecutionPolicy_c ExecPolicy >
+Zero Domain::reduce(Zero zero, Proj&& projection, Red&& reduction, ExecPolicy&& policy) const
+    requires invocable_on_const_elements_r< Proj, Zero > and requires {
+                                                                 {
+                                                                     reduction(zero, zero)
+                                                                     } -> std::convertible_to< Zero >;
+                                                             }
+{
+    const auto reduce_element_vector = [&]< ElementTypes ET, el_o_t EO >(const element_vector_t< ET, EO >& el_vec) {
+        return std::transform_reduce(policy, begin(el_vec), end(el_vec), zero, reduction, projection);
+    };
+    const auto reduce_element_vector_variant = [&](const element_vector_variant_t& vec_var) {
+        return std::visit< Zero >(reduce_element_vector, vec_var);
+    };
+    return std::transform_reduce(
+        policy, begin(element_vectors), end(element_vectors), zero, reduction, reduce_element_vector_variant);
 }
 
 template < invocable_on_const_elements_r< bool > F, ExecutionPolicy_c ExecPolicy >

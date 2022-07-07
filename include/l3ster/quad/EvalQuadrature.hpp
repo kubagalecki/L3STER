@@ -65,7 +65,7 @@ auto evalQuadrature(Integrator&& integrator, const Quadrature< QLENGTH, QDIM >& 
 // where certain quantities (e.g. basis derivatives) can be precomputed collectively for all quadrature points, and then
 // accessed by index during quadrature evaluation
 template < typename Integrator, typename ZeroGenerator, q_l_t QLENGTH, dim_t QDIM >
-auto evalQuadrature(Integrator&& integrator, const Quadrature< QLENGTH, QDIM >& quad, ZeroGenerator zero_gen) noexcept
+auto evalQuadrature(Integrator&& integrator, const Quadrature< QLENGTH, QDIM >& quad, ZeroGenerator&& zero_gen) noexcept
     requires requires(Integrator                                          integr,
                       Quadrature< QLENGTH, QDIM >::q_points_t::value_type qp,
                       Quadrature< QLENGTH, QDIM >::weights_t::value_type  w,

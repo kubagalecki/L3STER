@@ -133,6 +133,8 @@ public:
     template < arithmetic T >
     void reduce(const T* send_buf, T* recv_buf, size_t count, int root, MPI_Op op) const;
     template < arithmetic T >
+    void allReduce(const T* send_buf, T* recv_buf, size_t count, MPI_Op op) const;
+    template < arithmetic T >
     void gather(const T* send_buf, T* recv_buf, size_t count, int root) const;
     template < arithmetic T >
     void broadcast(T* message, int size, int root) const;
@@ -223,6 +225,13 @@ void MpiComm::reduce(const T* send_buf, T* recv_buf, size_t count, int root, MPI
 {
     const auto datatype = detail::MpiType< T >::value();
     detail::handleMPIError(MPI_Reduce(send_buf, recv_buf, count, datatype, op, root, comm), "MPI reduce failed");
+}
+
+template < arithmetic T >
+void MpiComm::allReduce(const T* send_buf, T* recv_buf, size_t count, MPI_Op op) const
+{
+    const auto datatype = detail::MpiType< T >::value();
+    detail::handleMPIError(MPI_Allreduce(send_buf, recv_buf, count, datatype, op, comm), "MPI all-reduce failed");
 }
 
 template < arithmetic T >

@@ -37,7 +37,8 @@ int main(int argc, char* argv[])
             glob_vals_view[i] = static_cast< val_t >(glob_vals.getMap()->getGlobalElement(i));
     }
     const auto check_glob_gather = [&](const auto& element) {
-        const auto local_vals = gatherGlobalValues< std::array{size_t{0}} >(element, map, glob_vals);
+        const auto local_vals = gatherGlobalValues< std::array{size_t{0}} >(
+            element.getNodes(), map, glob_vals.getData(), *glob_vals.getMap());
         if (not std::ranges::equal(
                 element.getNodes(), local_vals, std::equal_to<>{}, [](n_id_t n) { return static_cast< val_t >(n); }))
         {
@@ -58,8 +59,11 @@ int main(int argc, char* argv[])
         if constexpr (T == ElementTypes::Line and O == 1)
         {
             check_glob_gather(element);
-            scatterLocalSystem< std::array{size_t{0}} >(
-                local_system, element, map, *glob_mat, *glob_rhs->getVectorNonConst(0));
+            const auto el_dofs                 = detail::getUnsortedElementDofs< std::array{size_t{0}} >(element, map);
+            const auto& [local_mat, local_vec] = local_system;
+            detail::scatterLocalMatrix(local_mat, el_dofs, *glob_mat);
+            detail::scatterLocalVector(
+                local_vec, el_dofs, glob_rhs->getVectorNonConst(0)->getDataNonConst(), *glob_rhs->getMap());
         }
     });
     glob_mat->endAssembly();

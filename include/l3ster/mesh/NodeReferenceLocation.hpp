@@ -1,8 +1,8 @@
 #ifndef L3STER_MESH_NODEREFERENCELOCATION_HPP
 #define L3STER_MESH_NODEREFERENCELOCATION_HPP
 
-#include "Point.hpp"
 #include "l3ster/math/LobattoRuleAbsc.hpp"
+#include "l3ster/mesh/Point.hpp"
 
 namespace lstr
 {
@@ -12,8 +12,7 @@ template < el_o_t O >
 auto makeLineNodeLocations()
 {
     std::array< Point< 1 >, O + 1 > ret_val;
-    std::ranges::transform(
-        getLobattoRuleAbsc< val_t, O + 1 >(), begin(ret_val), [](double x) { return Point< 1 >{x}; });
+    std::ranges::transform(getLobattoRuleAbsc< val_t, O + 1 >(), begin(ret_val), [](val_t x) { return Point{x}; });
     return ret_val;
 }
 
@@ -21,11 +20,11 @@ template < el_o_t O >
 auto makeQuadNodeLocations()
 {
     constexpr auto                                            nodes_per_edge = O + 1;
+    const auto                                                absc = getLobattoRuleAbsc< val_t, nodes_per_edge >();
     std::array< Point< 2 >, nodes_per_edge * nodes_per_edge > ret_val;
-    size_t                                                    i = 0;
-    for (auto eta : getLobattoRuleAbsc< val_t, nodes_per_edge >())
-        for (auto xi : getLobattoRuleAbsc< val_t, nodes_per_edge >())
-            ret_val[i++] = Point< 2 >{xi, eta};
+    for (size_t i = 0; auto eta : absc)
+        for (auto xi : absc)
+            ret_val[i++] = Point{xi, eta};
     return ret_val;
 }
 
@@ -34,12 +33,12 @@ auto makeHexNodeLocations()
 {
     constexpr auto                        nodes_per_edge = O + 1;
     constexpr auto                        total_nodes    = nodes_per_edge * nodes_per_edge * nodes_per_edge;
+    const auto                            absc           = getLobattoRuleAbsc< val_t, nodes_per_edge >();
     std::array< Point< 3 >, total_nodes > ret_val;
-    size_t                                i = 0;
-    for (auto zeta : getLobattoRuleAbsc< val_t, nodes_per_edge >())
-        for (auto eta : getLobattoRuleAbsc< val_t, nodes_per_edge >())
-            for (auto xi : getLobattoRuleAbsc< val_t, nodes_per_edge >())
-                ret_val[i++] = Point< 3 >{xi, eta, zeta};
+    for (size_t i = 0; auto zeta : absc)
+        for (auto eta : absc)
+            for (auto xi : absc)
+                ret_val[i++] = Point{xi, eta, zeta};
     return ret_val;
 }
 } // namespace detail
