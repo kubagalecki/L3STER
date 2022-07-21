@@ -1,9 +1,8 @@
 #ifndef L3STER_MESH_ELEMENTINTERSECTING_HPP
 #define L3STER_MESH_ELEMENTINTERSECTING_HPP
 
-#include "ElementTypes.hpp"
-#include "NodePhysicalLocation.hpp"
-#include "l3ster/mapping/MapReferenceToPhysical.hpp"
+#include "l3ster/mesh/ElementTypes.hpp"
+#include "l3ster/mesh/NodePhysicalLocation.hpp"
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/Meta.hpp"
 

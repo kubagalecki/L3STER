@@ -19,13 +19,17 @@ struct ConstexprValue
     static constexpr auto value = V;
 };
 
-template < typename... >
+template < typename... Types >
 struct TypePack
-{};
+{
+    static constexpr auto size = sizeof...(Types);
+};
 
-template < auto... >
+template < auto... Vals >
 struct ValuePack
-{};
+{
+    static constexpr auto size = sizeof...(Vals);
+};
 
 namespace detail
 {
@@ -203,9 +207,9 @@ using cart_prod_t = apply_in_out_t< Inner, Outer, decltype(zipArrays(getCartProd
 template < array_of< bool > auto A >
 consteval auto getTrueInds()
 {
-    std::array< ptrdiff_t, std::ranges::count(A, true) > retval;
-    auto                                                 insert_it = retval.begin();
-    for (ptrdiff_t i = 0; bool v : A)
+    std::array< size_t, std::ranges::count(A, true) > retval;
+    auto                                              insert_it = retval.begin();
+    for (size_t i = 0; bool v : A)
     {
         if (v)
             *insert_it++ = i;

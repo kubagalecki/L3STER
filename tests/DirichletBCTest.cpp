@@ -1,5 +1,5 @@
 #include "l3ster/bcs/DirichletBC.hpp"
-#include "l3ster/assembly/ContributeLocalSystem.hpp"
+#include "l3ster/assembly/ScatterLocalSystem.hpp"
 #include "l3ster/bcs/GetDirichletDofs.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
@@ -51,7 +51,9 @@ int main(int argc, char* argv[])
                     local_mat                    = local_mat_t::Random();
                     local_mat                    = local_mat.template selfadjointView< Eigen::Lower >();
                     local_vec                    = local_vec_t::Random();
-                    contributeLocalSystem< std::array{ptrdiff_t{0}} >(local_system, element, map, *matrix, *rhs);
+                    const auto el_dofs = detail::getUnsortedElementDofs< std::array{size_t{0}} >(element, map);
+                    detail::scatterLocalMatrix(local_mat, el_dofs, *matrix);
+                    detail::scatterLocalVector(local_vec, el_dofs, rhs->getDataNonConst(), *rhs->getMap());
                 }
             },
             std::views::single(0));

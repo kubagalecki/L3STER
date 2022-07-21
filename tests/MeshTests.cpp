@@ -42,7 +42,7 @@ TEST_CASE("2D mesh import", "[mesh]")
     CHECK(boundaries[1].size() == 10);
     CHECK(boundaries[2].size() == 10);
     CHECK(boundaries[3].size() == 10);
-    CHECK_THROWS(part.getBoundaryView(6));
+    CHECK(part.getBoundaryView(6).size() == 0);
 }
 
 TEST_CASE("3D mesh import", "[mesh]")
@@ -58,7 +58,7 @@ TEST_CASE("3D mesh import", "[mesh]")
 
     for (int i = 2; i <= 7; ++i)
         CHECK_NOTHROW(part.getBoundaryView(i));
-    CHECK_THROWS(part.getBoundaryView(42));
+    CHECK(part.getBoundaryView(42).size() == 0);
 }
 
 TEST_CASE("Unsupported mesh formats, mesh I/O error handling", "[mesh]")

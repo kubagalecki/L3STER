@@ -14,32 +14,27 @@
 
 namespace lstr::detail
 {
-template < array_of< ptrdiff_t > auto dof_inds, ElementTypes T, el_o_t O, size_t n_total_dofs >
+template < array_of< size_t > auto dof_inds, size_t n_nodes, size_t n_total_dofs >
+auto getDofsFromNodes(const std::array< n_id_t, n_nodes >& nodes, const NodeToDofMap< n_total_dofs >& map)
+{
+    std::array< global_dof_t, dof_inds.size() * n_nodes > retval;
+    for (auto insert_it = retval.begin(); auto node : nodes)
+        insert_it = copyValuesAtInds< dof_inds >(map(node), insert_it);
+    return retval;
+}
+
+template < array_of< size_t > auto dof_inds, ElementTypes T, el_o_t O, size_t n_total_dofs >
 auto getSortedElementDofs(const Element< T, O >& element, const NodeToDofMap< n_total_dofs >& map)
 {
     auto nodes_copy = element.getNodes();
     std::ranges::sort(nodes_copy);
-    std::array< global_dof_t, dof_inds.size() * Element< T, O >::n_nodes > retval;
-    for (auto insert_it = retval.begin(); auto node : nodes_copy)
-    {
-        const auto& full_dofs = map(node);
-        for (auto ind : dof_inds)
-            *insert_it++ = full_dofs[ind];
-    }
-    return retval;
+    return getDofsFromNodes< dof_inds >(nodes_copy, map);
 }
 
-template < array_of< ptrdiff_t > auto dof_inds, ElementTypes T, el_o_t O, size_t n_total_dofs >
+template < array_of< size_t > auto dof_inds, ElementTypes T, el_o_t O, size_t n_total_dofs >
 auto getUnsortedElementDofs(const Element< T, O >& element, const NodeToDofMap< n_total_dofs >& map)
 {
-    std::array< global_dof_t, dof_inds.size() * Element< T, O >::n_nodes > retval;
-    for (auto insert_it = retval.begin(); auto node : element.getNodes())
-    {
-        const auto& full_dofs = map(node);
-        for (auto ind : dof_inds)
-            *insert_it++ = full_dofs[ind];
-    }
-    return retval;
+    return getDofsFromNodes< dof_inds >(element.getNodes(), map);
 }
 
 class CrsEntries

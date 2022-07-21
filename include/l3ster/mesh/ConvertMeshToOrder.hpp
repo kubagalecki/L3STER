@@ -1,8 +1,8 @@
 #ifndef L3STER_MESH_CONVERTMESHTOORDER_HPP
 #define L3STER_MESH_CONVERTMESHTOORDER_HPP
 
-#include "ElementIntersecting.hpp"
-#include "Mesh.hpp"
+#include "l3ster/mesh/ElementIntersecting.hpp"
+#include "l3ster/mesh/Mesh.hpp"
 #include "l3ster/util/Common.hpp"
 #include "l3ster/util/MetisUtils.hpp"
 

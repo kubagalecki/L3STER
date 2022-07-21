@@ -1,8 +1,8 @@
 #ifndef L3STER_MESH_NODEPHYSICALLOCATION_HPP
 #define L3STER_MESH_NODEPHYSICALLOCATION_HPP
 
-#include "NodeReferenceLocation.hpp"
 #include "l3ster/mapping/MapReferenceToPhysical.hpp"
+#include "l3ster/mesh/NodeReferenceLocation.hpp"
 
 namespace lstr
 {

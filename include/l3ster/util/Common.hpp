@@ -1,6 +1,8 @@
 #ifndef L3STER_UTIL_COMMON_HPP
 #define L3STER_UTIL_COMMON_HPP
 
+#include "l3ster/util/Concepts.hpp"
+
 #include <algorithm>
 #include <array>
 #include <concepts>
@@ -88,7 +90,29 @@ private:
     T value;
 };
 
-enum class Space
+template < std::ranges::sized_range auto inds, typename T, size_t N, std::indirectly_writable< T > Iter >
+Iter copyValuesAtInds(const std::array< T, N >& array, Iter out_iter)
+    requires std::convertible_to< std::ranges::range_value_t< decltype(inds) >,
+                                  size_t > and
+    (std::ranges::all_of(inds, [](size_t i) { return i < N; }))
+{
+    for (auto i : inds)
+        *out_iter++ = array[i];
+    return out_iter;
+}
+
+template < std::ranges::sized_range auto inds, typename T, size_t N >
+std::array< T, std::ranges::size(inds) > getValuesAtInds(const std::array< T, N >& array)
+    requires std::convertible_to< std::ranges::range_value_t< decltype(inds) >,
+                                  size_t > and
+    (std::ranges::all_of(inds, [](size_t i) { return i < N; }))
+{
+    std::array< T, std::ranges::size(inds) > retval;
+    copyValuesAtInds< inds >(array, begin(retval));
+    return retval;
+}
+
+enum struct Space
 {
     X,
     Y,
