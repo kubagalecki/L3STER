@@ -1,15 +1,14 @@
 #ifndef L3STER_DIRICHLETBC_HPP
 #define L3STER_DIRICHLETBC_HPP
 
-#include "l3ster/util/TrilinosUtils.hpp"
-
 #include "Tpetra_CrsMatrix.hpp"
 #include "Tpetra_Vector.hpp"
 
+#include "l3ster/util/DynamicBitset.hpp"
+#include "l3ster/util/TrilinosUtils.hpp"
+
 #include <ranges>
 #include <span>
-
-#include "l3ster/util/DynamicBitset.hpp"
 
 namespace lstr
 {
