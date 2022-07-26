@@ -8,11 +8,11 @@
 
 namespace lstr::detail
 {
-// Note: Tpetra (Multi)Vector's sumInto* member functions often throw in a multithreaded environment. This is due to the
+// Note: Tpetra (Multi)Vector's sumIntoX member functions often throw in a multithreaded environment. This is due to the
 // semantics of the dual views underpinning this class, not neccessarily to a bug. For the sake of simplicity, instead
 // of figuring out the correct set of Kokkos views needed to make this work, here we pass in the underlying host
-// allocation and perform the atomic update ourselves. Note that the sumInto* member functions of Tpetra::CrsMatrix work
-// just fine
+// allocation and perform the atomic update ourselves. Note that the sumIntoX member functions of Tpetra::CrsMatrix work
+// fine, since Tpetra::CrsMatrix assumes modification in host space
 template < int local_size >
 void scatterLocalVector(const Eigen::Matrix< val_t, local_size, 1 >&          local_vector,
                         const std::array< global_dof_t, size_t{local_size} >& dofs,

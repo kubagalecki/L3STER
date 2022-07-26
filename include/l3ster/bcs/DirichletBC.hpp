@@ -94,20 +94,29 @@ void DirichletBCAlgebraic::apply(const Tpetra::Vector<>& bc_vals,
                                  Tpetra::CrsMatrix<>&    matrix,
                                  Tpetra::Vector<>&       rhs) const
 {
+    const auto matrix_row_map   = matrix.getRowMap();
+    const auto matrix_col_map   = matrix.getColMap();
+    const auto matrix_crs_graph = matrix.getCrsGraph();
+    const auto bc_vals_data     = bc_vals.getData();
+
+    rhs.sync_host();
+    rhs.modify_host();
+    auto rhs_data = rhs.getDataNonConst();
+
     std::vector< val_t >       local_vals(matrix.getNodeMaxNumRowEntries(), 0.);
     std::vector< val_t >       col_copy_vals(dirichlet_col_matrix->getNodeMaxNumRowEntries());
     std::vector< local_dof_t > cols_to_zero_out(col_copy_vals.size());
 
     const auto process_dbc_row = [&](local_dof_t local_row) {
-        const auto local_cols = getLocalRowView(*matrix.getCrsGraph(), local_row);
-        const auto global_row = matrix.getRowMap()->getGlobalElement(local_row);
+        const auto local_cols = getLocalRowView(*matrix_crs_graph, local_row);
+        const auto global_row = matrix_row_map->getGlobalElement(local_row);
         const auto diag_ind   = std::distance(local_cols.begin(), std::ranges::find_if(local_cols, [&](local_dof_t c) {
-                                                return matrix.getColMap()->getGlobalElement(c) == global_row;
+                                                return matrix_col_map->getGlobalElement(c) == global_row;
                                             }));
         local_vals[diag_ind]  = 1.;
         replaceLocalValues(matrix, local_row, local_cols, local_vals | std::views::take(local_cols.size()));
         local_vals[diag_ind] = 0.;
-        rhs.replaceLocalValue(local_row, bc_vals.getData()[local_row]);
+        rhs_data[local_row]  = bc_vals_data[local_row];
     };
     const auto fill_subgraph_row = [&](local_dof_t                              local_row,
                                        const std::span< const local_dof_t >&    copy_inds,
@@ -143,6 +152,8 @@ void DirichletBCAlgebraic::apply(const Tpetra::Vector<>& bc_vals,
             process_non_dbc_row(local_row);
     }
     dirichlet_col_matrix->fillComplete();
+    rhs_data = {};
+    rhs.sync_device();
     dirichlet_col_matrix->apply(bc_vals, rhs, Teuchos::NO_TRANS, -1., 1.);
 }
 } // namespace lstr

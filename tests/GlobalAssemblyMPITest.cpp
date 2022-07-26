@@ -1,8 +1,6 @@
-#include "l3ster/assembly/AssembleGlobalSystem.hpp"
+#include "l3ster/assembly/AlgebraicSystemManager.hpp"
 #include "l3ster/assembly/ComputeValuesAtNodes.hpp"
 #include "l3ster/assembly/GatherGlobalValues.hpp"
-#include "l3ster/bcs/DirichletBC.hpp"
-#include "l3ster/bcs/GetDirichletDofs.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
@@ -10,6 +8,15 @@
 #include "l3ster/util/GlobalResource.hpp"
 
 #include "Amesos2.hpp"
+
+#define CHECK_THROWS(X)                                                                                                \
+    try                                                                                                                \
+    {                                                                                                                  \
+        X;                                                                                                             \
+        return EXIT_FAILURE;                                                                                           \
+    }                                                                                                                  \
+    catch (...)                                                                                                        \
+    {}
 
 using namespace lstr;
 
@@ -23,41 +30,18 @@ int main(int argc, char* argv[])
     constexpr auto   mesh_order = 2;
     auto             mesh       = makeSquareMesh(node_dist);
     mesh.getPartitions()[0].initDualGraph();
-    mesh.getPartitions()[0]         = convertMeshToOrder< mesh_order >(mesh.getPartitions()[0]);
-    constexpr d_id_t domain_id      = 0;
-    constexpr d_id_t bot_boundary   = 1;
-    constexpr d_id_t top_boundary   = 2;
-    constexpr d_id_t left_boundary  = 3;
-    constexpr d_id_t right_boundary = 4;
+    mesh.getPartitions()[0]    = convertMeshToOrder< mesh_order >(mesh.getPartitions()[0]);
+    constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
     const auto my_partition = distributeMesh(comm, mesh, {bot_boundary, top_boundary, left_boundary, right_boundary});
     const auto adiabatic_bound_view = my_partition.getBoundaryView(std::array{bot_boundary, top_boundary});
     const auto whole_bound_view =
         my_partition.getBoundaryView(std::array{top_boundary, bot_boundary, left_boundary, right_boundary});
 
-    constexpr auto problem_def    = ConstexprValue< std::array{Pair{d_id_t{0}, std::array{true, true, true}}} >{};
-    const auto     dof_intervals  = computeDofIntervals(my_partition, problem_def, comm);
-    const auto     map            = NodeToDofMap{my_partition, dof_intervals};
-    const auto     sparsity_graph = detail::makeSparsityGraph(my_partition, problem_def, dof_intervals, comm);
-
+    constexpr auto problem_def   = ConstexprValue< std::array{Pair{d_id_t{0}, std::array{true, true, true}}} >{};
     constexpr auto dirichlet_def = ConstexprValue< std::array{Pair{left_boundary, std::array{true, false, false}},
                                                               Pair{right_boundary, std::array{true, false, false}}} >{};
-    const auto& [owned_bcdofs, shared_bcdofs] =
-        detail::getDirichletDofs(my_partition, sparsity_graph, map, problem_def, dirichlet_def);
-    const auto     dirichlet_bc         = DirichletBCAlgebraic{sparsity_graph, owned_bcdofs, shared_bcdofs};
-    constexpr auto dirichlet_bc_val_def = [node_dist](const SpaceTimePoint& st) {
-        Eigen::Matrix< val_t, 1, 1 > retval;
-        retval[0] = st.space.x() / node_dist.back();
-        return retval;
-    };
 
-    const auto glob_mat = makeTeuchosRCP< Tpetra::FECrsMatrix< val_t, local_dof_t, global_dof_t > >(sparsity_graph);
-    const auto glob_rhs = makeTeuchosRCP< Tpetra::FEMultiVector< val_t, local_dof_t, global_dof_t > >(
-        sparsity_graph->getRowMap(), sparsity_graph->getImporter(), 1u);
-    const auto glob_result = makeTeuchosRCP< Tpetra::FEMultiVector< val_t, local_dof_t, global_dof_t > >(
-        sparsity_graph->getRowMap(), sparsity_graph->getImporter(), 1u);
-    glob_result->beginAssembly();
-    glob_result->endAssembly();
-
+    // Problem assembly
     constexpr auto diffusion_kernel2d = [](const auto&, const auto&, const auto&) noexcept {
         using mat_t = Eigen::Matrix< val_t, 4, 3 >;
         std::pair< std::array< mat_t, 3 >, Eigen::Vector4d > retval;
@@ -105,41 +89,62 @@ int main(int argc, char* argv[])
     constexpr auto QO       = q_o_t{mesh_order * 2};
     constexpr auto dof_inds = std::array{size_t{0}, size_t{1}, size_t{2}};
 
-    // Problem assembly
-    glob_mat->beginAssembly();
-    glob_rhs->beginAssembly();
-    {
-        const auto rhs_asm_vec = glob_rhs->getVectorNonConst(0);
-        rhs_asm_vec->modify_host();
-        const auto rhs_data = rhs_asm_vec->getDataNonConst();
-        assembleGlobalSystem< BT, QT, QO, dof_inds >(diffusion_kernel2d,
-                                                     my_partition,
-                                                     std::views::single(domain_id),
-                                                     map,
-                                                     fieldval_getter,
-                                                     *glob_mat,
-                                                     rhs_data,
-                                                     *glob_rhs->getMap());
-        assembleGlobalBoundarySystem< BT, QT, QO, dof_inds >(
-            neumann_bc_kernel, adiabatic_bound_view, map, fieldval_getter, *glob_mat, rhs_data, *glob_rhs->getMap());
-        rhs_asm_vec->sync_device();
-    }
-    glob_mat->endAssembly();
-    glob_rhs->endAssembly();
+    auto       problem               = AlgebraicSystemManager{comm, my_partition, problem_def, dirichlet_def};
+    const auto assembleDomainProblem = [&] {
+        problem.assembleDomainProblem< BT, QT, QO, dof_inds >(
+            diffusion_kernel2d, my_partition, std::views::single(domain_id), fieldval_getter);
+    };
+    const auto assembleBoundaryProblem = [&] {
+        problem.assembleBoundaryProblem< BT, QT, QO, dof_inds >(
+            neumann_bc_kernel, adiabatic_bound_view, fieldval_getter);
+    };
+
+    problem.beginAssembly();
+    CHECK_THROWS(problem.beginModify())
+    CHECK_THROWS(problem.endModify())
+    problem.endAssembly();
+    CHECK_THROWS(problem.setToZero())
+    CHECK_THROWS(assembleDomainProblem())
+    CHECK_THROWS(assembleBoundaryProblem())
+    problem.beginAssembly();
+    problem.setToZero();
+    assembleDomainProblem();
+    assembleBoundaryProblem();
+    problem.endAssembly();
+    problem.endAssembly();
 
     // Dirichlet BCs
-    Tpetra::Vector dirichlet_vals{glob_rhs->getMap()};
-    computeValuesAtNodes< std::array{size_t{0}} >(
-        dirichlet_bc_val_def, my_partition, std::array{left_boundary, right_boundary}, map, dirichlet_vals);
+    constexpr auto dirichlet_bc_val_def = [node_dist](const SpaceTimePoint& st) {
+        Eigen::Matrix< val_t, 1, 1 > retval;
+        retval[0] = st.space.x() / node_dist.back();
+        return retval;
+    };
+    auto dirichlet_vals = problem.makeCompatibleMultiVector(1u);
+    computeValuesAtNodes< std::array{size_t{0}} >(dirichlet_bc_val_def,
+                                                  my_partition,
+                                                  std::array{left_boundary, right_boundary},
+                                                  problem.getNodeToDofMap(),
+                                                  *dirichlet_vals->getVectorNonConst(0));
+    CHECK_THROWS(problem.applyDirichletBCs(*dirichlet_vals->getVector(0)))
+    problem.beginModify();
+    problem.beginModify();
+    CHECK_THROWS(problem.beginAssembly())
+    CHECK_THROWS(problem.endAssembly())
+    problem.applyDirichletBCs(*dirichlet_vals->getVector(0));
+    problem.endModify();
+    problem.endModify();
 
-    glob_mat->beginModify();
-    glob_rhs->beginModify();
-    dirichlet_bc.apply(dirichlet_vals, *glob_mat, *glob_rhs->getVectorNonConst(0));
-    glob_mat->endModify();
-    glob_rhs->endModify();
+    {
+        auto fake_problem = AlgebraicSystemManager{comm, my_partition, problem_def};
+        fake_problem.endAssembly();
+        CHECK_THROWS(fake_problem.applyDirichletBCs(*dirichlet_vals->getVector(0)))
+    }
 
     // Solve
-    Amesos2::KLU2< Tpetra::CrsMatrix<>, Tpetra::MultiVector<> > solver{glob_mat, glob_result, glob_rhs};
+    const auto glob_result = problem.makeCompatibleFEMultiVector(1u);
+    glob_result->switchActiveMultiVector();
+    Amesos2::KLU2< Tpetra::CrsMatrix<>, Tpetra::MultiVector<> > solver{
+        problem.getMatrix(), glob_result, problem.getRhs()};
     solver.preOrdering().symbolicFactorization().numericFactorization().solve();
 
     // Check results
@@ -164,7 +169,7 @@ int main(int argc, char* argv[])
         };
     const auto fval_getter = [&]< size_t N >(const std::array< n_id_t, N >& nodes) {
         return gatherGlobalValues< std::array{size_t{0}, size_t{1}, size_t{2}} >(
-            nodes, map, results_view, dof_local_global_map);
+            nodes, problem.getNodeToDofMap(), results_view, dof_local_global_map);
     };
     const auto error =
         computeNormL2< BT, QT, QO >(comm, compute_error, my_partition, std::views::single(domain_id), fval_getter);

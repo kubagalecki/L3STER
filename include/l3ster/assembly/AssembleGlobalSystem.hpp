@@ -40,7 +40,7 @@ template < BasisTypes              BT,
            array_of< size_t > auto field_inds,
            typename Kernel,
            detail::FieldValGetter_c FvalGetter,
-           std::ranges::sized_range R,
+           detail::DomainIdRange_c  R,
            size_t                   n_fields >
 void assembleGlobalSystem(Kernel&&                                               kernel,
                           const MeshPartition&                                   mesh,
