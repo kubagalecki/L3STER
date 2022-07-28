@@ -20,13 +20,13 @@ int main(int argc, char* argv[])
         if (rank != 0)
         {
             auto received = expected;
-            comm.receive(received.data(), received.size(), rank - 1);
+            comm.receive(received, rank - 1);
             if (received != expected)
                 throw std::runtime_error{"message corrupted in transit"};
         }
 
         if (rank != size - 1)
-            comm.send(expected.data(), expected.size(), rank + 1);
+            comm.send(expected, rank + 1);
 
         return EXIT_SUCCESS;
     }

@@ -131,9 +131,6 @@ concept random_access_typed_range =
 V > ;
 
 template < typename T >
-concept arithmetic = std::is_arithmetic_v< T >;
-
-template < typename T >
 concept ExecutionPolicy_c = std::is_execution_policy_v< std::remove_cvref_t< T > >;
 
 template < typename T >

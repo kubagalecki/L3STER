@@ -3,6 +3,13 @@
 
 #include <algorithm>
 #include <iostream>
+#include <span>
+
+template < typename T >
+auto asRange(T& t)
+{
+    return std::span{std::addressof(t), 1};
+}
 
 int main(int argc, char* argv[])
 {
@@ -24,13 +31,13 @@ int main(int argc, char* argv[])
                 rcv_requests.reserve(size - 1);
                 char message = 'z';
                 for (int src = 1; src < size; ++src)
-                    rcv_requests.push_back(comm.receiveAsync(&in_msg[src], 1, src));
+                    rcv_requests.push_back(comm.receiveAsync(asRange(in_msg[src]), src));
                 std::ranges::for_each(rcv_requests, [](auto& req) {
                     if (req.test())
                         throw std::logic_error{"Message received too soon"};
                 });
                 for (int dest = 1; dest < size; ++dest)
-                    comm.sendAsync(&message, 1, dest).wait();
+                    comm.sendAsync(asRange(message), dest).wait();
             }
             std::for_each(in_msg.cbegin() + 1, in_msg.cend(), [](char in) {
                 if (in != 'a')
@@ -40,12 +47,12 @@ int main(int argc, char* argv[])
         else
         {
             char msg_in{}, msg_out = 'a';
-            comm.receiveAsync(&msg_in, 1, 0).wait();
+            comm.receiveAsync(asRange(msg_in), 0).wait();
             if (msg_in != 'z')
                 throw std::logic_error{"Message corrupted in transit"};
-            comm.sendAsync(&msg_out, 1, 0).wait();
+            comm.sendAsync(asRange(msg_out), 0).wait();
         }
-        auto request_to_cancel = comm.sendAsync(&argc, 1, 0);
+        auto request_to_cancel = comm.sendAsync(asRange(argc), 0);
         request_to_cancel.cancel();
         request_to_cancel.wait();
 
