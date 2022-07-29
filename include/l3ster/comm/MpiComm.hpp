@@ -173,6 +173,8 @@ public:
     void broadcast(T* message, int size, int root) const;
     template < detail::MpiType_c T >
     [[nodiscard]] Request broadcastAsync(T* message, int size, int root) const;
+    template < detail::MpiType_c T >
+    [[nodiscard]] Request exclusiveScanAsync(T* send_buf, T* recv_buf, int size, MPI_Op op) const;
 
     // observers
     [[nodiscard]] inline int getRank() const;
@@ -331,6 +333,16 @@ MpiComm::Request MpiComm::broadcastAsync(T* message, int size, int root) const
     Request    request{};
     detail::handleMPIError(MPI_Ibcast(message, size, datatype, root, comm, &request.request),
                            "MPI asynchronous broadcast failed");
+    return request;
+}
+
+template < detail::MpiType_c T >
+MpiComm::Request MpiComm::exclusiveScanAsync(T* send_buf, T* recv_buf, int size, MPI_Op op) const
+{
+    const auto datatype = detail::MpiType< T >::value();
+    Request    request{};
+    detail::handleMPIError(MPI_Iexscan(send_buf, recv_buf, size, datatype, op, comm, &request.request),
+                           "MPI asynchronous exclusive scan failed");
     return request;
 }
 

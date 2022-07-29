@@ -14,7 +14,7 @@ auto computeValuesAtNodes(F&&                             f,
                           const MeshPartition&            mesh,
                           R&&                             dom_ids,
                           const NodeToDofMap< n_fields >& map,
-                          Tpetra::Vector<>                values,
+                          Tpetra::Vector<>&               values,
                           val_t                           time = 0.)
     requires std::convertible_to< std::ranges::range_value_t< R >,
                                   d_id_t > and
