@@ -1,4 +1,5 @@
 #include "l3ster/util/Algorithm.hpp"
+#include "l3ster/util/Base64.hpp"
 #include "l3ster/util/BitsetManip.hpp"
 #include "l3ster/util/Common.hpp"
 #include "l3ster/util/ConstexprVector.hpp"
@@ -430,4 +431,43 @@ TEST_CASE("Index map", "[util]")
     const auto map = IndexMap{vals};
     for (ptrdiff_t i : std::views::iota(base, base + size))
         CHECK(map(i) == i - 10);
+}
+
+TEST_CASE("Base64 encoding", "[util]")
+{
+    constexpr auto text =
+        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore "
+        "magna aliqua. Tempor orci eu lobortis elementum nibh tellus molestie nunc non. Dignissim cras tincidunt "
+        "lobortis feugiat vivamus at augue eget arcu. Ut tellus elementum sagittis vitae et. Cras semper auctor neque "
+        "vitae tempus quam pellentesque nec nam. Viverra maecenas accumsan lacus vel facilisis volutpat est velit "
+        "egestas. Vel quam elementum pulvinar etiam non quam. Lacus luctus accumsan tortor posuere ac ut consequat "
+        "semper viverra. Gravida neque convallis a cras semper auctor neque. Vehicula ipsum a arcu cursus vitae congue "
+        "mauris rhoncus aenean. Enim blandit volutpat maecenas volutpat blandit aliquam etiam erat. Ultrices tincidunt "
+        "arcu non sodales neque sodales ut etiam. Ultricies leo integer malesuada nunc vel risus commodo viverra "
+        "maecenas. Cras sed felis eget velit aliquet sagittis id. Blandit libero volutpat sed cras ornare arcu dui "
+        "vivamus arcu. Blandit turpis cursus in hac habitasse platea dictumst quisque sagittis. Sed turpis tincidunt "
+        "id aliquet. Elementum pulvinar etiam non quam lacus suspendisse faucibus.";
+    constexpr auto text_sv = std::string_view{text};
+    constexpr auto encoded_expected =
+        "TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQsIGNvbnNlY3RldHVyIGFkaXBpc2NpbmcgZWxpdCwgc2VkIGRvIGVpdXNtb2QgdGVtcG9yIGluY2"
+        "lkaWR1bnQgdXQgbGFib3JlIGV0IGRvbG9yZSBtYWduYSBhbGlxdWEuIFRlbXBvciBvcmNpIGV1IGxvYm9ydGlzIGVsZW1lbnR1bSBuaWJoIHRl"
+        "bGx1cyBtb2xlc3RpZSBudW5jIG5vbi4gRGlnbmlzc2ltIGNyYXMgdGluY2lkdW50IGxvYm9ydGlzIGZldWdpYXQgdml2YW11cyBhdCBhdWd1ZS"
+        "BlZ2V0IGFyY3UuIFV0IHRlbGx1cyBlbGVtZW50dW0gc2FnaXR0aXMgdml0YWUgZXQuIENyYXMgc2VtcGVyIGF1Y3RvciBuZXF1ZSB2aXRhZSB0"
+        "ZW1wdXMgcXVhbSBwZWxsZW50ZXNxdWUgbmVjIG5hbS4gVml2ZXJyYSBtYWVjZW5hcyBhY2N1bXNhbiBsYWN1cyB2ZWwgZmFjaWxpc2lzIHZvbH"
+        "V0cGF0IGVzdCB2ZWxpdCBlZ2VzdGFzLiBWZWwgcXVhbSBlbGVtZW50dW0gcHVsdmluYXIgZXRpYW0gbm9uIHF1YW0uIExhY3VzIGx1Y3R1cyBh"
+        "Y2N1bXNhbiB0b3J0b3IgcG9zdWVyZSBhYyB1dCBjb25zZXF1YXQgc2VtcGVyIHZpdmVycmEuIEdyYXZpZGEgbmVxdWUgY29udmFsbGlzIGEgY3"
+        "JhcyBzZW1wZXIgYXVjdG9yIG5lcXVlLiBWZWhpY3VsYSBpcHN1bSBhIGFyY3UgY3Vyc3VzIHZpdGFlIGNvbmd1ZSBtYXVyaXMgcmhvbmN1cyBh"
+        "ZW5lYW4uIEVuaW0gYmxhbmRpdCB2b2x1dHBhdCBtYWVjZW5hcyB2b2x1dHBhdCBibGFuZGl0IGFsaXF1YW0gZXRpYW0gZXJhdC4gVWx0cmljZX"
+        "MgdGluY2lkdW50IGFyY3Ugbm9uIHNvZGFsZXMgbmVxdWUgc29kYWxlcyB1dCBldGlhbS4gVWx0cmljaWVzIGxlbyBpbnRlZ2VyIG1hbGVzdWFk"
+        "YSBudW5jIHZlbCByaXN1cyBjb21tb2RvIHZpdmVycmEgbWFlY2VuYXMuIENyYXMgc2VkIGZlbGlzIGVnZXQgdmVsaXQgYWxpcXVldCBzYWdpdH"
+        "RpcyBpZC4gQmxhbmRpdCBsaWJlcm8gdm9sdXRwYXQgc2VkIGNyYXMgb3JuYXJlIGFyY3UgZHVpIHZpdmFtdXMgYXJjdS4gQmxhbmRpdCB0dXJw"
+        "aXMgY3Vyc3VzIGluIGhhYyBoYWJpdGFzc2UgcGxhdGVhIGRpY3R1bXN0IHF1aXNxdWUgc2FnaXR0aXMuIFNlZCB0dXJwaXMgdGluY2lkdW50IG"
+        "lkIGFsaXF1ZXQuIEVsZW1lbnR1bSBwdWx2aW5hciBldGlhbSBub24gcXVhbSBsYWN1cyBzdXNwZW5kaXNzZSBmYXVjaWJ1cy4=";
+    constexpr auto      encoded_expected_sv = std::string_view{encoded_expected};
+    std::vector< char > alloc(text_sv.size() * 4u / 3u + 3u);
+    const auto          bytes_written = encodeAsBase64(text_sv, alloc.begin());
+    const auto          encoded       = std::string_view{alloc.data(), bytes_written};
+
+    REQUIRE(encoded.size() == encoded_expected_sv.size());
+    CHECK(encoded == encoded_expected);
 }
