@@ -437,37 +437,99 @@ TEST_CASE("Base64 encoding", "[util]")
 {
     constexpr auto text =
         "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore "
-        "magna aliqua. Tempor orci eu lobortis elementum nibh tellus molestie nunc non. Dignissim cras tincidunt "
-        "lobortis feugiat vivamus at augue eget arcu. Ut tellus elementum sagittis vitae et. Cras semper auctor neque "
-        "vitae tempus quam pellentesque nec nam. Viverra maecenas accumsan lacus vel facilisis volutpat est velit "
-        "egestas. Vel quam elementum pulvinar etiam non quam. Lacus luctus accumsan tortor posuere ac ut consequat "
-        "semper viverra. Gravida neque convallis a cras semper auctor neque. Vehicula ipsum a arcu cursus vitae congue "
-        "mauris rhoncus aenean. Enim blandit volutpat maecenas volutpat blandit aliquam etiam erat. Ultrices tincidunt "
-        "arcu non sodales neque sodales ut etiam. Ultricies leo integer malesuada nunc vel risus commodo viverra "
-        "maecenas. Cras sed felis eget velit aliquet sagittis id. Blandit libero volutpat sed cras ornare arcu dui "
-        "vivamus arcu. Blandit turpis cursus in hac habitasse platea dictumst quisque sagittis. Sed turpis tincidunt "
-        "id aliquet. Elementum pulvinar etiam non quam lacus suspendisse faucibus.";
-    constexpr auto text_sv = std::string_view{text};
+        "magna aliqua. Etiam dignissim diam quis enim lobortis scelerisque fermentum. Mi quis hendrerit dolor magna. "
+        "Pellentesque diam volutpat commodo sed. Diam sollicitudin tempor id eu nisl nunc mi ipsum. Eget mauris "
+        "pharetra et ultrices neque ornare aenean. Amet luctus venenatis lectus magna fringilla urna porttitor rhoncus "
+        "dolor. Donec pretium vulputate sapien nec sagittis aliquam. Non odio euismod lacinia at quis risus sed "
+        "vulputate. Dui accumsan sit amet nulla facilisi. Vitae ultricies leo integer malesuada nunc vel risus "
+        "commodo. Ut venenatis tellus in metus vulputate eu scelerisque. Imperdiet dui accumsan sit amet nulla "
+        "facilisi. Velit sed ullamcorper morbi tincidunt. Nisi vitae suscipit tellus mauris a diam maecenas. "
+        "Adipiscing elit duis tristique sollicitudin nibh sit amet commodo. Nulla at volutpat diam ut venenatis tellus "
+        "in metus vulputate.";
     constexpr auto encoded_expected =
         "TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQsIGNvbnNlY3RldHVyIGFkaXBpc2NpbmcgZWxpdCwgc2VkIGRvIGVpdXNtb2QgdGVtcG9yIGluY2"
-        "lkaWR1bnQgdXQgbGFib3JlIGV0IGRvbG9yZSBtYWduYSBhbGlxdWEuIFRlbXBvciBvcmNpIGV1IGxvYm9ydGlzIGVsZW1lbnR1bSBuaWJoIHRl"
-        "bGx1cyBtb2xlc3RpZSBudW5jIG5vbi4gRGlnbmlzc2ltIGNyYXMgdGluY2lkdW50IGxvYm9ydGlzIGZldWdpYXQgdml2YW11cyBhdCBhdWd1ZS"
-        "BlZ2V0IGFyY3UuIFV0IHRlbGx1cyBlbGVtZW50dW0gc2FnaXR0aXMgdml0YWUgZXQuIENyYXMgc2VtcGVyIGF1Y3RvciBuZXF1ZSB2aXRhZSB0"
-        "ZW1wdXMgcXVhbSBwZWxsZW50ZXNxdWUgbmVjIG5hbS4gVml2ZXJyYSBtYWVjZW5hcyBhY2N1bXNhbiBsYWN1cyB2ZWwgZmFjaWxpc2lzIHZvbH"
-        "V0cGF0IGVzdCB2ZWxpdCBlZ2VzdGFzLiBWZWwgcXVhbSBlbGVtZW50dW0gcHVsdmluYXIgZXRpYW0gbm9uIHF1YW0uIExhY3VzIGx1Y3R1cyBh"
-        "Y2N1bXNhbiB0b3J0b3IgcG9zdWVyZSBhYyB1dCBjb25zZXF1YXQgc2VtcGVyIHZpdmVycmEuIEdyYXZpZGEgbmVxdWUgY29udmFsbGlzIGEgY3"
-        "JhcyBzZW1wZXIgYXVjdG9yIG5lcXVlLiBWZWhpY3VsYSBpcHN1bSBhIGFyY3UgY3Vyc3VzIHZpdGFlIGNvbmd1ZSBtYXVyaXMgcmhvbmN1cyBh"
-        "ZW5lYW4uIEVuaW0gYmxhbmRpdCB2b2x1dHBhdCBtYWVjZW5hcyB2b2x1dHBhdCBibGFuZGl0IGFsaXF1YW0gZXRpYW0gZXJhdC4gVWx0cmljZX"
-        "MgdGluY2lkdW50IGFyY3Ugbm9uIHNvZGFsZXMgbmVxdWUgc29kYWxlcyB1dCBldGlhbS4gVWx0cmljaWVzIGxlbyBpbnRlZ2VyIG1hbGVzdWFk"
-        "YSBudW5jIHZlbCByaXN1cyBjb21tb2RvIHZpdmVycmEgbWFlY2VuYXMuIENyYXMgc2VkIGZlbGlzIGVnZXQgdmVsaXQgYWxpcXVldCBzYWdpdH"
-        "RpcyBpZC4gQmxhbmRpdCBsaWJlcm8gdm9sdXRwYXQgc2VkIGNyYXMgb3JuYXJlIGFyY3UgZHVpIHZpdmFtdXMgYXJjdS4gQmxhbmRpdCB0dXJw"
-        "aXMgY3Vyc3VzIGluIGhhYyBoYWJpdGFzc2UgcGxhdGVhIGRpY3R1bXN0IHF1aXNxdWUgc2FnaXR0aXMuIFNlZCB0dXJwaXMgdGluY2lkdW50IG"
-        "lkIGFsaXF1ZXQuIEVsZW1lbnR1bSBwdWx2aW5hciBldGlhbSBub24gcXVhbSBsYWN1cyBzdXNwZW5kaXNzZSBmYXVjaWJ1cy4=";
-    constexpr auto      encoded_expected_sv = std::string_view{encoded_expected};
-    std::vector< char > alloc(text_sv.size() * 4u / 3u + 3u);
-    const auto          bytes_written = encodeAsBase64(text_sv, alloc.begin());
-    const auto          encoded       = std::string_view{alloc.data(), bytes_written};
+        "lkaWR1bnQgdXQgbGFib3JlIGV0IGRvbG9yZSBtYWduYSBhbGlxdWEuIEV0aWFtIGRpZ25pc3NpbSBkaWFtIHF1aXMgZW5pbSBsb2JvcnRpcyBz"
+        "Y2VsZXJpc3F1ZSBmZXJtZW50dW0uIE1pIHF1aXMgaGVuZHJlcml0IGRvbG9yIG1hZ25hLiBQZWxsZW50ZXNxdWUgZGlhbSB2b2x1dHBhdCBjb2"
+        "1tb2RvIHNlZC4gRGlhbSBzb2xsaWNpdHVkaW4gdGVtcG9yIGlkIGV1IG5pc2wgbnVuYyBtaSBpcHN1bS4gRWdldCBtYXVyaXMgcGhhcmV0cmEg"
+        "ZXQgdWx0cmljZXMgbmVxdWUgb3JuYXJlIGFlbmVhbi4gQW1ldCBsdWN0dXMgdmVuZW5hdGlzIGxlY3R1cyBtYWduYSBmcmluZ2lsbGEgdXJuYS"
+        "Bwb3J0dGl0b3IgcmhvbmN1cyBkb2xvci4gRG9uZWMgcHJldGl1bSB2dWxwdXRhdGUgc2FwaWVuIG5lYyBzYWdpdHRpcyBhbGlxdWFtLiBOb24g"
+        "b2RpbyBldWlzbW9kIGxhY2luaWEgYXQgcXVpcyByaXN1cyBzZWQgdnVscHV0YXRlLiBEdWkgYWNjdW1zYW4gc2l0IGFtZXQgbnVsbGEgZmFjaW"
+        "xpc2kuIFZpdGFlIHVsdHJpY2llcyBsZW8gaW50ZWdlciBtYWxlc3VhZGEgbnVuYyB2ZWwgcmlzdXMgY29tbW9kby4gVXQgdmVuZW5hdGlzIHRl"
+        "bGx1cyBpbiBtZXR1cyB2dWxwdXRhdGUgZXUgc2NlbGVyaXNxdWUuIEltcGVyZGlldCBkdWkgYWNjdW1zYW4gc2l0IGFtZXQgbnVsbGEgZmFjaW"
+        "xpc2kuIFZlbGl0IHNlZCB1bGxhbWNvcnBlciBtb3JiaSB0aW5jaWR1bnQuIE5pc2kgdml0YWUgc3VzY2lwaXQgdGVsbHVzIG1hdXJpcyBhIGRp"
+        "YW0gbWFlY2VuYXMuIEFkaXBpc2NpbmcgZWxpdCBkdWlzIHRyaXN0aXF1ZSBzb2xsaWNpdHVkaW4gbmliaCBzaXQgYW1ldCBjb21tb2RvLiBOdW"
+        "xsYSBhdCB2b2x1dHBhdCBkaWFtIHV0IHZlbmVuYXRpcyB0ZWxsdXMgaW4gbWV0dXMgdnVscHV0YXRlLg==";
+    constexpr auto encoded_expected_drop1 =
+        "b3JlbSBpcHN1bSBkb2xvciBzaXQgYW1ldCwgY29uc2VjdGV0dXIgYWRpcGlzY2luZyBlbGl0LCBzZWQgZG8gZWl1c21vZCB0ZW1wb3IgaW5jaW"
+        "RpZHVudCB1dCBsYWJvcmUgZXQgZG9sb3JlIG1hZ25hIGFsaXF1YS4gRXRpYW0gZGlnbmlzc2ltIGRpYW0gcXVpcyBlbmltIGxvYm9ydGlzIHNj"
+        "ZWxlcmlzcXVlIGZlcm1lbnR1bS4gTWkgcXVpcyBoZW5kcmVyaXQgZG9sb3IgbWFnbmEuIFBlbGxlbnRlc3F1ZSBkaWFtIHZvbHV0cGF0IGNvbW"
+        "1vZG8gc2VkLiBEaWFtIHNvbGxpY2l0dWRpbiB0ZW1wb3IgaWQgZXUgbmlzbCBudW5jIG1pIGlwc3VtLiBFZ2V0IG1hdXJpcyBwaGFyZXRyYSBl"
+        "dCB1bHRyaWNlcyBuZXF1ZSBvcm5hcmUgYWVuZWFuLiBBbWV0IGx1Y3R1cyB2ZW5lbmF0aXMgbGVjdHVzIG1hZ25hIGZyaW5naWxsYSB1cm5hIH"
+        "BvcnR0aXRvciByaG9uY3VzIGRvbG9yLiBEb25lYyBwcmV0aXVtIHZ1bHB1dGF0ZSBzYXBpZW4gbmVjIHNhZ2l0dGlzIGFsaXF1YW0uIE5vbiBv"
+        "ZGlvIGV1aXNtb2QgbGFjaW5pYSBhdCBxdWlzIHJpc3VzIHNlZCB2dWxwdXRhdGUuIER1aSBhY2N1bXNhbiBzaXQgYW1ldCBudWxsYSBmYWNpbG"
+        "lzaS4gVml0YWUgdWx0cmljaWVzIGxlbyBpbnRlZ2VyIG1hbGVzdWFkYSBudW5jIHZlbCByaXN1cyBjb21tb2RvLiBVdCB2ZW5lbmF0aXMgdGVs"
+        "bHVzIGluIG1ldHVzIHZ1bHB1dGF0ZSBldSBzY2VsZXJpc3F1ZS4gSW1wZXJkaWV0IGR1aSBhY2N1bXNhbiBzaXQgYW1ldCBudWxsYSBmYWNpbG"
+        "lzaS4gVmVsaXQgc2VkIHVsbGFtY29ycGVyIG1vcmJpIHRpbmNpZHVudC4gTmlzaSB2aXRhZSBzdXNjaXBpdCB0ZWxsdXMgbWF1cmlzIGEgZGlh"
+        "bSBtYWVjZW5hcy4gQWRpcGlzY2luZyBlbGl0IGR1aXMgdHJpc3RpcXVlIHNvbGxpY2l0dWRpbiBuaWJoIHNpdCBhbWV0IGNvbW1vZG8uIE51bG"
+        "xhIGF0IHZvbHV0cGF0IGRpYW0gdXQgdmVuZW5hdGlzIHRlbGx1cyBpbiBtZXR1cyB2dWxwdXRhdGUu";
+    constexpr auto encoded_expected_drop2 =
+        "cmVtIGlwc3VtIGRvbG9yIHNpdCBhbWV0LCBjb25zZWN0ZXR1ciBhZGlwaXNjaW5nIGVsaXQsIHNlZCBkbyBlaXVzbW9kIHRlbXBvciBpbmNpZG"
+        "lkdW50IHV0IGxhYm9yZSBldCBkb2xvcmUgbWFnbmEgYWxpcXVhLiBFdGlhbSBkaWduaXNzaW0gZGlhbSBxdWlzIGVuaW0gbG9ib3J0aXMgc2Nl"
+        "bGVyaXNxdWUgZmVybWVudHVtLiBNaSBxdWlzIGhlbmRyZXJpdCBkb2xvciBtYWduYS4gUGVsbGVudGVzcXVlIGRpYW0gdm9sdXRwYXQgY29tbW"
+        "9kbyBzZWQuIERpYW0gc29sbGljaXR1ZGluIHRlbXBvciBpZCBldSBuaXNsIG51bmMgbWkgaXBzdW0uIEVnZXQgbWF1cmlzIHBoYXJldHJhIGV0"
+        "IHVsdHJpY2VzIG5lcXVlIG9ybmFyZSBhZW5lYW4uIEFtZXQgbHVjdHVzIHZlbmVuYXRpcyBsZWN0dXMgbWFnbmEgZnJpbmdpbGxhIHVybmEgcG"
+        "9ydHRpdG9yIHJob25jdXMgZG9sb3IuIERvbmVjIHByZXRpdW0gdnVscHV0YXRlIHNhcGllbiBuZWMgc2FnaXR0aXMgYWxpcXVhbS4gTm9uIG9k"
+        "aW8gZXVpc21vZCBsYWNpbmlhIGF0IHF1aXMgcmlzdXMgc2VkIHZ1bHB1dGF0ZS4gRHVpIGFjY3Vtc2FuIHNpdCBhbWV0IG51bGxhIGZhY2lsaX"
+        "NpLiBWaXRhZSB1bHRyaWNpZXMgbGVvIGludGVnZXIgbWFsZXN1YWRhIG51bmMgdmVsIHJpc3VzIGNvbW1vZG8uIFV0IHZlbmVuYXRpcyB0ZWxs"
+        "dXMgaW4gbWV0dXMgdnVscHV0YXRlIGV1IHNjZWxlcmlzcXVlLiBJbXBlcmRpZXQgZHVpIGFjY3Vtc2FuIHNpdCBhbWV0IG51bGxhIGZhY2lsaX"
+        "NpLiBWZWxpdCBzZWQgdWxsYW1jb3JwZXIgbW9yYmkgdGluY2lkdW50LiBOaXNpIHZpdGFlIHN1c2NpcGl0IHRlbGx1cyBtYXVyaXMgYSBkaWFt"
+        "IG1hZWNlbmFzLiBBZGlwaXNjaW5nIGVsaXQgZHVpcyB0cmlzdGlxdWUgc29sbGljaXR1ZGluIG5pYmggc2l0IGFtZXQgY29tbW9kby4gTnVsbG"
+        "EgYXQgdm9sdXRwYXQgZGlhbSB1dCB2ZW5lbmF0aXMgdGVsbHVzIGluIG1ldHVzIHZ1bHB1dGF0ZS4=";
+    constexpr auto encoded_expected_takebut1 =
+        "TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQsIGNvbnNlY3RldHVyIGFkaXBpc2NpbmcgZWxpdCwgc2VkIGRvIGVpdXNtb2QgdGVtcG9yIGluY2"
+        "lkaWR1bnQgdXQgbGFib3JlIGV0IGRvbG9yZSBtYWduYSBhbGlxdWEuIEV0aWFtIGRpZ25pc3NpbSBkaWFtIHF1aXMgZW5pbSBsb2JvcnRpcyBz"
+        "Y2VsZXJpc3F1ZSBmZXJtZW50dW0uIE1pIHF1aXMgaGVuZHJlcml0IGRvbG9yIG1hZ25hLiBQZWxsZW50ZXNxdWUgZGlhbSB2b2x1dHBhdCBjb2"
+        "1tb2RvIHNlZC4gRGlhbSBzb2xsaWNpdHVkaW4gdGVtcG9yIGlkIGV1IG5pc2wgbnVuYyBtaSBpcHN1bS4gRWdldCBtYXVyaXMgcGhhcmV0cmEg"
+        "ZXQgdWx0cmljZXMgbmVxdWUgb3JuYXJlIGFlbmVhbi4gQW1ldCBsdWN0dXMgdmVuZW5hdGlzIGxlY3R1cyBtYWduYSBmcmluZ2lsbGEgdXJuYS"
+        "Bwb3J0dGl0b3IgcmhvbmN1cyBkb2xvci4gRG9uZWMgcHJldGl1bSB2dWxwdXRhdGUgc2FwaWVuIG5lYyBzYWdpdHRpcyBhbGlxdWFtLiBOb24g"
+        "b2RpbyBldWlzbW9kIGxhY2luaWEgYXQgcXVpcyByaXN1cyBzZWQgdnVscHV0YXRlLiBEdWkgYWNjdW1zYW4gc2l0IGFtZXQgbnVsbGEgZmFjaW"
+        "xpc2kuIFZpdGFlIHVsdHJpY2llcyBsZW8gaW50ZWdlciBtYWxlc3VhZGEgbnVuYyB2ZWwgcmlzdXMgY29tbW9kby4gVXQgdmVuZW5hdGlzIHRl"
+        "bGx1cyBpbiBtZXR1cyB2dWxwdXRhdGUgZXUgc2NlbGVyaXNxdWUuIEltcGVyZGlldCBkdWkgYWNjdW1zYW4gc2l0IGFtZXQgbnVsbGEgZmFjaW"
+        "xpc2kuIFZlbGl0IHNlZCB1bGxhbWNvcnBlciBtb3JiaSB0aW5jaWR1bnQuIE5pc2kgdml0YWUgc3VzY2lwaXQgdGVsbHVzIG1hdXJpcyBhIGRp"
+        "YW0gbWFlY2VuYXMuIEFkaXBpc2NpbmcgZWxpdCBkdWlzIHRyaXN0aXF1ZSBzb2xsaWNpdHVkaW4gbmliaCBzaXQgYW1ldCBjb21tb2RvLiBOdW"
+        "xsYSBhdCB2b2x1dHBhdCBkaWFtIHV0IHZlbmVuYXRpcyB0ZWxsdXMgaW4gbWV0dXMgdnVscHV0YXRl";
+    constexpr auto encoded_expected_takebut2 =
+        "TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQsIGNvbnNlY3RldHVyIGFkaXBpc2NpbmcgZWxpdCwgc2VkIGRvIGVpdXNtb2QgdGVtcG9yIGluY2"
+        "lkaWR1bnQgdXQgbGFib3JlIGV0IGRvbG9yZSBtYWduYSBhbGlxdWEuIEV0aWFtIGRpZ25pc3NpbSBkaWFtIHF1aXMgZW5pbSBsb2JvcnRpcyBz"
+        "Y2VsZXJpc3F1ZSBmZXJtZW50dW0uIE1pIHF1aXMgaGVuZHJlcml0IGRvbG9yIG1hZ25hLiBQZWxsZW50ZXNxdWUgZGlhbSB2b2x1dHBhdCBjb2"
+        "1tb2RvIHNlZC4gRGlhbSBzb2xsaWNpdHVkaW4gdGVtcG9yIGlkIGV1IG5pc2wgbnVuYyBtaSBpcHN1bS4gRWdldCBtYXVyaXMgcGhhcmV0cmEg"
+        "ZXQgdWx0cmljZXMgbmVxdWUgb3JuYXJlIGFlbmVhbi4gQW1ldCBsdWN0dXMgdmVuZW5hdGlzIGxlY3R1cyBtYWduYSBmcmluZ2lsbGEgdXJuYS"
+        "Bwb3J0dGl0b3IgcmhvbmN1cyBkb2xvci4gRG9uZWMgcHJldGl1bSB2dWxwdXRhdGUgc2FwaWVuIG5lYyBzYWdpdHRpcyBhbGlxdWFtLiBOb24g"
+        "b2RpbyBldWlzbW9kIGxhY2luaWEgYXQgcXVpcyByaXN1cyBzZWQgdnVscHV0YXRlLiBEdWkgYWNjdW1zYW4gc2l0IGFtZXQgbnVsbGEgZmFjaW"
+        "xpc2kuIFZpdGFlIHVsdHJpY2llcyBsZW8gaW50ZWdlciBtYWxlc3VhZGEgbnVuYyB2ZWwgcmlzdXMgY29tbW9kby4gVXQgdmVuZW5hdGlzIHRl"
+        "bGx1cyBpbiBtZXR1cyB2dWxwdXRhdGUgZXUgc2NlbGVyaXNxdWUuIEltcGVyZGlldCBkdWkgYWNjdW1zYW4gc2l0IGFtZXQgbnVsbGEgZmFjaW"
+        "xpc2kuIFZlbGl0IHNlZCB1bGxhbWNvcnBlciBtb3JiaSB0aW5jaWR1bnQuIE5pc2kgdml0YWUgc3VzY2lwaXQgdGVsbHVzIG1hdXJpcyBhIGRp"
+        "YW0gbWFlY2VuYXMuIEFkaXBpc2NpbmcgZWxpdCBkdWlzIHRyaXN0aXF1ZSBzb2xsaWNpdHVkaW4gbmliaCBzaXQgYW1ldCBjb21tb2RvLiBOdW"
+        "xsYSBhdCB2b2x1dHBhdCBkaWFtIHV0IHZlbmVuYXRpcyB0ZWxsdXMgaW4gbWV0dXMgdnVscHV0YXQ=";
+    constexpr auto text_sv                      = std::string_view{text};
+    constexpr auto encoded_expected_sv          = std::string_view{encoded_expected};
+    constexpr auto encoded_expected_drop1_sv    = std::string_view{encoded_expected_drop1};
+    constexpr auto encoded_expected_drop2_sv    = std::string_view{encoded_expected_drop2};
+    constexpr auto encoded_expected_takebut1_sv = std::string_view{encoded_expected_takebut1};
+    constexpr auto encoded_expected_takebut2_sv = std::string_view{encoded_expected_takebut2};
 
-    REQUIRE(encoded.size() == encoded_expected_sv.size());
-    CHECK(encoded == encoded_expected);
+    std::vector< char > alloc(text_sv.size() * 4u / 3u + 3u);
+    const auto          test = [&alloc](auto&& txt, std::string_view expected_b64) {
+        const auto bytes_written = encodeAsBase64(txt, alloc.begin());
+        const auto encoded       = std::string_view{alloc.data(), bytes_written};
+        REQUIRE(std::ranges::size(encoded) == expected_b64.size());
+        CHECK(std::ranges::equal(encoded, expected_b64));
+    };
+
+    test(text_sv, encoded_expected_sv);
+    test(text_sv | std::views::drop(1), encoded_expected_drop1_sv);
+    test(text_sv | std::views::drop(2), encoded_expected_drop2_sv);
+    test(text_sv | std::views::take(text_sv.size() - 1), encoded_expected_takebut1_sv);
+    test(text_sv | std::views::take(text_sv.size() - 2), encoded_expected_takebut2_sv);
+    test(text_sv | std::views::drop(3) | std::views::take(2), std::string_view{"ZW0="});
 }

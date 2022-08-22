@@ -17,59 +17,69 @@ namespace lstr
 {
 namespace detail
 {
-inline void encB64SerialImpl(std::span< const std::byte > data, char*& out)
+namespace b64
 {
-    static constexpr auto base64_conv_table = [] {
-        std::array< char, 64 > table;
-        std::iota(begin(table), std::next(begin(table), 26), 'A');
-        std::iota(std::next(begin(table), 26), std::next(begin(table), 52), 'a');
-        std::iota(std::next(begin(table), 52), std::next(begin(table), 62), '0');
-        table[62] = '+';
-        table[63] = '/';
-        return table;
-    }();
-    constexpr auto enc0 = [](std::byte b0) {
-        return base64_conv_table[std::to_integer< unsigned char >(b0 >> 2)];
-    };
-    constexpr auto enc1 = [](std::byte b0, std::byte b1) {
-        return base64_conv_table[std::to_integer< unsigned char >(((b0 & std::byte{0x3}) << 4) | (b1 >> 4))];
-    };
-    constexpr auto enc2 = [](std::byte b1, std::byte b2) {
-        return base64_conv_table[std::to_integer< unsigned char >(((b1 & std::byte{0xf}) << 2) | (b2 >> 6))];
-    };
-    constexpr auto enc3 = [](std::byte b2) {
-        return base64_conv_table[std::to_integer< unsigned char >(b2 & std::byte{0x3f})];
-    };
-
+inline constexpr auto conv_table = [] {
+    std::array< char, 64 > table;
+    std::iota(begin(table), std::next(begin(table), 26), 'A');
+    std::iota(std::next(begin(table), 26), std::next(begin(table), 52), 'a');
+    std::iota(std::next(begin(table), 52), std::next(begin(table), 62), '0');
+    table[62] = '+';
+    table[63] = '/';
+    return table;
+}();
+inline unsigned char enc0(std::byte b0)
+{
+    return conv_table[std::to_integer< unsigned char >(b0 >> 2)];
+}
+inline unsigned char enc1(std::byte b0, std::byte b1)
+{
+    return conv_table[std::to_integer< unsigned char >(((b0 & std::byte{0x3}) << 4) | (b1 >> 4))];
+}
+inline unsigned char enc2(std::byte b1, std::byte b2)
+{
+    return conv_table[std::to_integer< unsigned char >(((b1 & std::byte{0xf}) << 2) | (b2 >> 6))];
+}
+inline unsigned char enc3(std::byte b2)
+{
+    return conv_table[std::to_integer< unsigned char >(b2 & std::byte{0x3f})];
+}
+} // namespace b64
+inline std::size_t encB64SerialImpl(std::span< const std::byte > data, char*& out)
+{
     std::size_t i = 0;
     for (; i + 3 <= data.size(); i += 3)
     {
         const auto b0 = data[i];
         const auto b1 = data[i + 1];
         const auto b2 = data[i + 2];
-        *out++        = enc0(b0);
-        *out++        = enc1(b0, b1);
-        *out++        = enc2(b1, b2);
-        *out++        = enc3(b2);
+        *out++        = b64::enc0(b0);
+        *out++        = b64::enc1(b0, b1);
+        *out++        = b64::enc2(b1, b2);
+        *out++        = b64::enc3(b2);
     }
-    switch (data.size() - i)
+    return i;
+}
+inline void encB64Remainder(std::span< const std::byte > data, char*& out)
+{
+    switch (data.size())
     {
     case 0:
         break;
     case 1: {
         const auto last_byte = data.back();
-        *out++               = enc0(last_byte);
-        *out++               = enc1(last_byte, std::byte{0});
+        *out++               = b64::enc0(last_byte);
+        *out++               = b64::enc1(last_byte, std::byte{0});
         *out++               = '=';
         *out++               = '=';
         break;
     }
     case 2: {
-        const auto penult_byte = data[i];
+        const auto penult_byte = data.front();
         const auto last_byte   = data.back();
-        *out++                 = enc0(penult_byte);
-        *out++                 = enc1(penult_byte, last_byte);
-        *out++                 = enc2(last_byte, std::byte{0});
+        *out++                 = b64::enc0(penult_byte);
+        *out++                 = b64::enc1(penult_byte, last_byte);
+        *out++                 = b64::enc2(last_byte, std::byte{0});
         *out++                 = '=';
         break;
     }
@@ -160,27 +170,50 @@ inline std::size_t encB64SimdImpl(std::span< const std::byte > data, char*& out)
     return 0;
 #endif
 }
+inline std::size_t alignForSimd(std::span< const std::byte > data, char*& out)
+{
+    static_assert(alignof(int) == 4);
+    auto ptr   = (void*)data.data();
+    auto space = std::numeric_limits< std::size_t >::max();
+    std::align(alignof(int), 1, ptr, space);
+    const auto misaligned_by = std::numeric_limits< std::size_t >::max() - space;
+    size_t     to_be_processed_serially{}; // Alignment pass can't leave remainder
+    switch (misaligned_by % 3)
+    {
+    case 0:
+        to_be_processed_serially = misaligned_by;
+        break;
+    case 1:
+        to_be_processed_serially = misaligned_by + 4;
+        break;
+    case 2:
+        to_be_processed_serially = misaligned_by + 8;
+        break;
+    }
+    if (to_be_processed_serially <= data.size())
+        return detail::encB64SerialImpl(data.subspan(0, to_be_processed_serially), out);
+    else
+        return 0;
+}
 } // namespace detail
 template < std::ranges::contiguous_range R, std::contiguous_iterator I >
 std::size_t encodeAsBase64(R&& data, I out_it)
     requires std::ranges::sized_range< R > and std::same_as< std::iter_value_t< I >, char >
 {
-    const auto data_span = std::span{std::ranges::data(data), std::ranges::size(data)};
-    auto       byte_span = std::as_bytes(data_span);
-    auto       out_ptr   = std::addressof(*out_it);
+    const auto  data_span       = std::span{std::ranges::data(data), std::ranges::size(data)};
+    const auto  byte_span       = std::as_bytes(data_span);
+    auto        out_ptr         = std::addressof(*out_it);
+    std::size_t bytes_processed = 0;
 
-    if constexpr (alignof(std::ranges::range_value_t< R >) < 4)
-    {
-        auto ptr   = (void*)byte_span.data();
-        auto space = std::numeric_limits< std::size_t >::max();
-        std::align(alignof(int), 1, ptr, space);
-        const auto misaligned_by = std::numeric_limits< std::size_t >::max() - space;
-        detail::encB64SerialImpl(byte_span.subspan(0, misaligned_by), out_ptr);
-        byte_span = byte_span.subspan(misaligned_by);
-    }
+#if defined(__AVX2__)
+    // Note: it is unclear whether `vpmaskmov` support unaligned access, better to err on the side of caution
+    if constexpr (alignof(std::ranges::range_value_t< R >) < alignof(int))
+        bytes_processed += detail::alignForSimd(byte_span, out_ptr);
+#endif
 
-    const auto simd_processed_bytes = detail::encB64SimdImpl(byte_span, out_ptr);
-    detail::encB64SerialImpl(byte_span.subspan(simd_processed_bytes), out_ptr);
+    bytes_processed += detail::encB64SimdImpl(byte_span.subspan(bytes_processed), out_ptr);
+    bytes_processed += detail::encB64SerialImpl(byte_span.subspan(bytes_processed), out_ptr);
+    detail::encB64Remainder(byte_span.subspan(bytes_processed), out_ptr);
     const auto bytes_written = std::distance(std::addressof(*out_it), out_ptr);
     return bytes_written;
 }
