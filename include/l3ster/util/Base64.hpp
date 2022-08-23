@@ -1,6 +1,8 @@
 #ifndef L3STER_UTIL_BASE64_HPP
 #define L3STER_UTIL_BASE64_HPP
 
+#include "tbb/tbb.h"
+
 #include <array>
 #include <concepts>
 #include <limits>
@@ -15,9 +17,7 @@
 
 namespace lstr
 {
-namespace detail
-{
-namespace b64
+namespace detail::b64
 {
 inline constexpr auto conv_table = [] {
     std::array< char, 64 > table;
@@ -28,23 +28,22 @@ inline constexpr auto conv_table = [] {
     table[63] = '/';
     return table;
 }();
-inline unsigned char enc0(std::byte b0)
+inline char enc0(std::byte b0)
 {
     return conv_table[std::to_integer< unsigned char >(b0 >> 2)];
 }
-inline unsigned char enc1(std::byte b0, std::byte b1)
+inline char enc1(std::byte b0, std::byte b1)
 {
     return conv_table[std::to_integer< unsigned char >(((b0 & std::byte{0x3}) << 4) | (b1 >> 4))];
 }
-inline unsigned char enc2(std::byte b1, std::byte b2)
+inline char enc2(std::byte b1, std::byte b2)
 {
     return conv_table[std::to_integer< unsigned char >(((b1 & std::byte{0xf}) << 2) | (b2 >> 6))];
 }
-inline unsigned char enc3(std::byte b2)
+inline char enc3(std::byte b2)
 {
     return conv_table[std::to_integer< unsigned char >(b2 & std::byte{0x3f})];
 }
-} // namespace b64
 inline std::size_t encB64SerialImpl(std::span< const std::byte > data, char*& out)
 {
     std::size_t i = 0;
@@ -53,36 +52,31 @@ inline std::size_t encB64SerialImpl(std::span< const std::byte > data, char*& ou
         const auto b0 = data[i];
         const auto b1 = data[i + 1];
         const auto b2 = data[i + 2];
-        *out++        = b64::enc0(b0);
-        *out++        = b64::enc1(b0, b1);
-        *out++        = b64::enc2(b1, b2);
-        *out++        = b64::enc3(b2);
+        *out++        = enc0(b0);
+        *out++        = enc1(b0, b1);
+        *out++        = enc2(b1, b2);
+        *out++        = enc3(b2);
     }
     return i;
 }
 inline void encB64Remainder(std::span< const std::byte > data, char*& out)
 {
-    switch (data.size())
+    if (data.size() == 1)
     {
-    case 0:
-        break;
-    case 1: {
         const auto last_byte = data.back();
-        *out++               = b64::enc0(last_byte);
-        *out++               = b64::enc1(last_byte, std::byte{0});
+        *out++               = enc0(last_byte);
+        *out++               = enc1(last_byte, std::byte{0});
         *out++               = '=';
         *out++               = '=';
-        break;
     }
-    case 2: {
+    else if (data.size() == 2)
+    {
         const auto penult_byte = data.front();
         const auto last_byte   = data.back();
-        *out++                 = b64::enc0(penult_byte);
-        *out++                 = b64::enc1(penult_byte, last_byte);
-        *out++                 = b64::enc2(last_byte, std::byte{0});
+        *out++                 = enc0(penult_byte);
+        *out++                 = enc1(penult_byte, last_byte);
+        *out++                 = enc2(last_byte, std::byte{0});
         *out++                 = '=';
-        break;
-    }
     }
 }
 inline std::size_t encB64SimdImpl(std::span< const std::byte > data, char*& out)
@@ -115,38 +109,8 @@ inline std::size_t encB64SimdImpl(std::span< const std::byte > data, char*& out)
         const auto v13        = _mm256_set1_epi8(13);
         const auto v26        = _mm256_set1_epi8(26);
         const auto v51        = _mm256_set1_epi8(51);
-        const auto offset_map = _mm256_setr_epi8(71,
-                                                 -4,
-                                                 -4,
-                                                 -4,
-                                                 -4,
-                                                 -4,
-                                                 -4,
-                                                 -4,
-                                                 -4,
-                                                 -4,
-                                                 -4,
-                                                 -19,
-                                                 -16,
-                                                 65,
-                                                 0,
-                                                 0,
-                                                 71,
-                                                 -4,
-                                                 -4,
-                                                 -4,
-                                                 -4,
-                                                 -4,
-                                                 -4,
-                                                 -4,
-                                                 -4,
-                                                 -4,
-                                                 -4,
-                                                 -19,
-                                                 -16,
-                                                 65,
-                                                 0,
-                                                 0);
+        const auto offset_map = _mm256_setr_epi8(71, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -19, -16, 65, 0, 0,
+                                                 71, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -19, -16, 65, 0, 0);
 
         const auto lt26_mask = _mm256_cmpgt_epi8(v26, b64_inds);
         const auto red_0_25  = _mm256_and_si256(lt26_mask, v13);
@@ -156,16 +120,24 @@ inline std::size_t encB64SimdImpl(std::span< const std::byte > data, char*& out)
         return _mm256_add_epi8(b64_inds, offsets);
     };
 
-    std::size_t i = 0;
-    for (; i + 24 <= data.size(); i += 24)
-    {
-        const auto packed_block   = load24(std::next(data.data(), static_cast< std::ptrdiff_t >(i)));
+    constexpr std::size_t block_size       = 24;
+    constexpr std::size_t block_proc_bytes = 32;
+    const auto            n_blocks         = data.size() / block_size;
+    const auto            block_range      = tbb::blocked_range< std::size_t >{0, n_blocks};
+    const auto            process_block    = [&](std::size_t block_num) {
+        const auto block_start    = std::next(data.data(), block_num * block_size);
+        const auto out_start      = std::next(out, block_num * block_proc_bytes);
+        const auto packed_block   = load24(block_start);
         const auto unpacked_block = unpack_lo6(packed_block);
         const auto ascii_block    = to_ascii(unpacked_block);
-        _mm256_storeu_si256(reinterpret_cast< __m256i* >(out), ascii_block);
-        std::advance(out, 32);
-    }
-    return i;
+        _mm256_storeu_si256(reinterpret_cast< __m256i* >(out_start), ascii_block);
+    };
+    tbb::parallel_for(block_range, [&](const tbb::blocked_range< std::size_t >& range) {
+        for (auto block = range.begin(); block != range.end(); ++block)
+            process_block(block);
+    });
+    std::advance(out, n_blocks * block_proc_bytes);
+    return n_blocks * block_size;
 #else
     return 0;
 #endif
@@ -176,26 +148,14 @@ inline std::size_t alignForSimd(std::span< const std::byte > data, char*& out)
     auto ptr   = (void*)data.data();
     auto space = std::numeric_limits< std::size_t >::max();
     std::align(alignof(int), 1, ptr, space);
-    const auto misaligned_by = std::numeric_limits< std::size_t >::max() - space;
-    size_t     to_be_processed_serially{}; // Alignment pass can't leave remainder
-    switch (misaligned_by % 3)
-    {
-    case 0:
-        to_be_processed_serially = misaligned_by;
-        break;
-    case 1:
-        to_be_processed_serially = misaligned_by + 4;
-        break;
-    case 2:
-        to_be_processed_serially = misaligned_by + 8;
-        break;
-    }
-    if (to_be_processed_serially <= data.size())
-        return detail::encB64SerialImpl(data.subspan(0, to_be_processed_serially), out);
+    auto misaligned_by = std::numeric_limits< std::size_t >::max() - space;
+    misaligned_by += (misaligned_by % 3) * alignof(int); // Alignment pass can't leave remainder
+    if (misaligned_by <= data.size())
+        return encB64SerialImpl(data.subspan(0, misaligned_by), out);
     else
         return 0;
 }
-} // namespace detail
+} // namespace detail::b64
 template < std::ranges::contiguous_range R, std::contiguous_iterator I >
 std::size_t encodeAsBase64(R&& data, I out_it)
     requires std::ranges::sized_range< R > and std::same_as< std::iter_value_t< I >, char >
@@ -206,16 +166,25 @@ std::size_t encodeAsBase64(R&& data, I out_it)
     std::size_t bytes_processed = 0;
 
 #if defined(__AVX2__)
-    // Note: it is unclear whether `vpmaskmov` support unaligned access, better to err on the side of caution
+    // Note: it is unclear whether `vpmaskmov` supports unaligned access, better to err on the side of caution
     if constexpr (alignof(std::ranges::range_value_t< R >) < alignof(int))
-        bytes_processed += detail::alignForSimd(byte_span, out_ptr);
+        bytes_processed += detail::b64::alignForSimd(byte_span, out_ptr);
 #endif
 
-    bytes_processed += detail::encB64SimdImpl(byte_span.subspan(bytes_processed), out_ptr);
-    bytes_processed += detail::encB64SerialImpl(byte_span.subspan(bytes_processed), out_ptr);
-    detail::encB64Remainder(byte_span.subspan(bytes_processed), out_ptr);
+    bytes_processed += detail::b64::encB64SimdImpl(byte_span.subspan(bytes_processed), out_ptr);
+    bytes_processed += detail::b64::encB64SerialImpl(byte_span.subspan(bytes_processed), out_ptr);
+    detail::b64::encB64Remainder(byte_span.subspan(bytes_processed), out_ptr);
     const auto bytes_written = std::distance(std::addressof(*out_it), out_ptr);
     return bytes_written;
+}
+
+template < typename T >
+std::size_t getBase64EncodingSize(std::size_t size)
+{
+    const auto bytes   = size * sizeof(T);
+    const auto div_res = bytes * 4 / 3;
+    const auto mod_res = bytes * 4 % 3;
+    return mod_res > 0 ? div_res + 4 : div_res;
 }
 } // namespace lstr
 #endif // L3STER_UTIL_BASE64_HPP

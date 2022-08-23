@@ -532,4 +532,19 @@ TEST_CASE("Base64 encoding", "[util]")
     test(text_sv | std::views::take(text_sv.size() - 1), encoded_expected_takebut1_sv);
     test(text_sv | std::views::take(text_sv.size() - 2), encoded_expected_takebut2_sv);
     test(text_sv | std::views::drop(3) | std::views::take(2), std::string_view{"ZW0="});
+
+    // Test whether sequential and parallel implementations yield identical results
+    auto             prng           = std::mt19937{std::random_device{}()};
+    auto             dist           = std::uniform_int_distribution< char >{};
+    constexpr size_t long_text_size = 1ul << 26;
+    std::string      long_text(long_text_size, '\0');
+    std::generate(long_text.begin(), long_text.end(), [&] { return dist(prng); });
+    std::string long_text_b64_par(long_text_size * 4 / 3 + 4, '\0');
+    std::string long_text_b64_seq(long_text_size * 4 / 3 + 4, '\0');
+    encodeAsBase64(long_text, long_text_b64_par.begin());
+    auto       seq_ptr        = long_text_b64_seq.data();
+    const auto long_byte_span = std::as_bytes(std::span{long_text});
+    const auto lp             = detail::b64::encB64SerialImpl(long_byte_span, seq_ptr);
+    detail::b64::encB64Remainder(long_byte_span.subspan(lp), seq_ptr);
+    CHECK(long_text_b64_seq == long_text_b64_par);
 }
