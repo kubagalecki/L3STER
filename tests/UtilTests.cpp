@@ -536,7 +536,7 @@ TEST_CASE("Base64 encoding", "[util]")
     // Test whether sequential and parallel implementations yield identical results
     auto             prng           = std::mt19937{std::random_device{}()};
     auto             dist           = std::uniform_int_distribution< char >{};
-    constexpr size_t long_text_size = 1ul << 26;
+    constexpr size_t long_text_size = 1ul << 25;
     std::string      long_text(long_text_size, '\0');
     std::generate(long_text.begin(), long_text.end(), [&] { return dist(prng); });
     std::string long_text_b64_par(long_text_size * 4 / 3 + 4, '\0');
