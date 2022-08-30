@@ -14,7 +14,7 @@ namespace detail
 inline auto sendNDoms(const MpiComm& comm, const SerializedPartition& part, int destination, int tag)
 {
     auto n_dom_ptr = std::make_unique< size_t >(part.domains.size()); // extend lifetime past fun call
-    auto msg       = comm.sendAsync(n_dom_ptr.get(), 1, destination, tag);
+    auto msg       = comm.sendAsync(std::span{n_dom_ptr.get(), 1}, destination, tag);
     return std::make_pair(std::move(n_dom_ptr), std::move(msg));
 }
 

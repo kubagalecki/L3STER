@@ -16,8 +16,8 @@ namespace lstr
 namespace detail
 {
 template < typename T >
-concept GlobalDofRange_c = std::ranges::sized_range< T > and std::same_as < std::ranges::range_value_t< T >,
-global_dof_t > ;
+concept GlobalDofRange_c =
+    std::ranges::sized_range< T > and std::same_as< std::ranges::range_value_t< T >, global_dof_t >;
 } // namespace detail
 
 class DirichletBCAlgebraic

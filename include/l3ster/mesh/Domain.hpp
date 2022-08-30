@@ -55,8 +55,7 @@ public:
                                                                      {
                                                                          reduction(zero, zero)
                                                                          } -> std::convertible_to< Zero >;
-                                                                 }
-    ;
+                                                                 };
 
     template < invocable_on_const_elements_r< bool > F, ExecutionPolicy_c ExecPolicy >
     [[nodiscard]] find_result_t find(F&& predicate, ExecPolicy&& policy);

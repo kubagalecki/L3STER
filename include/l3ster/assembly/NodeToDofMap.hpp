@@ -16,6 +16,8 @@ public:
 
     [[nodiscard]] const auto& operator()(n_id_t node) const noexcept { return map.find(node)->second; }
 
+    [[nodiscard]] const auto& getMap() const noexcept { return map; }
+
 private:
     std::unordered_map< n_id_t, std::array< global_dof_t, NF > > map;
 };

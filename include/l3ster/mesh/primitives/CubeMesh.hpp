@@ -9,10 +9,9 @@ template < std::ranges::random_access_range Rx,
            std::ranges::random_access_range Ry,
            std::ranges::random_access_range Rz >
 inline Mesh makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz)
-    requires std::convertible_to< std::ranges::range_value_t< std::decay_t< Rx > >,
-                                  val_t >and std::convertible_to< std::ranges::range_value_t< std::decay_t< Ry > >,
-                                                                  val_t >and std::
-        convertible_to< std::ranges::range_value_t< std::decay_t< Rz > >, val_t >
+    requires std::convertible_to< std::ranges::range_value_t< std::decay_t< Rx > >, val_t > and
+             std::convertible_to< std::ranges::range_value_t< std::decay_t< Ry > >, val_t > and
+             std::convertible_to< std::ranges::range_value_t< std::decay_t< Rz > >, val_t >
 {
     const size_t n_dx = std::ranges::size(distx);
     const size_t n_dy = std::ranges::size(disty);
@@ -137,8 +136,7 @@ inline Mesh makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz)
 
 template < std::ranges::random_access_range R >
 inline Mesh makeCubeMesh(R&& dist)
-    requires std::convertible_to< std::ranges::range_value_t< std::decay_t< R > >,
-                                  val_t >
+    requires std::convertible_to< std::ranges::range_value_t< std::decay_t< R > >, val_t >
 {
     return makeCubeMesh(dist, dist, dist);
 }

@@ -20,8 +20,8 @@ concept DomainPredicate_c = requires(T op, const DomainView dv) {
                                     } -> std::convertible_to< bool >;
                             };
 template < typename T >
-concept DomainIdRange_c = std::ranges::sized_range< T > and std::convertible_to < std::ranges::range_value_t< T >,
-d_id_t > ;
+concept DomainIdRange_c =
+    std::ranges::sized_range< T > and std::convertible_to< std::ranges::range_value_t< T >, d_id_t >;
 } // namespace detail
 
 class MeshPartition
@@ -107,8 +107,7 @@ public:
                                                                      {
                                                                          reduction(zero, zero)
                                                                          } -> std::convertible_to< Zero >;
-                                                                 }
-    ;
+                                                                 };
 
     // find
     // Note: if the predicate returns true for multiple elements, the reference to any one of them may be returned
@@ -564,7 +563,7 @@ std::vector< d_id_t > MeshPartition::getDomainIds() const
 {
     std::vector< d_id_t > retval;
     retval.reserve(domains.size());
-    std::ranges::transform(domains, back_inserter(retval), [](const auto& pair) { return pair.first; });
+    std::ranges::copy(domains | std::views::keys, back_inserter(retval));
     return retval;
 }
 

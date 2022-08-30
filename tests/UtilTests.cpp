@@ -1,4 +1,5 @@
 #include "l3ster/util/Algorithm.hpp"
+#include "l3ster/util/Base64.hpp"
 #include "l3ster/util/BitsetManip.hpp"
 #include "l3ster/util/Common.hpp"
 #include "l3ster/util/ConstexprVector.hpp"
@@ -430,4 +431,120 @@ TEST_CASE("Index map", "[util]")
     const auto map = IndexMap{vals};
     for (ptrdiff_t i : std::views::iota(base, base + size))
         CHECK(map(i) == i - 10);
+}
+
+TEST_CASE("Base64 encoding", "[util]")
+{
+    constexpr auto text =
+        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore "
+        "magna aliqua. Etiam dignissim diam quis enim lobortis scelerisque fermentum. Mi quis hendrerit dolor magna. "
+        "Pellentesque diam volutpat commodo sed. Diam sollicitudin tempor id eu nisl nunc mi ipsum. Eget mauris "
+        "pharetra et ultrices neque ornare aenean. Amet luctus venenatis lectus magna fringilla urna porttitor rhoncus "
+        "dolor. Donec pretium vulputate sapien nec sagittis aliquam. Non odio euismod lacinia at quis risus sed "
+        "vulputate. Dui accumsan sit amet nulla facilisi. Vitae ultricies leo integer malesuada nunc vel risus "
+        "commodo. Ut venenatis tellus in metus vulputate eu scelerisque. Imperdiet dui accumsan sit amet nulla "
+        "facilisi. Velit sed ullamcorper morbi tincidunt. Nisi vitae suscipit tellus mauris a diam maecenas. "
+        "Adipiscing elit duis tristique sollicitudin nibh sit amet commodo. Nulla at volutpat diam ut venenatis tellus "
+        "in metus vulputate.";
+    constexpr auto encoded_expected =
+        "TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQsIGNvbnNlY3RldHVyIGFkaXBpc2NpbmcgZWxpdCwgc2VkIGRvIGVpdXNtb2QgdGVtcG9yIGluY2"
+        "lkaWR1bnQgdXQgbGFib3JlIGV0IGRvbG9yZSBtYWduYSBhbGlxdWEuIEV0aWFtIGRpZ25pc3NpbSBkaWFtIHF1aXMgZW5pbSBsb2JvcnRpcyBz"
+        "Y2VsZXJpc3F1ZSBmZXJtZW50dW0uIE1pIHF1aXMgaGVuZHJlcml0IGRvbG9yIG1hZ25hLiBQZWxsZW50ZXNxdWUgZGlhbSB2b2x1dHBhdCBjb2"
+        "1tb2RvIHNlZC4gRGlhbSBzb2xsaWNpdHVkaW4gdGVtcG9yIGlkIGV1IG5pc2wgbnVuYyBtaSBpcHN1bS4gRWdldCBtYXVyaXMgcGhhcmV0cmEg"
+        "ZXQgdWx0cmljZXMgbmVxdWUgb3JuYXJlIGFlbmVhbi4gQW1ldCBsdWN0dXMgdmVuZW5hdGlzIGxlY3R1cyBtYWduYSBmcmluZ2lsbGEgdXJuYS"
+        "Bwb3J0dGl0b3IgcmhvbmN1cyBkb2xvci4gRG9uZWMgcHJldGl1bSB2dWxwdXRhdGUgc2FwaWVuIG5lYyBzYWdpdHRpcyBhbGlxdWFtLiBOb24g"
+        "b2RpbyBldWlzbW9kIGxhY2luaWEgYXQgcXVpcyByaXN1cyBzZWQgdnVscHV0YXRlLiBEdWkgYWNjdW1zYW4gc2l0IGFtZXQgbnVsbGEgZmFjaW"
+        "xpc2kuIFZpdGFlIHVsdHJpY2llcyBsZW8gaW50ZWdlciBtYWxlc3VhZGEgbnVuYyB2ZWwgcmlzdXMgY29tbW9kby4gVXQgdmVuZW5hdGlzIHRl"
+        "bGx1cyBpbiBtZXR1cyB2dWxwdXRhdGUgZXUgc2NlbGVyaXNxdWUuIEltcGVyZGlldCBkdWkgYWNjdW1zYW4gc2l0IGFtZXQgbnVsbGEgZmFjaW"
+        "xpc2kuIFZlbGl0IHNlZCB1bGxhbWNvcnBlciBtb3JiaSB0aW5jaWR1bnQuIE5pc2kgdml0YWUgc3VzY2lwaXQgdGVsbHVzIG1hdXJpcyBhIGRp"
+        "YW0gbWFlY2VuYXMuIEFkaXBpc2NpbmcgZWxpdCBkdWlzIHRyaXN0aXF1ZSBzb2xsaWNpdHVkaW4gbmliaCBzaXQgYW1ldCBjb21tb2RvLiBOdW"
+        "xsYSBhdCB2b2x1dHBhdCBkaWFtIHV0IHZlbmVuYXRpcyB0ZWxsdXMgaW4gbWV0dXMgdnVscHV0YXRlLg==";
+    constexpr auto encoded_expected_drop1 =
+        "b3JlbSBpcHN1bSBkb2xvciBzaXQgYW1ldCwgY29uc2VjdGV0dXIgYWRpcGlzY2luZyBlbGl0LCBzZWQgZG8gZWl1c21vZCB0ZW1wb3IgaW5jaW"
+        "RpZHVudCB1dCBsYWJvcmUgZXQgZG9sb3JlIG1hZ25hIGFsaXF1YS4gRXRpYW0gZGlnbmlzc2ltIGRpYW0gcXVpcyBlbmltIGxvYm9ydGlzIHNj"
+        "ZWxlcmlzcXVlIGZlcm1lbnR1bS4gTWkgcXVpcyBoZW5kcmVyaXQgZG9sb3IgbWFnbmEuIFBlbGxlbnRlc3F1ZSBkaWFtIHZvbHV0cGF0IGNvbW"
+        "1vZG8gc2VkLiBEaWFtIHNvbGxpY2l0dWRpbiB0ZW1wb3IgaWQgZXUgbmlzbCBudW5jIG1pIGlwc3VtLiBFZ2V0IG1hdXJpcyBwaGFyZXRyYSBl"
+        "dCB1bHRyaWNlcyBuZXF1ZSBvcm5hcmUgYWVuZWFuLiBBbWV0IGx1Y3R1cyB2ZW5lbmF0aXMgbGVjdHVzIG1hZ25hIGZyaW5naWxsYSB1cm5hIH"
+        "BvcnR0aXRvciByaG9uY3VzIGRvbG9yLiBEb25lYyBwcmV0aXVtIHZ1bHB1dGF0ZSBzYXBpZW4gbmVjIHNhZ2l0dGlzIGFsaXF1YW0uIE5vbiBv"
+        "ZGlvIGV1aXNtb2QgbGFjaW5pYSBhdCBxdWlzIHJpc3VzIHNlZCB2dWxwdXRhdGUuIER1aSBhY2N1bXNhbiBzaXQgYW1ldCBudWxsYSBmYWNpbG"
+        "lzaS4gVml0YWUgdWx0cmljaWVzIGxlbyBpbnRlZ2VyIG1hbGVzdWFkYSBudW5jIHZlbCByaXN1cyBjb21tb2RvLiBVdCB2ZW5lbmF0aXMgdGVs"
+        "bHVzIGluIG1ldHVzIHZ1bHB1dGF0ZSBldSBzY2VsZXJpc3F1ZS4gSW1wZXJkaWV0IGR1aSBhY2N1bXNhbiBzaXQgYW1ldCBudWxsYSBmYWNpbG"
+        "lzaS4gVmVsaXQgc2VkIHVsbGFtY29ycGVyIG1vcmJpIHRpbmNpZHVudC4gTmlzaSB2aXRhZSBzdXNjaXBpdCB0ZWxsdXMgbWF1cmlzIGEgZGlh"
+        "bSBtYWVjZW5hcy4gQWRpcGlzY2luZyBlbGl0IGR1aXMgdHJpc3RpcXVlIHNvbGxpY2l0dWRpbiBuaWJoIHNpdCBhbWV0IGNvbW1vZG8uIE51bG"
+        "xhIGF0IHZvbHV0cGF0IGRpYW0gdXQgdmVuZW5hdGlzIHRlbGx1cyBpbiBtZXR1cyB2dWxwdXRhdGUu";
+    constexpr auto encoded_expected_drop2 =
+        "cmVtIGlwc3VtIGRvbG9yIHNpdCBhbWV0LCBjb25zZWN0ZXR1ciBhZGlwaXNjaW5nIGVsaXQsIHNlZCBkbyBlaXVzbW9kIHRlbXBvciBpbmNpZG"
+        "lkdW50IHV0IGxhYm9yZSBldCBkb2xvcmUgbWFnbmEgYWxpcXVhLiBFdGlhbSBkaWduaXNzaW0gZGlhbSBxdWlzIGVuaW0gbG9ib3J0aXMgc2Nl"
+        "bGVyaXNxdWUgZmVybWVudHVtLiBNaSBxdWlzIGhlbmRyZXJpdCBkb2xvciBtYWduYS4gUGVsbGVudGVzcXVlIGRpYW0gdm9sdXRwYXQgY29tbW"
+        "9kbyBzZWQuIERpYW0gc29sbGljaXR1ZGluIHRlbXBvciBpZCBldSBuaXNsIG51bmMgbWkgaXBzdW0uIEVnZXQgbWF1cmlzIHBoYXJldHJhIGV0"
+        "IHVsdHJpY2VzIG5lcXVlIG9ybmFyZSBhZW5lYW4uIEFtZXQgbHVjdHVzIHZlbmVuYXRpcyBsZWN0dXMgbWFnbmEgZnJpbmdpbGxhIHVybmEgcG"
+        "9ydHRpdG9yIHJob25jdXMgZG9sb3IuIERvbmVjIHByZXRpdW0gdnVscHV0YXRlIHNhcGllbiBuZWMgc2FnaXR0aXMgYWxpcXVhbS4gTm9uIG9k"
+        "aW8gZXVpc21vZCBsYWNpbmlhIGF0IHF1aXMgcmlzdXMgc2VkIHZ1bHB1dGF0ZS4gRHVpIGFjY3Vtc2FuIHNpdCBhbWV0IG51bGxhIGZhY2lsaX"
+        "NpLiBWaXRhZSB1bHRyaWNpZXMgbGVvIGludGVnZXIgbWFsZXN1YWRhIG51bmMgdmVsIHJpc3VzIGNvbW1vZG8uIFV0IHZlbmVuYXRpcyB0ZWxs"
+        "dXMgaW4gbWV0dXMgdnVscHV0YXRlIGV1IHNjZWxlcmlzcXVlLiBJbXBlcmRpZXQgZHVpIGFjY3Vtc2FuIHNpdCBhbWV0IG51bGxhIGZhY2lsaX"
+        "NpLiBWZWxpdCBzZWQgdWxsYW1jb3JwZXIgbW9yYmkgdGluY2lkdW50LiBOaXNpIHZpdGFlIHN1c2NpcGl0IHRlbGx1cyBtYXVyaXMgYSBkaWFt"
+        "IG1hZWNlbmFzLiBBZGlwaXNjaW5nIGVsaXQgZHVpcyB0cmlzdGlxdWUgc29sbGljaXR1ZGluIG5pYmggc2l0IGFtZXQgY29tbW9kby4gTnVsbG"
+        "EgYXQgdm9sdXRwYXQgZGlhbSB1dCB2ZW5lbmF0aXMgdGVsbHVzIGluIG1ldHVzIHZ1bHB1dGF0ZS4=";
+    constexpr auto encoded_expected_takebut1 =
+        "TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQsIGNvbnNlY3RldHVyIGFkaXBpc2NpbmcgZWxpdCwgc2VkIGRvIGVpdXNtb2QgdGVtcG9yIGluY2"
+        "lkaWR1bnQgdXQgbGFib3JlIGV0IGRvbG9yZSBtYWduYSBhbGlxdWEuIEV0aWFtIGRpZ25pc3NpbSBkaWFtIHF1aXMgZW5pbSBsb2JvcnRpcyBz"
+        "Y2VsZXJpc3F1ZSBmZXJtZW50dW0uIE1pIHF1aXMgaGVuZHJlcml0IGRvbG9yIG1hZ25hLiBQZWxsZW50ZXNxdWUgZGlhbSB2b2x1dHBhdCBjb2"
+        "1tb2RvIHNlZC4gRGlhbSBzb2xsaWNpdHVkaW4gdGVtcG9yIGlkIGV1IG5pc2wgbnVuYyBtaSBpcHN1bS4gRWdldCBtYXVyaXMgcGhhcmV0cmEg"
+        "ZXQgdWx0cmljZXMgbmVxdWUgb3JuYXJlIGFlbmVhbi4gQW1ldCBsdWN0dXMgdmVuZW5hdGlzIGxlY3R1cyBtYWduYSBmcmluZ2lsbGEgdXJuYS"
+        "Bwb3J0dGl0b3IgcmhvbmN1cyBkb2xvci4gRG9uZWMgcHJldGl1bSB2dWxwdXRhdGUgc2FwaWVuIG5lYyBzYWdpdHRpcyBhbGlxdWFtLiBOb24g"
+        "b2RpbyBldWlzbW9kIGxhY2luaWEgYXQgcXVpcyByaXN1cyBzZWQgdnVscHV0YXRlLiBEdWkgYWNjdW1zYW4gc2l0IGFtZXQgbnVsbGEgZmFjaW"
+        "xpc2kuIFZpdGFlIHVsdHJpY2llcyBsZW8gaW50ZWdlciBtYWxlc3VhZGEgbnVuYyB2ZWwgcmlzdXMgY29tbW9kby4gVXQgdmVuZW5hdGlzIHRl"
+        "bGx1cyBpbiBtZXR1cyB2dWxwdXRhdGUgZXUgc2NlbGVyaXNxdWUuIEltcGVyZGlldCBkdWkgYWNjdW1zYW4gc2l0IGFtZXQgbnVsbGEgZmFjaW"
+        "xpc2kuIFZlbGl0IHNlZCB1bGxhbWNvcnBlciBtb3JiaSB0aW5jaWR1bnQuIE5pc2kgdml0YWUgc3VzY2lwaXQgdGVsbHVzIG1hdXJpcyBhIGRp"
+        "YW0gbWFlY2VuYXMuIEFkaXBpc2NpbmcgZWxpdCBkdWlzIHRyaXN0aXF1ZSBzb2xsaWNpdHVkaW4gbmliaCBzaXQgYW1ldCBjb21tb2RvLiBOdW"
+        "xsYSBhdCB2b2x1dHBhdCBkaWFtIHV0IHZlbmVuYXRpcyB0ZWxsdXMgaW4gbWV0dXMgdnVscHV0YXRl";
+    constexpr auto encoded_expected_takebut2 =
+        "TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQsIGNvbnNlY3RldHVyIGFkaXBpc2NpbmcgZWxpdCwgc2VkIGRvIGVpdXNtb2QgdGVtcG9yIGluY2"
+        "lkaWR1bnQgdXQgbGFib3JlIGV0IGRvbG9yZSBtYWduYSBhbGlxdWEuIEV0aWFtIGRpZ25pc3NpbSBkaWFtIHF1aXMgZW5pbSBsb2JvcnRpcyBz"
+        "Y2VsZXJpc3F1ZSBmZXJtZW50dW0uIE1pIHF1aXMgaGVuZHJlcml0IGRvbG9yIG1hZ25hLiBQZWxsZW50ZXNxdWUgZGlhbSB2b2x1dHBhdCBjb2"
+        "1tb2RvIHNlZC4gRGlhbSBzb2xsaWNpdHVkaW4gdGVtcG9yIGlkIGV1IG5pc2wgbnVuYyBtaSBpcHN1bS4gRWdldCBtYXVyaXMgcGhhcmV0cmEg"
+        "ZXQgdWx0cmljZXMgbmVxdWUgb3JuYXJlIGFlbmVhbi4gQW1ldCBsdWN0dXMgdmVuZW5hdGlzIGxlY3R1cyBtYWduYSBmcmluZ2lsbGEgdXJuYS"
+        "Bwb3J0dGl0b3IgcmhvbmN1cyBkb2xvci4gRG9uZWMgcHJldGl1bSB2dWxwdXRhdGUgc2FwaWVuIG5lYyBzYWdpdHRpcyBhbGlxdWFtLiBOb24g"
+        "b2RpbyBldWlzbW9kIGxhY2luaWEgYXQgcXVpcyByaXN1cyBzZWQgdnVscHV0YXRlLiBEdWkgYWNjdW1zYW4gc2l0IGFtZXQgbnVsbGEgZmFjaW"
+        "xpc2kuIFZpdGFlIHVsdHJpY2llcyBsZW8gaW50ZWdlciBtYWxlc3VhZGEgbnVuYyB2ZWwgcmlzdXMgY29tbW9kby4gVXQgdmVuZW5hdGlzIHRl"
+        "bGx1cyBpbiBtZXR1cyB2dWxwdXRhdGUgZXUgc2NlbGVyaXNxdWUuIEltcGVyZGlldCBkdWkgYWNjdW1zYW4gc2l0IGFtZXQgbnVsbGEgZmFjaW"
+        "xpc2kuIFZlbGl0IHNlZCB1bGxhbWNvcnBlciBtb3JiaSB0aW5jaWR1bnQuIE5pc2kgdml0YWUgc3VzY2lwaXQgdGVsbHVzIG1hdXJpcyBhIGRp"
+        "YW0gbWFlY2VuYXMuIEFkaXBpc2NpbmcgZWxpdCBkdWlzIHRyaXN0aXF1ZSBzb2xsaWNpdHVkaW4gbmliaCBzaXQgYW1ldCBjb21tb2RvLiBOdW"
+        "xsYSBhdCB2b2x1dHBhdCBkaWFtIHV0IHZlbmVuYXRpcyB0ZWxsdXMgaW4gbWV0dXMgdnVscHV0YXQ=";
+    constexpr auto text_sv                      = std::string_view{text};
+    constexpr auto encoded_expected_sv          = std::string_view{encoded_expected};
+    constexpr auto encoded_expected_drop1_sv    = std::string_view{encoded_expected_drop1};
+    constexpr auto encoded_expected_drop2_sv    = std::string_view{encoded_expected_drop2};
+    constexpr auto encoded_expected_takebut1_sv = std::string_view{encoded_expected_takebut1};
+    constexpr auto encoded_expected_takebut2_sv = std::string_view{encoded_expected_takebut2};
+
+    std::vector< char > alloc(text_sv.size() * 4u / 3u + 3u);
+    const auto          test = [&alloc](auto&& txt, std::string_view expected_b64) {
+        const auto bytes_written = encodeAsBase64(txt, alloc.begin());
+        const auto encoded       = std::string_view{alloc.data(), bytes_written};
+        REQUIRE(std::ranges::size(encoded) == expected_b64.size());
+        CHECK(std::ranges::equal(encoded, expected_b64));
+    };
+
+    test(text_sv, encoded_expected_sv);
+    test(text_sv | std::views::drop(1), encoded_expected_drop1_sv);
+    test(text_sv | std::views::drop(2), encoded_expected_drop2_sv);
+    test(text_sv | std::views::take(text_sv.size() - 1), encoded_expected_takebut1_sv);
+    test(text_sv | std::views::take(text_sv.size() - 2), encoded_expected_takebut2_sv);
+    test(text_sv | std::views::drop(3) | std::views::take(2), std::string_view{"ZW0="});
+
+    // Test whether sequential and parallel implementations yield identical results
+    auto             prng           = std::mt19937{std::random_device{}()};
+    auto             dist           = std::uniform_int_distribution< char >{};
+    constexpr size_t long_text_size = 1ul << 25;
+    std::string      long_text(long_text_size, '\0');
+    std::generate(long_text.begin(), long_text.end(), [&] { return dist(prng); });
+    std::string long_text_b64_par(long_text_size * 4 / 3 + 4, '\0');
+    std::string long_text_b64_seq(long_text_size * 4 / 3 + 4, '\0');
+    encodeAsBase64(long_text, long_text_b64_par.begin());
+    auto       seq_ptr        = long_text_b64_seq.data();
+    const auto long_byte_span = std::as_bytes(std::span{long_text});
+    const auto lp             = detail::b64::encB64SerialImpl(long_byte_span, seq_ptr);
+    detail::b64::encB64Remainder(long_byte_span.subspan(lp), seq_ptr);
+    CHECK(long_text_b64_seq == long_text_b64_par);
 }

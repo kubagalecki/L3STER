@@ -23,32 +23,32 @@ inline SerializedPartition receivePartition(const MpiComm& comm, int source)
 
         const auto node_msg_size = sizes[i * 4];
         domain.element_nodes.resize(node_msg_size);
-        messages.emplace_back(comm.receiveAsync(domain.element_nodes.data(), node_msg_size, source, msg_tag++));
+        messages.emplace_back(comm.receiveAsync(domain.element_nodes, source, msg_tag++));
 
         const auto data_msg_size = sizes[i * 4 + 1];
         domain.element_data.resize(data_msg_size);
-        messages.emplace_back(comm.receiveAsync(domain.element_data.data(), data_msg_size, source, msg_tag++));
+        messages.emplace_back(comm.receiveAsync(domain.element_data, source, msg_tag++));
 
         const auto id_msg_size = sizes[i * 4 + 2];
         domain.element_ids.resize(id_msg_size);
-        messages.emplace_back(comm.receiveAsync(domain.element_ids.data(), id_msg_size, source, msg_tag++));
+        messages.emplace_back(comm.receiveAsync(domain.element_ids, source, msg_tag++));
 
         const auto offset_msg_size = sizes[i * 4 + 3];
         domain.type_order_offsets.resize(offset_msg_size);
         domain.types.resize(offset_msg_size);
         domain.orders.resize(offset_msg_size);
-        messages.emplace_back(comm.receiveAsync(domain.type_order_offsets.data(), offset_msg_size, source, msg_tag++));
-        messages.emplace_back(comm.receiveAsync(domain.types.data(), offset_msg_size, source, msg_tag++));
-        messages.emplace_back(comm.receiveAsync(domain.orders.data(), offset_msg_size, source, msg_tag++));
+        messages.emplace_back(comm.receiveAsync(domain.type_order_offsets, source, msg_tag++));
+        messages.emplace_back(comm.receiveAsync(domain.types, source, msg_tag++));
+        messages.emplace_back(comm.receiveAsync(domain.orders, source, msg_tag++));
     }
 
     const auto nodes_size = sizes[4 * n_doms];
     ret_val.nodes.resize(nodes_size);
-    messages.emplace_back(comm.receiveAsync(ret_val.nodes.data(), nodes_size, source, msg_tag++));
+    messages.emplace_back(comm.receiveAsync(ret_val.nodes, source, msg_tag++));
 
     const auto ghost_nodes_size = sizes.back();
     ret_val.ghost_nodes.resize(ghost_nodes_size);
-    messages.emplace_back(comm.receiveAsync(ret_val.ghost_nodes.data(), ghost_nodes_size, source, msg_tag));
+    messages.emplace_back(comm.receiveAsync(ret_val.ghost_nodes, source, msg_tag));
 
     return ret_val;
 }

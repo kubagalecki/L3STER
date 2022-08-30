@@ -42,8 +42,7 @@ private:
 
     template < typename F >
     [[nodiscard]] std::pair< size_t, size_t > findCpuIf(const F&) const noexcept
-        requires std::is_invocable_r_v< bool, F, hwloc_cpuset_t >
-    ;
+        requires std::is_invocable_r_v< bool, F, hwloc_cpuset_t >;
 
     std::vector< std::vector< hwloc_cpuset_t > > cpu_masks{};
     std::vector< hwloc_nodeset_t >               node_masks{};

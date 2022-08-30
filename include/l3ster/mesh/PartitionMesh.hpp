@@ -5,6 +5,7 @@
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/MetisUtils.hpp"
 
+#include <unordered_set>
 #include <vector>
 
 namespace lstr
@@ -63,6 +64,7 @@ inline auto getMetisOptionsForPartitioning()
     METIS_SetDefaultOptions(opts.data());
 
     opts[METIS_OPTION_OBJTYPE] = METIS_OBJTYPE_VOL;
+    opts[METIS_OPTION_CONTIG]  = 1;
     opts[METIS_OPTION_NCUTS]   = 3;
     opts[METIS_OPTION_NSEPS]   = 3;
     opts[METIS_OPTION_NITER]   = 20;
@@ -175,67 +177,84 @@ inline void assignBoundaryElements(const MeshPartition&                        p
         boundaries);
 }
 
-inline std::vector< MeshPartition > assignNodes(idx_t                                       n_parts,
-                                                const std::vector< idx_t >&                 npart,
-                                                std::vector< MeshPartition::domain_map_t >& new_domain_maps)
+inline void reassignDisjointNodes(std::vector< std::pair< std::vector< n_id_t >, std::vector< n_id_t > > >& part_nodes,
+                                  std::vector< idx_t >& disjoint_nodes)
 {
-    enum class NodeType
-    {
-        None,
-        Normal,
-        Ghost
+    const auto claim_nodes = [&](idx_t part, std::pair< std::vector< n_id_t >, std::vector< n_id_t > >& nodes) {
+        std::vector< n_id_t > claimed;
+        auto& [owned_nodes, ghost_nodes] = nodes;
+        const auto try_claim             = [&](idx_t node) {
+            const auto ghost_iter = std::ranges::lower_bound(ghost_nodes, node);
+            if (ghost_iter == ghost_nodes.end() or *ghost_iter != static_cast< n_id_t >(node))
+                return false;
+            claimed.emplace_back(node);
+            ghost_nodes.erase(ghost_iter);
+            return true;
+        };
+        std::erase_if(disjoint_nodes, try_claim);
+        std::ranges::sort(claimed);
+        const auto old_n_owned = owned_nodes.size();
+        owned_nodes.resize(old_n_owned + claimed.size());
+        const auto insert_pos = std::next(begin(owned_nodes), static_cast< ptrdiff_t >(old_n_owned));
+        std::ranges::copy(claimed, insert_pos);
+        std::ranges::inplace_merge(owned_nodes, insert_pos);
     };
+    for (idx_t part = 0; auto& nodes : part_nodes)
+        claim_nodes(part++, nodes);
+    if (not disjoint_nodes.empty())
+        throw std::logic_error{"At least one node in the mesh does not belong to any element"};
+}
 
-    std::vector< MeshPartition > new_partitions;
-    new_partitions.reserve(n_parts);
-    std::vector< NodeType > node_types(npart.size());
-    for (idx_t part_ind = 0; auto&& new_dom_map : new_domain_maps)
+inline auto assignNodes(idx_t                                             n_parts,
+                        const std::vector< idx_t >&                       npart,
+                        const std::vector< MeshPartition::domain_map_t >& domain_maps)
+{
+    std::vector< std::pair< std::vector< n_id_t >, std::vector< n_id_t > > > new_node_vecs;
+    std::vector< idx_t >                                                     disjoint_nodes;
+    new_node_vecs.reserve(n_parts);
+    for (idx_t part_ind = 0; const auto& dom_map : domain_maps)
     {
-        size_t n_normal = 0, n_ghosts = 0;
-        std::ranges::fill(node_types, NodeType::None);
-        for (const auto& [ignore, domain] : new_dom_map)
+        std::unordered_set< idx_t > owned_nodes, ghost_nodes;
+        for (const auto& domain : dom_map | std::views::values)
         {
             domain.visit(
                 [&](const auto& element) {
                     for (auto node : element.getNodes())
-                    {
                         if (npart[node] == part_ind)
-                        {
-                            node_types[node] = NodeType::Normal;
-                            ++n_normal;
-                        }
+                            owned_nodes.insert(node);
                         else
-                        {
-                            node_types[node] = NodeType::Ghost;
-                            ++n_ghosts;
-                        }
-                    };
+                            ghost_nodes.insert(node);
                 },
                 std::execution::seq);
         }
-        std::vector< n_id_t > nodes, ghost_nodes;
-        nodes.reserve(n_normal);
-        ghost_nodes.reserve(n_ghosts);
-        for (n_id_t index = 0; auto type : node_types)
+        for (idx_t n = 0; auto p : npart)
         {
-            switch (type)
-            {
-            case NodeType::Normal:
-                nodes.push_back(index);
-                break;
-            case NodeType::Ghost:
-                ghost_nodes.push_back(index);
-                break;
-            default:
-                break;
-            }
-            ++index;
+            if (p == part_ind and not owned_nodes.contains(n))
+                disjoint_nodes.push_back(n);
+            ++n;
+        }
+        constexpr auto vec_from_set = [](const std::unordered_set< idx_t >& set) {
+            std::vector< n_id_t > vec(set.size());
+            std::ranges::copy(set, begin(vec));
+            std::ranges::sort(vec);
+            return vec;
         };
-
-        new_partitions.emplace_back(std::move(new_dom_map), std::move(nodes), std::move(ghost_nodes));
+        new_node_vecs.emplace_back(vec_from_set(owned_nodes), vec_from_set(ghost_nodes));
         ++part_ind;
     }
-    return new_partitions;
+    reassignDisjointNodes(new_node_vecs, disjoint_nodes);
+    return new_node_vecs;
+}
+
+inline Mesh
+makeMeshFromPartitionComponents(std::vector< MeshPartition::domain_map_t >&&                               dom_maps,
+                                std::vector< std::pair< std::vector< n_id_t >, std::vector< n_id_t > > >&& node_vecs)
+{
+    std::vector< MeshPartition > new_parts;
+    new_parts.reserve(dom_maps.size());
+    for (size_t i = 0; auto& [owned, ghost] : node_vecs) // can't use std::transform since we modify the source range
+        new_parts.emplace_back(std::move(dom_maps[i++]), std::move(owned), std::move(ghost));
+    return Mesh{std::move(new_parts)};
 }
 } // namespace detail
 
@@ -250,16 +269,14 @@ inline std::vector< MeshPartition > assignNodes(idx_t                           
     if (n_parts <= 1)
         return mesh;
 
-    const MeshPartition& part            = mesh.getPartitions()[0];
-    const auto           is_not_boundary = detail::getDomainPredicate(boundaries);
-    const auto           domain_data     = detail::getDomainData(part, is_not_boundary);
-
-    auto metis_result = detail::partitionDomains(part, domain_data, n_parts, is_not_boundary, std::move(part_weights));
-    auto& [epart, npart] = metis_result;
-
-    auto new_domain_maps = detail::distributeDomainElements(part, n_parts, epart, is_not_boundary);
+    const MeshPartition& part         = mesh.getPartitions()[0];
+    const auto           not_boundary = detail::getDomainPredicate(boundaries);
+    const auto           domain_data  = detail::getDomainData(part, not_boundary);
+    auto [epart, npart]  = detail::partitionDomains(part, domain_data, n_parts, not_boundary, std::move(part_weights));
+    auto new_domain_maps = detail::distributeDomainElements(part, n_parts, epart, not_boundary);
     detail::assignBoundaryElements(part, epart, new_domain_maps, boundaries, domain_data[0]);
-    return Mesh{detail::assignNodes(n_parts, npart, new_domain_maps)};
+    auto node_vecs = detail::assignNodes(n_parts, npart, new_domain_maps);
+    return detail::makeMeshFromPartitionComponents(std::move(new_domain_maps), std::move(node_vecs));
 }
 } // namespace lstr
 #endif // L3STER_MESH_PARTITIONMESH_HPP

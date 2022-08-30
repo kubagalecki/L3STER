@@ -173,9 +173,7 @@ auto assembleLocalSystem(Kernel&&                                               
                          const Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, n_fields, rcmaj >&     node_vals,
                          const ReferenceBasisAtQuadrature< ET, EO, QL, Element< ET, EO >::native_dim >& basis_at_q,
                          val_t                                                                          time)
-    requires detail::Kernel_c< Kernel,
-                               Element< ET, EO >::native_dim,
-                               n_fields >
+    requires detail::Kernel_c< Kernel, Element< ET, EO >::native_dim, n_fields >
 {
     const auto& quadrature          = basis_at_q.quadrature;
     const auto  jac_at_qp           = computeJacobiansAtQpoints(element, quadrature);
@@ -206,9 +204,7 @@ auto assembleLocalBoundarySystem(
     const Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, n_fields, rcmaj >&     node_vals,
     const ReferenceBasisAtQuadrature< ET, EO, QL, Element< ET, EO >::native_dim >& basis_at_q,
     val_t                                                                          time)
-    requires detail::BoundaryKernel_c< Kernel,
-                                       Element< ET, EO >::native_dim,
-                                       n_fields >
+    requires detail::BoundaryKernel_c< Kernel, Element< ET, EO >::native_dim, n_fields >
 {
     const auto& quadrature          = basis_at_q.quadrature;
     const auto  jac_at_qp           = computeJacobiansAtQpoints(*el_view.element, quadrature);
