@@ -109,8 +109,38 @@ inline std::size_t encB64SimdImpl(std::span< const std::byte > data, char*& out)
         const auto v13        = _mm256_set1_epi8(13);
         const auto v26        = _mm256_set1_epi8(26);
         const auto v51        = _mm256_set1_epi8(51);
-        const auto offset_map = _mm256_setr_epi8(71, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -19, -16, 65, 0, 0,
-                                                 71, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -19, -16, 65, 0, 0);
+        const auto offset_map = _mm256_setr_epi8(71,
+                                                 -4,
+                                                 -4,
+                                                 -4,
+                                                 -4,
+                                                 -4,
+                                                 -4,
+                                                 -4,
+                                                 -4,
+                                                 -4,
+                                                 -4,
+                                                 -19,
+                                                 -16,
+                                                 65,
+                                                 0,
+                                                 0,
+                                                 71,
+                                                 -4,
+                                                 -4,
+                                                 -4,
+                                                 -4,
+                                                 -4,
+                                                 -4,
+                                                 -4,
+                                                 -4,
+                                                 -4,
+                                                 -4,
+                                                 -19,
+                                                 -16,
+                                                 65,
+                                                 0,
+                                                 0);
 
         const auto lt26_mask = _mm256_cmpgt_epi8(v26, b64_inds);
         const auto red_0_25  = _mm256_and_si256(lt26_mask, v13);
@@ -181,10 +211,10 @@ std::size_t encodeAsBase64(R&& data, I out_it)
 template < typename T >
 std::size_t getBase64EncodingSize(std::size_t size)
 {
-    const auto bytes   = size * sizeof(T);
-    const auto div_res = bytes * 4 / 3;
-    const auto mod_res = bytes * 4 % 3;
-    return mod_res > 0 ? div_res + 4 : div_res;
+    const auto bytes           = size * sizeof(T);
+    const auto n_full_triplets = bytes / 3;
+    const auto remainder       = bytes % 3;
+    return (n_full_triplets + (remainder > 0)) * 4;
 }
 } // namespace lstr
 #endif // L3STER_UTIL_BASE64_HPP
