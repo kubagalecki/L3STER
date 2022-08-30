@@ -127,8 +127,7 @@ concept predicate_trait_specialized = requires {
 
 template < typename R, typename V >
 concept random_access_typed_range =
-    std::ranges::random_access_range< R > && std::same_as < std::ranges::range_value_t< R >,
-V > ;
+    std::ranges::random_access_range< R > && std::same_as< std::ranges::range_value_t< R >, V >;
 
 template < typename T >
 concept ExecutionPolicy_c = std::is_execution_policy_v< std::remove_cvref_t< T > >;

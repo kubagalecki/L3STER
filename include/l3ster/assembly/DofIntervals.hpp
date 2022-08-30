@@ -126,9 +126,8 @@ void serializeDofIntervals(const node_interval_vector_t< n_fields >&       inter
 
 template < size_t n_fields >
 auto deserializeDofIntervals(const std::ranges::sized_range auto& serial_data, auto out_it)
-    requires std::same_as< std::ranges::range_value_t< std::decay_t< decltype(serial_data) > >,
-                           unsigned long long >and std::
-        output_iterator< decltype(out_it), std::pair< std::array< n_id_t, 2 >, std::bitset< n_fields > > >
+    requires std::same_as< std::ranges::range_value_t< std::decay_t< decltype(serial_data) > >, unsigned long long > and
+             std::output_iterator< decltype(out_it), std::pair< std::array< n_id_t, 2 >, std::bitset< n_fields > > >
 {
     for (auto data_it = std::ranges::begin(serial_data); data_it != std::ranges::end(serial_data);)
     {
@@ -327,17 +326,13 @@ void consolidateDofIntervals(node_interval_vector_t< n_fields >& intervals)
 template < size_t n_fields >
 auto computeIntervalStarts(const node_interval_vector_t< n_fields >& intervals)
 {
-    std::vector< global_dof_t > retval(intervals.size());
-    std::transform_exclusive_scan(begin(intervals),
-                                  end(intervals),
-                                  begin(retval),
-                                  0,
-                                  std::plus< global_dof_t >{},
-                                  [](const auto& interval) -> global_dof_t {
-                                      const auto& [delim, cov] = interval;
-                                      const auto& [lo, hi]     = delim;
-                                      return (hi - lo + 1) * cov.count();
-                                  });
+    std::vector< size_t > retval(intervals.size());
+    std::transform_exclusive_scan(
+        begin(intervals), end(intervals), begin(retval), 0, std::plus< size_t >{}, [](const auto& interval) -> size_t {
+            const auto& [delim, cov] = interval;
+            const auto& [lo, hi]     = delim;
+            return (hi - lo + 1u) * cov.count();
+        });
     return retval;
 }
 

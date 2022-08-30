@@ -7,9 +7,8 @@ namespace lstr
 {
 template < std::ranges::random_access_range Rx, std::ranges::random_access_range Ry >
 inline Mesh makeSquareMesh(Rx&& distx, Ry&& disty)
-    requires std::convertible_to< std::ranges::range_value_t< std::decay_t< Rx > >,
-                                  val_t >and std::convertible_to< std::ranges::range_value_t< std::decay_t< Ry > >,
-                                                                  val_t >
+    requires std::convertible_to< std::ranges::range_value_t< std::decay_t< Rx > >, val_t > and
+             std::convertible_to< std::ranges::range_value_t< std::decay_t< Ry > >, val_t >
 {
     const size_t n_dx = std::ranges::size(distx);
     const size_t n_dy = std::ranges::size(disty);
@@ -77,8 +76,7 @@ inline Mesh makeSquareMesh(Rx&& distx, Ry&& disty)
 
 template < std::ranges::random_access_range R >
 inline Mesh makeSquareMesh(R&& dist)
-    requires std::convertible_to< std::ranges::range_value_t< std::decay_t< R > >,
-                                  val_t >
+    requires std::convertible_to< std::ranges::range_value_t< std::decay_t< R > >, val_t >
 {
     return makeSquareMesh(dist, dist);
 }

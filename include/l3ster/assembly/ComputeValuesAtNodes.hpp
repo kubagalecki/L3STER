@@ -9,23 +9,19 @@
 
 namespace lstr
 {
-template < array_of< size_t > auto dof_inds, typename F, std::ranges::sized_range R, size_t n_fields >
+template < array_of< size_t > auto dof_inds, typename F, detail::DomainIdRange_c R, size_t n_fields >
 auto computeValuesAtNodes(F&&                             f,
                           const MeshPartition&            mesh,
                           R&&                             dom_ids,
                           const NodeToDofMap< n_fields >& map,
                           Tpetra::Vector<>&               values,
                           val_t                           time = 0.)
-    requires std::convertible_to< std::ranges::range_value_t< R >,
-                                  d_id_t > and
-             (std::ranges::all_of(dof_inds, [](size_t dof) { return dof < n_fields; })) and
-                 requires(const SpaceTimePoint p)
-{
-    {
-        f(p)
-        } -> EigenVector_c;
-}
-and(std::invoke_result_t< F, SpaceTimePoint >::RowsAtCompileTime == dof_inds.size())
+    requires(std::ranges::all_of(dof_inds, [](size_t dof) { return dof < n_fields; })) and
+            requires(const SpaceTimePoint p) {
+                {
+                    f(p)
+                    } -> EigenVector_c;
+            } and (std::invoke_result_t< F, SpaceTimePoint >::RowsAtCompileTime == dof_inds.size())
 {
     const auto is_owned_node = [&](n_id_t node) {
         return not std::ranges::binary_search(mesh.getGhostNodes(), node);

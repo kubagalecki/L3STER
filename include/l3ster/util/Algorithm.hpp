@@ -179,12 +179,11 @@ template <
         std::ranges::equal_to,
     std::regular_invocable< std::ranges::range_value_t< R >, std::ranges::range_value_t< R > > Red = std::plus<> >
     requires std::permutable< std::ranges::iterator_t< R > > and
-             std::assignable_from< std::ranges::range_reference_t< R >,
-                                   std::invoke_result_t< Red,
-                                                         std::ranges::range_value_t< R >,
-                                                         std::ranges::range_value_t< R > > > constexpr std::ranges::
-        borrowed_subrange_t< R >
-        reduceConsecutive(R&& range, Cmp&& comparator = {}, Red&& reduction = {})
+             std::assignable_from<
+                 std::ranges::range_reference_t< R >,
+                 std::invoke_result_t< Red, std::ranges::range_value_t< R >, std::ranges::range_value_t< R > > >
+constexpr std::ranges::borrowed_subrange_t< R >
+reduceConsecutive(R&& range, Cmp&& comparator = {}, Red&& reduction = {})
 {
     auto it        = std::ranges::begin(range);
     auto write_pos = it;

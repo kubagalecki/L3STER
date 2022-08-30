@@ -7,8 +7,7 @@ namespace lstr
 {
 template < std::ranges::random_access_range Rx >
 inline Mesh makeLineMesh(Rx&& distx)
-    requires std::convertible_to< std::ranges::range_value_t< std::decay_t< Rx > >,
-                                  val_t >
+    requires std::convertible_to< std::ranges::range_value_t< std::decay_t< Rx > >, val_t >
 {
     const size_t n_dx = std::ranges::size(distx);
     const size_t e_dx = n_dx - 1;
