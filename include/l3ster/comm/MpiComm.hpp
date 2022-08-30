@@ -128,11 +128,11 @@ public:
         inline FileHandle& operator=(FileHandle&&) noexcept;
         ~FileHandle() { closeIgnoreErr(); }
 
-        inline void preallocate(MPI_Offset size);
+        inline void preallocate(MPI_Offset size) const;
         template < detail::MpiNonblockingBuf_c R >
-        MpiComm::Request readAtAsync(R&& read_range, MPI_Offset offset);
+        MpiComm::Request readAtAsync(R&& read_range, MPI_Offset offset) const;
         template < detail::MpiNonblockingBuf_c R >
-        MpiComm::Request writeAtAsync(R&& write_range, MPI_Offset offset);
+        MpiComm::Request writeAtAsync(R&& write_range, MPI_Offset offset) const;
 
     private:
         FileHandle() = default;
@@ -141,7 +141,7 @@ public:
         MPI_File file = MPI_FILE_NULL;
     };
 
-    inline FileHandle openFile(const char* file_name, int amode, MPI_Info info = MPI_INFO_NULL);
+    inline FileHandle openFile(const char* file_name, int amode, MPI_Info info = MPI_INFO_NULL) const;
 
     void abort() const { MPI_Abort(comm, MPI_ERR_UNKNOWN); }
 
@@ -212,33 +212,33 @@ MpiComm::FileHandle& MpiComm::FileHandle::operator=(MpiComm::FileHandle&& other)
     file = std::exchange(other.file, MPI_FILE_NULL);
     return *this;
 }
-void MpiComm::FileHandle::preallocate(MPI_Offset size)
+void MpiComm::FileHandle::preallocate(MPI_Offset size) const
 {
     detail::handleMPIError(MPI_File_preallocate(file, size), "MPI file preallocate failed");
 }
 template < detail::MpiNonblockingBuf_c R >
-MpiComm::Request MpiComm::FileHandle::readAtAsync(R&& read_range, MPI_Offset offset)
+MpiComm::Request MpiComm::FileHandle::readAtAsync(R&& read_range, MPI_Offset offset) const
 {
     const auto       datatype = detail::MpiType< std::ranges::range_value_t< R > >::value();
     MpiComm::Request request;
     detail::handleMPIError(
         MPI_File_iread_at(
-            file, offset, std::ranges::data(read_range), std::ranges::size(read_range), datatype, request.request),
+            file, offset, std::ranges::data(read_range), std::ranges::size(read_range), datatype, &request.request),
         "MPI asynchronous read from file at offset failed");
     return request;
 }
 template < detail::MpiNonblockingBuf_c R >
-MpiComm::Request MpiComm::FileHandle::writeAtAsync(R&& write_range, MPI_Offset offset)
+MpiComm::Request MpiComm::FileHandle::writeAtAsync(R&& write_range, MPI_Offset offset) const
 {
     const auto       datatype = detail::MpiType< std::ranges::range_value_t< R > >::value();
     MpiComm::Request request;
     detail::handleMPIError(
         MPI_File_iwrite_at(
-            file, offset, std::ranges::data(write_range), std::ranges::size(write_range), datatype, request.request),
+            file, offset, std::ranges::data(write_range), std::ranges::size(write_range), datatype, &request.request),
         "MPI asynchronous write to file at offset failed");
     return request;
 }
-MpiComm::FileHandle MpiComm::openFile(const char* file_name, int amode, MPI_Info info)
+MpiComm::FileHandle MpiComm::openFile(const char* file_name, int amode, MPI_Info info) const
 {
     FileHandle fh;
     detail::handleMPIError(MPI_File_open(comm, file_name, amode, info, &fh.file),
