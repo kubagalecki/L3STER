@@ -87,7 +87,7 @@ public:
         clear();
         deallocate();
 
-        m_data     = std::exchange(vm.m_data, 0u);
+        m_data     = std::exchange(vm.m_data, nullptr);
         m_size     = std::exchange(vm.m_size, 0u);
         m_capacity = std::exchange(vm.m_capacity, 0u);
         return *this;
@@ -131,7 +131,11 @@ public:
     constexpr const_reverse_iterator rend() const { return std::make_reverse_iterator(m_data); }
     constexpr const_reverse_iterator crend() const { return std::make_reverse_iterator(m_data); }
 
-    constexpr void pushBack(const_reference value) { emplaceBack(value); }
+    constexpr void pushBack(const_reference value)
+        requires std::copy_constructible< T >
+    {
+        emplaceBack(value);
+    }
     template < typename... Arg >
     constexpr reference emplaceBack(Arg&&... args)
         requires std::constructible_from< T, Arg... >
