@@ -72,24 +72,6 @@ std::vector< T > concatVectors(std::vector< T > v1, const std::vector< T >& v2)
     return v1;
 }
 
-template < typename T >
-struct alignas(std::max< std::size_t >(64u /* cacheline size */, alignof(T))) CacheAligned
-{
-    template < typename... Args >
-    constexpr CacheAligned(Args&&... args)
-        requires std::constructible_from< T, Args... >
-    : value{std::forward< Args >(args)...}
-    {}
-
-    constexpr T&       operator*() noexcept { return value; }
-    constexpr const T& operator*() const noexcept { return value; }
-    constexpr T*       operator->() noexcept { return std::addressof(value); }
-    constexpr const T* operator->() const noexcept { return std::addressof(value); }
-
-private:
-    T value;
-};
-
 template < std::ranges::sized_range auto inds, typename T, size_t N, std::indirectly_writable< T > Iter >
 Iter copyValuesAtInds(const std::array< T, N >& array, Iter out_iter)
     requires std::convertible_to< std::ranges::range_value_t< decltype(inds) >, size_t > and

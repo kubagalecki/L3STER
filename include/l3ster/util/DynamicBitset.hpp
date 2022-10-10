@@ -17,18 +17,28 @@ class DynamicBitset
 {
     static constexpr std::size_t ul_bits = sizeof(unsigned long) * CHAR_BIT;
 
-    static inline std::ptrdiff_t getEntryInd(std::size_t pos) { return static_cast< std::ptrdiff_t >(pos / ul_bits); }
-    static inline std::uint8_t   getBitPos(std::size_t pos) { return pos % ul_bits; }
-    static inline unsigned long  getMask(std::uint8_t bit_pos) { return 0b1ul << bit_pos; }
-    static inline auto           posInds(std::size_t pos) { return std::make_pair(getEntryInd(pos), getBitPos(pos)); }
-    static inline std::size_t    computeAllocUls(std::size_t size)
+    static std::ptrdiff_t getEntryInd(std::size_t pos) { return static_cast< std::ptrdiff_t >(pos / ul_bits); }
+    static std::uint8_t   getBitPos(std::size_t pos) { return pos % ul_bits; }
+    static unsigned long  getMask(std::uint8_t bit_pos) { return 0b1ul << bit_pos; }
+    static auto           posInds(std::size_t pos) { return std::make_pair(getEntryInd(pos), getBitPos(pos)); }
+    static std::size_t    computeAllocUls(std::size_t size)
     {
         return size % ul_bits == 0 ? size / ul_bits : size / ul_bits + 1;
+    }
+    [[nodiscard]] auto getUlAndMask(std::size_t pos) const
+    {
+        const auto [ul_ind, bit_pos] = posInds(pos);
+        return std::make_pair(std::addressof(m_data[ul_ind]), getMask(bit_pos));
+    }
+    auto getUlAndMask(std::size_t pos)
+    {
+        const auto [ul_ind, bit_pos] = posInds(pos);
+        return std::make_pair(std::addressof(m_data[ul_ind]), getMask(bit_pos));
     }
 
 public:
     DynamicBitset() = default;
-    DynamicBitset(std::size_t size_) : m_data(computeAllocUls(size_), 0ul), m_size{size_} {}
+    DynamicBitset(std::size_t size) : m_data(computeAllocUls(size), 0ul), m_size{size} {}
     void resize(std::size_t new_size)
     {
         m_data.resize(computeAllocUls(new_size), 0ul);
@@ -37,40 +47,39 @@ public:
 
     [[nodiscard]] std::size_t count() const noexcept
     {
-        return std::transform_reduce(
-            begin(m_data), end(m_data), std::size_t{0}, std::plus<>{}, [](CacheAligned< unsigned long > v) {
-                return std::popcount(*v);
-            });
+        return std::transform_reduce(begin(m_data), end(m_data), std::size_t{0}, std::plus<>{}, [](unsigned long v) {
+            return std::popcount(v);
+        });
     }
     [[nodiscard]] std::size_t size() const noexcept { return m_size; }
 
     [[nodiscard]] bool test(std::size_t pos) const noexcept
     {
-        const auto [ul_ind, bit_pos] = posInds(pos);
-        return *m_data[ul_ind] & getMask(bit_pos);
+        const auto [ul_ptr, mask] = getUlAndMask(pos);
+        return *ul_ptr & mask;
     }
     void set(std::size_t pos) noexcept
     {
-        const auto [ul_ind, bit_pos] = posInds(pos);
-        *m_data[ul_ind] |= getMask(bit_pos);
+        const auto [ul_ptr, mask] = getUlAndMask(pos);
+        *ul_ptr |= mask;
     }
     void reset(std::size_t pos) noexcept
     {
-        const auto [ul_ind, bit_pos] = posInds(pos);
-        *m_data[ul_ind] &= ~getMask(bit_pos);
+        const auto [ul_ptr, mask] = getUlAndMask(pos);
+        *ul_ptr &= ~mask;
     }
     void flip(std::size_t pos) noexcept
     {
-        const auto [ul_ind, bit_pos] = posInds(pos);
-        *m_data[ul_ind] ^= getMask(bit_pos);
+        const auto [ul_ptr, mask] = getUlAndMask(pos);
+        *ul_ptr ^= mask;
     }
     void assign(std::size_t pos, bool val) noexcept
     {
         const auto [ul_ind, bit_pos] = posInds(pos);
-        *m_data[ul_ind] &= ~getMask(bit_pos);
-        *m_data[ul_ind] |= static_cast< unsigned long >(val) << bit_pos;
+        m_data[ul_ind] &= ~getMask(bit_pos);
+        m_data[ul_ind] |= static_cast< unsigned long >(val) << bit_pos;
     }
-    void clear() noexcept { std::ranges::fill(m_data, CacheAligned< unsigned long >{0ul}); }
+    void clear() noexcept { std::ranges::fill(m_data, 0ul); }
 
     class BitReference
     {
@@ -102,27 +111,23 @@ public:
     public:
         [[nodiscard]] bool test(std::size_t pos, std::memory_order order = std::memory_order_seq_cst) noexcept
         {
-            const auto [ul_ind, bit_pos] = posInds(pos);
-            std::atomic_ref atomic_val{*m_target->m_data[ul_ind]};
-            return atomic_val.load(order) & getMask(bit_pos);
+            const auto [ul_ptr, mask] = m_target->getUlAndMask(pos);
+            return std::atomic_ref{*ul_ptr}.load(order) & mask;
         }
         void set(std::size_t pos, std::memory_order order = std::memory_order_seq_cst) noexcept
         {
-            const auto [ul_ind, bit_pos] = posInds(pos);
-            std::atomic_ref atomic_val{*m_target->m_data[ul_ind]};
-            atomic_val.fetch_or(getMask(bit_pos), order);
+            const auto [ul_ptr, mask] = m_target->getUlAndMask(pos);
+            std::atomic_ref{*ul_ptr}.fetch_or(mask, order);
         }
         void reset(std::size_t pos, std::memory_order order = std::memory_order_seq_cst) noexcept
         {
-            const auto [ul_ind, bit_pos] = posInds(pos);
-            std::atomic_ref atomic_val{*m_target->m_data[ul_ind]};
-            atomic_val.fetch_and(~getMask(bit_pos), order);
+            const auto [ul_ptr, mask] = m_target->getUlAndMask(pos);
+            std::atomic_ref{*ul_ptr}.fetch_and(~mask, order);
         }
         void flip(std::size_t pos, std::memory_order order = std::memory_order_seq_cst) noexcept
         {
-            const auto [ul_ind, bit_pos] = posInds(pos);
-            std::atomic_ref atomic_val{*m_target->m_data[ul_ind]};
-            atomic_val.fetch_xor(getMask(bit_pos), order);
+            const auto [ul_ptr, mask] = m_target->getUlAndMask(pos);
+            std::atomic_ref{*ul_ptr}.fetch_xor(mask, order);
         }
 
     private:
@@ -185,7 +190,7 @@ public:
                 unsigned long mask{0};
                 for (auto i = first_bit; i <= last_bit; ++i)
                     mask |= getMask(i);
-                return std::popcount(*m_target->m_data[first_ul] & mask);
+                return std::popcount(m_target->m_data[first_ul] & mask);
             }
             else
             {
@@ -194,15 +199,15 @@ public:
                 unsigned long mask{0};
                 for (auto i = first_bit; i < ul_bits; ++i)
                     mask |= getMask(i);
-                retval += std::popcount(*m_target->m_data[first_ul] & mask);
+                retval += std::popcount(m_target->m_data[first_ul] & mask);
 
                 for (auto i = first_ul + 1; i < last_ul; ++i)
-                    retval += std::popcount(*m_target->m_data[i]);
+                    retval += std::popcount(m_target->m_data[i]);
 
                 mask = 0;
                 for (std::uint8_t i = 0; i <= last_bit; ++i)
                     mask |= getMask(i);
-                retval += std::popcount(*m_target->m_data[last_ul] & mask);
+                retval += std::popcount(m_target->m_data[last_ul] & mask);
 
                 return retval;
             }
@@ -222,8 +227,9 @@ public:
     }
 
 private:
-    std::vector< CacheAligned< unsigned long > > m_data;
-    std::size_t                                  m_size{};
+    std::vector< unsigned long > m_data;
+    std::size_t                  m_size{};
 };
+
 } // namespace lstr
 #endif // L3STER_UTIL_DYNAMICBITSET_HPP
