@@ -10,47 +10,47 @@
 
 namespace lstr
 {
+// Range concepts
+template < typename R, typename T >
+concept RangeOfConvertibleTo_c = std::ranges::range< R > and std::convertible_to< std::ranges::range_value_t< R >, T >;
+template < typename R, typename T >
+concept SizedRangeOf_c = std::ranges::sized_range< R > and std::same_as< std::ranges::range_value_t< R >, T >;
+template < typename R, typename T >
+concept SizedRangeOfConvertibleTo_c = RangeOfConvertibleTo_c< R, T > and std::ranges::sized_range< R >;
+template < typename R, typename T >
+concept RandomAccessRangeOf =
+    std::ranges::random_access_range< R > and std::same_as< std::ranges::range_value_t< R >, T >;
+template < typename R, typename T >
+concept ContiguousSizedRangeOf = std::ranges::contiguous_range< R > and
+                                 std::same_as< std::ranges::range_value_t< R >, T > and std::ranges::sized_range< R >;
+template < typename R >
+concept IndexRange_c = SizedRangeOfConvertibleTo_c< R, std::size_t >;
+
 namespace detail
 {
 template < typename T >
-struct is_array : std::false_type
-{};
+inline constexpr bool is_array = false;
 template < typename T, std::size_t N >
-struct is_array< std::array< T, N > > : std::true_type
-{};
-} // namespace detail
-
+inline constexpr bool is_array< std::array< T, N > > = true;
 template < typename T >
-concept array = detail::is_array< T >::value;
-
-template < typename T, typename V >
-concept array_of = array< T > and std::same_as< typename T::value_type, V >;
-
-namespace detail
-{
-template < typename T >
-struct is_tuple : std::false_type
-{};
+inline constexpr bool is_tuple = false;
 template < typename... T >
-struct is_tuple< std::tuple< T... > > : std::true_type
-{};
-} // namespace detail
-
+inline constexpr bool is_tuple< std::tuple< T... > > = true;
 template < typename T >
-concept tuple = detail::is_tuple< T >::value;
-
-namespace detail
-{
-template < typename T >
-struct is_pair : std::false_type
-{};
+inline constexpr bool is_pair = false;
 template < typename T1, typename T2 >
-struct is_pair< std::pair< T1, T2 > > : std::true_type
-{};
+inline constexpr bool is_pair< std::pair< T1, T2 > > = true;
 } // namespace detail
 
+// Tuple-related cocnepts
 template < typename T >
-concept pair = detail::is_pair< T >::value;
+concept Array_c = detail::is_array< T >;
+template < typename T, typename V >
+concept ArrayOf_c = Array_c< T > and std::same_as< typename T::value_type, V >;
+template < typename T >
+concept Tuple_c = detail::is_tuple< T >;
+template < typename T >
+concept Pair_c = detail::is_pair< T >;
 
 namespace detail
 {
@@ -89,20 +89,20 @@ struct is_tuple_invocable : std::false_type
 {};
 
 template < typename T, tuple_like tuple_t >
-    struct is_tuple_invocable< T, tuple_t > : std::conditional_t < []< size_t... I >(std::index_sequence< I... >)
+    struct is_tuple_invocable< T, tuple_t > : std::conditional_t < std::invoke([]< size_t... I >(std::index_sequence< I... >)
 {
     return (std::is_invocable_v< T, std::tuple_element_t< I, tuple_t > > and ...);
-}(std::make_index_sequence< std::tuple_size_v< tuple_t > >{}), std::true_type, std::false_type > {};
+}, std::make_index_sequence< std::tuple_size_v< tuple_t > >{}), std::true_type, std::false_type > {};
 
 template < typename R, typename T, typename tuple_t >
 struct is_tuple_r_invocable : std::false_type
 {};
 
 template < typename R, typename T, tuple_like tuple_t >
-    struct is_tuple_r_invocable< R, T, tuple_t > : std::conditional_t < []< size_t... I >(std::index_sequence< I... >)
+    struct is_tuple_r_invocable< R, T, tuple_t > : std::conditional_t < std::invoke([]< size_t... I >(std::index_sequence< I... >)
 {
     return (std::is_invocable_r_v< R, T, std::tuple_element_t< I, tuple_t > > and ...);
-}(std::make_index_sequence< std::tuple_size_v< tuple_t > >{}), std::true_type, std::false_type > {};
+}, std::make_index_sequence< std::tuple_size_v< tuple_t > >{}), std::true_type, std::false_type > {};
 } // namespace detail
 
 template < typename T, typename tuple_t >
@@ -112,11 +112,11 @@ template < typename T, typename R, typename tuple_t >
 concept tuple_r_invocable = detail::is_tuple_r_invocable< R, T, tuple_t >::value;
 
 template < typename T, typename Domain, typename Range >
-concept mapping = requires(T f, Domain x) {
-                      {
-                          f(x)
-                          } -> std::convertible_to< Range >;
-                  };
+concept Mapping_c = requires(T f, Domain x) {
+                        {
+                            f(x)
+                            } -> std::convertible_to< Range >;
+                    };
 
 template < typename T, template < typename > typename Predicate >
 concept predicate_trait_specialized = requires {
@@ -125,13 +125,9 @@ concept predicate_trait_specialized = requires {
                                               } -> std::convertible_to< bool >;
                                       };
 
-template < typename R, typename V >
-concept random_access_typed_range =
-    std::ranges::random_access_range< R > && std::same_as< std::ranges::range_value_t< R >, V >;
-
+// Execution policy concepts
 template < typename T >
 concept ExecutionPolicy_c = std::is_execution_policy_v< std::remove_cvref_t< T > >;
-
 template < typename T >
 concept SequencedPolicy_c = std::same_as< std::execution::sequenced_policy, std::remove_cvref_t< T > >;
 } // namespace lstr

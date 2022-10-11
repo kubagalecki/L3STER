@@ -3,7 +3,10 @@
 
 #include "l3ster/util/Concepts.hpp"
 
+extern "C"
+{
 #include "mpi.h"
+}
 
 #include <memory_resource>
 #include <span>

@@ -1,7 +1,7 @@
 #ifndef L3STER_UTIL_BASE64_HPP
 #define L3STER_UTIL_BASE64_HPP
 
-#include "tbb/tbb.h"
+#include "oneapi/tbb/parallel_for.h"
 
 #include <array>
 #include <concepts>
@@ -19,7 +19,7 @@ namespace lstr
 {
 namespace detail::b64
 {
-inline constexpr auto conv_table = [] {
+inline constexpr auto conv_table = std::invoke([] {
     std::array< char, 64 > table;
     std::iota(begin(table), std::next(begin(table), 26), 'A');
     std::iota(std::next(begin(table), 26), std::next(begin(table), 52), 'a');
@@ -27,7 +27,8 @@ inline constexpr auto conv_table = [] {
     table[62] = '+';
     table[63] = '/';
     return table;
-}();
+});
+
 inline char enc0(std::byte b0)
 {
     return conv_table[std::to_integer< unsigned char >(b0 >> 2)];
@@ -44,6 +45,7 @@ inline char enc3(std::byte b2)
 {
     return conv_table[std::to_integer< unsigned char >(b2 & std::byte{0x3f})];
 }
+
 inline std::size_t encB64SerialImpl(std::span< const std::byte > data, char*& out)
 {
     std::size_t i = 0;
@@ -59,6 +61,7 @@ inline std::size_t encB64SerialImpl(std::span< const std::byte > data, char*& ou
     }
     return i;
 }
+
 inline void encB64Remainder(std::span< const std::byte > data, char*& out)
 {
     if (data.size() == 1)
@@ -79,6 +82,7 @@ inline void encB64Remainder(std::span< const std::byte > data, char*& out)
         *out++                 = '=';
     }
 }
+
 inline std::size_t encB64SimdImpl(std::span< const std::byte > data, char*& out)
 {
 #if defined(__AVX2__)
@@ -153,7 +157,7 @@ inline std::size_t encB64SimdImpl(std::span< const std::byte > data, char*& out)
     constexpr std::size_t block_size       = 24;
     constexpr std::size_t block_proc_bytes = 32;
     const auto            n_blocks         = data.size() / block_size;
-    const auto            block_range      = tbb::blocked_range< std::size_t >{0, n_blocks};
+    const auto            block_range      = oneapi::tbb::blocked_range< std::size_t >{0, n_blocks};
     const auto            process_block    = [&](std::size_t block_num) {
         const auto block_start    = std::next(data.data(), block_num * block_size);
         const auto out_start      = std::next(out, block_num * block_proc_bytes);
@@ -162,7 +166,7 @@ inline std::size_t encB64SimdImpl(std::span< const std::byte > data, char*& out)
         const auto ascii_block    = to_ascii(unpacked_block);
         _mm256_storeu_si256(reinterpret_cast< __m256i* >(out_start), ascii_block);
     };
-    tbb::parallel_for(block_range, [&](const tbb::blocked_range< std::size_t >& range) {
+    oneapi::tbb::parallel_for(block_range, [&](const oneapi::tbb::blocked_range< std::size_t >& range) {
         for (auto block = range.begin(); block != range.end(); ++block)
             process_block(block);
     });
@@ -172,6 +176,7 @@ inline std::size_t encB64SimdImpl(std::span< const std::byte > data, char*& out)
     return 0;
 #endif
 }
+
 inline std::size_t alignForSimd(std::span< const std::byte > data, char*& out)
 {
     static_assert(alignof(int) == 4);
@@ -186,6 +191,7 @@ inline std::size_t alignForSimd(std::span< const std::byte > data, char*& out)
         return 0;
 }
 } // namespace detail::b64
+
 template < std::ranges::contiguous_range R, std::contiguous_iterator I >
 std::size_t encodeAsBase64(R&& data, I out_it)
     requires std::ranges::sized_range< R > and std::same_as< std::iter_value_t< I >, char >

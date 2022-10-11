@@ -2,30 +2,145 @@
 #define L3STER_ASSEMBLY_NODETODOFMAP_HPP
 
 #include "l3ster/assembly/DofIntervals.hpp"
+#include "l3ster/util/RobinHoodHashTables.hpp"
 
 #include "Tpetra_CrsGraph.hpp"
 
 namespace lstr
 {
-template < size_t NF > // number of fields
-class NodeToDofMap
+template < size_t dofs_per_node >
+class NodeToGlobalDofMap
 {
+    using payload_t = std::array< global_dof_t, dofs_per_node >;
+    struct ContiguousCaseInfo
+    {
+        static_assert(dofs_per_node <= 1u << (sizeof(std::uint8_t) * CHAR_BIT));
+        n_id_t                                    base_node;
+        global_dof_t                              base_dof;
+        std::array< std::uint8_t, dofs_per_node > dof_inds;
+        std::uint8_t                              n_dofs;
+    };
+    using map_t  = std::unordered_map< n_id_t, payload_t >;
+    using data_t = std::variant< map_t, ContiguousCaseInfo >;
+
 public:
-    NodeToDofMap() = default;
-    inline NodeToDofMap(const MeshPartition& mesh, const detail::node_interval_vector_t< NF >& dof_intervals);
+    using dof_t                               = global_dof_t;
+    static constexpr global_dof_t invalid_dof = -1;
 
-    [[nodiscard]] const auto& operator()(n_id_t node) const noexcept { return map.find(node)->second; }
+    NodeToGlobalDofMap() = default;
+    inline NodeToGlobalDofMap(const MeshPartition&                                   mesh,
+                              const detail::node_interval_vector_t< dofs_per_node >& dof_intervals);
 
-    [[nodiscard]] const auto& getMap() const noexcept { return map; }
+    [[nodiscard]] inline payload_t operator()(n_id_t node) const noexcept;
+    [[nodiscard]] bool             isContiguous() const noexcept
+    {
+        return std::get_if< ContiguousCaseInfo >(std::addressof(m_data));
+    }
 
 private:
-    std::unordered_map< n_id_t, std::array< global_dof_t, NF > > map;
+    inline bool tryInitAsContiguous(const MeshPartition&                                   msh,
+                                    const detail::node_interval_vector_t< dofs_per_node >& dof_ints);
+    inline void initNonContiguous(const MeshPartition&                                   mesh,
+                                  const detail::node_interval_vector_t< dofs_per_node >& dof_intervals);
+
+    data_t m_data;
 };
 
-template < size_t NF >
-NodeToDofMap< NF >::NodeToDofMap(const MeshPartition& mesh, const detail::node_interval_vector_t< NF >& dof_intervals)
-    : map(mesh.getNodes().size() + mesh.getGhostNodes().size())
+template < size_t dofs_per_node >
+class NodeToLocalDofMap
 {
+    using payload_t = std::array< local_dof_t, dofs_per_node >;
+    using map_t     = robin_hood::unordered_flat_map< n_id_t, payload_t >;
+
+public:
+    static constexpr local_dof_t invalid_dof = -1;
+    using dof_t                              = local_dof_t;
+
+    NodeToLocalDofMap() = default;
+    NodeToLocalDofMap(const MeshPartition&                            nodes,
+                      const NodeToGlobalDofMap< dofs_per_node >&      global_map,
+                      const Tpetra::Map< local_dof_t, global_dof_t >& local_global_map);
+    [[nodiscard]] const payload_t& operator()(n_id_t node) const noexcept { return m_map.find(node)->second; }
+
+private:
+    map_t m_map;
+};
+
+namespace detail
+{
+template < typename T >
+inline constexpr bool is_node_map = false;
+template < size_t dpn >
+inline constexpr bool is_node_map< NodeToGlobalDofMap< dpn > > = true;
+template < size_t dpn >
+inline constexpr bool is_node_map< NodeToLocalDofMap< dpn > > = true;
+} // namespace detail
+
+template < typename T >
+concept NodeToDofMap_c = detail::is_node_map< T >;
+
+template < size_t dofs_per_node >
+NodeToGlobalDofMap< dofs_per_node >::NodeToGlobalDofMap(
+    const MeshPartition& mesh, const detail::node_interval_vector_t< dofs_per_node >& dof_intervals)
+{
+    if (not tryInitAsContiguous(mesh, dof_intervals))
+        initNonContiguous(mesh, dof_intervals);
+}
+
+template < size_t dofs_per_node >
+typename NodeToGlobalDofMap< dofs_per_node >::payload_t
+NodeToGlobalDofMap< dofs_per_node >::operator()(n_id_t node) const noexcept
+{
+    const auto map_ptr = std::get_if< map_t >(std::addressof(m_data));
+    if (map_ptr)
+        return map_ptr->find(node)->second;
+    else
+    {
+        const auto& contig_info = *std::get_if< ContiguousCaseInfo >(std::addressof(m_data));
+        const auto  dof_inds    = std::span{contig_info.dof_inds.begin(), contig_info.n_dofs};
+        auto        node_dof    = contig_info.base_dof + (node - contig_info.base_node) * contig_info.n_dofs;
+        payload_t   retval;
+        retval.fill(invalid_dof);
+        for (auto i : dof_inds)
+            retval[i] = node_dof++;
+        return retval;
+    }
+}
+
+template < size_t dofs_per_node >
+bool NodeToGlobalDofMap< dofs_per_node >::tryInitAsContiguous(
+    const MeshPartition& mesh, const detail::node_interval_vector_t< dofs_per_node >& dof_intervals)
+{
+    const auto min_node_in_partition = std::min(
+        mesh.getNodes().size() != 0 ? mesh.getNodes().front() : std::numeric_limits< n_id_t >::max(),
+        mesh.getGhostNodes().size() != 0 ? mesh.getGhostNodes().front() : std::numeric_limits< n_id_t >::max());
+    const auto max_node_in_partition = std::max(mesh.getNodes().size() != 0 ? mesh.getNodes().back() : 0,
+                                                mesh.getGhostNodes().size() != 0 ? mesh.getGhostNodes().back() : 0);
+    global_dof_t base_dof{};
+    for (const auto& interval : dof_intervals)
+    {
+        const auto& [delim, coverage]     = interval;
+        const auto& [int_first, int_last] = delim;
+        if (min_node_in_partition >= int_first and max_node_in_partition <= int_last)
+        {
+            std::array< std::uint8_t, dofs_per_node > dof_inds{};
+            auto                                      write_it = begin(dof_inds);
+            for (size_t i = 0; i < dofs_per_node; ++i)
+                if (coverage.test(i))
+                    *write_it++ = static_cast< std::uint8_t >(i);
+            m_data = ContiguousCaseInfo{int_first, base_dof, dof_inds, static_cast< std::uint8_t >(coverage.count())};
+            return true;
+        }
+        base_dof += (int_last - int_first + 1) * coverage.count();
+    }
+    return false;
+}
+
+template < size_t dofs_per_node >
+void NodeToGlobalDofMap< dofs_per_node >::initNonContiguous(
+    const MeshPartition& mesh, const detail::node_interval_vector_t< dofs_per_node >& dof_intervals)
+{
+    auto&      map = m_data.template emplace< map_t >(mesh.getNodes().size() + mesh.getGhostNodes().size());
     const auto dof_interval_starts = detail::computeIntervalStarts(dof_intervals);
     const auto add_entries         = [&](const std::vector< n_id_t >& nodes) {
         const auto compute_node_dofs = [&](n_id_t node_id, ptrdiff_t interval_ind) {
@@ -33,8 +148,8 @@ NodeToDofMap< NF >::NodeToDofMap(const MeshPartition& mesh, const detail::node_i
             const auto& [delim, cov] = dof_intervals[interval_ind];
             const auto& [lo, hi]     = delim;
 
-            std::array< global_dof_t, NF > retval;
-            retval.fill(std::numeric_limits< global_dof_t >::max());
+            std::array< global_dof_t, dofs_per_node > retval;
+            retval.fill(invalid_dof);
             global_dof_t node_dof = dof_int_start + (node_id - lo) * cov.count();
             for (ptrdiff_t i = 0; auto& dof : retval)
                 if (cov.test(i++))
@@ -52,6 +167,27 @@ NodeToDofMap< NF >::NodeToDofMap(const MeshPartition& mesh, const detail::node_i
     };
     add_entries(mesh.getNodes());
     add_entries(mesh.getGhostNodes());
+}
+
+template < size_t dofs_per_node >
+NodeToLocalDofMap< dofs_per_node >::NodeToLocalDofMap(const MeshPartition&                            mesh,
+                                                      const NodeToGlobalDofMap< dofs_per_node >&      global_map,
+                                                      const Tpetra::Map< local_dof_t, global_dof_t >& local_global_map)
+    : m_map(mesh.getNodes().size() + mesh.getGhostNodes().size())
+{
+    const auto add_dofs_for_nodes = [&](const std::vector< n_id_t >& nodes) {
+        for (n_id_t node : nodes)
+        {
+            payload_t& local_dofs = m_map[node];
+            std::ranges::transform(global_map(node), begin(local_dofs), [&](auto global_dof) {
+                return global_dof == NodeToGlobalDofMap< dofs_per_node >::invalid_dof
+                         ? invalid_dof
+                         : local_global_map.getLocalElement(global_dof);
+            });
+        }
+    };
+    add_dofs_for_nodes(mesh.getNodes());
+    add_dofs_for_nodes(mesh.getGhostNodes());
 }
 } // namespace lstr
 #endif // L3STER_ASSEMBLY_NODETODOFMAP_HPP

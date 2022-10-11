@@ -8,33 +8,25 @@
 
 namespace lstr::detail
 {
-// Note: Tpetra (Multi)Vector's sumIntoX member functions often throw in a multithreaded environment. This is due to the
+// Note: Tpetra (Multi)Vector's sumIntoX member functions may throw in a multithreaded environment. This is due to the
 // semantics of the dual views underpinning this class, not neccessarily to a bug. For the sake of simplicity, instead
 // of figuring out the correct set of Kokkos views needed to make this work, here we pass in the underlying host
-// allocation and perform the atomic update ourselves. Note that the sumIntoX member functions of Tpetra::CrsMatrix work
-// fine, since Tpetra::CrsMatrix assumes modification in host space
+// allocation view (std::span) and perform the atomic update ourselves. Note that the sumIntoX member functions of
+// Tpetra::CrsMatrix work fine, since Tpetra::CrsMatrix assumes modification in host space
 template < int local_size >
-void scatterLocalVector(const Eigen::Matrix< val_t, local_size, 1 >&          local_vector,
-                        const std::array< global_dof_t, size_t{local_size} >& dofs,
-                        const Teuchos::ArrayRCP< val_t >&                     global_vector,
-                        const Tpetra::Map< local_dof_t, global_dof_t >&       dof_map)
+void scatterLocalSystem(const EigenRowMajorSquareMatrix< val_t, local_size >&  local_matrix,
+                        const Eigen::Vector< val_t, local_size >&              local_vector,
+                        Tpetra::CrsMatrix< val_t, local_dof_t, global_dof_t >& global_matrix,
+                        std::span< val_t >                                     global_vector,
+                        std::span< const local_dof_t, size_t{local_size} >     row_dofs,
+                        std::span< const local_dof_t, size_t{local_size} >     col_dofs,
+                        std::span< const local_dof_t, size_t{local_size} >     rhs_dofs)
 {
-    for (ptrdiff_t local_row = 0; auto dof : dofs)
+    for (ptrdiff_t loc_row = 0; loc_row < local_size; ++loc_row)
     {
-        const auto local_dof = dof_map.getLocalElement(dof);
-        std::atomic_ref{global_vector[local_dof]}.fetch_add(local_vector[local_row++], std::memory_order_relaxed);
-    }
-}
-
-template < int local_size >
-void scatterLocalMatrix(const Eigen::Matrix< val_t, local_size, local_size, Eigen::RowMajor >& local_matrix,
-                        const std::array< global_dof_t, size_t{local_size} >&                  dofs,
-                        Tpetra::CrsMatrix< val_t, local_dof_t, global_dof_t >&                 global_matrix)
-{
-    for (ptrdiff_t local_row = 0; auto dof : dofs)
-    {
-        const auto row_vals = std::views::counted(std::next(local_matrix.data(), local_row++ * local_size), local_size);
-        global_matrix.sumIntoGlobalValues(dof, asTeuchosView(dofs), asTeuchosView(row_vals));
+        const auto row_vals = std::span{std::next(local_matrix.data(), loc_row * local_size), local_size};
+        global_matrix.sumIntoLocalValues(row_dofs[loc_row], asTeuchosView(col_dofs), asTeuchosView(row_vals));
+        std::atomic_ref{global_vector[rhs_dofs[loc_row]]}.fetch_add(local_vector[loc_row], std::memory_order_relaxed);
     }
 }
 } // namespace lstr::detail

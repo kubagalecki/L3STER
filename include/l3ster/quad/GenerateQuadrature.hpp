@@ -19,7 +19,7 @@ template < QuadratureTypes QT, q_o_t QO, ElementTypes ET >
 const auto& getQuadrature()
     requires(ET == ElementTypes::Quad)
 {
-    static const auto value = [] {
+    static const auto value = std::invoke([] {
         const auto& ref_quadrature   = getReferenceQuadrature< QT, QO >();
         const auto& ref_quadrature_p = ref_quadrature.getPoints();
         const auto& ref_quadrature_w = ref_quadrature.getWeights();
@@ -41,7 +41,7 @@ const auto& getQuadrature()
             }
 
         return quadrature_t{q_points, weights};
-    }();
+    });
     return value;
 }
 
@@ -49,7 +49,7 @@ template < QuadratureTypes QT, q_o_t QO, ElementTypes ET >
 const auto& getQuadrature()
     requires(ET == ElementTypes::Hex)
 {
-    static const auto value = [] {
+    static const auto value = std::invoke([] {
         const auto& ref_quadrature   = getReferenceQuadrature< QT, QO >();
         const auto& ref_quadrature_p = ref_quadrature.getPoints();
         const auto& ref_quadrature_w = ref_quadrature.getWeights();
@@ -73,7 +73,7 @@ const auto& getQuadrature()
                 }
 
         return quadrature_t{q_points, weights};
-    }();
+    });
     return value;
 }
 } // namespace lstr

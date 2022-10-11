@@ -1,5 +1,7 @@
 #include "l3ster/post/VtkExport.hpp"
+#include "l3ster/assembly/AlgebraicSystemManager.hpp"
 #include "l3ster/assembly/ComputeValuesAtNodes.hpp"
+#include "l3ster/assembly/SolutionManager.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
@@ -9,8 +11,9 @@
 
 using namespace lstr;
 using namespace std::numbers;
+using namespace std::string_view_literals;
 
-void run2D()
+void vtkExportTest2D()
 {
     const MpiComm comm;
 
@@ -35,33 +38,24 @@ void run2D()
         mesh.getPartitions()[0].initDualGraph();
         mesh.getPartitions()[0] = convertMeshToOrder< mesh_order >(mesh.getPartitions()[0]);
     }
-    constexpr d_id_t domain_id      = 0;
-    constexpr d_id_t bot_boundary   = 1;
-    constexpr d_id_t top_boundary   = 2;
-    constexpr d_id_t left_boundary  = 3;
-    constexpr d_id_t right_boundary = 4;
+    constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
     const auto my_partition = distributeMesh(comm, mesh, {bot_boundary, top_boundary, left_boundary, right_boundary});
 
-    constexpr auto problem_def =
-        ConstexprValue< std::array{Pair{d_id_t{domain_id}, std::array{false, true, false, true, true}},
-                                   Pair{d_id_t{bot_boundary}, std::array{true, false, true, false, false}},
-                                   Pair{d_id_t{top_boundary}, std::array{true, false, true, false, false}}} >{};
-    const auto dof_intervals  = computeDofIntervals(my_partition, problem_def, comm);
-    const auto map            = NodeToDofMap{my_partition, dof_intervals};
-    const auto sparsity_graph = detail::makeSparsityGraph(my_partition, problem_def, dof_intervals, comm);
+    constexpr auto problem_def       = std::array{Pair{domain_id, std::array{false, true, false, true}},
+                                            Pair{bot_boundary, std::array{true, false, true, false}},
+                                            Pair{top_boundary, std::array{true, false, true, false}}};
+    constexpr auto problemdef_ctwrpr = ConstexprValue< problem_def >{};
+    constexpr auto n_fields          = detail::deduceNFields(problem_def);
+    constexpr auto scalar_inds       = std::array< size_t, 2 >{0, 2};
+    constexpr auto vec_inds          = std::array< size_t, 2 >{1, 3};
 
-    const auto node_vals =
-        makeTeuchosRCP< Tpetra::FEMultiVector<> >(sparsity_graph->getRowMap(), sparsity_graph->getImporter(), 1u);
+    const auto system_manager   = AlgebraicSystemManager{comm, my_partition, problemdef_ctwrpr};
+    auto       solution_manager = SolutionManager{my_partition, comm, n_fields};
 
-    auto exporter = PvtuExporter{my_partition,
-                                 map,
-                                 *node_vals->getMap(),
-                                 std::vector< std::string >{"C1", "Cpi", "vel"},
-                                 std::array< unsigned char, 5 >{0, 2, 1, 2, 2}};
-
-    node_vals->switchActiveMultiVector();
-    node_vals->beginModify();
-    computeValuesAtNodes< std::array< size_t, 2 >{0, 2} >(
+    auto         solution = system_manager.makeSolutionMultiVector();
+    const double Re       = 40.;
+    const double lambda   = Re / 2. - std::sqrt(Re * Re / 4. - 4. * pi * pi);
+    computeValuesAtNodes(
         [&](const SpaceTimePoint& p) {
             Eigen::Vector2d retval;
             retval[0] = 1.;
@@ -70,31 +64,37 @@ void run2D()
         },
         my_partition,
         std::array{bot_boundary, top_boundary},
-        map,
-        *node_vals->getVectorNonConst(0));
-    const double Re     = 40.;
-    const double lambda = Re / 2. - std::sqrt(Re * Re / 4. - 4. * pi * pi);
-    computeValuesAtNodes< std::array< size_t, 3 >{1, 3, 4} >(
+        system_manager.getRhsMap(),
+        ConstexprValue< scalar_inds >{},
+        *solution->getVectorNonConst(0));
+    computeValuesAtNodes(
         [&](const SpaceTimePoint& p) {
-            Eigen::Vector3d retval;
+            Eigen::Vector2d retval;
             // Kovasznay flow velocity field
             retval[0] = 1. - std::exp(lambda * p.space.x()) * std::cos(2. * pi * p.space.y());
             retval[1] = lambda * std::exp(lambda * p.space.x()) * std::sin(2 * pi * p.space.y()) / (2. * pi);
-            retval[2] = 0.;
             return retval;
         },
         my_partition,
         std::views::single(domain_id),
-        map,
-        *node_vals->getVectorNonConst(0));
-    node_vals->endModify();
-    node_vals->doOwnedToOwnedPlusShared(Tpetra::REPLACE);
-    node_vals->switchActiveMultiVector();
-    node_vals->sync_host();
-    exporter.exportResults("test_results_2D", comm, *node_vals->getVector(0));
+        system_manager.getRhsMap(),
+        ConstexprValue< vec_inds >{},
+        *solution->getVectorNonConst(0));
+    solution_manager.updateSolution(my_partition,
+                                    *solution->getVector(0),
+                                    system_manager.getRhsMap(),
+                                    std::views::iota(0u, n_fields),
+                                    problemdef_ctwrpr);
+    solution_manager.communicateSharedValues();
+
+    auto       exporter        = PvtuExporter{my_partition, solution_manager.getNodeMap()};
+    const auto field_names     = std::array{"C1"sv, "Cpi"sv, "vel"sv};
+    const auto field_comp_inds = std::array< std::span< const size_t >, 3 >{
+        std::span{std::addressof(scalar_inds[0]), 1}, std::span{std::addressof(scalar_inds[1]), 1}, vec_inds};
+    exporter.exportSolution("test_results_2D", comm, solution_manager, field_names, field_comp_inds);
 }
 
-void run3D()
+void vtkExportTest3D()
 {
     const MpiComm comm;
 
@@ -115,23 +115,16 @@ void run3D()
     }
     const auto my_partition = distributeMesh(comm, mesh, {1, 2, 3, 4, 5, 6});
 
-    constexpr auto problem_def    = ConstexprValue< std::array{Pair{d_id_t{0}, std::array{true, true, true}}} >{};
-    const auto     dof_intervals  = computeDofIntervals(my_partition, problem_def, comm);
-    const auto     map            = NodeToDofMap{my_partition, dof_intervals};
-    const auto     sparsity_graph = detail::makeSparsityGraph(my_partition, problem_def, dof_intervals, comm);
+    constexpr auto problem_def       = std::array{Pair{d_id_t{0}, std::array{true, true, true}}};
+    constexpr auto problemdef_ctwrpr = ConstexprValue< problem_def >{};
+    constexpr auto n_fields          = detail::deduceNFields(problem_def);
+    constexpr auto field_inds        = std::array< size_t, 3 >{0, 1, 2};
 
-    const auto node_vals =
-        makeTeuchosRCP< Tpetra::FEMultiVector<> >(sparsity_graph->getRowMap(), sparsity_graph->getImporter(), 1u);
+    const auto system_manager   = AlgebraicSystemManager{comm, my_partition, problemdef_ctwrpr};
+    auto       solution_manager = SolutionManager{my_partition, comm, n_fields};
 
-    auto exporter = PvtuExporter{my_partition,
-                                 map,
-                                 *node_vals->getMap(),
-                                 std::vector< std::string >{"vec3D"},
-                                 std::array< unsigned char, 3 >{0, 0, 0}};
-
-    node_vals->switchActiveMultiVector();
-    node_vals->beginModify();
-    computeValuesAtNodes< std::array< size_t, 3 >{0, 1, 2} >(
+    auto solution = system_manager.makeSolutionMultiVector();
+    computeValuesAtNodes(
         [&](const SpaceTimePoint& point) {
             Eigen::Vector3d retval;
             const auto&     p = point.space;
@@ -143,21 +136,28 @@ void run3D()
         },
         my_partition,
         std::views::single(0),
-        map,
-        *node_vals->getVectorNonConst(0));
-    node_vals->endModify();
-    node_vals->doOwnedToOwnedPlusShared(Tpetra::REPLACE);
-    node_vals->switchActiveMultiVector();
-    node_vals->sync_host();
-    exporter.exportResults("test_results_3D", comm, *node_vals->getVector(0));
+        system_manager.getRhsMap(),
+        ConstexprValue< field_inds >{},
+        *solution->getVectorNonConst(0));
+    solution_manager.updateSolution(my_partition,
+                                    *solution->getVector(0),
+                                    system_manager.getRhsMap(),
+                                    std::views::iota(0u, n_fields),
+                                    problemdef_ctwrpr);
+    solution_manager.communicateSharedValues();
+
+    auto       exporter   = PvtuExporter{my_partition, solution_manager.getNodeMap()};
+    const auto field_name = "vec3D"sv;
+    exporter.exportSolution(
+        "test_results_3D", comm, solution_manager, std::views::single(field_name), std::views::single(field_inds));
 }
 
 int main(int argc, char* argv[])
 {
     GlobalResource< MpiScopeGuard >::initialize(argc, argv);
 
-    run2D();
-    run3D();
+    vtkExportTest2D();
+    vtkExportTest3D();
 
     // TODO: Programatically check whether the data was exported correctly. For the time being, check manually...
 }

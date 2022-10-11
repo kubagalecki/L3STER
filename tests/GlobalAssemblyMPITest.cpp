@@ -1,22 +1,16 @@
 #include "l3ster/assembly/AlgebraicSystemManager.hpp"
 #include "l3ster/assembly/ComputeValuesAtNodes.hpp"
 #include "l3ster/assembly/GatherGlobalValues.hpp"
+#include "l3ster/assembly/SolutionManager.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 #include "l3ster/post/NormL2.hpp"
 #include "l3ster/util/GlobalResource.hpp"
 
-#include "Amesos2.hpp"
+#include "Common.hpp"
 
-#define CHECK_THROWS(X)                                                                                                \
-    try                                                                                                                \
-    {                                                                                                                  \
-        X;                                                                                                             \
-        return EXIT_FAILURE;                                                                                           \
-    }                                                                                                                  \
-    catch (...)                                                                                                        \
-    {}
+#include "Amesos2.hpp"
 
 using namespace lstr;
 
@@ -37,9 +31,14 @@ int main(int argc, char* argv[])
     const auto whole_bound_view =
         my_partition.getBoundaryView(std::array{top_boundary, bot_boundary, left_boundary, right_boundary});
 
-    constexpr auto problem_def   = ConstexprValue< std::array{Pair{d_id_t{0}, std::array{true, true, true}}} >{};
-    constexpr auto dirichlet_def = ConstexprValue< std::array{Pair{left_boundary, std::array{true, false, false}},
-                                                              Pair{right_boundary, std::array{true, false, false}}} >{};
+    constexpr auto problem_def         = std::array{Pair{domain_id, std::array{true, true, true}}};
+    constexpr auto dirichlet_def       = std::array{Pair{left_boundary, std::array{true, false, false}},
+                                              Pair{right_boundary, std::array{true, false, false}}};
+    constexpr auto probdef_ctwrpr      = ConstexprValue< problem_def >{};
+    constexpr auto dirichletdef_ctwrpr = ConstexprValue< dirichlet_def >{};
+
+    constexpr auto n_fields       = detail::deduceNFields(problem_def);
+    auto           system_manager = AlgebraicSystemManager{comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr};
 
     // Problem assembly
     constexpr auto diffusion_kernel2d = [](const auto&, const auto&, const auto&) noexcept {
@@ -89,29 +88,29 @@ int main(int argc, char* argv[])
     constexpr auto QO       = q_o_t{mesh_order * 2};
     constexpr auto dof_inds = std::array{size_t{0}, size_t{1}, size_t{2}};
 
-    auto       problem               = AlgebraicSystemManager{comm, my_partition, problem_def, dirichlet_def};
     const auto assembleDomainProblem = [&] {
-        problem.assembleDomainProblem< BT, QT, QO, dof_inds >(
+        system_manager.assembleDomainProblem< BT, QT, QO, dof_inds >(
             diffusion_kernel2d, my_partition, std::views::single(domain_id), fieldval_getter);
     };
     const auto assembleBoundaryProblem = [&] {
-        problem.assembleBoundaryProblem< BT, QT, QO, dof_inds >(
+        system_manager.assembleBoundaryProblem< BT, QT, QO, dof_inds >(
             neumann_bc_kernel, adiabatic_bound_view, fieldval_getter);
     };
 
-    problem.beginAssembly();
-    CHECK_THROWS(problem.beginModify())
-    CHECK_THROWS(problem.endModify())
-    problem.endAssembly();
-    CHECK_THROWS(problem.setToZero())
+    // Check constraints on assembly state
+    system_manager.beginAssembly();
+    CHECK_THROWS(system_manager.beginModify())
+    CHECK_THROWS(system_manager.endModify())
+    system_manager.endAssembly();
+    CHECK_THROWS(system_manager.setToZero())
     CHECK_THROWS(assembleDomainProblem())
     CHECK_THROWS(assembleBoundaryProblem())
-    problem.beginAssembly();
-    problem.setToZero();
+    system_manager.beginAssembly();
+    system_manager.setToZero();
     assembleDomainProblem();
     assembleBoundaryProblem();
-    problem.endAssembly();
-    problem.endAssembly();
+    system_manager.endAssembly();
+    system_manager.endAssembly();
 
     // Dirichlet BCs
     constexpr auto dirichlet_bc_val_def = [node_dist](const SpaceTimePoint& st) {
@@ -119,57 +118,68 @@ int main(int argc, char* argv[])
         retval[0] = st.space.x() / node_dist.back();
         return retval;
     };
-    auto dirichlet_vals = problem.makeCompatibleMultiVector(1u);
-    computeValuesAtNodes< std::array{size_t{0}} >(dirichlet_bc_val_def,
-                                                  my_partition,
-                                                  std::array{left_boundary, right_boundary},
-                                                  problem.getNodeToDofMap(),
-                                                  *dirichlet_vals->getVectorNonConst(0));
-    CHECK_THROWS(problem.applyDirichletBCs(*dirichlet_vals->getVector(0)))
-    problem.beginModify();
-    problem.beginModify();
-    CHECK_THROWS(problem.beginAssembly())
-    CHECK_THROWS(problem.endAssembly())
-    problem.applyDirichletBCs(*dirichlet_vals->getVector(0));
-    problem.endModify();
-    problem.endModify();
+    auto dirichlet_vals = system_manager.makeSolutionMultiVector(1u);
+    computeValuesAtNodes(dirichlet_bc_val_def,
+                         my_partition,
+                         std::array{left_boundary, right_boundary},
+                         system_manager.getRhsMap(),
+                         ConstexprValue< std::array{0} >{},
+                         *dirichlet_vals->getVectorNonConst(0));
 
+    // Check constraints on assembly state
+    CHECK_THROWS(system_manager.applyDirichletBCs(*dirichlet_vals->getVector(0)))
+    system_manager.beginModify();
+    system_manager.beginModify();
+    CHECK_THROWS(system_manager.beginAssembly())
+    CHECK_THROWS(system_manager.endAssembly())
+    system_manager.applyDirichletBCs(*dirichlet_vals->getVector(0));
+    system_manager.endModify();
+    system_manager.endModify();
     {
-        auto fake_problem = AlgebraicSystemManager{comm, my_partition, problem_def};
+        auto fake_problem = AlgebraicSystemManager{comm, my_partition, probdef_ctwrpr};
         fake_problem.endAssembly();
         CHECK_THROWS(fake_problem.applyDirichletBCs(*dirichlet_vals->getVector(0)))
     }
 
     // Solve
-    const auto glob_result = problem.makeCompatibleFEMultiVector(1u);
-    glob_result->switchActiveMultiVector();
-    Amesos2::KLU2< Tpetra::CrsMatrix<>, Tpetra::MultiVector<> > solver{
-        problem.getMatrix(), glob_result, problem.getRhs()};
+    auto solution_mv = system_manager.makeSolutionMultiVector();
+    auto solver      = Amesos2::KLU2< Tpetra::CrsMatrix< val_t, local_dof_t, global_dof_t >,
+                                 Tpetra::MultiVector< val_t, local_dof_t, global_dof_t > >{
+        system_manager.getMatrix(), solution_mv, system_manager.getRhs()};
     solver.preOrdering().symbolicFactorization().numericFactorization().solve();
 
+    const auto     solution         = solution_mv->getVector(0);
+    auto           solution_manager = SolutionManager{my_partition, comm, n_fields};
+    constexpr auto field_inds       = std::views::iota(0u, n_fields);
+    solution_manager.updateSolution(my_partition, *solution, system_manager.getRhsMap(), field_inds, probdef_ctwrpr);
+    solution_manager.communicateSharedValues();
+
     // Check results
-    glob_result->doOwnedToOwnedPlusShared(Tpetra::REPLACE);
-    glob_result->switchActiveMultiVector();
-    const auto     results_view         = glob_result->getVector(0)->getData();
-    const auto&    dof_local_global_map = *glob_result->getMap();
+    const auto     solution_view = solution->getData();
     constexpr auto compute_error =
         [node_dist](const auto& vals, const auto& ders, const SpaceTimePoint& point) noexcept {
             Eigen::Matrix< val_t, 3, 1 > error;
-            const auto                   T  = vals[0];
-            const auto                   Tx = vals[1];
-            const auto                   Ty = vals[2];
-            error[0]                        = T - point.space.x() / node_dist.back();
-            error[1]                        = Tx - 1. / node_dist.back();
-            error[2]                        = Ty;
+            const auto                   T     = vals[0];
+            const auto                   dT_dx = vals[1];
+            const auto                   dT_dy = vals[2];
+            error[0]                           = T - point.space.x() / node_dist.back();
+            error[1]                           = dT_dx - 1. / node_dist.back();
+            error[2]                           = dT_dy;
             return error;
         };
     constexpr auto compute_boundary_error =
         [compute_error](const auto& vals, const auto& ders, const SpaceTimePoint& point, const auto&) noexcept {
             return compute_error(vals, ders, point);
         };
-    const auto fval_getter = [&]< size_t N >(const std::array< n_id_t, N >& nodes) {
-        return gatherGlobalValues< std::array{size_t{0}, size_t{1}, size_t{2}} >(
-            nodes, problem.getNodeToDofMap(), results_view, dof_local_global_map);
+    const auto  node_vals   = std::invoke([&] {
+        std::array< std::span< const val_t >, field_inds.size() > retval;
+        std::ranges::transform(field_inds, begin(retval), [&](auto i) { return solution_manager.getNodalValues(i); });
+        return retval;
+    });
+    const auto& node_map    = solution_manager.getNodeMap();
+    const auto  fval_getter = [&](const auto& nodes) {
+        return gatherGlobalValues(
+            nodes, [&](n_id_t node) { return node_map.getLocalElement(node); }, std::span{node_vals});
     };
     const auto error =
         computeNormL2< BT, QT, QO >(comm, compute_error, my_partition, std::views::single(domain_id), fval_getter);

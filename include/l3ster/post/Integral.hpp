@@ -23,7 +23,7 @@ concept BoundaryIntegralKernel_c = requires(T                                   
                                             std::array< val_t, n_fields >                    node_vals,
                                             std::array< std::array< val_t, n_fields >, dim > node_ders,
                                             SpaceTimePoint                                   point,
-                                            Eigen::Matrix< val_t, dim, 1 >                   normal) {
+                                            Eigen::Vector< val_t, dim >                      normal) {
                                        {
                                            std::invoke(int_kernel, node_vals, node_ders, point, normal)
                                            } noexcept -> EigenVector_c;
@@ -50,7 +50,7 @@ struct integral_kernel_eval_result< IntKernel, dim, n_fields >
                                        std::array< val_t, n_fields >,
                                        std::array< std::array< val_t, n_fields >, dim >,
                                        SpaceTimePoint,
-                                       Eigen::Matrix< val_t, dim, 1 > >;
+                                       Eigen::Vector< val_t, dim > >;
 };
 template < typename IntKernel, dim_t dim, size_t n_fields >
     requires IntegralKernel_c< IntKernel, dim, n_fields > or BoundaryIntegralKernel_c< IntKernel, dim, n_fields >
@@ -60,31 +60,33 @@ template < typename IntKernel, dim_t dim, size_t n_fields >
 inline constexpr auto deduce_n_integral_components =
     integral_kernel_eval_result_t< IntKernel, dim, n_fields >::RowsAtCompileTime;
 template < typename IntKernel, size_t n_fields >
-inline constexpr auto n_integral_components = []< typename... TypeOrderPair >(TypePack< TypeOrderPair... >) {
-    constexpr auto invalid_nic = std::numeric_limits< int >::max();
-    constexpr auto deduce_nc   = []< ElementTypes ET, el_o_t EO >(ValuePack< ET, EO >) -> int {
-        constexpr auto dim = Element< ET, EO >::native_dim;
-        if constexpr (IntegralKernel_c< IntKernel, dim, n_fields > or
-                      BoundaryIntegralKernel_c< IntKernel, dim, n_fields >)
-            return deduce_n_integral_components< IntKernel, dim, n_fields >;
-        else
-            return invalid_nic;
-    };
-    constexpr auto int_comps_for_els = std::array< int, sizeof...(TypeOrderPair) >{deduce_nc(TypeOrderPair{})...};
-    constexpr auto is_valid_nic      = [](int nic) {
-        return nic != invalid_nic;
-    };
-    static_assert(std::ranges::find_if(int_comps_for_els, is_valid_nic) != end(int_comps_for_els));
-    constexpr auto n_int_comps = *std::ranges::find_if(int_comps_for_els, is_valid_nic);
-    static_assert(
-        std::ranges::all_of(int_comps_for_els, [](int nic) { return nic == n_int_comps or nic == invalid_nic; }));
-    return n_int_comps;
-}(type_order_combinations{});
+inline constexpr auto n_integral_components = std::invoke(
+    []< typename... TypeOrderPair >(TypePack< TypeOrderPair... >) {
+        constexpr auto invalid_nic = std::numeric_limits< int >::max();
+        constexpr auto deduce_nc   = []< ElementTypes ET, el_o_t EO >(ValuePack< ET, EO >) -> int {
+            constexpr auto dim = Element< ET, EO >::native_dim;
+            if constexpr (IntegralKernel_c< IntKernel, dim, n_fields > or
+                          BoundaryIntegralKernel_c< IntKernel, dim, n_fields >)
+                return deduce_n_integral_components< IntKernel, dim, n_fields >;
+            else
+                return invalid_nic;
+        };
+        constexpr auto int_comps_for_els = std::array< int, sizeof...(TypeOrderPair) >{deduce_nc(TypeOrderPair{})...};
+        constexpr auto is_valid_nic      = [](int nic) {
+            return nic != invalid_nic;
+        };
+        static_assert(std::ranges::find_if(int_comps_for_els, is_valid_nic) != end(int_comps_for_els));
+        constexpr auto n_int_comps = *std::ranges::find_if(int_comps_for_els, is_valid_nic);
+        static_assert(
+            std::ranges::all_of(int_comps_for_els, [](int nic) { return nic == n_int_comps or nic == invalid_nic; }));
+        return n_int_comps;
+    },
+    type_order_combinations{});
 
-template < typename IntKernel, ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields, int rcmaj >
+template < typename IntKernel, ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
 auto evalElementIntegral(IntKernel&&                                                                    int_kernel,
                          const Element< ET, EO >&                                                       element,
-                         const Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, n_fields, rcmaj >&     node_vals,
+                         const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >&      node_vals,
                          const ReferenceBasisAtQuadrature< ET, EO, QL, Element< ET, EO >::native_dim >& basis_at_q,
                          val_t                                                                          time)
     requires detail::IntegralKernel_c< IntKernel, Element< ET, EO >::native_dim, n_fields >
@@ -106,11 +108,11 @@ auto evalElementIntegral(IntKernel&&                                            
     return evalQuadrature(compute_value_at_qp, quadrature, init_zero);
 }
 
-template < typename IntKernel, ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields, int rcmaj >
+template < typename IntKernel, ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
 auto evalElementBoundaryIntegral(
     IntKernel&&                                                                    int_kernel,
     const BoundaryElementView< ET, EO >&                                           el_view,
-    const Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, n_fields, rcmaj >&     node_vals,
+    const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >&      node_vals,
     const ReferenceBasisAtQuadrature< ET, EO, QL, Element< ET, EO >::native_dim >& basis_at_q,
     val_t                                                                          time)
     requires detail::BoundaryIntegralKernel_c< IntKernel, Element< ET, EO >::native_dim, n_fields >

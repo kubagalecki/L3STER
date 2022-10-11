@@ -182,9 +182,7 @@ concept RscIterator_c =
         typename ConstexprRefStableCollection< typename T::value_type, T::container_type::block_size >::Iterator >;
 } // namespace detail
 
-template < typename Iter >
-constexpr auto operator+(ptrdiff_t n, Iter it)
-    requires detail::RscIterator_c< Iter >
+constexpr auto operator+(ptrdiff_t n, detail::RscIterator_c auto it)
 {
     return it + n;
 }

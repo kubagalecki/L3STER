@@ -1,5 +1,5 @@
-#ifndef L3STER_DIRICHLETBC_HPP
-#define L3STER_DIRICHLETBC_HPP
+#ifndef L3STER_BCS_DIRICHLETBC_HPP
+#define L3STER_BCS_DIRICHLETBC_HPP
 
 #include "Tpetra_CrsMatrix.hpp"
 #include "Tpetra_Vector.hpp"
@@ -21,31 +21,29 @@ concept GlobalDofRange_c =
 
 class DirichletBCAlgebraic
 {
-    [[nodiscard]] std::span< const local_dof_t > getLocalColInds(local_dof_t local_row) const
-    {
-        return std::span{std::next(bc_local_col_inds.cbegin(), bc_local_col_inds_offsets[local_row]),
-                         std::next(bc_local_col_inds.cbegin(), bc_local_col_inds_offsets[local_row + 1])};
-    }
-
 public:
-    template < detail::GlobalDofRange_c R1, detail::GlobalDofRange_c R2 >
-    DirichletBCAlgebraic(const Teuchos::RCP< const Tpetra::CrsGraph<> >& dof,
-                         R1&&                                            owned_bc_dofs_sorted,
-                         R2&&                                            shared_bc_dofs_sorted);
+    using graph_t  = Tpetra::CrsGraph< local_dof_t, global_dof_t >;
+    using matrix_t = Tpetra::CrsMatrix< val_t, local_dof_t, global_dof_t >;
+    using vector_t = Tpetra::Vector< val_t, local_dof_t, global_dof_t >;
 
-    inline void apply(const Tpetra::Vector<>& bc_vals, Tpetra::CrsMatrix<>& matrix, Tpetra::Vector<>& rhs) const;
+    template < detail::GlobalDofRange_c R1, detail::GlobalDofRange_c R2 >
+    DirichletBCAlgebraic(const Teuchos::RCP< const graph_t >& sparsity_graph,
+                         R1&&                                 owned_bc_dofs_sorted,
+                         R2&&                                 shared_bc_dofs_sorted);
+
+    inline void apply(const vector_t& bc_vals, matrix_t& matrix, vector_t& rhs) const;
 
 private:
-    Teuchos::RCP< Tpetra::CrsMatrix<> > dirichlet_col_matrix;
-    std::vector< local_dof_t >          owned_bc_dofs;
-    std::vector< local_dof_t >          bc_local_col_inds;
-    std::vector< local_dof_t >          bc_local_col_inds_offsets;
+    [[nodiscard]] inline std::span< const local_dof_t > getLocalColInds(local_dof_t local_row) const;
+
+    Teuchos::RCP< matrix_t >   m_dirichlet_col_mat;
+    std::vector< local_dof_t > m_owned_bc_dofs, m_bc_local_col_inds, m_bc_local_col_inds_offsets;
 };
 
 template < detail::GlobalDofRange_c R1, detail::GlobalDofRange_c R2 >
-DirichletBCAlgebraic::DirichletBCAlgebraic(const Teuchos::RCP< const Tpetra::CrsGraph<> >& sparsity_graph,
-                                           R1&&                                            bc_rows,
-                                           R2&&                                            bc_cols)
+DirichletBCAlgebraic::DirichletBCAlgebraic(const Teuchos::RCP< const graph_t >& sparsity_graph,
+                                           R1&&                                 bc_rows,
+                                           R2&&                                 bc_cols)
 {
     const auto is_bc_row = [&](global_dof_t dof) {
         return std::ranges::binary_search(bc_rows, dof);
@@ -53,31 +51,31 @@ DirichletBCAlgebraic::DirichletBCAlgebraic(const Teuchos::RCP< const Tpetra::Crs
     const auto is_bc_col = [&](global_dof_t dof) {
         return std::ranges::binary_search(bc_cols, dof);
     };
-    dirichlet_col_matrix = makeTeuchosRCP< Tpetra::CrsMatrix<> >(getSubgraph(
+    m_dirichlet_col_mat = makeTeuchosRCP< matrix_t >(getSubgraph(
         sparsity_graph, [&](global_dof_t row) { return not is_bc_row(row); }, is_bc_col));
 
-    owned_bc_dofs.reserve(std::ranges::size(bc_rows));
-    bc_local_col_inds_offsets.reserve(sparsity_graph->getNodeNumRows() + 1);
-    bc_local_col_inds_offsets.push_back(0);
-    bc_local_col_inds.reserve(bc_local_col_inds_offsets.size()); // just a loose heuristic
+    m_owned_bc_dofs.reserve(std::ranges::size(bc_rows));
+    m_bc_local_col_inds_offsets.reserve(sparsity_graph->getNodeNumRows() + 1);
+    m_bc_local_col_inds_offsets.push_back(0);
+    m_bc_local_col_inds.reserve(m_bc_local_col_inds_offsets.size()); // just a loose heuristic
 
     const auto process_dbc_row = [&](local_dof_t local_row) {
-        owned_bc_dofs.push_back(local_row);
-        bc_local_col_inds_offsets.push_back(bc_local_col_inds_offsets.back());
+        m_owned_bc_dofs.push_back(local_row);
+        m_bc_local_col_inds_offsets.push_back(m_bc_local_col_inds_offsets.back());
     };
     const auto process_non_dbc_row = [&](local_dof_t local_row) {
         const auto local_cols_full = getLocalRowView(*sparsity_graph, local_row);
-        const auto local_cols_dbc  = getLocalRowView(*dirichlet_col_matrix->getCrsGraph(), local_row);
+        const auto local_cols_dbc  = getLocalRowView(*m_dirichlet_col_mat->getCrsGraph(), local_row);
         for (local_dof_t dbc_mat_col_local : local_cols_dbc)
         {
-            const auto dbc_mat_col_global = dirichlet_col_matrix->getColMap()->getGlobalElement(dbc_mat_col_local);
+            const auto dbc_mat_col_global = m_dirichlet_col_mat->getColMap()->getGlobalElement(dbc_mat_col_local);
             const local_dof_t matched_local_row_ind =
                 std::distance(local_cols_full.begin(), std::ranges::find_if(local_cols_full, [&](local_dof_t c) {
                                   return sparsity_graph->getColMap()->getGlobalElement(c) == dbc_mat_col_global;
                               }));
-            bc_local_col_inds.push_back(matched_local_row_ind);
+            m_bc_local_col_inds.push_back(matched_local_row_ind);
         }
-        bc_local_col_inds_offsets.push_back(bc_local_col_inds_offsets.back() + local_cols_dbc.size());
+        m_bc_local_col_inds_offsets.push_back(m_bc_local_col_inds_offsets.back() + local_cols_dbc.size());
     };
     for (local_dof_t local_row = 0; static_cast< size_t >(local_row) < sparsity_graph->getNodeNumRows(); ++local_row)
     {
@@ -87,12 +85,10 @@ DirichletBCAlgebraic::DirichletBCAlgebraic(const Teuchos::RCP< const Tpetra::Crs
         else
             process_non_dbc_row(local_row);
     }
-    bc_local_col_inds.shrink_to_fit();
+    m_bc_local_col_inds.shrink_to_fit();
 }
 
-void DirichletBCAlgebraic::apply(const Tpetra::Vector<>& bc_vals,
-                                 Tpetra::CrsMatrix<>&    matrix,
-                                 Tpetra::Vector<>&       rhs) const
+void DirichletBCAlgebraic::apply(const vector_t& bc_vals, matrix_t& matrix, vector_t& rhs) const
 {
     const auto matrix_row_map   = matrix.getRowMap();
     const auto matrix_col_map   = matrix.getColMap();
@@ -104,7 +100,7 @@ void DirichletBCAlgebraic::apply(const Tpetra::Vector<>& bc_vals,
     auto rhs_data = rhs.getDataNonConst();
 
     std::vector< val_t >       local_vals(matrix.getNodeMaxNumRowEntries(), 0.);
-    std::vector< val_t >       col_copy_vals(dirichlet_col_matrix->getNodeMaxNumRowEntries());
+    std::vector< val_t >       col_copy_vals(m_dirichlet_col_mat->getNodeMaxNumRowEntries());
     std::vector< local_dof_t > cols_to_zero_out(col_copy_vals.size());
 
     const auto process_dbc_row = [&](local_dof_t local_row) {
@@ -122,9 +118,9 @@ void DirichletBCAlgebraic::apply(const Tpetra::Vector<>& bc_vals,
                                        const std::span< const local_dof_t >&    copy_inds,
                                        const Teuchos::ArrayView< const val_t >& local_vals_view) {
         std::ranges::transform(copy_inds, col_copy_vals.begin(), [&](local_dof_t i) { return local_vals_view[i]; });
-        const auto copy_cols = getLocalRowView(*dirichlet_col_matrix->getCrsGraph(), local_row);
+        const auto copy_cols = getLocalRowView(*m_dirichlet_col_mat->getCrsGraph(), local_row);
         replaceLocalValues(
-            *dirichlet_col_matrix, local_row, copy_cols, col_copy_vals | std::views::take(copy_inds.size()));
+            *m_dirichlet_col_mat, local_row, copy_cols, col_copy_vals | std::views::take(copy_inds.size()));
     };
     const auto zero_dirichlet_cols = [&](local_dof_t                                    local_row,
                                          const std::span< const local_dof_t >&          copy_inds,
@@ -143,18 +139,23 @@ void DirichletBCAlgebraic::apply(const Tpetra::Vector<>& bc_vals,
         zero_dirichlet_cols(local_row, copycol_inds, local_entries.first);
     };
 
-    dirichlet_col_matrix->resumeFill();
+    m_dirichlet_col_mat->resumeFill();
     for (local_dof_t local_row = 0; static_cast< size_t >(local_row) < matrix.getNodeNumRows(); ++local_row)
     {
-        if (std::ranges::binary_search(owned_bc_dofs, local_row))
+        if (std::ranges::binary_search(m_owned_bc_dofs, local_row))
             process_dbc_row(local_row);
         else
             process_non_dbc_row(local_row);
     }
-    dirichlet_col_matrix->fillComplete();
-    rhs_data = {};
+    m_dirichlet_col_mat->fillComplete();
     rhs.sync_device();
-    dirichlet_col_matrix->apply(bc_vals, rhs, Teuchos::NO_TRANS, -1., 1.);
+    m_dirichlet_col_mat->apply(bc_vals, rhs, Teuchos::NO_TRANS, -1., 1.);
+}
+
+std::span< const local_dof_t > DirichletBCAlgebraic::getLocalColInds(local_dof_t local_row) const
+{
+    const auto col_inds_offs = m_bc_local_col_inds_offsets | std::views::drop(local_row) | std::views::take(2);
+    return m_bc_local_col_inds | std::views::take(col_inds_offs[1]) | std::views::drop(col_inds_offs[0]);
 }
 } // namespace lstr
-#endif // L3STER_DIRICHLETBC_HPP
+#endif // L3STER_BCS_DIRICHLETBC_HPP

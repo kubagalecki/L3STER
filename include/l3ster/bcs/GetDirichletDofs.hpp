@@ -6,11 +6,11 @@
 namespace lstr::detail
 {
 template < detail::ProblemDef_c auto problem_def, detail::ProblemDef_c auto dirichlet_def >
-auto getDirichletDofs(const MeshPartition&                                      mesh,
-                      const Teuchos::RCP< const Tpetra::FECrsGraph<> >&         sparsity_graph,
-                      const NodeToDofMap< detail::deduceNFields(problem_def) >& dof_map,
-                      ConstexprValue< problem_def >                             problem_def_ctwrapper,
-                      ConstexprValue< dirichlet_def >                           dirichlet_def_ctwrapper)
+auto getDirichletDofs(const MeshPartition&                                                         mesh,
+                      const Teuchos::RCP< const Tpetra::FECrsGraph< local_dof_t, global_dof_t > >& sparsity_graph,
+                      const NodeToGlobalDofMap< detail::deduceNFields(problem_def) >&              dof_map,
+                      ConstexprValue< problem_def >                                                probdef_ctwrpr,
+                      ConstexprValue< dirichlet_def >                                              dirichletdef_ctwrpr)
 {
     const auto mark_owned_dirichlet_dofs = [&] {
         const auto dirichlet_dofs = makeTeuchosRCP< Tpetra::FEMultiVector<> >(
@@ -28,7 +28,7 @@ auto getDirichletDofs(const MeshPartition&                                      
             };
             mesh.visit(process_element, domain_id);
         };
-        forConstexpr(process_domain, dirichlet_def_ctwrapper);
+        forConstexpr(process_domain, dirichletdef_ctwrpr);
         dirichlet_dofs->endAssembly();
         return dirichlet_dofs;
     };

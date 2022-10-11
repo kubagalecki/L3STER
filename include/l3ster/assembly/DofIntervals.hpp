@@ -243,7 +243,7 @@ void consolidateDofIntervals(node_interval_vector_t< n_fields >& intervals)
 
     const auto resolve_overlapping = [&intervals] {
         // TODO: Optimize this function so that `overlap_range` only covers the intervals which *end* before it
-        // does. This will help reduce the n int the O(n^2) part of the algorithm
+        // does. This will help reduce the n in the O(n^2) part of the algorithm
 
         std::vector< interval_t > scratchpad;
         auto                      overlap_begin = intervals.begin();
@@ -274,7 +274,7 @@ void consolidateDofIntervals(node_interval_vector_t< n_fields >& intervals)
             scratchpad.reserve(2 * overlap_size - 1);
             while (lo <= overlap_max_node)
             {
-                const auto hi = [&] {
+                const auto                       hi = std::invoke([&] {
                     auto retval = std::numeric_limits< n_id_t >::max();
                     for (const auto& [int_lo, int_hi] : overlap_range | std::views::keys)
                     {
@@ -288,7 +288,7 @@ void consolidateDofIntervals(node_interval_vector_t< n_fields >& intervals)
                             break;
                     }
                     return retval;
-                }();
+                });
                 typename interval_t::second_type field_cov;
                 for (const auto& [delims, cov] : overlap_range)
                 {

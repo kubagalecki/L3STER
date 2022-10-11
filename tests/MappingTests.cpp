@@ -415,22 +415,25 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
     constexpr auto  BT = BasisTypes::Lagrange;
 
     constexpr auto check_all_in_plane = [](const BoundaryView& view, Space normal, val_t offs) {
-        const auto space_ind = [](Space s) {
-            int retval{};
-            switch (s)
-            {
-            case Space::X:
-                retval = 0;
-                break;
-            case Space::Y:
-                retval = 1;
-                break;
-            case Space::Z:
-                retval = 2;;
-                break;
-            }
-            return retval;
-        }(normal);
+        const auto space_ind = std::invoke(
+            [](Space s) {
+                int retval{};
+                switch (s)
+                {
+                case Space::X:
+                    retval = 0;
+                    break;
+                case Space::Y:
+                    retval = 1;
+                    break;
+                case Space::Z:
+                    retval = 2;
+                    ;
+                    break;
+                }
+                return retval;
+            },
+            normal);
         const auto element_checker = [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
             const auto& ref_q =
                 getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.element_side).quadrature;
@@ -450,9 +453,9 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
             constexpr el_o_t EO  = 1;
             constexpr q_o_t  QLO = 1;
             const auto       el  = Element< ET, 1 >{
-                       std::array< n_id_t, 2 >{0, 1},
-                       std::array< Point< 3 >, 2 >{Point{node_pos.front(), 0., 0.}, Point{node_pos.back(), 0., 0.}},
-                       0};
+                std::array< n_id_t, 2 >{0, 1},
+                std::array< Point< 3 >, 2 >{Point{node_pos.front(), 0., 0.}, Point{node_pos.back(), 0., 0.}},
+                0};
 
             const auto check_pos = [&](el_side_t side, val_t x_pos) {
                 const auto& ref_q  = getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QLO >(side);

@@ -16,7 +16,7 @@ public:
                const std::vector< global_dof_t >&                                          dofs)
         : dim{dofs.size()}, entries{dim * dim}
     {
-        const auto node_to_dof_map = NodeToDofMap{mesh, dof_intervals};
+        const auto node_to_dof_map = NodeToGlobalDofMap{mesh, dof_intervals};
         const auto process_domain  = [&]< auto dom_def >(ConstexprValue< dom_def >)
         {
             constexpr auto  domain_id        = dom_def.first;

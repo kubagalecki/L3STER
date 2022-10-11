@@ -89,17 +89,17 @@ TEMPLATE_TEST_CASE("Iteration over elements",
                    std::execution::sequenced_policy,
                    std::execution::parallel_policy)
 {
-    constexpr auto node_dist = [] {
+    constexpr auto node_dist = std::invoke([] {
         std::array< double, 20 > retval{};
         std::ranges::generate(retval, [v = 0.]() mutable { return v += 1.; });
         return retval;
-    }();
-    constexpr auto n_edges = node_dist.size() - 1;
-    constexpr auto n_faces = n_edges * n_edges * 6;
-    constexpr auto n_vols  = n_edges * n_edges * n_edges;
-    auto           mesh    = makeCubeMesh(node_dist);
-    auto&          part    = mesh.getPartitions()[0];
-    const auto     policy  = TestType{};
+    });
+    constexpr auto n_edges   = node_dist.size() - 1;
+    constexpr auto n_faces   = n_edges * n_edges * 6;
+    constexpr auto n_vols    = n_edges * n_edges * n_edges;
+    auto           mesh      = makeCubeMesh(node_dist);
+    auto&          part      = mesh.getPartitions()[0];
+    const auto     policy    = TestType{};
 
     int        count           = 0;
     const auto element_counter = [&](const auto& el) {

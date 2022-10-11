@@ -35,7 +35,6 @@ public:
         return std::addressof(m_problems.emplaceBack(std::move(equations), std::move(bcs), std::move(dirichlet_bcs)));
     }
 
-
     constexpr const auto& getProblems() const { return m_problems; }
 
 private:

@@ -22,14 +22,14 @@ int main(int argc, char* argv[])
 
     constexpr auto problem_def    = ConstexprValue< std::array{Pair{d_id_t{0}, std::array{true}}} >{};
     const auto     dof_intervals  = computeDofIntervals(my_partition, problem_def, comm);
-    const auto     map            = NodeToDofMap{my_partition, dof_intervals};
+    const auto     global_dof_map = NodeToGlobalDofMap{my_partition, dof_intervals};
     const auto     sparsity_graph = detail::makeSparsityGraph(my_partition, problem_def, dof_intervals, comm);
 
     const auto bv = my_partition.getBoundaryView(boundary);
 
     constexpr auto dirichlet_def = ConstexprValue< std::array{Pair{d_id_t{boundary}, std::array{true}}} >{};
     const auto& [owned_bcdofs, shared_bcdofs] =
-        detail::getDirichletDofs(my_partition, sparsity_graph, map, problem_def, dirichlet_def);
+        detail::getDirichletDofs(my_partition, sparsity_graph, global_dof_map, problem_def, dirichlet_def);
     const auto dirichlet_bc = DirichletBCAlgebraic{sparsity_graph, owned_bcdofs, shared_bcdofs};
 
     auto                    matrix = makeTeuchosRCP< Tpetra::FECrsMatrix<> >(sparsity_graph);
@@ -37,23 +37,31 @@ int main(int argc, char* argv[])
     Tpetra::MultiVector<>   result_vectors{sparsity_graph->getRowMap(), 2};
     matrix->beginAssembly();
     input_vectors.beginAssembly();
+
+    const auto row_map = NodeToLocalDofMap{my_partition, global_dof_map, *matrix->getRowMap()};
+    const auto col_map = NodeToLocalDofMap{my_partition, global_dof_map, *matrix->getColMap()};
+    const auto rhs_map = NodeToLocalDofMap{my_partition, global_dof_map, *input_vectors.getMap()};
+
     {
-        auto rhs = input_vectors.getVectorNonConst(0);
+        auto rhs      = input_vectors.getVectorNonConst(0)->getDataNonConst();
+        auto rhs_view = std::span{rhs};
         my_partition.visit(
             [&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
                 if constexpr (T == ElementTypes::Hex and O == 1)
                 {
                     constexpr int n_dofs = Element< T, O >::n_nodes;
-                    using local_mat_t    = Eigen::Matrix< val_t, n_dofs, n_dofs, Eigen::RowMajor >;
+                    using local_mat_t    = EigenRowMajorMatrix< val_t, n_dofs, n_dofs >;
                     using local_vec_t    = Eigen::Matrix< val_t, n_dofs, 1 >;
                     std::pair< local_mat_t, local_vec_t > local_system;
                     auto& [local_mat, local_vec] = local_system;
                     local_mat                    = local_mat_t::Random();
                     local_mat                    = local_mat.template selfadjointView< Eigen::Lower >();
                     local_vec                    = local_vec_t::Random();
-                    const auto el_dofs = detail::getUnsortedElementDofs< std::array{size_t{0}} >(element, map);
-                    detail::scatterLocalMatrix(local_mat, el_dofs, *matrix);
-                    detail::scatterLocalVector(local_vec, el_dofs, rhs->getDataNonConst(), *rhs->getMap());
+
+                    const auto row_dofs = detail::getUnsortedElementDofs< std::array{size_t{0}} >(element, row_map);
+                    const auto col_dofs = detail::getUnsortedElementDofs< std::array{size_t{0}} >(element, col_map);
+                    const auto rhs_dofs = detail::getUnsortedElementDofs< std::array{size_t{0}} >(element, rhs_map);
+                    detail::scatterLocalSystem(local_mat, local_vec, *matrix, rhs_view, row_dofs, col_dofs, rhs_dofs);
                 }
             },
             std::views::single(0));

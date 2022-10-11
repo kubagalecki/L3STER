@@ -12,7 +12,7 @@ namespace lstr
 namespace detail
 {
 template < typename T >
-concept ValidKernelResult_c = pair< T > and array< typename T::first_type > and
+concept ValidKernelResult_c = Pair_c< T > and Array_c< typename T::first_type > and
                               EigenMatrix_c< typename T::first_type::value_type > and
                               EigenVector_c< typename T::second_type > and
                               (T::first_type::value_type::RowsAtCompileTime == T::second_type::RowsAtCompileTime);
@@ -68,13 +68,12 @@ template < typename Kernel, dim_t dim, size_t n_fields >
 inline constexpr std::size_t n_unknowns =
     kernel_result_t< Kernel, dim, n_fields >::first_type::value_type::ColsAtCompileTime;
 
-template < int n_nodes, int n_fields, int n_qp, size_t n_dims, int rcmaj >
-auto computeFieldValsAndDers(
-    const Eigen::Matrix< val_t, n_qp, n_nodes, Eigen::RowMajor >&                       basis_vals,
-    const std::array< Eigen::Matrix< val_t, n_qp, n_nodes, Eigen::RowMajor >, n_dims >& basis_ders,
-    const Eigen::Matrix< val_t, n_nodes, n_fields, rcmaj >&                             node_vals)
+template < int n_nodes, int n_fields, int n_qp, size_t n_dims >
+auto computeFieldValsAndDers(const EigenRowMajorMatrix< val_t, n_qp, n_nodes >&                       basis_vals,
+                             const std::array< EigenRowMajorMatrix< val_t, n_qp, n_nodes >, n_dims >& basis_ders,
+                             const EigenRowMajorMatrix< val_t, n_nodes, n_fields >&                   node_vals)
 {
-    using quantity_at_qps = Eigen::Matrix< val_t, n_qp, n_fields, n_fields == 1 ? Eigen::ColMajor : Eigen::RowMajor >;
+    using quantity_at_qps = EigenRowMajorMatrix< val_t, n_qp, n_fields >;
     std::pair< quantity_at_qps, std::array< quantity_at_qps, n_dims > > retval;
     if constexpr (n_fields != 0)
     {
@@ -85,15 +84,15 @@ auto computeFieldValsAndDers(
     return retval;
 }
 
-template < int n_fields, int n_qp, size_t n_dims, int rc_maj >
+template < int n_fields, int n_qp, size_t n_dims >
 auto extractFieldValsAndDersAtQpoint(
-    const std::pair< Eigen::Matrix< val_t, n_qp, n_fields, rc_maj >,
-                     std::array< Eigen::Matrix< val_t, n_qp, n_fields, rc_maj >, n_dims > >& field_vals_and_ders,
-    size_t                                                                                   qp_ind)
+    const std::pair< EigenRowMajorMatrix< val_t, n_qp, n_fields >,
+                     std::array< EigenRowMajorMatrix< val_t, n_qp, n_fields >, n_dims > >& field_vals_and_ders,
+    size_t                                                                                 qp_ind)
 {
     using quantity_at_qp        = std::array< val_t, n_fields >;
-    const auto extract_quantity = [&](const Eigen::Matrix< val_t, n_qp, n_fields, rc_maj >& quantity,
-                                      quantity_at_qp&                                       target) {
+    const auto extract_quantity = [&](const EigenRowMajorMatrix< val_t, n_qp, n_fields >& quantity,
+                                      quantity_at_qp&                                     target) {
         for (size_t i = 0; i < n_fields; ++i)
             target[i] = quantity(qp_ind, i);
     };
@@ -143,8 +142,7 @@ auto makeRankUpdateMatrix(const auto& kernel_result, const auto& basis_vals, con
     constexpr size_t n_equations = std::remove_cvref_t< decltype(kernel_result) >::value_type::RowsAtCompileTime;
     constexpr size_t n_unknowns  = std::remove_cvref_t< decltype(kernel_result) >::value_type::ColsAtCompileTime;
     constexpr size_t n_bases     = std::remove_cvref_t< decltype(basis_vals) >::ColsAtCompileTime;
-    constexpr auto   mjr_dir     = n_equations > 1 ? Eigen::RowMajor : Eigen::ColMajor;
-    Eigen::Matrix< val_t, n_bases * n_unknowns, n_equations, mjr_dir > ret_val;
+    EigenRowMajorMatrix< val_t, n_bases * n_unknowns, n_equations > ret_val;
     for (ptrdiff_t basis_ind = 0; basis_ind < static_cast< ptrdiff_t >(n_bases); ++basis_ind)
     {
         ret_val(Eigen::seqN(basis_ind * n_unknowns, Eigen::fix< n_unknowns >), Eigen::all) =
@@ -161,16 +159,16 @@ auto initLocalSystem()
 {
     constexpr auto dim                = Element< ET, EO >::native_dim;
     constexpr auto local_problem_size = Element< ET, EO >::n_nodes * n_unknowns< Kernel, dim, n_fields >;
-    using k_el_t                      = Eigen::Matrix< val_t, local_problem_size, local_problem_size, Eigen::RowMajor >;
-    using f_el_t                      = Eigen::Matrix< val_t, local_problem_size, 1 >;
+    using k_el_t                      = EigenRowMajorMatrix< val_t, local_problem_size, local_problem_size >;
+    using f_el_t                      = Eigen::Vector< val_t, local_problem_size >;
     return std::pair< k_el_t, f_el_t >{k_el_t::Zero(), f_el_t::Zero()};
 }
 } // namespace detail
 
-template < typename Kernel, ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields, int rcmaj >
+template < typename Kernel, ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
 auto assembleLocalSystem(Kernel&&                                                                       kernel,
                          const Element< ET, EO >&                                                       element,
-                         const Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, n_fields, rcmaj >&     node_vals,
+                         const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >&      node_vals,
                          const ReferenceBasisAtQuadrature< ET, EO, QL, Element< ET, EO >::native_dim >& basis_at_q,
                          val_t                                                                          time)
     requires detail::Kernel_c< Kernel, Element< ET, EO >::native_dim, n_fields >
@@ -197,11 +195,11 @@ auto assembleLocalSystem(Kernel&&                                               
     return local_system;
 }
 
-template < typename Kernel, ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields, int rcmaj >
+template < typename Kernel, ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
 auto assembleLocalBoundarySystem(
     Kernel&&                                                                       kernel,
     const BoundaryElementView< ET, EO >&                                           el_view,
-    const Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, n_fields, rcmaj >&     node_vals,
+    const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >&      node_vals,
     const ReferenceBasisAtQuadrature< ET, EO, QL, Element< ET, EO >::native_dim >& basis_at_q,
     val_t                                                                          time)
     requires detail::BoundaryKernel_c< Kernel, Element< ET, EO >::native_dim, n_fields >

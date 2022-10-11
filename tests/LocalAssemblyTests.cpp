@@ -65,9 +65,9 @@ TEST_CASE("Local system assembly", "[local_asm]")
         K            = K.template selfadjointView< Eigen::Lower >();
         auto u       = F;
 
-        constexpr auto boundary_nodes = [] {
+        constexpr auto boundary_nodes = std::invoke([] {
             constexpr auto& boundary_table = ElementTraits< Element< ET, EO > >::boundary_table;
-            constexpr auto  bn_packed      = [] {
+            constexpr auto  bn_packed      = std::invoke([] {
                 constexpr size_t max_nbn =
                     std::accumulate(begin(boundary_table), end(boundary_table), 0, [](size_t val, const auto& a) {
                         return val + a.size();
@@ -81,24 +81,24 @@ TEST_CASE("Local system assembly", "[local_asm]")
                 std::ranges::sort(ret_alloc);
                 const auto [first, last] = std::ranges::unique(ret_alloc);
                 return std::make_pair(ret_alloc, std::distance(begin(ret_alloc), first));
-            }();
+            });
             std::array< el_locind_t, bn_packed.second > ret_val{};
             std::copy(begin(bn_packed.first), begin(bn_packed.first) + bn_packed.second, begin(ret_val));
             return ret_val;
-        }();
+        });
         REQUIRE(boundary_nodes.size() == (EO + 1) * (EO + 1) - (EO - 1) * (EO - 1));
 
-        constexpr auto bc_inds = [&] {
+        constexpr auto                            bc_inds    = std::invoke([&] {
             auto ret_val = boundary_nodes;
             for (auto& bc_ind : ret_val)
                 bc_ind *= nf;
             return ret_val;
-        }();
-        constexpr auto nonbc_inds = [&] {
+        });
+        constexpr auto                            nonbc_inds = std::invoke([&] {
             std::array< ptrdiff_t, Element< ET, EO >::n_nodes * nf - bc_inds.size() > ret_val{};
             std::ranges::set_difference(std::views::iota(0u, Element< ET, EO >::n_nodes * nf), bc_inds, begin(ret_val));
             return ret_val;
-        }();
+        });
         Eigen::Matrix< val_t, bc_inds.size(), 1 > bc_vals{};
         for (ptrdiff_t i = 0; auto node : boundary_nodes)
             bc_vals[i++] = solution(nodePhysicalLocation(element, node));

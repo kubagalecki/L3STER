@@ -28,11 +28,11 @@ namespace detail
 template < el_o_t O, el_locind_t I >
 auto computeLagrangeLineBasisPolynomial()
 {
-    constexpr auto vals = [] {
+    constexpr auto vals = std::invoke([] {
         std::array< val_t, O + 1 > ret_val{};
         ret_val[I] = 1.;
         return ret_val;
-    }();
+    });
     return lagrangeInterp(getLobattoRuleAbsc< val_t, O + 1 >(), vals);
 }
 
@@ -222,9 +222,9 @@ constexpr DerDim derivativeByIndex(dim_t d)
 template < ElementTypes T, el_o_t O, BasisTypes BT >
 auto computeRefBasisDers(const Point< Element< T, O >::native_dim >& point)
 {
-    constexpr dim_t                                               nat_dim     = Element< T, O >::native_dim;
-    constexpr el_locind_t                                         n_basis_fun = Element< T, O >::n_nodes;
-    Eigen::Matrix< val_t, nat_dim, n_basis_fun, Eigen::RowMajor > ret_val;
+    constexpr dim_t                                    nat_dim     = Element< T, O >::native_dim;
+    constexpr el_locind_t                              n_basis_fun = Element< T, O >::n_nodes;
+    EigenRowMajorMatrix< val_t, nat_dim, n_basis_fun > ret_val;
     forConstexpr(
         [&]< el_locind_t I >(std::integral_constant< el_locind_t, I >) {
             forConstexpr(

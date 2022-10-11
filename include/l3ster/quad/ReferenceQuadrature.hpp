@@ -22,7 +22,7 @@ template < QuadratureTypes QT, q_o_t QO >
 const auto& getReferenceQuadrature()
     requires(QT == QuadratureTypes::GLeg)
 {
-    static const auto value = [] {
+    static const auto value = std::invoke([] {
         constexpr size_t size = getRefQuadSize< QT, QO >();
         using quadrature_t    = Quadrature< size, 1 >;
 
@@ -43,7 +43,7 @@ const auto& getReferenceQuadrature()
         std::ranges::copy(w, weights.begin());
 
         return quadrature_t{q_points, weights};
-    }();
+    });
     return value;
 }
 } // namespace lstr

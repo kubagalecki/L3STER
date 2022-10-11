@@ -1,6 +1,6 @@
+#include "l3ster/assembly/DofIntervals.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/comm/MpiComm.hpp"
-#include "l3ster/assembly/DofIntervals.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/util/GlobalResource.hpp"
@@ -19,14 +19,14 @@ int main(int argc, char* argv[])
         const auto n_ranks = comm.getSize();
         const auto my_rank = comm.getRank();
 
-        const auto            mesh_full = my_rank != 0 ? Mesh{} : [] {
+        const auto            mesh_full = my_rank != 0 ? Mesh{} : std::invoke([] {
             constexpr auto       order = 2;
             constexpr std::array dist{0., 1., 2.};
             auto                 retval = makeCubeMesh(dist);
             retval.getPartitions()[0].initDualGraph();
             retval.getPartitions()[0] = convertMeshToOrder< order >(retval.getPartitions()[0]);
             return retval;
-        }();
+        });
         std::vector< d_id_t > boundaries(6);
         std::iota(boundaries.begin(), boundaries.end(), 1);
         const auto mesh_parted = distributeMesh(comm, mesh_full, boundaries);
