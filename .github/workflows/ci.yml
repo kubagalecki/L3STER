@@ -11,7 +11,7 @@ jobs:
     name: Build base container
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: whoan/docker-build-with-cache-action@v5
         id: docker-base-cache
         with:
@@ -28,7 +28,7 @@ jobs:
       CMAKE_BUILD_TYPE: Release
       CMAKE_TOOLCHAIN_PATH: ../cmake/toolchains/StaticAnalysis.cmake
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Append docker base
         run: sed -i '1 i\FROM '"$DOCKER_BASE" $GITHUB_WORKSPACE/Dockerfile
       - uses: ./scripts/ci/run-tests
@@ -46,7 +46,7 @@ jobs:
         build_type: [ Debug, Release ]
         sanitizer: [ Address, Thread, UndefinedBehavior ]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Append docker base
         run: sed -i '1 i\FROM '"$DOCKER_BASE" $GITHUB_WORKSPACE/Dockerfile
       - uses: ./scripts/ci/run-tests
@@ -61,7 +61,7 @@ jobs:
       REPORT_COVERAGE: ON
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Append docker base
         run: sed -i '1 i\FROM '"$DOCKER_BASE" $GITHUB_WORKSPACE/Dockerfile
       - uses: ./scripts/ci/run-tests
@@ -73,7 +73,7 @@ jobs:
     env:
       DEPLOYMENT_TESTS: true
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Append docker base
         run: sed -i '1 i\FROM '"$DOCKER_BASE" $GITHUB_WORKSPACE/Dockerfile
       - uses: ./scripts/ci/run-tests
