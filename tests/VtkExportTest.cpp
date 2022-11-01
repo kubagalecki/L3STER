@@ -48,13 +48,15 @@ void vtkExportTest2D()
     constexpr auto n_fields          = detail::deduceNFields(problem_def);
     constexpr auto scalar_inds       = std::array< size_t, 2 >{0, 2};
     constexpr auto vec_inds          = std::array< size_t, 2 >{1, 3};
+    constexpr auto all_field_inds    = makeIotaArray< size_t, n_fields >();
 
     const auto system_manager   = AlgebraicSystemManager{comm, my_partition, problemdef_ctwrpr};
     auto       solution_manager = SolutionManager{my_partition, comm, n_fields};
 
-    auto         solution = system_manager.makeSolutionMultiVector();
-    const double Re       = 40.;
-    const double lambda   = Re / 2. - std::sqrt(Re * Re / 4. - 4. * pi * pi);
+    auto         solution      = system_manager.makeSolutionMultiVector();
+    auto         solution_view = solution->getDataNonConst(0);
+    const double Re            = 40.;
+    const double lambda        = Re / 2. - std::sqrt(Re * Re / 4. - 4. * pi * pi);
     computeValuesAtNodes(
         [&](const SpaceTimePoint& p) {
             Eigen::Vector2d retval;
@@ -66,7 +68,7 @@ void vtkExportTest2D()
         std::array{bot_boundary, top_boundary},
         system_manager.getRhsMap(),
         ConstexprValue< scalar_inds >{},
-        *solution->getVectorNonConst(0));
+        solution_view);
     computeValuesAtNodes(
         [&](const SpaceTimePoint& p) {
             Eigen::Vector2d retval;
@@ -79,12 +81,9 @@ void vtkExportTest2D()
         std::views::single(domain_id),
         system_manager.getRhsMap(),
         ConstexprValue< vec_inds >{},
-        *solution->getVectorNonConst(0));
-    solution_manager.updateSolution(my_partition,
-                                    *solution->getVector(0),
-                                    system_manager.getRhsMap(),
-                                    std::views::iota(0u, n_fields),
-                                    problemdef_ctwrpr);
+        solution_view);
+    solution_manager.updateSolution(
+        my_partition, *solution->getVector(0), system_manager.getRhsMap(), all_field_inds, problemdef_ctwrpr);
     solution_manager.communicateSharedValues();
 
     auto       exporter        = PvtuExporter{my_partition, solution_manager.getNodeMap()};
@@ -118,12 +117,13 @@ void vtkExportTest3D()
     constexpr auto problem_def       = std::array{Pair{d_id_t{0}, std::array{true, true, true}}};
     constexpr auto problemdef_ctwrpr = ConstexprValue< problem_def >{};
     constexpr auto n_fields          = detail::deduceNFields(problem_def);
-    constexpr auto field_inds        = std::array< size_t, 3 >{0, 1, 2};
+    constexpr auto field_inds        = makeIotaArray< size_t, n_fields >();
 
     const auto system_manager   = AlgebraicSystemManager{comm, my_partition, problemdef_ctwrpr};
     auto       solution_manager = SolutionManager{my_partition, comm, n_fields};
 
-    auto solution = system_manager.makeSolutionMultiVector();
+    auto solution      = system_manager.makeSolutionMultiVector();
+    auto solution_view = solution->getDataNonConst(0);
     computeValuesAtNodes(
         [&](const SpaceTimePoint& point) {
             Eigen::Vector3d retval;
@@ -138,12 +138,9 @@ void vtkExportTest3D()
         std::views::single(0),
         system_manager.getRhsMap(),
         ConstexprValue< field_inds >{},
-        *solution->getVectorNonConst(0));
-    solution_manager.updateSolution(my_partition,
-                                    *solution->getVector(0),
-                                    system_manager.getRhsMap(),
-                                    std::views::iota(0u, n_fields),
-                                    problemdef_ctwrpr);
+        solution_view);
+    solution_manager.updateSolution(
+        my_partition, *solution->getVector(0), system_manager.getRhsMap(), field_inds, problemdef_ctwrpr);
     solution_manager.communicateSharedValues();
 
     auto       exporter   = PvtuExporter{my_partition, solution_manager.getNodeMap()};

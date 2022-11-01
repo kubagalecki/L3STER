@@ -35,13 +35,12 @@ public:
     [[nodiscard]] inline std::span< const val_t > getNodalValues(size_t solution_ind) const;
     [[nodiscard]] inline const map_t&             getNodeMap() const;
 
-    template < std::ranges::range R, detail::ProblemDef_c auto problem_def >
-    void updateSolution(const MeshPartition&                 mesh,
-                        const solution_vector_t&             solution,
-                        const node_dof_map_t< problem_def >& node_dof_map,
-                        R&&                                  solution_inds,
-                        ConstexprValue< problem_def >)
-        requires std::convertible_to< std::ranges::range_value_t< std::decay_t< R > >, size_t >;
+    template < detail::ProblemDef_c auto problem_def >
+    void updateSolution(const MeshPartition&                                          problem_ind,
+                        const solution_vector_t&                                      solution,
+                        const node_dof_map_t< problem_def >&                          node_dof_map,
+                        std::span< const size_t, detail::deduceNFields(problem_def) > solution_inds,
+                        ConstexprValue< problem_def >);
 
 private:
     inline void toggleState();
@@ -52,7 +51,8 @@ private:
     Teuchos::RCP< fevector_t >                      m_nodal_values;
     State                                           m_state = State::Owned;
     Teuchos::ArrayRCP< Teuchos::ArrayRCP< val_t > > m_values_alloc;
-    std::vector< std::span< val_t > >               m_values_views;
+    std::vector< std::span< val_t > >               m_values_views;          // For thread-safe access
+    const map_t*                                    m_owned_plus_shared_map; // For thread-safe access
 };
 
 SolutionManager::SolutionManager(const MeshPartition& mesh, const MpiComm& comm, size_t n_fields)
@@ -87,13 +87,12 @@ SolutionManager::initNodalValues(const MeshPartition& mesh, size_t n_fields, con
     return makeTeuchosRCP< fevector_t >(owned_map, importer, n_fields);
 }
 
-template < std::ranges::range R, detail::ProblemDef_c auto problem_def >
-void SolutionManager::updateSolution(const MeshPartition&                 mesh,
-                                     const solution_vector_t&             solution,
-                                     const node_dof_map_t< problem_def >& node_dof_map,
-                                     R&&                                  solution_inds,
-                                     ConstexprValue< problem_def >        probelm_def_ctwrapper)
-    requires std::convertible_to< std::ranges::range_value_t< std::decay_t< R > >, size_t >
+template < detail::ProblemDef_c auto problem_def >
+void SolutionManager::updateSolution(const MeshPartition&                                          mesh,
+                                     const solution_vector_t&                                      solution,
+                                     const node_dof_map_t< problem_def >&                          node_dof_map,
+                                     std::span< const size_t, detail::deduceNFields(problem_def) > solution_inds,
+                                     ConstexprValue< problem_def > probelm_def_ctwrapper)
 {
     if (m_state == State::OwnedPlusShared)
     {
@@ -106,6 +105,12 @@ void SolutionManager::updateSolution(const MeshPartition&                 mesh,
     const auto  src_array_alloc = solution.getData();
     const auto  src_array       = std::span{src_array_alloc};
 
+    const auto is_owned_node = [&](n_id_t node) {
+        return not std::ranges::binary_search(mesh.getGhostNodes(), node);
+    };
+    const auto get_managed_span = [&](size_t problem_ind) { // Manager numbering differs from the problem's numbering
+        return m_values_views[*std::next(std::ranges::begin(solution_inds), static_cast< ptrdiff_t >(problem_ind))];
+    };
     const auto visit_domain = [&]< auto dom_def >(ConstexprValue< dom_def >)
     {
         constexpr auto domain                = dom_def.first;
@@ -117,15 +122,12 @@ void SolutionManager::updateSolution(const MeshPartition&                 mesh,
             return retval;
         });
         const auto     update_element_values = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
-            const auto is_owned_node = [&](n_id_t node) {
-                return not std::ranges::binary_search(mesh.getGhostNodes(), node);
-            };
             const auto update_node_values = [&](n_id_t node) {
                 const auto dest_local_ind = dest_map.getLocalElement(static_cast< global_dof_t >(node));
                 for (size_t i = 0; auto node_dof : getValuesAtInds< field_inds >(node_dof_map(node)))
                 {
                     const auto src_value = src_array[node_dof];
-                    const auto dest_span = m_values_views[field_inds[i++]];
+                    const auto dest_span = get_managed_span(field_inds[i++]);
                     std::atomic_ref{dest_span[dest_local_ind]}.store(src_value, std::memory_order_relaxed);
                 }
             };
@@ -167,7 +169,7 @@ void SolutionManager::requireState(SolutionManager::State state, const char* exc
 const SolutionManager::map_t& SolutionManager::getNodeMap() const
 {
     requireState(State::OwnedPlusShared, "getNodeMap was called in owned state");
-    return *m_nodal_values->getMap();
+    return *m_owned_plus_shared_map;
 }
 
 void SolutionManager::prepareForMultithreadedAccessOnHost()
@@ -176,6 +178,7 @@ void SolutionManager::prepareForMultithreadedAccessOnHost()
     m_nodal_values->sync_host();
     m_values_alloc = m_nodal_values->get2dViewNonConst();
     std::ranges::copy(m_values_alloc, std::back_inserter(m_values_views));
+    m_owned_plus_shared_map = std::addressof(*m_nodal_values->getMap());
 }
 
 void SolutionManager::clearHostViews()

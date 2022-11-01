@@ -10,14 +10,13 @@ namespace lstr
 template < size_t n_fields >
 class AlgebraicSystemManager
 {
-    using map_t          = Tpetra::Map< local_dof_t, global_dof_t >;
-    using fegraph_t      = Tpetra::FECrsGraph< local_dof_t, global_dof_t >;
-    using fematrix_t     = Tpetra::FECrsMatrix< val_t, local_dof_t, global_dof_t >;
-    using fevector_t     = Tpetra::FEMultiVector< val_t, local_dof_t, global_dof_t >;
-    using mltvector_t    = Tpetra::MultiVector< val_t, local_dof_t, global_dof_t >;
-    using vector_t       = Tpetra::Vector< val_t, local_dof_t, global_dof_t >;
-    using dof_map_local  = NodeToLocalDofMap< n_fields >;
-    using dof_map_global = NodeToGlobalDofMap< n_fields >;
+    using fegraph_t        = Tpetra::FECrsGraph< local_dof_t, global_dof_t >;
+    using fematrix_t       = Tpetra::FECrsMatrix< val_t, local_dof_t, global_dof_t >;
+    using fevector_t       = Tpetra::FEMultiVector< val_t, local_dof_t, global_dof_t >;
+    using mltvector_t      = Tpetra::MultiVector< val_t, local_dof_t, global_dof_t >;
+    using vector_t         = Tpetra::Vector< val_t, local_dof_t, global_dof_t >;
+    using dof_map_local_t  = NodeToLocalDofMap< n_fields >;
+    using dof_map_global_t = NodeToGlobalDofMap< n_fields >;
 
 public:
     template < detail::ProblemDef_c auto problem_def >
@@ -42,18 +41,18 @@ public:
     inline void endModify();
     inline void setToZero();
 
-    template < BasisTypes              BT,
-               QuadratureTypes         QT,
-               q_o_t                   QO,
+    template < BasisTypes               BT,
+               QuadratureTypes          QT,
+               q_o_t                    QO,
                ArrayOf_c< size_t > auto field_inds,
                typename Kernel,
                detail::FieldValGetter_c FvalGetter,
                detail::DomainIdRange_c  R >
     void assembleDomainProblem(
         Kernel&& kernel, const MeshPartition& mesh, R&& domain_ids, FvalGetter&& fval_getter, val_t time = 0.);
-    template < BasisTypes              BT,
-               QuadratureTypes         QT,
-               q_o_t                   QO,
+    template < BasisTypes               BT,
+               QuadratureTypes          QT,
+               q_o_t                    QO,
                ArrayOf_c< size_t > auto field_inds,
                typename Kernel,
                detail::FieldValGetter_c FvalGetter >
@@ -64,7 +63,7 @@ public:
 
 private:
     template < detail::ProblemDef_c auto problem_def >
-    dof_map_global initSystem(const MpiComm& comm, const MeshPartition& mesh, ConstexprValue< problem_def >);
+    dof_map_global_t initSystem(const MpiComm& comm, const MeshPartition& mesh, ConstexprValue< problem_def >);
     template < detail::ProblemDef_c auto problem_def, detail::ProblemDef_c auto dirichlet_def >
     void        initDirichletBCs(const MeshPartition&                  mesh,
                                  const NodeToGlobalDofMap< n_fields >& global_node_dof_map,
@@ -80,10 +79,11 @@ private:
         Closed
     };
 
-    dof_map_local                         m_node_to_row_dof_map, m_node_to_col_dof_map, m_node_to_rhs_dof_map;
+    dof_map_local_t                       m_node_to_row_dof_map, m_node_to_col_dof_map, m_node_to_rhs_dof_map;
     Teuchos::RCP< fematrix_t >            m_matrix;
     Teuchos::RCP< fevector_t >            m_rhs;
-    std::span< val_t >                    m_rhs_view; // We need a thread safe view, which Teuchos::ArrayRCP is not
+    Teuchos::ArrayRCP< val_t >            m_rhs_alloc; // Host view of the rhs
+    std::span< val_t >                    m_rhs_view;  // We need a thread safe view, which Teuchos::ArrayRCP is not
     Teuchos::RCP< const fegraph_t >       m_sparsity_graph;
     std::optional< DirichletBCAlgebraic > m_dirichlet_bcs;
     State                                 m_state;
@@ -212,9 +212,9 @@ void AlgebraicSystemManager< n_fields >::setToZero()
 }
 
 template < size_t n_fields >
-template < BasisTypes              BT,
-           QuadratureTypes         QT,
-           q_o_t                   QO,
+template < BasisTypes               BT,
+           QuadratureTypes          QT,
+           q_o_t                    QO,
            ArrayOf_c< size_t > auto field_inds,
            typename Kernel,
            detail::FieldValGetter_c FvalGetter,
@@ -237,9 +237,9 @@ void AlgebraicSystemManager< n_fields >::assembleDomainProblem(
 }
 
 template < size_t n_fields >
-template < BasisTypes              BT,
-           QuadratureTypes         QT,
-           q_o_t                   QO,
+template < BasisTypes               BT,
+           QuadratureTypes          QT,
+           q_o_t                    QO,
            ArrayOf_c< size_t > auto field_inds,
            typename Kernel,
            detail::FieldValGetter_c FvalGetter >
@@ -310,14 +310,15 @@ void AlgebraicSystemManager< n_fields >::openRhs()
 {
     m_rhs->sync_host();
     m_rhs->modify_host();
-    const auto rhs_alloc = m_rhs->getDataNonConst(0);
-    m_rhs_view           = rhs_alloc; // Backed by m_rhs, this is not dangling
+    m_rhs_alloc = m_rhs->getDataNonConst(0);
+    m_rhs_view  = m_rhs_alloc;
 }
 template < size_t n_fields >
 void AlgebraicSystemManager< n_fields >::closeRhs()
 {
+    m_rhs_view  = {};
+    m_rhs_alloc = {};
     m_rhs->sync_device();
-    m_rhs_view = {};
 }
 } // namespace lstr
 #endif // L3STER_ASSEMBLY_ALGEBRAICSYSTEMMANAGER_HPP

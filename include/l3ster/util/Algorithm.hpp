@@ -220,5 +220,13 @@ reduceConsecutive(R&& range, Cmp&& comparator = {}, Red&& reduction = {})
     }
     return std::ranges::borrowed_subrange_t< R >(write_pos, std::ranges::end(range));
 }
+
+template < typename T, size_t size >
+constexpr auto makeIotaArray(const T& first = T{})
+{
+    std::array< T, size > retval;
+    std::iota(begin(retval), end(retval), first);
+    return retval;
+}
 } // namespace lstr
 #endif // L3STER_UTIL_ALGORITHM_HPP

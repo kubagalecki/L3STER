@@ -1,7 +1,6 @@
 #include "l3ster/assembly/AlgebraicSystemManager.hpp"
 #include "l3ster/assembly/ComputeValuesAtNodes.hpp"
 #include "l3ster/assembly/GatherGlobalValues.hpp"
-#include "l3ster/assembly/SolutionManager.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
@@ -118,13 +117,14 @@ int main(int argc, char* argv[])
         retval[0] = st.space.x() / node_dist.back();
         return retval;
     };
-    auto dirichlet_vals = system_manager.makeSolutionMultiVector(1u);
+    auto dirichlet_vals      = system_manager.makeSolutionMultiVector();
+    auto dirichlet_vals_view = dirichlet_vals->getDataNonConst(0);
     computeValuesAtNodes(dirichlet_bc_val_def,
                          my_partition,
                          std::array{left_boundary, right_boundary},
                          system_manager.getRhsMap(),
                          ConstexprValue< std::array{0} >{},
-                         *dirichlet_vals->getVectorNonConst(0));
+                         dirichlet_vals_view);
 
     // Check constraints on assembly state
     CHECK_THROWS(system_manager.applyDirichletBCs(*dirichlet_vals->getVector(0)))
@@ -150,7 +150,7 @@ int main(int argc, char* argv[])
 
     const auto     solution         = solution_mv->getVector(0);
     auto           solution_manager = SolutionManager{my_partition, comm, n_fields};
-    constexpr auto field_inds       = std::views::iota(0u, n_fields);
+    constexpr auto field_inds       = makeIotaArray< size_t, n_fields >();
     solution_manager.updateSolution(my_partition, *solution, system_manager.getRhsMap(), field_inds, probdef_ctwrpr);
     solution_manager.communicateSharedValues();
 
@@ -171,15 +171,8 @@ int main(int argc, char* argv[])
         [compute_error](const auto& vals, const auto& ders, const SpaceTimePoint& point, const auto&) noexcept {
             return compute_error(vals, ders, point);
         };
-    const auto  node_vals   = std::invoke([&] {
-        std::array< std::span< const val_t >, field_inds.size() > retval;
-        std::ranges::transform(field_inds, begin(retval), [&](auto i) { return solution_manager.getNodalValues(i); });
-        return retval;
-    });
-    const auto& node_map    = solution_manager.getNodeMap();
-    const auto  fval_getter = [&](const auto& nodes) {
-        return gatherGlobalValues(
-            nodes, [&](n_id_t node) { return node_map.getLocalElement(node); }, std::span{node_vals});
+    const auto fval_getter = [&](const auto& nodes) {
+        return gatherGlobalValues< field_inds >(nodes, solution_manager);
     };
     const auto error =
         computeNormL2< BT, QT, QO >(comm, compute_error, my_partition, std::views::single(domain_id), fval_getter);
