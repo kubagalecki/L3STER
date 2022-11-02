@@ -4,7 +4,7 @@
 static void BM_MeshRead(benchmark::State& state)
 {
     for (auto _ : state)
-        const auto temp = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
+        benchmark::DoNotOptimize(readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag));
 }
 BENCHMARK(BM_MeshRead)->Unit(benchmark::kMillisecond)->Name("Read mesh");
 
@@ -12,11 +12,12 @@ static void BM_DualGraphGeneration(benchmark::State& state)
 {
     auto  mesh      = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     auto& partition = mesh.getPartitions()[0];
-
     for (auto _ : state)
     {
         partition.initDualGraph();
+        state.PauseTiming();
         partition.deleteDualGraph();
+        state.ResumeTiming();
     }
 }
 BENCHMARK(BM_DualGraphGeneration)->Unit(benchmark::kMillisecond)->Name("Generate dual graph");
@@ -26,24 +27,16 @@ static void BM_BoundaryViewGeneration(benchmark::State& state)
     auto  mesh      = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     auto& partition = mesh.getPartitions()[0];
     partition.initDualGraph();
-
     for (auto _ : state)
-    {
-        const auto boundary_view = partition.getBoundaryView(2);
-        benchmark::DoNotOptimize(boundary_view);
-    }
+        benchmark::DoNotOptimize(partition.getBoundaryView(2));
 }
 BENCHMARK(BM_BoundaryViewGeneration)->Unit(benchmark::kMillisecond)->Name("Generate boundary view");
 
 static void BM_BoundaryViewGenerationFallback(benchmark::State& state)
 {
     const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
-
     for (auto _ : state)
-    {
-        const auto boundary_view = mesh.getPartitions()[0].getBoundaryView(2);
-        benchmark::DoNotOptimize(boundary_view);
-    }
+        benchmark::DoNotOptimize(mesh.getPartitions()[0].getBoundaryView(2));
 }
 BENCHMARK(BM_BoundaryViewGenerationFallback)->Unit(benchmark::kSecond)->Name("Generate boundary view (fallback)");
 
@@ -52,35 +45,30 @@ static void BM_MeshOrderConversion(benchmark::State& state)
     auto  mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     auto& part = mesh.getPartitions()[0];
     part.initDualGraph();
-
     for (auto _ : state)
-    {
-        const auto converted = convertMeshToOrder< 2 >(part);
-        benchmark::DoNotOptimize(converted);
-    }
+        benchmark::DoNotOptimize(convertMeshToOrder< 2 >(part));
 }
 BENCHMARK(BM_MeshOrderConversion)->Unit(benchmark::kSecond)->Name("Convert mesh to 2nd order");
 
 static void BM_MeshPartitioning(benchmark::State& state)
 {
     auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
-
+    mesh.getPartitions()[0].initDualGraph();
     for (auto _ : state)
-    {
-        const auto parted = partitionMesh(mesh, 2, {});
-        benchmark::DoNotOptimize(parted);
-    }
+        benchmark::DoNotOptimize(partitionMesh(mesh, state.range(0), {2}));
 }
-BENCHMARK(BM_MeshPartitioning)->Unit(benchmark::kMillisecond)->Name("Partition mesh in half");
+BENCHMARK(BM_MeshPartitioning)
+    ->Unit(benchmark::kMillisecond)
+    ->Name("Partition mesh")
+    ->Unit(benchmark::kSecond)
+    ->RangeMultiplier(2)
+    ->Range(1, 1 << 6);
 
 static void BM_MeshSerialization(benchmark::State& state)
 {
     const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     for (auto _ : state)
-    {
-        const auto serialized = SerializedPartition{mesh.getPartitions()[0]};
-        benchmark::DoNotOptimize(serialized);
-    }
+        benchmark::DoNotOptimize(SerializedPartition{mesh.getPartitions()[0]});
 }
 BENCHMARK(BM_MeshSerialization)->Unit(benchmark::kMillisecond)->Name("Serialize mesh");
 
@@ -89,10 +77,7 @@ static void BM_MeshDeserialization(benchmark::State& state)
     const auto mesh       = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     const auto serialized = SerializedPartition{mesh.getPartitions()[0]};
     for (auto _ : state)
-    {
-        const auto part2 = deserializePartition(serialized);
-        benchmark::DoNotOptimize(part2);
-    }
+        benchmark::DoNotOptimize(deserializePartition(serialized));
 }
 BENCHMARK(BM_MeshDeserialization)->Unit(benchmark::kMillisecond)->Name("Deserialize mesh");
 
