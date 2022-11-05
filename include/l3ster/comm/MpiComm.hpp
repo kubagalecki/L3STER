@@ -66,28 +66,6 @@ auto decomposeMpiBuf(R&& buf)
 }
 } // namespace detail
 
-struct MpiScopeGuard
-{
-    inline MpiScopeGuard(int& argc, char**& argv);
-    MpiScopeGuard(const MpiScopeGuard&)            = delete;
-    MpiScopeGuard(MpiScopeGuard&&)                 = delete;
-    MpiScopeGuard& operator=(const MpiScopeGuard&) = delete;
-    MpiScopeGuard& operator=(MpiScopeGuard&&)      = delete;
-    ~MpiScopeGuard() { MPI_Finalize(); }
-};
-
-MpiScopeGuard::MpiScopeGuard(int& argc, char**& argv)
-{
-    constexpr auto required_mode = MPI_THREAD_SERIALIZED;
-    int            provided_mode{};
-    int            mpi_status = MPI_Init_thread(&argc, &argv, required_mode, &provided_mode);
-    if (mpi_status)
-        throw std::runtime_error{"failed to initialize MPI"};
-    if (provided_mode < required_mode)
-        throw std::runtime_error{
-            "The current version of MPI does not support the required threading mode MPI_THREAD_SERIALIZED"};
-}
-
 class MpiComm
 {
 public:

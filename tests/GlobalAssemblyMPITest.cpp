@@ -5,20 +5,19 @@
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 #include "l3ster/post/NormL2.hpp"
-#include "l3ster/util/GlobalResource.hpp"
+#include "l3ster/util/ScopeGuards.hpp"
 
 #include "Common.hpp"
 
 #include "Amesos2.hpp"
 
-using namespace lstr;
-
 // Solve 2D diffusion problem
 int main(int argc, char* argv[])
 {
-    GlobalResource< MpiScopeGuard >::initialize(argc, argv);
-    const MpiComm comm;
+    using namespace lstr;
+    L3sterScopeGuard scope_guard{argc, argv};
 
+    const MpiComm    comm;
     const std::array node_dist{0., 1., 2., 3., 4., 5., 6., 7., 8.};
     constexpr auto   mesh_order = 2;
     auto             mesh       = makeSquareMesh(node_dist);
@@ -38,6 +37,17 @@ int main(int argc, char* argv[])
 
     constexpr auto n_fields       = detail::deduceNFields(problem_def);
     auto           system_manager = AlgebraicSystemManager{comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr};
+
+    // Check that the underlying data gets cached
+    {
+        const auto system_manager_shallow_copy =
+            AlgebraicSystemManager{comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr};
+        if (std::addressof(*system_manager.getMatrix()) != std::addressof(*system_manager_shallow_copy.getMatrix()))
+        {
+            std::cerr << "Algebraic system caching failure\n";
+            comm.abort();
+        }
+    }
 
     // Problem assembly
     constexpr auto diffusion_kernel2d = [](const auto&, const auto&, const auto&) noexcept {
@@ -153,6 +163,17 @@ int main(int argc, char* argv[])
     constexpr auto field_inds       = makeIotaArray< size_t, n_fields >();
     solution_manager.updateSolution(my_partition, *solution, system_manager.getRhsMap(), field_inds, probdef_ctwrpr);
     solution_manager.communicateSharedValues();
+
+    // Check that the underlying data cache is still usable after the solve
+    {
+        const auto system_manager_shallow_copy =
+            AlgebraicSystemManager{comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr};
+        if (std::addressof(*system_manager.getMatrix()) != std::addressof(*system_manager_shallow_copy.getMatrix()))
+        {
+            std::cerr << "Algebraic system caching failed after solve\n";
+            comm.abort();
+        }
+    }
 
     // Check results
     const auto     solution_view = solution->getData();

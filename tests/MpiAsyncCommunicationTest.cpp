@@ -1,5 +1,5 @@
 #include "l3ster/comm/MpiComm.hpp"
-#include "l3ster/util/GlobalResource.hpp"
+#include "l3ster/util/ScopeGuards.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -13,8 +13,10 @@ auto asRange(T& t)
 
 int main(int argc, char* argv[])
 {
-    lstr::GlobalResource< lstr::MpiScopeGuard >::initialize(argc, argv);
-    lstr::MpiComm comm{};
+    using namespace lstr;
+    L3sterScopeGuard scope_guard{argc, argv};
+    MpiComm          comm{};
+
     try
     {
         const auto size = comm.getSize();
@@ -27,7 +29,7 @@ int main(int argc, char* argv[])
         {
             std::vector< char > in_msg(size);
             {
-                std::vector< lstr::MpiComm::Request > rcv_requests;
+                std::vector< MpiComm::Request > rcv_requests;
                 rcv_requests.reserve(size - 1);
                 char message = 'z';
                 for (int src = 1; src < size; ++src)

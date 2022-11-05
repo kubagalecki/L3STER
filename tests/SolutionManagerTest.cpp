@@ -3,15 +3,15 @@
 #include "l3ster/assembly/ComputeValuesAtNodes.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
-#include "l3ster/util/GlobalResource.hpp"
+#include "l3ster/util/ScopeGuards.hpp"
 
 #include "Common.hpp"
 
 int main(int argc, char* argv[])
 {
     using namespace lstr;
-    GlobalResource< MpiScopeGuard >::initialize(argc, argv);
-    const MpiComm comm;
+    L3sterScopeGuard scope_guard{argc, argv};
+    const MpiComm    comm;
 
     const std::array node_dist{0., 1., 2., 3., 4., 5., 6., 7., 8.};
     constexpr auto   mesh_order = 2;

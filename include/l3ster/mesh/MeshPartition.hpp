@@ -20,8 +20,7 @@ concept DomainPredicate_c = requires(T op, const DomainView dv) {
                                     } -> std::convertible_to< bool >;
                             };
 template < typename T >
-concept DomainIdRange_c =
-    std::ranges::sized_range< T > and std::convertible_to< std::ranges::range_value_t< T >, d_id_t >;
+concept DomainIdRange_c = SizedRangeOfConvertibleTo_c< T, d_id_t >;
 } // namespace detail
 
 class MeshPartition
@@ -136,13 +135,13 @@ public:
     [[nodiscard]] BoundaryView getBoundaryView(d_id_t id) const { return getBoundaryView(std::views::single(id)); }
 
     // observers
-    [[nodiscard]] DomainView                   getDomainView(d_id_t id) const { return DomainView{domains.at(id), id}; }
-    [[nodiscard]] inline size_t                getNElements() const;
-    [[nodiscard]] auto                         getNDomains() const { return domains.size(); }
-    [[nodiscard]] inline std::vector< d_id_t > getDomainIds() const;
-    [[nodiscard]] const Domain&                getDomain(d_id_t id) const { return domains.at(id); }
-    [[nodiscard]] const node_vec_t&            getNodes() const noexcept { return nodes; }
-    [[nodiscard]] const node_vec_t&            getGhostNodes() const noexcept { return ghost_nodes; }
+    [[nodiscard]] DomainView        getDomainView(d_id_t id) const { return DomainView{domains.at(id), id}; }
+    [[nodiscard]] inline size_t     getNElements() const;
+    [[nodiscard]] auto              getNDomains() const { return domains.size(); }
+    [[nodiscard]] auto              getDomainIds() const { return domains | std::views::keys; }
+    [[nodiscard]] const Domain&     getDomain(d_id_t id) const { return domains.at(id); }
+    [[nodiscard]] const node_vec_t& getNodes() const noexcept { return nodes; }
+    [[nodiscard]] const node_vec_t& getGhostNodes() const noexcept { return ghost_nodes; }
 
     template < el_o_t O >
     [[nodiscard]] domain_map_t getConversionAlloc() const;
@@ -557,14 +556,6 @@ size_t MeshPartition::getNElements() const
 {
     return std::accumulate(
         domains.cbegin(), domains.cend(), 0, [](size_t s, const auto& d) { return s + d.second.getNElements(); });
-}
-
-std::vector< d_id_t > MeshPartition::getDomainIds() const
-{
-    std::vector< d_id_t > retval;
-    retval.reserve(domains.size());
-    std::ranges::copy(domains | std::views::keys, back_inserter(retval));
-    return retval;
 }
 
 template < el_o_t O >

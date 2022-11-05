@@ -3,7 +3,7 @@
 #include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
-#include "l3ster/util/GlobalResource.hpp"
+#include "l3ster/util/ScopeGuards.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -12,8 +12,9 @@
 int main(int argc, char* argv[])
 {
     using namespace lstr;
-    GlobalResource< lstr::MpiScopeGuard >::initialize(argc, argv);
-    MpiComm comm{};
+    L3sterScopeGuard scope_guard{argc, argv};
+    MpiComm          comm{};
+
     try
     {
         const auto n_ranks = comm.getSize();

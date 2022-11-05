@@ -5,7 +5,7 @@
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
-#include "l3ster/util/GlobalResource.hpp"
+#include "l3ster/util/ScopeGuards.hpp"
 
 #include <numbers>
 
@@ -151,7 +151,7 @@ void vtkExportTest3D()
 
 int main(int argc, char* argv[])
 {
-    GlobalResource< MpiScopeGuard >::initialize(argc, argv);
+    L3sterScopeGuard scope_guard{argc, argv};
 
     vtkExportTest2D();
     vtkExportTest3D();
