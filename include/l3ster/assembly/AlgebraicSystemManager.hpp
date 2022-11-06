@@ -346,23 +346,6 @@ void AlgebraicSystemManager< n_fields >::initFromCache(const MpiComm&           
     m_cache_ptr = initOrRetrieveFromCache(comm, mesh, problemdef_ctwrpr, bcdef_ctwrpr);
 }
 
-namespace detail
-{
-size_t computeMeshHash(const MeshPartition& mesh)
-{
-    constexpr auto hash_range = [](std::ranges::contiguous_range auto&& r) -> size_t {
-        const auto data = std::span{std::forward< decltype(r) >(r)};
-        return robin_hood::hash_bytes(data.data(), data.size_bytes());
-    };
-    const auto hash_element = [&](const auto& element) {
-        return hash_range(element.getNodes());
-    };
-    const size_t topo_hash =
-        mesh.reduce(size_t{}, hash_element, std::bit_xor<>{}, mesh.getDomainIds(), std::execution::par);
-    return topo_hash ^ hash_range(mesh.getNodes()) ^ hash_range(mesh.getGhostNodes());
-}
-} // namespace detail
-
 template < size_t n_fields >
 template < detail::ProblemDef_c auto problem_def, detail::ProblemDef_c auto dirichlet_def >
 std::shared_ptr< typename AlgebraicSystemManager< n_fields >::CacheEntry >
@@ -372,7 +355,7 @@ AlgebraicSystemManager< n_fields >::initOrRetrieveFromCache(const MpiComm&      
                                                             ConstexprValue< dirichlet_def > dbcdef_ctwrpr)
 {
     auto       tag             = std::unique_ptr< CacheTagBase >(new CacheTag< problem_def, dirichlet_def >);
-    const auto mesh_hash       = detail::computeMeshHash(mesh);
+    const auto mesh_hash       = mesh.computeTopoHash();
     auto       cache_key       = CacheKey{std::move(tag), mesh_hash};
     const auto lookup_result   = cache.find(cache_key);
     const char local_cache_hit = lookup_result != end(cache) and not lookup_result->second.expired();

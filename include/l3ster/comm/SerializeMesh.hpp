@@ -102,15 +102,15 @@ SerializedDomain::SerializedDomain(const Domain& domain)
 struct SerializedPartition
 {
     SerializedPartition() = default;
-    explicit SerializedPartition(const MeshPartition& part) : nodes{part.nodes}, ghost_nodes{part.ghost_nodes}
+    explicit SerializedPartition(const MeshPartition& part) : nodes{part.m_nodes}, ghost_nodes{part.m_ghost_nodes}
     {
-        for (const auto& [id, dom] : part.domains)
+        for (const auto& [id, dom] : part.m_domains)
             domains.emplace(id, dom);
     }
     explicit SerializedPartition(MeshPartition&& part)
-        : nodes{std::move(part.nodes)}, ghost_nodes{std::move(part.ghost_nodes)}
+        : nodes{std::move(part.m_nodes)}, ghost_nodes{std::move(part.m_ghost_nodes)}
     {
-        for (const auto& [id, dom] : part.domains)
+        for (const auto& [id, dom] : part.m_domains)
             domains.emplace(id, dom);
     }
 

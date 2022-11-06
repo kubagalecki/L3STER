@@ -7,6 +7,8 @@
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/MetisUtils.hpp"
 
+#include "l3ster/util/RobinHoodHashTables.hpp"
+
 #include <map>
 
 namespace lstr
@@ -37,12 +39,12 @@ public:
     MeshPartition() = default;
     inline explicit MeshPartition(domain_map_t domains_);
     MeshPartition(domain_map_t domains_, node_vec_t nodes_, node_vec_t ghost_nodes_)
-        : domains{std::move(domains_)}, nodes{std::move(nodes_)}, ghost_nodes{std::move(ghost_nodes_)}
+        : m_domains{std::move(domains_)}, m_nodes{std::move(nodes_)}, m_ghost_nodes{std::move(ghost_nodes_)}
     {}
 
     inline const MetisGraphWrapper& initDualGraph();
-    void                            deleteDualGraph() noexcept { dual_graph.reset(); }
-    [[nodiscard]] bool              isDualGraphInitialized() const noexcept { return dual_graph.has_value(); }
+    void                            deleteDualGraph() noexcept { m_dual_graph.reset(); }
+    [[nodiscard]] bool              isDualGraphInitialized() const noexcept { return m_dual_graph.has_value(); }
     [[nodiscard]] inline const MetisGraphWrapper& getDualGraph() const;
 
     // Iteration (visiting) over elements
@@ -135,13 +137,14 @@ public:
     [[nodiscard]] BoundaryView getBoundaryView(d_id_t id) const { return getBoundaryView(std::views::single(id)); }
 
     // observers
-    [[nodiscard]] DomainView        getDomainView(d_id_t id) const { return DomainView{domains.at(id), id}; }
+    [[nodiscard]] DomainView        getDomainView(d_id_t id) const { return DomainView{m_domains.at(id), id}; }
     [[nodiscard]] inline size_t     getNElements() const;
-    [[nodiscard]] auto              getNDomains() const { return domains.size(); }
-    [[nodiscard]] auto              getDomainIds() const { return domains | std::views::keys; }
-    [[nodiscard]] const Domain&     getDomain(d_id_t id) const { return domains.at(id); }
-    [[nodiscard]] const node_vec_t& getNodes() const noexcept { return nodes; }
-    [[nodiscard]] const node_vec_t& getGhostNodes() const noexcept { return ghost_nodes; }
+    [[nodiscard]] auto              getNDomains() const { return m_domains.size(); }
+    [[nodiscard]] auto              getDomainIds() const { return m_domains | std::views::keys; }
+    [[nodiscard]] const Domain&     getDomain(d_id_t id) const { return m_domains.at(id); }
+    [[nodiscard]] const node_vec_t& getNodes() const noexcept { return m_nodes; }
+    [[nodiscard]] const node_vec_t& getGhostNodes() const noexcept { return m_ghost_nodes; }
+    [[nodiscard]] inline size_t     computeTopoHash() const;
 
     template < el_o_t O >
     [[nodiscard]] domain_map_t getConversionAlloc() const;
@@ -156,10 +159,9 @@ private:
     template < ElementTypes T, el_o_t O >
     el_boundary_view_result_t getElementBoundaryViewFallback(const Element< T, O >& el, d_id_t d) const;
 
-    domain_map_t                       domains;
-    node_vec_t                         nodes;
-    node_vec_t                         ghost_nodes;
-    std::optional< MetisGraphWrapper > dual_graph;
+    domain_map_t                       m_domains;
+    node_vec_t                         m_nodes, m_ghost_nodes;
+    std::optional< MetisGraphWrapper > m_dual_graph;
 };
 
 MeshPartition::cfind_result_t MeshPartition::constifyFindResult(find_result_t found)
@@ -172,13 +174,13 @@ MeshPartition::cfind_result_t MeshPartition::constifyFindResult(find_result_t fo
 
 const MetisGraphWrapper& MeshPartition::initDualGraph()
 {
-    return dual_graph ? *dual_graph : dual_graph.emplace(makeMetisDualGraph());
+    return m_dual_graph ? *m_dual_graph : m_dual_graph.emplace(makeMetisDualGraph());
 }
 
 const MetisGraphWrapper& MeshPartition::getDualGraph() const
 {
-    if (dual_graph)
-        return *dual_graph;
+    if (m_dual_graph)
+        return *m_dual_graph;
     else
         throw std::runtime_error{"Attempting to access dual graph before initialization"};
 }
@@ -192,16 +194,16 @@ const MetisGraphWrapper& MeshPartition::getDualGraph() const
 template < invocable_on_elements F, ExecutionPolicy_c ExecPolicy >
 void MeshPartition::visit(F&& element_visitor, d_id_t domain_id, ExecPolicy&& policy)
 {
-    const auto dom_it = domains.find(domain_id);
-    if (dom_it != end(domains))
+    const auto dom_it = m_domains.find(domain_id);
+    if (dom_it != end(m_domains))
         dom_it->second.visit(std::forward< F >(element_visitor), std::forward< ExecPolicy >(policy));
 }
 
 template < invocable_on_const_elements F, ExecutionPolicy_c ExecPolicy >
 void MeshPartition::visit(F&& element_visitor, d_id_t domain_id, ExecPolicy&& policy) const
 {
-    const auto dom_it = domains.find(domain_id);
-    if (dom_it != end(domains))
+    const auto dom_it = m_domains.find(domain_id);
+    if (dom_it != end(m_domains))
         dom_it->second.visit(std::forward< F >(element_visitor), std::forward< ExecPolicy >(policy));
 }
 
@@ -214,9 +216,9 @@ void MeshPartition::visit(F&& element_visitor, D&& domain_predicate, ExecPolicy&
             dom.visit(element_visitor, policy);
     };
     if constexpr (SequencedPolicy_c< ExecPolicy >)
-        std::ranges::for_each(domains, visit_domain);
+        std::ranges::for_each(m_domains, visit_domain);
     else
-        std::for_each(policy, begin(domains), end(domains), visit_domain);
+        std::for_each(policy, begin(m_domains), end(m_domains), visit_domain);
 }
 
 template < invocable_on_const_elements F, detail::DomainPredicate_c D, ExecutionPolicy_c ExecPolicy >
@@ -228,9 +230,9 @@ void MeshPartition::visit(F&& element_visitor, D&& domain_predicate, ExecPolicy&
             dom.visit(element_visitor, policy);
     };
     if constexpr (SequencedPolicy_c< ExecPolicy >)
-        std::ranges::for_each(domains, visit_domain);
+        std::ranges::for_each(m_domains, visit_domain);
     else
-        std::for_each(policy, begin(domains), end(domains), visit_domain);
+        std::for_each(policy, begin(m_domains), end(m_domains), visit_domain);
 }
 
 template < invocable_on_elements_and< const DomainView > F, detail::DomainPredicate_c D, ExecutionPolicy_c ExecPolicy >
@@ -243,9 +245,9 @@ void MeshPartition::visit(F&& element_visitor, D&& domain_predicate, ExecPolicy&
             dom.visit([&](auto& element) { element_visitor(element, domain_view); }, policy);
     };
     if constexpr (SequencedPolicy_c< ExecPolicy >)
-        std::ranges::for_each(domains, visit_domain);
+        std::ranges::for_each(m_domains, visit_domain);
     else
-        std::for_each(policy, begin(domains), end(domains), visit_domain);
+        std::for_each(policy, begin(m_domains), end(m_domains), visit_domain);
 }
 
 template < invocable_on_const_elements_and< const DomainView > F,
@@ -260,9 +262,9 @@ void MeshPartition::visit(F&& element_visitor, D&& domain_predicate, ExecPolicy&
             dom.visit([&](const auto& element) { element_visitor(element, domain_view); }, policy);
     };
     if constexpr (SequencedPolicy_c< ExecPolicy >)
-        std::ranges::for_each(domains, visit_domain);
+        std::ranges::for_each(m_domains, visit_domain);
     else
-        std::for_each(policy, begin(domains), end(domains), visit_domain);
+        std::for_each(policy, begin(m_domains), end(m_domains), visit_domain);
 }
 
 template < invocable_on_elements F, ExecutionPolicy_c ExecPolicy >
@@ -272,9 +274,9 @@ void MeshPartition::visit(F&& element_visitor, ExecPolicy&& policy)
         map_entry.second.visit(element_visitor, policy);
     };
     if constexpr (SequencedPolicy_c< ExecPolicy >)
-        std::ranges::for_each(domains, visit_domain);
+        std::ranges::for_each(m_domains, visit_domain);
     else
-        std::for_each(policy, begin(domains), end(domains), visit_domain);
+        std::for_each(policy, begin(m_domains), end(m_domains), visit_domain);
 }
 
 template < invocable_on_const_elements F, ExecutionPolicy_c ExecPolicy >
@@ -284,9 +286,9 @@ void MeshPartition::visit(F&& element_visitor, ExecPolicy&& policy) const
         map_entry.second.visit(element_visitor, policy);
     };
     if constexpr (SequencedPolicy_c< ExecPolicy >)
-        std::ranges::for_each(domains, visit_domain);
+        std::ranges::for_each(m_domains, visit_domain);
     else
-        std::for_each(policy, begin(domains), end(domains), visit_domain);
+        std::for_each(policy, begin(m_domains), end(m_domains), visit_domain);
 }
 
 template < invocable_on_elements_and< const DomainView > F, ExecutionPolicy_c ExecPolicy >
@@ -298,9 +300,9 @@ void MeshPartition::visit(F&& element_visitor, ExecPolicy&& policy)
         dom.visit([&](auto& element) { element_visitor(element, domain_view); }, policy);
     };
     if constexpr (SequencedPolicy_c< ExecPolicy >)
-        std::ranges::for_each(domains, visit_domain);
+        std::ranges::for_each(m_domains, visit_domain);
     else
-        std::for_each(policy, begin(domains), end(domains), visit_domain);
+        std::for_each(policy, begin(m_domains), end(m_domains), visit_domain);
 }
 
 template < invocable_on_const_elements_and< const DomainView > F, ExecutionPolicy_c ExecPolicy >
@@ -312,9 +314,9 @@ void MeshPartition::visit(F&& element_visitor, ExecPolicy&& policy) const
         dom.visit([&](const auto& element) { element_visitor(element, domain_view); }, policy);
     };
     if constexpr (SequencedPolicy_c< ExecPolicy >)
-        std::ranges::for_each(domains, visit_domain);
+        std::ranges::for_each(m_domains, visit_domain);
     else
-        std::for_each(policy, begin(domains), end(domains), visit_domain);
+        std::for_each(policy, begin(m_domains), end(m_domains), visit_domain);
 }
 
 template < invocable_on_elements F, detail::DomainIdRange_c R, ExecutionPolicy_c ExecPolicy >
@@ -347,8 +349,8 @@ template < invocable_on_elements_and< const DomainView > F, detail::DomainIdRang
 void MeshPartition::visit(F&& element_visitor, R&& domain_ids, ExecPolicy&& policy)
 {
     const auto visit_domain = [&](d_id_t id) {
-        const auto dom_it = domains.find(id);
-        if (dom_it != end(domains))
+        const auto dom_it = m_domains.find(id);
+        if (dom_it != end(m_domains))
         {
             const auto domain_view = DomainView{dom_it->second, dom_it->first};
             dom_it->second.visit([&](auto& element) { element_visitor(element, domain_view); }, policy);
@@ -367,8 +369,8 @@ template < invocable_on_const_elements_and< const DomainView > F,
 void MeshPartition::visit(F&& element_visitor, R&& domain_ids, ExecPolicy&& policy) const
 {
     const auto visit_domain = [&](d_id_t id) {
-        const auto dom_it = domains.find(id);
-        if (dom_it != end(domains))
+        const auto dom_it = m_domains.find(id);
+        if (dom_it != end(m_domains))
         {
             const auto domain_view = DomainView{dom_it->second, dom_it->first};
             dom_it->second.visit([&](const auto& element) { element_visitor(element, domain_view); }, policy);
@@ -390,8 +392,8 @@ Zero MeshPartition::reduce(Zero&& zero, Proj&& projection, Red&& reduction, R&& 
                                                              }
 {
     const auto& reduce_domain = [&](d_id_t id) {
-        const auto dom_it = domains.find(id);
-        if (dom_it != end(domains))
+        const auto dom_it = m_domains.find(id);
+        if (dom_it != end(m_domains))
             return dom_it->second.reduce(zero, projection, reduction, policy);
         else
             return zero;
@@ -419,7 +421,7 @@ MeshPartition::find_result_t MeshPartition::find(F&& predicate, D&& domain_predi
 {
     find_result_t result;
     std::mutex    mut;
-    (void)std::find_if(policy, begin(domains), end(domains), [&](auto& map_entry) {
+    (void)std::find_if(policy, begin(m_domains), end(m_domains), [&](auto& map_entry) {
         auto& [id, domain]     = map_entry;
         const auto find_result = domain.find(predicate, policy);
         if (find_result)
@@ -441,7 +443,7 @@ MeshPartition::cfind_result_t MeshPartition::find(F&& predicate, D&& domain_ids,
 
 MeshPartition::find_result_t MeshPartition::find(el_id_t id)
 {
-    for (auto& [dom_id, dom] : domains)
+    for (auto& [dom_id, dom] : m_domains)
     {
         const auto find_result = dom.find(id);
         if (find_result)
@@ -468,7 +470,7 @@ MeshPartition::el_boundary_view_result_t MeshPartition::getElementBoundaryViewIm
         return detail::matchBoundaryNodesToElement(*domain_element, boundary_nodes);
     };
 
-    const auto adjacent_elems = dual_graph->getElementAdjacent(el.getId());
+    const auto adjacent_elems = m_dual_graph->getElementAdjacent(el.getId());
     for (el_id_t adj_id : adjacent_elems)
     {
         const auto  find_result = find(adj_id);
@@ -515,8 +517,8 @@ BoundaryView MeshPartition::getBoundaryView(R&& boundary_ids) const
     size_t n_boundary_els = 0;
     for (d_id_t id : boundary_ids)
     {
-        const auto dom_it = domains.find(id);
-        if (dom_it != end(domains))
+        const auto dom_it = m_domains.find(id);
+        if (dom_it != end(m_domains))
             n_boundary_els += dom_it->second.getNElements();
     }
     BoundaryView::boundary_element_view_variant_vector_t boundary_elements;
@@ -555,28 +557,29 @@ BoundaryView MeshPartition::getBoundaryView(R&& boundary_ids) const
 size_t MeshPartition::getNElements() const
 {
     return std::accumulate(
-        domains.cbegin(), domains.cend(), 0, [](size_t s, const auto& d) { return s + d.second.getNElements(); });
+        m_domains.cbegin(), m_domains.cend(), 0, [](size_t s, const auto& d) { return s + d.second.getNElements(); });
 }
 
 template < el_o_t O >
 MeshPartition::domain_map_t MeshPartition::getConversionAlloc() const
 {
     domain_map_t retval;
-    for (const auto& [id, dom] : domains)
+    for (const auto& [id, dom] : m_domains)
         retval.emplace_hint(retval.cend(), id, dom.template getConversionAlloc< O >());
     return retval;
 }
 
-MeshPartition::MeshPartition(MeshPartition::domain_map_t domains_) : domains{std::move(domains_)}
+MeshPartition::MeshPartition(MeshPartition::domain_map_t domains_) : m_domains{std::move(domains_)}
 {
     constexpr size_t n_nodes_estimate_factor = 4; // TODO: come up with better heuristic
-    nodes.reserve(getNElements() * n_nodes_estimate_factor);
-    visit(
-        [&](const auto& element) { std::ranges::for_each(element.getNodes(), [&](n_id_t n) { nodes.push_back(n); }); });
-    std::ranges::sort(nodes);
-    const auto range_to_erase = std::ranges::unique(nodes);
-    nodes.erase(begin(range_to_erase), end(range_to_erase));
-    nodes.shrink_to_fit();
+    m_nodes.reserve(getNElements() * n_nodes_estimate_factor);
+    visit([&](const auto& element) {
+        std::ranges::for_each(element.getNodes(), [&](n_id_t n) { m_nodes.push_back(n); });
+    });
+    std::ranges::sort(m_nodes);
+    const auto range_to_erase = std::ranges::unique(m_nodes);
+    m_nodes.erase(begin(range_to_erase), end(range_to_erase));
+    m_nodes.shrink_to_fit();
 }
 
 auto MeshPartition::convertToMetisFormat() const
@@ -617,6 +620,19 @@ MetisGraphWrapper MeshPartition::makeMetisDualGraph() const
     detail::handleMetisErrorCode(error);
 
     return MetisGraphWrapper{xadj, adjncy, getNElements()};
+}
+
+size_t MeshPartition::computeTopoHash() const
+{
+    constexpr auto hash_range = [](std::ranges::contiguous_range auto&& r) -> size_t {
+        const auto data = std::span{std::forward< decltype(r) >(r)};
+        return robin_hood::hash_bytes(data.data(), data.size_bytes());
+    };
+    const auto hash_element = [&](const auto& element) {
+        return hash_range(element.getNodes());
+    };
+    const size_t topo_hash = reduce(size_t{}, hash_element, std::bit_xor<>{}, getDomainIds(), std::execution::par);
+    return topo_hash ^ hash_range(m_nodes) ^ hash_range(m_ghost_nodes);
 }
 } // namespace lstr
 #endif // L3STER_MESH_MESHPARTITION_HPP
