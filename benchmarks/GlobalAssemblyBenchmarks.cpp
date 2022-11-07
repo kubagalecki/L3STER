@@ -39,19 +39,17 @@ static void BM_OwnerOrSharedNodeDeterminationNotGhost(benchmark::State& state)
 
     for (auto _ : state)
     {
-        std::for_each(mesh.getPartitions().begin(), mesh.getPartitions().end(), [](const auto& prt) {
-            const auto is_owned = [&](n_id_t node) {
-                return not std::ranges::binary_search(prt.getGhostNodes(), node);
-            };
+        for (const auto& prt : mesh.getPartitions())
             prt.visit(
                 [&](const auto& element) {
                     for (auto node : element.getNodes())
-                        benchmark::DoNotOptimize(is_owned(node));
+                        benchmark::DoNotOptimize(not prt.isGhostNode(node));
                 },
                 std::views::single(1));
-        });
     }
-    state.SetBytesProcessed(n_nodes_visited * state.iterations());
+    const auto nodes_processed = static_cast< double >(n_nodes_visited * state.iterations());
+    state.counters["Query rate"] =
+        benchmark::Counter{nodes_processed, benchmark::Counter::kIsRate, benchmark::Counter::kIs1000};
 }
 BENCHMARK(BM_OwnerOrSharedNodeDeterminationNotGhost)
     ->Name("Is node owned or shared? [not ghost]")
@@ -76,19 +74,17 @@ static void BM_OwnerOrSharedNodeDeterminationShared(benchmark::State& state)
 
     for (auto _ : state)
     {
-        std::for_each(mesh.getPartitions().begin(), mesh.getPartitions().end(), [](const auto& prt) {
-            const auto is_owned = [&](n_id_t node) {
-                return std::ranges::binary_search(prt.getNodes(), node);
-            };
+        for (const auto& prt : mesh.getPartitions())
             prt.visit(
                 [&](const auto& element) {
                     for (auto node : element.getNodes())
-                        benchmark::DoNotOptimize(is_owned(node));
+                        benchmark::DoNotOptimize(prt.isOwnedNode(node));
                 },
                 std::views::single(1));
-        });
     }
-    state.SetBytesProcessed(n_nodes_visited * state.iterations());
+    const auto nodes_processed = static_cast< double >(n_nodes_visited * state.iterations());
+    state.counters["Query rate"] =
+        benchmark::Counter{nodes_processed, benchmark::Counter::kIsRate, benchmark::Counter::kIs1000};
 }
 BENCHMARK(BM_OwnerOrSharedNodeDeterminationShared)
     ->Name("Is node owned or shared? [is owned]")

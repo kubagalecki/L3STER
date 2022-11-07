@@ -144,7 +144,10 @@ public:
     [[nodiscard]] const Domain&     getDomain(d_id_t id) const { return m_domains.at(id); }
     [[nodiscard]] const node_vec_t& getNodes() const noexcept { return m_nodes; }
     [[nodiscard]] const node_vec_t& getGhostNodes() const noexcept { return m_ghost_nodes; }
-    [[nodiscard]] inline size_t     computeTopoHash() const;
+
+    [[nodiscard]] inline size_t computeTopoHash() const;
+    [[nodiscard]] bool isGhostNode(n_id_t node) const { return std::ranges::binary_search(m_ghost_nodes, node); }
+    [[nodiscard]] bool isOwnedNode(n_id_t node) const { return std::ranges::binary_search(m_nodes, node); }
 
     template < el_o_t O >
     [[nodiscard]] domain_map_t getConversionAlloc() const;

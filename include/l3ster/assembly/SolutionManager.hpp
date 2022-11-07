@@ -2,7 +2,6 @@
 #define L3STER_SOLUTIONMANAGER_HPP
 
 #include "l3ster/assembly/NodeToDofMap.hpp"
-#include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/util/TrilinosUtils.hpp"
 
 namespace lstr

@@ -155,7 +155,7 @@ int main(int argc, char* argv[])
                     << (bad_nodes.size() == 1 ? "" : "s") << " (!= 2.)\nThe affected nodes are:\n";
             const auto log_bad_node = [&](n_id_t node) {
                 err_msg << node << ": ";
-                if (std::ranges::binary_search(my_partition.getGhostNodes(), node))
+                if (my_partition.isGhostNode(node))
                     err_msg << "ghost\n";
                 else
                     err_msg << "owned\n";

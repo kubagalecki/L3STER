@@ -111,7 +111,9 @@ function( define_trilinos_target Verbosity Version )
                  "that you are responsible for ensuring compatibility. If you're uncertain of what this all means, "
                  "it's probably safest to force CMake to configure using the compiler specified above by passing:\n"
                  " -DCMAKE_CXX_COMPILER=${Trilinos_CXX_COMPILER}\n"
-                 "or setting the equivalent in a toolchain file.\n" )
+                 "or setting the equivalent in a toolchain file.\n"
+                 "Please note that this warning only compares the path strings of the two compilers. If the two paths "
+                 "printed above alias the same file, please disregard this warning.\n" )
     endif ()
 
     detect_trilinos_packages( ${Verbosity} "${Trilinos_PACKAGE_LIST}" "${ARGN}" )

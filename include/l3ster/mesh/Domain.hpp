@@ -250,7 +250,7 @@ Domain::find_result_t Domain::find(el_id_t id)
         // optimization for contiguous case
         if (back_id - front_id + 1u == el_vec.size())
         {
-            opt_el_ptr_variant.emplace(&el_vec[id - front_id]);
+            opt_el_ptr_variant.emplace(std::addressof(el_vec[id - front_id]));
             return true;
         }
 
@@ -258,7 +258,7 @@ Domain::find_result_t Domain::find(el_id_t id)
         if (it == end(el_vec) or it->getId() != id)
             return false;
 
-        opt_el_ptr_variant.emplace(&*it);
+        opt_el_ptr_variant.emplace(std::addressof(*it));
         return true;
     };
     const auto vector_variant_visitor = [&](element_vector_variant_t& var) {
