@@ -21,7 +21,7 @@ using element_cptr_t         = const Element< ET, EO >*;
 using element_ptr_variant_t  = parametrize_type_over_element_types_and_orders_t< std::variant, element_ptr_t >;
 using element_cptr_variant_t = parametrize_type_over_element_types_and_orders_t< std::variant, element_cptr_t >;
 template < ElementTypes ET, el_o_t EO >
-struct BoundaryElementView;
+class BoundaryElementView;
 
 template < ElementTypes TYPE, el_o_t ORDER >
 using type_order_set          = ValuePack< TYPE, ORDER >;

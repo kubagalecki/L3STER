@@ -133,7 +133,7 @@ auto evaluateBoundaryKernel(Kernel&&    kernel,
                             const auto& normal)
 {
     const auto [field_vals_at_qp, field_ders_at_qp] = extractFieldValsAndDersAtQpoint(field_vals_and_ders, qp_ind);
-    const auto space_time                           = makeSpaceTimePoint(*el_view.element, quadrature, qp_ind, time);
+    const auto space_time                           = makeSpaceTimePoint(*el_view, quadrature, qp_ind, time);
     return std::invoke(std::forward< Kernel >(kernel), field_vals_at_qp, field_ders_at_qp, space_time, normal);
 }
 
@@ -205,7 +205,7 @@ auto assembleLocalBoundarySystem(
     requires detail::BoundaryKernel_c< Kernel, Element< ET, EO >::native_dim, n_fields >
 {
     const auto& quadrature          = basis_at_q.quadrature;
-    const auto  jac_at_qp           = computeJacobiansAtQpoints(*el_view.element, quadrature);
+    const auto  jac_at_qp           = computeJacobiansAtQpoints(*el_view, quadrature);
     const auto& basis_vals          = basis_at_q.basis_vals;
     const auto  basis_ders          = computePhysBasisDersAtQpoints(basis_at_q.basis_ders, jac_at_qp);
     const auto  field_vals_and_ders = detail::computeFieldValsAndDers(basis_vals, basis_ders, node_vals);

@@ -554,7 +554,7 @@ BoundaryView MeshPartition::getBoundaryView(R&& boundary_ids) const
                 "incorrectly specified boundaries, resulting in the edge/face element being in a different partition "
                 "than its parent area/volume element."};
     }
-    return BoundaryView{std::move(boundary_elements)};
+    return BoundaryView{std::move(boundary_elements), *this};
 }
 
 size_t MeshPartition::getNElements() const

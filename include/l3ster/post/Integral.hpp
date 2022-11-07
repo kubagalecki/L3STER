@@ -118,7 +118,7 @@ auto evalElementBoundaryIntegral(
     requires detail::BoundaryIntegralKernel_c< IntKernel, Element< ET, EO >::native_dim, n_fields >
 {
     const auto& quadrature          = basis_at_q.quadrature;
-    const auto  jac_at_qp           = computeJacobiansAtQpoints(*el_view.element, quadrature);
+    const auto  jac_at_qp           = computeJacobiansAtQpoints(*el_view, quadrature);
     const auto& basis_vals          = basis_at_q.basis_vals;
     const auto  basis_ders          = computePhysBasisDersAtQpoints(basis_at_q.basis_ders, jac_at_qp);
     const auto  field_vals_and_ders = detail::computeFieldValsAndDers(basis_vals, basis_ders, node_vals);
@@ -180,7 +180,7 @@ auto evalLocalBoundaryIntegral(IntKernel&&         int_kernel,
         constexpr auto el_dim = Element< ET, EO >::native_dim;
         if constexpr (detail::BoundaryIntegralKernel_c< IntKernel, el_dim, n_fields >)
         {
-            const auto  field_vals = field_val_getter(el_view.element->getNodes());
+            const auto  field_vals = field_val_getter(el_view->getNodes());
             const auto& qbv        = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
             return evalElementBoundaryIntegral(int_kernel, el_view, field_vals, qbv, time);
         }

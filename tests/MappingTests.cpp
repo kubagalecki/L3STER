@@ -436,9 +436,9 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
             normal);
         const auto element_checker = [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
             const auto& ref_q =
-                getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.element_side).quadrature;
+                getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide()).quadrature;
             for (auto qp : ref_q.getPoints())
-                CHECK(mapToPhysicalSpace(*el_view.element, Point{qp})[space_ind] == Approx{offs}.epsilon(1e-15));
+                CHECK(mapToPhysicalSpace(*el_view, Point{qp})[space_ind] == Approx{offs}.epsilon(1e-15));
         };
         view.visit(element_checker);
     };

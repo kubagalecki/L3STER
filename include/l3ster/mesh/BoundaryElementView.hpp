@@ -6,17 +6,21 @@
 
 namespace lstr
 {
-template < ElementTypes ELTYPE, el_o_t ELORDER >
-struct BoundaryElementView
+template < ElementTypes ET, el_o_t EO >
+class BoundaryElementView
 {
-    using element_t = Element< ELTYPE, ELORDER >;
-
-    BoundaryElementView(const element_t& element_, const el_side_t element_side_)
-        : element{&element_}, element_side{element_side_}
+public:
+    BoundaryElementView(const Element< ET, EO >& element, const el_side_t side)
+        : m_element_ptr{std::addressof(element)}, m_element_side{side}
     {}
 
-    element_cptr_t< ELTYPE, ELORDER > element;
-    el_side_t                         element_side;
+    [[nodiscard]] const Element< ET, EO >* operator->() const { return m_element_ptr; }
+    [[nodiscard]] const Element< ET, EO >& operator*() const { return *m_element_ptr; }
+    [[nodiscard]] auto                     getSide() const { return m_element_side; }
+
+private:
+    const Element< ET, EO >* m_element_ptr;
+    el_side_t                m_element_side;
 };
 } // namespace lstr
 #endif // L3STER_MESH_BOUNDARYELEMENTVIEW_HPP

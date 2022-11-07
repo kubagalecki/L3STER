@@ -37,9 +37,9 @@ inline constexpr auto deduce_n_fields = std::invoke(
     type_order_combinations{});
 } // namespace detail
 
-template < BasisTypes              BT,
-           QuadratureTypes         QT,
-           q_o_t                   QO,
+template < BasisTypes               BT,
+           QuadratureTypes          QT,
+           q_o_t                    QO,
            ArrayOf_c< size_t > auto field_inds,
            typename Kernel,
            detail::FieldValGetter_c FvalGetter,
@@ -72,9 +72,9 @@ void assembleGlobalSystem(Kernel&&                                              
     mesh.visit(process_element, std::forward< R >(domain_ids), std::execution::par);
 }
 
-template < BasisTypes              BT,
-           QuadratureTypes         QT,
-           q_o_t                   QO,
+template < BasisTypes               BT,
+           QuadratureTypes          QT,
+           q_o_t                    QO,
            ArrayOf_c< size_t > auto field_inds,
            typename Kernel,
            detail::FieldValGetter_c FvalGetter,
@@ -93,13 +93,12 @@ void assembleGlobalBoundarySystem(Kernel&&                                      
         constexpr auto el_dim = Element< ET, EO >::native_dim;
         if constexpr (detail::BoundaryKernel_c< Kernel, el_dim, detail::deduce_n_fields< FvalGetter > >)
         {
-            const auto& element    = *el_view.element;
-            const auto  field_vals = field_val_getter(element.getNodes());
-            const auto& qbv        = getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.element_side);
+            const auto  field_vals = field_val_getter(el_view->getNodes());
+            const auto& qbv        = getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
             const auto [loc_mat, loc_vec] = assembleLocalBoundarySystem(kernel, el_view, field_vals, qbv, time);
-            const auto row_dofs           = detail::getUnsortedElementDofs< field_inds >(element, row_map);
-            const auto col_dofs           = detail::getUnsortedElementDofs< field_inds >(element, col_map);
-            const auto rhs_dofs           = detail::getUnsortedElementDofs< field_inds >(element, rhs_map);
+            const auto row_dofs           = detail::getUnsortedElementDofs< field_inds >(*el_view, row_map);
+            const auto col_dofs           = detail::getUnsortedElementDofs< field_inds >(*el_view, col_map);
+            const auto rhs_dofs           = detail::getUnsortedElementDofs< field_inds >(*el_view, rhs_map);
             detail::scatterLocalSystem(loc_mat, loc_vec, global_matrix, global_vector, row_dofs, col_dofs, rhs_dofs);
         }
     };
