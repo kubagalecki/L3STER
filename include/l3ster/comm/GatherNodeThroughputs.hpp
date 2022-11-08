@@ -21,12 +21,12 @@ inline std::vector< val_t > gatherNodeThroughputs(const MpiComm& comm)
         if (throughput_sum == 0u)
             throw std::runtime_error{"Throughput computation failed on all nodes"};
 
-        std::vector< val_t > ret_val{};
-        ret_val.reserve(throughputs.size());
-        std::ranges::transform(throughputs, std::back_inserter(ret_val), [&](auto tp) {
+        std::vector< val_t > retval{};
+        retval.reserve(throughputs.size());
+        std::ranges::transform(throughputs, std::back_inserter(retval), [&](auto tp) {
             return static_cast< val_t >(tp) / static_cast< val_t >(throughput_sum);
         });
-        return ret_val;
+        return retval;
     }
     else
     {

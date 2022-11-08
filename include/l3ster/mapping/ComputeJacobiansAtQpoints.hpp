@@ -16,9 +16,9 @@ template < ElementTypes ET, el_o_t EO, q_l_t QL, dim_t QD >
 auto computeJacobiansAtQpoints(const Element< ET, EO >& element, const Quadrature< QL, QD >& quadrature)
 {
     const auto                                                            jac_gen = getNatJacobiMatGenerator(element);
-    std::array< detail::jacobian_t< Element< ET, EO >::native_dim >, QL > ret_val;
-    std::ranges::transform(quadrature.getPoints(), begin(ret_val), [&](const auto& pc) { return jac_gen(Point{pc}); });
-    return ret_val;
+    std::array< detail::jacobian_t< Element< ET, EO >::native_dim >, QL > retval;
+    std::ranges::transform(quadrature.getPoints(), begin(retval), [&](const auto& pc) { return jac_gen(Point{pc}); });
+    return retval;
 }
 } // namespace lstr
 #endif // L3STER_MAPPING_COMPUTEJACOBIANSATQPOINTS_HPP

@@ -17,8 +17,8 @@ deserializeElementVector(const n_id_t*& nodes, const val_t*& data, const el_id_t
 
     constexpr auto node_chunk_size = Element< T, O >::n_nodes;
 
-    std::vector< Element< T, O > > ret_val;
-    ret_val.reserve(size);
+    std::vector< Element< T, O > > retval;
+    retval.reserve(size);
 
     for (size_t el_i = 0; el_i < size; ++el_i)
     {
@@ -33,20 +33,20 @@ deserializeElementVector(const n_id_t*& nodes, const val_t*& data, const el_id_t
 
         const auto el_id = *ids++; // NOLINT
 
-        ret_val.emplace_back(node_array, data_array, el_id);
+        retval.emplace_back(node_array, data_array, el_id);
     }
 
-    return ret_val;
+    return retval;
 }
 
 inline auto initElementVectorVariant(ElementTypes T, el_o_t O)
 {
     using ret_t = Domain::element_vector_variant_t;
-    ret_t      ret_val;
+    ret_t      retval;
     const auto init_if = [&]< ElementTypes TYPE, el_o_t ORDER >(ValuePack< TYPE, ORDER >) {
         if (T == TYPE and O == ORDER)
         {
-            ret_val.template emplace< std::vector< Element< TYPE, ORDER > > >();
+            retval.template emplace< std::vector< Element< TYPE, ORDER > > >();
             return true;
         }
         else
@@ -57,7 +57,7 @@ inline auto initElementVectorVariant(ElementTypes T, el_o_t O)
         (init_if(Types{}) or ...);
     };
     deduce(type_order_combinations{});
-    return ret_val;
+    return retval;
 }
 
 inline Domain deserializeDomain(const SerializedDomain& domain)

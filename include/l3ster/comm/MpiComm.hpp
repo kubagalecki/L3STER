@@ -255,17 +255,17 @@ void MpiComm::receive(R&& recv_range, int source, int tag) const
 template < detail::MpiType_c T >
 T MpiComm::receive(int source, int tag) const
 {
-    T ret_val{};
-    receive(std::span{&ret_val, 1}, source, tag);
-    return ret_val;
+    T retval{};
+    receive(std::span{&retval, 1}, source, tag);
+    return retval;
 }
 
 template < detail::MpiType_c T >
 std::vector< T > MpiComm::receive(size_t count, int source, int tag) const
 {
-    std::vector< T > ret_val(count);
-    receive(ret_val, source, tag);
-    return ret_val;
+    std::vector< T > retval(count);
+    receive(retval, source, tag);
+    return retval;
 }
 
 template < detail::MpiNonblockingBuf_c R >

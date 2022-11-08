@@ -10,13 +10,13 @@ template < BasisTypes BT, ElementTypes ET, el_o_t EO, q_l_t QL, dim_t QD >
 auto computeRefBasisAtQpoints(const Quadrature< QL, QD >& quad)
     requires(ElementTraits< Element< ET, EO > >::native_dim == QD)
 {
-    EigenRowMajorMatrix< val_t, QL, Element< ET, EO >::n_nodes > ret_val;
+    EigenRowMajorMatrix< val_t, QL, Element< ET, EO >::n_nodes > retval;
     for (ptrdiff_t index = 0; const auto& qp : quad.getPoints())
     {
         const auto val               = computeRefBasis< ET, EO, BT >(Point{qp});
-        ret_val(index++, Eigen::all) = val;
+        retval(index++, Eigen::all) = val;
     }
-    return ret_val;
+    return retval;
 }
 
 template < BasisTypes BT, ElementTypes ET, el_o_t EO, q_l_t QL, dim_t QD >
@@ -26,15 +26,15 @@ auto computeRefBasisDersAtQpoints(const Quadrature< QL, QD >& quad)
     using values_at_qp_t = EigenRowMajorMatrix< val_t, QL, Element< ET, EO >::n_nodes >;
     using ret_t          = std::array< values_at_qp_t, Element< ET, EO >::native_dim >;
 
-    ret_t ret_val;
+    ret_t retval;
     for (ptrdiff_t index = 0; const auto& qp : quad.getPoints())
     {
         const auto ders = computeRefBasisDers< ET, EO, BT >(Point{qp});
         for (ptrdiff_t d = 0; d < static_cast< ptrdiff_t >(Element< ET, EO >::native_dim); ++d)
-            ret_val[d](index, Eigen::all) = ders(d, Eigen::all);
+            retval[d](index, Eigen::all) = ders(d, Eigen::all);
         ++index;
     }
-    return ret_val;
+    return retval;
 }
 } // namespace lstr
 #endif // L3STER_BASISFUN_COMPUTEREFBASISATQPOINTS_HPP

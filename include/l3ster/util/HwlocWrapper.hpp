@@ -137,10 +137,10 @@ inline std::pair< size_t, size_t > HwlocWrapper::getLastThreadLocation() const
     const auto                     err = hwloc_get_last_cpu_location(topo, cpu, HWLOC_CPUBIND_THREAD);
     detail::handleHwlocError< std::runtime_error >(err,
                                                    "hwloc failed to obtain the last location of the current thread");
-    const auto ret_val = findCpuIf([&](hwloc_const_cpuset_t set) { return hwloc_bitmap_isequal(set, cpu); });
-    if (ret_val.first == std::numeric_limits< size_t >::max())
+    const auto retval = findCpuIf([&](hwloc_const_cpuset_t set) { return hwloc_bitmap_isequal(set, cpu); });
+    if (retval.first == std::numeric_limits< size_t >::max())
         throw std::logic_error{"The thread location provided by hwloc seems to lie outside of the machine's topology"};
-    return ret_val;
+    return retval;
 }
 
 inline void* HwlocWrapper::allocateOnNode(size_t size, size_t node) const noexcept
@@ -195,8 +195,8 @@ template < typename F >
 std::pair< size_t, size_t > HwlocWrapper::findCpuIf(const F& fun) const noexcept
     requires std::is_invocable_r_v< bool, F, hwloc_cpuset_t >
 {
-    std::pair< size_t, size_t > ret_val;
-    auto& [node, cpu] = ret_val;
+    std::pair< size_t, size_t > retval;
+    auto& [node, cpu] = retval;
 
     const auto find_cpu = [&](const std::vector< hwloc_cpuset_t >& cpus) {
         cpu = std::distance(cpus.begin(), std::ranges::find_if(cpus, fun));
@@ -205,7 +205,7 @@ std::pair< size_t, size_t > HwlocWrapper::findCpuIf(const F& fun) const noexcept
     const auto   node_it  = std::ranges::find_if(cpu_masks, find_cpu);
     const size_t node_ind = std::distance(cpu_masks.begin(), node_it);
     node                  = node_ind == cpu_masks.size() ? std::numeric_limits< size_t >::max() : node_ind;
-    return ret_val;
+    return retval;
 }
 } // namespace lstr
 
