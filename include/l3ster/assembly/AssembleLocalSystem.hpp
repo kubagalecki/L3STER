@@ -142,16 +142,16 @@ auto makeRankUpdateMatrix(const auto& kernel_result, const auto& basis_vals, con
     constexpr size_t n_equations = std::remove_cvref_t< decltype(kernel_result) >::value_type::RowsAtCompileTime;
     constexpr size_t n_unknowns  = std::remove_cvref_t< decltype(kernel_result) >::value_type::ColsAtCompileTime;
     constexpr size_t n_bases     = std::remove_cvref_t< decltype(basis_vals) >::ColsAtCompileTime;
-    EigenRowMajorMatrix< val_t, n_bases * n_unknowns, n_equations > ret_val;
+    EigenRowMajorMatrix< val_t, n_bases * n_unknowns, n_equations > retval;
     for (ptrdiff_t basis_ind = 0; basis_ind < static_cast< ptrdiff_t >(n_bases); ++basis_ind)
     {
-        ret_val(Eigen::seqN(basis_ind * n_unknowns, Eigen::fix< n_unknowns >), Eigen::all) =
+        retval(Eigen::seqN(basis_ind * n_unknowns, Eigen::fix< n_unknowns >), Eigen::all) =
             basis_vals(qp_ind, basis_ind) * kernel_result[0].transpose();
         for (ptrdiff_t dim = 1; const auto& basis_der : basis_ders)
-            ret_val(Eigen::seqN(basis_ind * n_unknowns, Eigen::fix< n_unknowns >), Eigen::all) +=
+            retval(Eigen::seqN(basis_ind * n_unknowns, Eigen::fix< n_unknowns >), Eigen::all) +=
                 basis_der(qp_ind, basis_ind) * kernel_result[dim++].transpose();
     }
-    return ret_val;
+    return retval;
 }
 
 template < typename Kernel, ElementTypes ET, el_o_t EO, size_t n_fields >

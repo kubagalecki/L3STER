@@ -8,11 +8,9 @@ static void BM_PhysBasisDersComputation(benchmark::State& state)
     const auto     element   = getExampleHexElement< EO >();
     const auto     ref_basis = getReferenceBasisAtDomainQuadrature< BT, ElementTypes::Hex, EO, QT, QO >();
     const auto     jacobians = computeJacobiansAtQpoints(element, ref_basis.quadrature);
+    setMinStackSize(1ul << 30);
     for (auto _ : state)
-    {
-        const auto ders = computePhysBasisDersAtQpoints(ref_basis.basis_ders, jacobians);
-        benchmark::DoNotOptimize(ders);
-    }
+        benchmark::DoNotOptimize(computePhysBasisDersAtQpoints(ref_basis.basis_ders, jacobians));
 }
 #define DEF_PHYS_BAS_BENCH(QO, EO)                                                                                     \
     BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, QO, EO)                                                            \
@@ -20,33 +18,38 @@ static void BM_PhysBasisDersComputation(benchmark::State& state)
         ->Unit(benchmark::kMicrosecond);
 #define DEF_PHYS_BAS_BENCH_SUITE(EO)                                                                                   \
     DEF_PHYS_BAS_BENCH(0, EO);                                                                                         \
-    DEF_PHYS_BAS_BENCH(2, EO);                                                                                         \
     DEF_PHYS_BAS_BENCH(4, EO);                                                                                         \
-    DEF_PHYS_BAS_BENCH(6, EO);                                                                                         \
     DEF_PHYS_BAS_BENCH(8, EO);                                                                                         \
-    DEF_PHYS_BAS_BENCH(10, EO);                                                                                        \
     DEF_PHYS_BAS_BENCH(12, EO);                                                                                        \
-    DEF_PHYS_BAS_BENCH(14, EO);
+    DEF_PHYS_BAS_BENCH(16, EO);                                                                                        \
+    DEF_PHYS_BAS_BENCH(20, EO);                                                                                        \
+    DEF_PHYS_BAS_BENCH(24, EO);
 DEF_PHYS_BAS_BENCH_SUITE(1)
 DEF_PHYS_BAS_BENCH_SUITE(2)
-DEF_PHYS_BAS_BENCH_SUITE(3)
 DEF_PHYS_BAS_BENCH_SUITE(4)
+DEF_PHYS_BAS_BENCH_SUITE(6)
 
 template < el_o_t EO >
 static void BM_NS3DLocalAssembly(benchmark::State& state)
 {
     constexpr auto  QT = QuadratureTypes::GLeg;
     constexpr auto  BT = BasisTypes::Lagrange;
-    constexpr q_o_t QO = 4 * EO - 2;
+    constexpr q_o_t QO = 4 * EO - 1;
 
     const auto  element         = getExampleHexElement< EO >();
     const auto& ref_bas_at_quad = getReferenceBasisAtDomainQuadrature< BT, ElementTypes::Hex, EO, QT, QO >();
 
-    using nodal_vals_t            = Eigen::Matrix< val_t, element.n_nodes, 7 >;
+    constexpr size_t n_fields     = 7;
+    constexpr size_t n_eq         = 8;
+    using nodal_vals_t            = Eigen::Matrix< val_t, element.n_nodes, n_fields >;
     const nodal_vals_t nodal_vals = nodal_vals_t::Random();
 
-    constexpr auto local_matrix_size = Element< ElementTypes ::Hex, EO >::n_nodes * 7;
-    setMinStackSize(80'000'000 + 3 * sizeof(val_t) * local_matrix_size * local_matrix_size);
+    constexpr auto local_matrix_rows = Element< ElementTypes ::Hex, EO >::n_nodes * 7;
+    constexpr auto local_system_size = local_matrix_rows * (local_matrix_rows + n_eq + 1);
+    const auto     node_values_size  = 4 * n_fields * ref_bas_at_quad.quadrature.size;
+    const auto     basis_vals_size   = 2 * sizeof ref_bas_at_quad;
+    const auto     req_stack_size    = (local_system_size + node_values_size + basis_vals_size) * sizeof(val_t);
+    setMinStackSize((1ul << 26) + req_stack_size);
 
     constexpr auto ns3d_kernel = [](const auto& vals, const auto& ders, const auto&) noexcept {
         constexpr size_t nf = 7;
@@ -61,10 +64,10 @@ static void BM_NS3DLocalAssembly(benchmark::State& state)
         using A_t   = Eigen::Matrix< val_t, ne, nf >;
         using F_t   = Eigen::Matrix< val_t, ne, 1 >;
         using ret_t = std::pair< std::array< A_t, 4 >, F_t >;
-        ret_t ret_val;
-        auto& [A0, A1, A2, A3] = ret_val.first;
-        auto& F                = ret_val.second;
-        for (auto& mat : ret_val.first)
+        ret_t retval;
+        auto& [A0, A1, A2, A3] = retval.first;
+        auto& F                = retval.second;
+        for (auto& mat : retval.first)
             mat.setZero();
         F.setZero();
 
@@ -120,14 +123,11 @@ static void BM_NS3DLocalAssembly(benchmark::State& state)
         F[1] = u * vx + v * vy + w * vz;
         F[2] = u * wx + v * wy + w * wz;
 
-        return ret_val;
+        return retval;
     };
 
     for (auto _ : state)
-    {
-        const auto local_system = assembleLocalSystem(ns3d_kernel, element, nodal_vals, ref_bas_at_quad, 0.);
-        benchmark::DoNotOptimize(local_system);
-    }
+        benchmark::DoNotOptimize(assembleLocalSystem(ns3d_kernel, element, nodal_vals, ref_bas_at_quad, 0.));
 }
 #define NS3D_ASSEMBLY_BENCH(ELO, UNIT)                                                                                 \
     BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, ELO)                                                                      \
@@ -135,7 +135,5 @@ static void BM_NS3DLocalAssembly(benchmark::State& state)
         ->Unit(benchmark::k##UNIT);
 NS3D_ASSEMBLY_BENCH(1, Millisecond);
 NS3D_ASSEMBLY_BENCH(2, Millisecond);
-NS3D_ASSEMBLY_BENCH(3, Millisecond);
 NS3D_ASSEMBLY_BENCH(4, Second);
-NS3D_ASSEMBLY_BENCH(5, Second);
 NS3D_ASSEMBLY_BENCH(6, Second);

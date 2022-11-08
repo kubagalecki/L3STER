@@ -54,7 +54,7 @@ static void BM_OwnerOrSharedNodeDeterminationNotGhost(benchmark::State& state)
 BENCHMARK(BM_OwnerOrSharedNodeDeterminationNotGhost)
     ->Name("Is node owned or shared? [not ghost]")
     ->RangeMultiplier(2)
-    ->Range(1, 1 << 8)
+    ->Range(1, 1 << 4)
     ->Unit(benchmark::kMillisecond);
 
 static void BM_OwnerOrSharedNodeDeterminationShared(benchmark::State& state)
@@ -89,5 +89,5 @@ static void BM_OwnerOrSharedNodeDeterminationShared(benchmark::State& state)
 BENCHMARK(BM_OwnerOrSharedNodeDeterminationShared)
     ->Name("Is node owned or shared? [is owned]")
     ->RangeMultiplier(2)
-    ->Range(1, 1 << 8)
+    ->Range(1, 1 << 4)
     ->Unit(benchmark::kMillisecond);

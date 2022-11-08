@@ -32,10 +32,10 @@ TEST_CASE("Local system assembly", "[local_asm]")
             using A_t   = Eigen::Matrix< val_t, ne, nf >;
             using F_t   = Eigen::Matrix< val_t, ne, 1 >;
             using ret_t = std::pair< std::array< A_t, dim + 1 >, F_t >;
-            ret_t ret_val;
-            auto& [A0, A1, A2] = ret_val.first;
-            auto& F            = ret_val.second;
-            for (auto& mat : ret_val.first)
+            ret_t retval;
+            auto& [A0, A1, A2] = retval.first;
+            auto& F            = retval.second;
+            for (auto& mat : retval.first)
                 mat.setZero();
             F.setZero();
 
@@ -52,7 +52,7 @@ TEST_CASE("Local system assembly", "[local_asm]")
             A2(2, 0) = 1.;
             A2(3, 1) = -1.;
 
-            return ret_val;
+            return retval;
         };
 
         constexpr auto solution = [](const Point< 3 >& p) {
@@ -82,22 +82,22 @@ TEST_CASE("Local system assembly", "[local_asm]")
                 const auto [first, last] = std::ranges::unique(ret_alloc);
                 return std::make_pair(ret_alloc, std::distance(begin(ret_alloc), first));
             });
-            std::array< el_locind_t, bn_packed.second > ret_val{};
-            std::copy(begin(bn_packed.first), begin(bn_packed.first) + bn_packed.second, begin(ret_val));
-            return ret_val;
+            std::array< el_locind_t, bn_packed.second > retval{};
+            std::copy(begin(bn_packed.first), begin(bn_packed.first) + bn_packed.second, begin(retval));
+            return retval;
         });
         REQUIRE(boundary_nodes.size() == (EO + 1) * (EO + 1) - (EO - 1) * (EO - 1));
 
         constexpr auto                            bc_inds    = std::invoke([&] {
-            auto ret_val = boundary_nodes;
-            for (auto& bc_ind : ret_val)
+            auto retval = boundary_nodes;
+            for (auto& bc_ind : retval)
                 bc_ind *= nf;
-            return ret_val;
+            return retval;
         });
         constexpr auto                            nonbc_inds = std::invoke([&] {
-            std::array< ptrdiff_t, Element< ET, EO >::n_nodes * nf - bc_inds.size() > ret_val{};
-            std::ranges::set_difference(std::views::iota(0u, Element< ET, EO >::n_nodes * nf), bc_inds, begin(ret_val));
-            return ret_val;
+            std::array< ptrdiff_t, Element< ET, EO >::n_nodes * nf - bc_inds.size() > retval{};
+            std::ranges::set_difference(std::views::iota(0u, Element< ET, EO >::n_nodes * nf), bc_inds, begin(retval));
+            return retval;
         });
         Eigen::Matrix< val_t, bc_inds.size(), 1 > bc_vals{};
         for (ptrdiff_t i = 0; auto node : boundary_nodes)
