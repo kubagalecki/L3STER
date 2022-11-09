@@ -86,22 +86,24 @@ static void BM_CopyElementNodes(benchmark::State& state)
 {
     const auto            mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     const auto&           part = mesh.getPartitions()[0];
-    std::atomic< size_t > progress_counter{0u};
+    std::atomic< size_t > node_counter{0u};
 
     const auto element_op_counter = [&]< ElementTypes T, el_o_t O >(const Element< T, O >&) {
-        progress_counter.fetch_add(Element< T, O >::n_nodes, std::memory_order_relaxed);
+        node_counter.fetch_add(Element< T, O >::n_nodes, std::memory_order_relaxed);
     };
     part.visit(element_op_counter, std::execution::par);
 
     const auto read_element = [&]< ElementTypes T, el_o_t O >(const Element< T, O >& el) {
-        auto nodes_copy = el.getNodes();
+        const auto nodes_copy = el.getNodes();
         benchmark::DoNotOptimize(nodes_copy);
     };
 
     for (auto _ : state)
         part.visit(read_element, ExecutionPolicy{});
 
-    state.SetBytesProcessed(progress_counter.load() * sizeof(n_id_t) * state.iterations());
+    state.counters["Nodes read"] = benchmark::Counter{static_cast< double >(node_counter.load() * state.iterations()),
+                                                      benchmark::Counter::kIsRate,
+                                                      benchmark::Counter::kIs1000};
 }
 BENCHMARK_TEMPLATE(BM_CopyElementNodes, std::execution::sequenced_policy)
     ->Unit(benchmark::kMicrosecond)

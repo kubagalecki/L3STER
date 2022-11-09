@@ -11,6 +11,13 @@ static void BM_PhysBasisDersComputation(benchmark::State& state)
     setMinStackSize(1ul << 30);
     for (auto _ : state)
         benchmark::DoNotOptimize(computePhysBasisDersAtQpoints(ref_basis.basis_ders, jacobians));
+
+    constexpr auto n_nodes = Element< ElementTypes::Hex, EO >::n_nodes;
+    const auto     n_qp    = ref_basis.quadrature.size;
+    state.counters["DPFlops"] =
+        benchmark::Counter{static_cast< double >(state.iterations()) * 3 * 3 * 2 * n_nodes * n_qp,
+                           benchmark::Counter::kIsRate,
+                           benchmark::Counter::kIs1000};
 }
 #define DEF_PHYS_BAS_BENCH(QO, EO)                                                                                     \
     BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, QO, EO)                                                            \
@@ -44,8 +51,9 @@ static void BM_NS3DLocalAssembly(benchmark::State& state)
     using nodal_vals_t            = Eigen::Matrix< val_t, element.n_nodes, n_fields >;
     const nodal_vals_t nodal_vals = nodal_vals_t::Random();
 
-    constexpr auto local_matrix_rows = Element< ElementTypes ::Hex, EO >::n_nodes * 7;
-    constexpr auto local_system_size = local_matrix_rows * (local_matrix_rows + n_eq + 1);
+    constexpr auto n_nodes           = Element< ElementTypes ::Hex, EO >::n_nodes;
+    constexpr auto loc_mat_rows      = n_nodes * n_fields;
+    constexpr auto local_system_size = loc_mat_rows * (loc_mat_rows + n_eq + 1);
     const auto     node_values_size  = 4 * n_fields * ref_bas_at_quad.quadrature.size;
     const auto     basis_vals_size   = 2 * sizeof ref_bas_at_quad;
     const auto     req_stack_size    = (local_system_size + node_values_size + basis_vals_size) * sizeof(val_t);
@@ -128,12 +136,21 @@ static void BM_NS3DLocalAssembly(benchmark::State& state)
 
     for (auto _ : state)
         benchmark::DoNotOptimize(assembleLocalSystem(ns3d_kernel, element, nodal_vals, ref_bas_at_quad, 0.));
+
+    const auto flops_per_qp = /* physical basis derivative computation */ n_nodes * 3 * 3 * 2 +
+                              /* field value computation */ n_fields * n_nodes * 2 * 4 +
+                              /* rank update matrix creation */ loc_mat_rows * n_eq * 7 +
+                              /* rank update flops */ loc_mat_rows * ((loc_mat_rows + 1) * n_eq + 1);
+    const auto n_qp           = ref_bas_at_quad.quadrature.size;
+    state.counters["DPFlops"] = benchmark::Counter{static_cast< double >(state.iterations()) * n_qp * flops_per_qp,
+                                                   benchmark::Counter::kIsRate,
+                                                   benchmark::Counter::kIs1000};
 }
 #define NS3D_ASSEMBLY_BENCH(ELO, UNIT)                                                                                 \
     BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, ELO)                                                                      \
         ->Name("Local NS3D system assembly [Hex, EO " #ELO "]")                                                        \
         ->Unit(benchmark::k##UNIT);
-NS3D_ASSEMBLY_BENCH(1, Millisecond);
-NS3D_ASSEMBLY_BENCH(2, Millisecond);
-NS3D_ASSEMBLY_BENCH(4, Second);
+NS3D_ASSEMBLY_BENCH(1, Microsecond);
+NS3D_ASSEMBLY_BENCH(2, Microsecond);
+NS3D_ASSEMBLY_BENCH(4, Millisecond);
 NS3D_ASSEMBLY_BENCH(6, Second);
