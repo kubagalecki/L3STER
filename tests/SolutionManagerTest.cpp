@@ -52,6 +52,7 @@ int main(int argc, char* argv[])
             std::views::single(domain_id),
             system_manager1.getRhsMap(),
             ConstexprValue< std::array{0} >{},
+            empty_field_val_getter,
             solution_view);
         computeValuesAtNodes(
             [](const auto&) {
@@ -63,6 +64,7 @@ int main(int argc, char* argv[])
             std::views::single(bot_boundary),
             system_manager1.getRhsMap(),
             ConstexprValue< std::array{1} >{},
+            empty_field_val_getter,
             solution_view);
     }
     solution1->sync_device();
@@ -82,6 +84,7 @@ int main(int argc, char* argv[])
             std::views::single(domain_id),
             system_manager2.getRhsMap(),
             ConstexprValue< std::array{0} >{},
+            empty_field_val_getter,
             solution_view);
     }
     solution2->sync_device();

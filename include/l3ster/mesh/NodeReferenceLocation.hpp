@@ -43,7 +43,7 @@ auto makeHexNodeLocations()
 }
 } // namespace detail
 
-template < ElementTypes T, el_o_t O >
+template < ElementTypes T, el_o_t O, BasisTypes BT = BasisTypes::Lagrange >
 const auto& getNodeLocations()
     requires(T == ElementTypes::Line or T == ElementTypes::Quad or T == ElementTypes::Hex)
 {

@@ -17,7 +17,7 @@ auto computeJacobiansAtQpoints(const Element< ET, EO >& element, const Quadratur
 {
     const auto                                                            jac_gen = getNatJacobiMatGenerator(element);
     std::array< detail::jacobian_t< Element< ET, EO >::native_dim >, QL > retval;
-    std::ranges::transform(quadrature.getPoints(), begin(retval), [&](const auto& pc) { return jac_gen(Point{pc}); });
+    std::ranges::transform(quadrature.points, begin(retval), [&](const auto& pc) { return jac_gen(Point{pc}); });
     return retval;
 }
 } // namespace lstr

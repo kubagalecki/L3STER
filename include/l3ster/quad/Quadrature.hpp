@@ -7,23 +7,15 @@
 
 namespace lstr
 {
-template < q_l_t QLENGTH, dim_t QDIM >
-class Quadrature
+template < q_l_t q_size, dim_t q_dim >
+struct Quadrature
 {
-public:
-    using q_points_t = std::array< std::array< val_t, QDIM >, QLENGTH >;
-    using weights_t  = std::array< val_t, QLENGTH >;
+    using q_points_t = std::array< std::array< val_t, q_dim >, q_size >;
+    using weights_t  = std::array< val_t, q_size >;
 
-    static constexpr q_l_t size = QLENGTH;
-    static constexpr dim_t dim  = QDIM;
+    static constexpr q_l_t size = q_size;
+    static constexpr dim_t dim  = q_dim;
 
-    Quadrature() = default;
-    Quadrature(const q_points_t& qpts, const weights_t& w) : points(qpts), weights(w) {}
-
-    const auto& getPoints() const noexcept { return points; }
-    const auto& getWeights() const noexcept { return weights; }
-
-private:
     q_points_t points;
     weights_t  weights;
 };

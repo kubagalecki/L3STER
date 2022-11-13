@@ -57,18 +57,13 @@ void vtkExportTest2D()
     auto         solution_view = solution->getDataNonConst(0);
     const double Re            = 40.;
     const double lambda        = Re / 2. - std::sqrt(Re * Re / 4. - 4. * pi * pi);
-    computeValuesAtNodes(
-        [&](const SpaceTimePoint& p) {
-            Eigen::Vector2d retval;
-            retval[0] = 1.;
-            retval[1] = pi;
-            return retval;
-        },
-        my_partition,
-        std::array{bot_boundary, top_boundary},
-        system_manager.getRhsMap(),
-        ConstexprValue< scalar_inds >{},
-        solution_view);
+    const auto   bot_top_vals  = std::array< val_t, 2 >{1., pi};
+    computeValuesAtNodes(my_partition,
+                         std::array{bot_boundary, top_boundary},
+                         system_manager.getRhsMap(),
+                         ConstexprValue< scalar_inds >{},
+                         bot_top_vals,
+                         solution_view);
     computeValuesAtNodes(
         [&](const SpaceTimePoint& p) {
             Eigen::Vector2d retval;
@@ -81,6 +76,7 @@ void vtkExportTest2D()
         std::views::single(domain_id),
         system_manager.getRhsMap(),
         ConstexprValue< vec_inds >{},
+        empty_field_val_getter,
         solution_view);
     solution_manager.updateSolution(
         my_partition, *solution->getVector(0), system_manager.getRhsMap(), all_field_inds, problemdef_ctwrpr);
@@ -138,6 +134,7 @@ void vtkExportTest3D()
         std::views::single(0),
         system_manager.getRhsMap(),
         ConstexprValue< field_inds >{},
+        empty_field_val_getter,
         solution_view);
     solution_manager.updateSolution(
         my_partition, *solution->getVector(0), system_manager.getRhsMap(), field_inds, problemdef_ctwrpr);

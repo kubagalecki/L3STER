@@ -93,8 +93,8 @@ auto evalElementIntegral(IntKernel&&                                            
 {
     const auto& quadrature          = basis_at_q.quadrature;
     const auto  jac_at_qp           = computeJacobiansAtQpoints(element, quadrature);
-    const auto& basis_vals          = basis_at_q.basis_vals;
-    const auto  basis_ders          = computePhysBasisDersAtQpoints(basis_at_q.basis_ders, jac_at_qp);
+    const auto& basis_vals          = basis_at_q.basis.values;
+    const auto  basis_ders          = computePhysBasisDersAtQpoints(basis_at_q.basis.derivatives, jac_at_qp);
     const auto  field_vals_and_ders = detail::computeFieldValsAndDers(basis_vals, basis_ders, node_vals);
 
     using result_t = detail::integral_kernel_eval_result_t< IntKernel, Element< ET, EO >::native_dim, n_fields >;
@@ -119,8 +119,8 @@ auto evalElementBoundaryIntegral(
 {
     const auto& quadrature          = basis_at_q.quadrature;
     const auto  jac_at_qp           = computeJacobiansAtQpoints(*el_view, quadrature);
-    const auto& basis_vals          = basis_at_q.basis_vals;
-    const auto  basis_ders          = computePhysBasisDersAtQpoints(basis_at_q.basis_ders, jac_at_qp);
+    const auto& basis_vals          = basis_at_q.basis.values;
+    const auto  basis_ders          = computePhysBasisDersAtQpoints(basis_at_q.basis.derivatives, jac_at_qp);
     const auto  field_vals_and_ders = detail::computeFieldValsAndDers(basis_vals, basis_ders, node_vals);
 
     using result_t = detail::integral_kernel_eval_result_t< IntKernel, Element< ET, EO >::native_dim, n_fields >;

@@ -107,7 +107,7 @@ auto extractFieldValsAndDersAtQpoint(
 
 SpaceTimePoint makeSpaceTimePoint(const auto& element, const auto& quadrature, ptrdiff_t qp_ind, val_t time)
 {
-    return SpaceTimePoint{.space = mapToPhysicalSpace(element, Point{quadrature.getPoints()[qp_ind]}), .time = time};
+    return SpaceTimePoint{.space = mapToPhysicalSpace(element, Point{quadrature.points[qp_ind]}), .time = time};
 }
 
 template < typename Kernel >
@@ -175,8 +175,8 @@ auto assembleLocalSystem(Kernel&&                                               
 {
     const auto& quadrature          = basis_at_q.quadrature;
     const auto  jac_at_qp           = computeJacobiansAtQpoints(element, quadrature);
-    const auto& basis_vals          = basis_at_q.basis_vals;
-    const auto  basis_ders          = computePhysBasisDersAtQpoints(basis_at_q.basis_ders, jac_at_qp);
+    const auto& basis_vals          = basis_at_q.basis.values;
+    const auto  basis_ders          = computePhysBasisDersAtQpoints(basis_at_q.basis.derivatives, jac_at_qp);
     const auto  field_vals_and_ders = detail::computeFieldValsAndDers(basis_vals, basis_ders, node_vals);
 
     auto local_system     = detail::initLocalSystem< Kernel, ET, EO, n_fields >();
@@ -184,7 +184,7 @@ auto assembleLocalSystem(Kernel&&                                               
     const auto process_qp = [&](ptrdiff_t qp_ind) {
         const auto [A, F] = detail::evaluateKernel(kernel, element, field_vals_and_ders, quadrature, qp_ind, time);
         const auto rank_update_matrix = detail::makeRankUpdateMatrix(A, basis_vals, basis_ders, qp_ind);
-        const auto rank_update_weight = jac_at_qp[qp_ind].determinant() * quadrature.getWeights()[qp_ind];
+        const auto rank_update_weight = jac_at_qp[qp_ind].determinant() * quadrature.weights[qp_ind];
         K_el.template selfadjointView< Eigen::Lower >().rankUpdate(rank_update_matrix, rank_update_weight);
         F_el += rank_update_matrix * F * rank_update_weight;
     };
@@ -206,8 +206,8 @@ auto assembleLocalBoundarySystem(
 {
     const auto& quadrature          = basis_at_q.quadrature;
     const auto  jac_at_qp           = computeJacobiansAtQpoints(*el_view, quadrature);
-    const auto& basis_vals          = basis_at_q.basis_vals;
-    const auto  basis_ders          = computePhysBasisDersAtQpoints(basis_at_q.basis_ders, jac_at_qp);
+    const auto& basis_vals          = basis_at_q.basis.values;
+    const auto  basis_ders          = computePhysBasisDersAtQpoints(basis_at_q.basis.derivatives, jac_at_qp);
     const auto  field_vals_and_ders = detail::computeFieldValsAndDers(basis_vals, basis_ders, node_vals);
 
     auto local_system     = detail::initLocalSystem< Kernel, ET, EO, n_fields >();
@@ -217,7 +217,7 @@ auto assembleLocalBoundarySystem(
         const auto [A, F] =
             detail::evaluateBoundaryKernel(kernel, el_view, field_vals_and_ders, quadrature, qp_ind, time, normal);
         const auto rank_update_matrix = detail::makeRankUpdateMatrix(A, basis_vals, basis_ders, qp_ind);
-        const auto rank_update_weight = jac_at_qp[qp_ind].determinant() * quadrature.getWeights()[qp_ind];
+        const auto rank_update_weight = jac_at_qp[qp_ind].determinant() * quadrature.weights[qp_ind];
         K_el.template selfadjointView< Eigen::Lower >().rankUpdate(rank_update_matrix, rank_update_weight);
         F_el += rank_update_matrix * F * rank_update_weight;
     };

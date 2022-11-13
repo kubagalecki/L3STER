@@ -53,12 +53,8 @@ auto evalQuadrature(Integrator&& integrator, const Quadrature< QLENGTH, QDIM >& 
         return std::apply(integrator, point) * weight;
     };
     const auto zero_init = typename detail::QuadIntTraits< Integrator, Quadrature< QLENGTH, QDIM > >::kernel_t{};
-    return std::transform_reduce(quad.getPoints().cbegin(),
-                                 quad.getPoints().cend(),
-                                 quad.getWeights().cbegin(),
-                                 zero_init,
-                                 std::plus<>{},
-                                 invoke_and_weigh);
+    return std::transform_reduce(
+        quad.points.cbegin(), quad.points.cend(), quad.weights.cbegin(), zero_init, std::plus<>{}, invoke_and_weigh);
 }
 
 // This is a weighted reduction of `fun` over point-index pairs. This is meant to enable more efficient calculation,
@@ -81,9 +77,9 @@ auto evalQuadrature(Integrator&& integrator, const Quadrature< QLENGTH, QDIM >& 
              }
 {
     auto zero = zero_gen();
-    for (ptrdiff_t i = 0; const auto& qp : quad.getPoints())
+    for (ptrdiff_t i = 0; const auto& qp : quad.points)
     {
-        zero += integrator(i, qp) * quad.getWeights()[i];
+        zero += integrator(i, qp) * quad.weights[i];
         ++i;
     }
     return zero;

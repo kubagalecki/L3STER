@@ -140,7 +140,7 @@ static void BM_NS3DLocalAssembly(benchmark::State& state)
     const auto flops_per_qp = /* physical basis derivative computation */ n_nodes * 3 * 3 * 2 +
                               /* field value computation */ n_fields * n_nodes * 2 * 4 +
                               /* rank update matrix creation */ loc_mat_rows * n_eq * 7 +
-                              /* rank update flops */ loc_mat_rows * ((loc_mat_rows + 1) * n_eq + 1);
+                              /* rank update flops */ (loc_mat_rows + 1) * (loc_mat_rows + 1) / 2 * (2 * n_eq + 1);
     const auto n_qp           = ref_bas_at_quad.quadrature.size;
     state.counters["DPFlops"] = benchmark::Counter{static_cast< double >(state.iterations()) * n_qp * flops_per_qp,
                                                    benchmark::Counter::kIsRate,

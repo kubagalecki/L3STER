@@ -1,4 +1,3 @@
-#include "l3ster/basisfun/ComputeRefBasisAtQpoints.hpp"
 #include "l3ster/quad/EvalQuadrature.hpp"
 #include "l3ster/quad/GenerateQuadrature.hpp"
 
@@ -18,8 +17,8 @@ TEST_CASE("1D Gauss-Legendre quadrature, 1 point", "[quadrature]")
     Approx qp_0 = Approx(0).margin(tol);
     Approx w_0  = Approx(2).margin(tol);
 
-    CHECK(ref_quad.getPoints()[0][0] == qp_0);
-    CHECK(ref_quad.getWeights()[0] == w_0);
+    CHECK(ref_quad.points[0][0] == qp_0);
+    CHECK(ref_quad.weights[0] == w_0);
 }
 
 TEST_CASE("1D Gauss-Legendre quadrature, 2 point", "[quadrature]")
@@ -33,10 +32,10 @@ TEST_CASE("1D Gauss-Legendre quadrature, 2 point", "[quadrature]")
     Approx qp_1 = Approx(0.57735026919).margin(tol);
     Approx w    = Approx(1).margin(tol);
 
-    CHECK(ref_quad.getPoints()[0].front() == qp_0);
-    CHECK(ref_quad.getPoints()[1].front() == qp_1);
-    CHECK(ref_quad.getWeights()[0] == w);
-    CHECK(ref_quad.getWeights()[0] == w);
+    CHECK(ref_quad.points[0].front() == qp_0);
+    CHECK(ref_quad.points[1].front() == qp_1);
+    CHECK(ref_quad.weights[0] == w);
+    CHECK(ref_quad.weights[0] == w);
 }
 
 TEST_CASE("1D Gauss-Legendre quadrature, 3 point", "[quadrature]")
@@ -53,12 +52,12 @@ TEST_CASE("1D Gauss-Legendre quadrature, 3 point", "[quadrature]")
     Approx w_1  = Approx(0.88888888889).margin(tol);
     Approx w_2  = Approx(0.55555555556).margin(tol);
 
-    CHECK(ref_quad.getPoints()[0].front() == qp_0);
-    CHECK(ref_quad.getPoints()[1].front() == qp_1);
-    CHECK(ref_quad.getPoints()[2].front() == qp_2);
-    CHECK(ref_quad.getWeights()[0] == w_0);
-    CHECK(ref_quad.getWeights()[1] == w_1);
-    CHECK(ref_quad.getWeights()[2] == w_2);
+    CHECK(ref_quad.points[0].front() == qp_0);
+    CHECK(ref_quad.points[1].front() == qp_1);
+    CHECK(ref_quad.points[2].front() == qp_2);
+    CHECK(ref_quad.weights[0] == w_0);
+    CHECK(ref_quad.weights[1] == w_1);
+    CHECK(ref_quad.weights[2] == w_2);
 }
 
 TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
@@ -73,8 +72,8 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
         Approx qp_0 = Approx(0).margin(tol);
         Approx w_0  = Approx(2).margin(tol);
 
-        CHECK(quadrature.getPoints()[0][0] == qp_0);
-        CHECK(quadrature.getWeights()[0] == w_0);
+        CHECK(quadrature.points[0][0] == qp_0);
+        CHECK(quadrature.weights[0] == w_0);
     }
 
     SECTION("2 point quadrature")
@@ -88,10 +87,10 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
         Approx qp_1 = Approx(0.57735026919).margin(tol);
         Approx w    = Approx(1).margin(tol);
 
-        CHECK(quadrature.getPoints()[0].front() == qp_0);
-        CHECK(quadrature.getPoints()[1].front() == qp_1);
-        CHECK(quadrature.getWeights()[0] == w);
-        CHECK(quadrature.getWeights()[0] == w);
+        CHECK(quadrature.points[0].front() == qp_0);
+        CHECK(quadrature.points[1].front() == qp_1);
+        CHECK(quadrature.weights[0] == w);
+        CHECK(quadrature.weights[0] == w);
     }
 
     SECTION("3 point quadrature")
@@ -108,12 +107,12 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
         Approx w_1  = Approx(0.88888888889).margin(tol);
         Approx w_2  = Approx(0.55555555556).margin(tol);
 
-        CHECK(quadrature.getPoints()[0].front() == qp_0);
-        CHECK(quadrature.getPoints()[1].front() == qp_1);
-        CHECK(quadrature.getPoints()[2].front() == qp_2);
-        CHECK(quadrature.getWeights()[0] == w_0);
-        CHECK(quadrature.getWeights()[1] == w_1);
-        CHECK(quadrature.getWeights()[2] == w_2);
+        CHECK(quadrature.points[0].front() == qp_0);
+        CHECK(quadrature.points[1].front() == qp_1);
+        CHECK(quadrature.points[2].front() == qp_2);
+        CHECK(quadrature.weights[0] == w_0);
+        CHECK(quadrature.weights[1] == w_1);
+        CHECK(quadrature.weights[2] == w_2);
     }
 }
 
@@ -172,9 +171,9 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
         Approx qp_0 = Approx(0).margin(tol);
         Approx w_0  = Approx(4).margin(tol);
-        CHECK(quadrature.getPoints()[0][0] == qp_0);
-        CHECK(quadrature.getPoints()[0][1] == qp_0);
-        CHECK(quadrature.getWeights()[0] == w_0);
+        CHECK(quadrature.points[0][0] == qp_0);
+        CHECK(quadrature.points[0][1] == qp_0);
+        CHECK(quadrature.weights[0] == w_0);
     }
 
     SECTION("4 point quadrature")
@@ -254,10 +253,10 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
 
         Approx qp_0 = Approx(0).margin(tol);
         Approx w_0  = Approx(8).margin(tol);
-        CHECK(quadrature.getPoints()[0][0] == qp_0);
-        CHECK(quadrature.getPoints()[0][1] == qp_0);
-        CHECK(quadrature.getPoints()[0][2] == qp_0);
-        CHECK(quadrature.getWeights()[0] == w_0);
+        CHECK(quadrature.points[0][0] == qp_0);
+        CHECK(quadrature.points[0][1] == qp_0);
+        CHECK(quadrature.points[0][2] == qp_0);
+        CHECK(quadrature.weights[0] == w_0);
     }
 
     SECTION("8 point quadrature")

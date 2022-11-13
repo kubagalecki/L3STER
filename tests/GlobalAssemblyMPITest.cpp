@@ -134,6 +134,7 @@ int main(int argc, char* argv[])
                          std::array{left_boundary, right_boundary},
                          system_manager.getRhsMap(),
                          ConstexprValue< std::array{0} >{},
+                         empty_field_val_getter,
                          dirichlet_vals_view);
 
     // Check constraints on assembly state

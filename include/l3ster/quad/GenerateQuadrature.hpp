@@ -21,8 +21,8 @@ const auto& getQuadrature()
 {
     static const auto value = std::invoke([] {
         const auto& ref_quadrature   = getReferenceQuadrature< QT, QO >();
-        const auto& ref_quadrature_p = ref_quadrature.getPoints();
-        const auto& ref_quadrature_w = ref_quadrature.getWeights();
+        const auto& ref_quadrature_p = ref_quadrature.points;
+        const auto& ref_quadrature_w = ref_quadrature.weights;
 
         constexpr auto ref_size = ref_quadrature.size;
         using quadrature_t      = Quadrature< ref_size * ref_size, 2 >;
@@ -51,8 +51,8 @@ const auto& getQuadrature()
 {
     static const auto value = std::invoke([] {
         const auto& ref_quadrature   = getReferenceQuadrature< QT, QO >();
-        const auto& ref_quadrature_p = ref_quadrature.getPoints();
-        const auto& ref_quadrature_w = ref_quadrature.getWeights();
+        const auto& ref_quadrature_p = ref_quadrature.points;
+        const auto& ref_quadrature_w = ref_quadrature.weights;
 
         constexpr auto ref_size = ref_quadrature.size;
         using quadrature_t      = Quadrature< ref_size * ref_size * ref_size, 3 >;
