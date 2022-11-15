@@ -3,7 +3,7 @@
 
 #include "l3ster/assembly/SpaceTimePoint.hpp"
 #include "l3ster/mapping/BoundaryNormal.hpp"
-#include "l3ster/mapping/ComputePhysBasisDersAtQpoints.hpp"
+#include "l3ster/mapping/ComputePhysBasisDersAtPoints.hpp"
 #include "l3ster/mapping/MapReferenceToPhysical.hpp"
 #include "l3ster/mesh/BoundaryElementView.hpp"
 
@@ -32,7 +32,7 @@ concept BoundaryKernel_c = requires(K                                           
                                     std::array< val_t, n_fields >                    node_vals,
                                     std::array< std::array< val_t, n_fields >, dim > node_ders,
                                     SpaceTimePoint                                   point,
-                                    Eigen::Matrix< val_t, dim, 1 >                   normal) {
+                                    Eigen::Vector< val_t, dim >                      normal) {
                                {
                                    std::invoke(kernel, node_vals, node_ders, point, normal)
                                    } noexcept -> ValidKernelResult_c;
@@ -59,7 +59,7 @@ struct kernel_result< Kernel, dim, n_fields >
                                        std::array< val_t, n_fields >,
                                        std::array< std::array< val_t, n_fields >, dim >,
                                        SpaceTimePoint,
-                                       Eigen::Matrix< val_t, dim, 1 > >;
+                                       Eigen::Vector< val_t, dim > >;
 };
 template < typename Kernel, dim_t dim, size_t n_fields >
     requires Kernel_c< Kernel, dim, n_fields > or BoundaryKernel_c< Kernel, dim, n_fields >
@@ -173,11 +173,12 @@ auto assembleLocalSystem(Kernel&&                                               
                          val_t                                                                          time)
     requires detail::Kernel_c< Kernel, Element< ET, EO >::native_dim, n_fields >
 {
-    const auto& quadrature          = basis_at_q.quadrature;
-    const auto  jac_at_qp           = computeJacobiansAtQpoints(element, quadrature);
-    const auto& basis_vals          = basis_at_q.basis.values;
-    const auto  basis_ders          = computePhysBasisDersAtQpoints(basis_at_q.basis.derivatives, jac_at_qp);
-    const auto  field_vals_and_ders = detail::computeFieldValsAndDers(basis_vals, basis_ders, node_vals);
+    const auto& quadrature = basis_at_q.quadrature;
+    const auto& basis_vals = basis_at_q.basis.values;
+
+    const auto jac_at_qp           = computeJacobiansAtPoints(element, quadrature.points);
+    const auto basis_ders          = computePhysBasisDersAtPoints(basis_at_q.basis.derivatives, jac_at_qp);
+    const auto field_vals_and_ders = detail::computeFieldValsAndDers(basis_vals, basis_ders, node_vals);
 
     auto local_system     = detail::initLocalSystem< Kernel, ET, EO, n_fields >();
     auto& [K_el, F_el]    = local_system;
@@ -198,17 +199,18 @@ auto assembleLocalSystem(Kernel&&                                               
 template < typename Kernel, ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
 auto assembleLocalBoundarySystem(
     Kernel&&                                                                       kernel,
-    const BoundaryElementView< ET, EO >&                                           el_view,
+    BoundaryElementView< ET, EO >                                                  el_view,
     const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >&      node_vals,
     const ReferenceBasisAtQuadrature< ET, EO, QL, Element< ET, EO >::native_dim >& basis_at_q,
     val_t                                                                          time)
     requires detail::BoundaryKernel_c< Kernel, Element< ET, EO >::native_dim, n_fields >
 {
-    const auto& quadrature          = basis_at_q.quadrature;
-    const auto  jac_at_qp           = computeJacobiansAtQpoints(*el_view, quadrature);
-    const auto& basis_vals          = basis_at_q.basis.values;
-    const auto  basis_ders          = computePhysBasisDersAtQpoints(basis_at_q.basis.derivatives, jac_at_qp);
-    const auto  field_vals_and_ders = detail::computeFieldValsAndDers(basis_vals, basis_ders, node_vals);
+    const auto& quadrature = basis_at_q.quadrature;
+    const auto& basis_vals = basis_at_q.basis.values;
+
+    const auto jac_at_qp           = computeJacobiansAtPoints(*el_view, quadrature.points);
+    const auto basis_ders          = computePhysBasisDersAtPoints(basis_at_q.basis.derivatives, jac_at_qp);
+    const auto field_vals_and_ders = detail::computeFieldValsAndDers(basis_vals, basis_ders, node_vals);
 
     auto local_system     = detail::initLocalSystem< Kernel, ET, EO, n_fields >();
     auto& [K_el, F_el]    = local_system;

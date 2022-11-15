@@ -11,6 +11,8 @@
 
 #include "Amesos2.hpp"
 
+bool terminate_called = false;
+
 // Solve 2D diffusion problem
 int main(int argc, char* argv[])
 {
@@ -25,9 +27,10 @@ int main(int argc, char* argv[])
     mesh.getPartitions()[0]    = convertMeshToOrder< mesh_order >(mesh.getPartitions()[0]);
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
     const auto my_partition = distributeMesh(comm, mesh, {bot_boundary, top_boundary, left_boundary, right_boundary});
-    const auto adiabatic_bound_view = my_partition.getBoundaryView(std::array{bot_boundary, top_boundary});
-    const auto whole_bound_view =
-        my_partition.getBoundaryView(std::array{top_boundary, bot_boundary, left_boundary, right_boundary});
+    const auto adiabatic_boundary_ids = std::array{bot_boundary, top_boundary};
+    const auto whole_boundary_ids     = std::array{top_boundary, bot_boundary, left_boundary, right_boundary};
+    const auto adiabatic_bound_view   = my_partition.getBoundaryView(adiabatic_boundary_ids);
+    const auto whole_bound_view       = my_partition.getBoundaryView(whole_boundary_ids);
 
     constexpr auto problem_def         = std::array{Pair{domain_id, std::array{true, true, true}}};
     constexpr auto dirichlet_def       = std::array{Pair{left_boundary, std::array{true, false, false}},
@@ -50,32 +53,33 @@ int main(int argc, char* argv[])
     }
 
     // Problem assembly
-    constexpr auto diffusion_kernel2d = [](const auto&, const auto&, const auto&) noexcept {
-        using mat_t = Eigen::Matrix< val_t, 4, 3 >;
-        std::pair< std::array< mat_t, 3 >, Eigen::Vector4d > retval;
-        auto& [matrices, rhs] = retval;
-        auto& [A0, A1, A2]    = matrices;
-        constexpr double k    = 1.; // diffusivity
+    constexpr auto diffusion_kernel2d =
+        [](const auto&, const std::array< std::array< val_t, 0 >, 2 >&, const SpaceTimePoint&) noexcept {
+            using mat_t = Eigen::Matrix< val_t, 4, 3 >;
+            std::pair< std::array< mat_t, 3 >, Eigen::Vector4d > retval;
+            auto& [matrices, rhs] = retval;
+            auto& [A0, A1, A2]    = matrices;
+            constexpr double k    = 1.; // diffusivity
 
-        A0       = mat_t::Zero();
-        A1       = mat_t::Zero();
-        A2       = mat_t::Zero();
-        rhs      = Eigen::Vector4d::Zero();
-        A0(1, 1) = -1.;
-        A0(2, 2) = -1.;
-        A1(0, 1) = k;
-        A1(1, 0) = 1.;
-        A1(3, 2) = 1.;
-        A2(0, 2) = k;
-        A2(2, 0) = 1;
-        A2(3, 1) = -1;
-        return retval;
-    };
+            A0       = mat_t::Zero();
+            A1       = mat_t::Zero();
+            A2       = mat_t::Zero();
+            rhs      = Eigen::Vector4d::Zero();
+            A0(1, 1) = -1.;
+            A0(2, 2) = -1.;
+            A1(0, 1) = k;
+            A1(1, 0) = 1.;
+            A1(3, 2) = 1.;
+            A2(0, 2) = k;
+            A2(2, 0) = 1.;
+            A2(3, 1) = -1.;
+            return retval;
+        };
     static_assert(detail::Kernel_c< decltype(diffusion_kernel2d), 2, 0 >);
     constexpr auto neumann_bc_kernel =
         [](const auto&, const auto&, const auto&, const Eigen::Matrix< val_t, 2, 1 >& normal) noexcept {
             using mat_t = Eigen::Matrix< val_t, 1, 3 >;
-            using vec_t = Eigen::Matrix< val_t, 1, 1 >;
+            using vec_t = Eigen::Vector< val_t, 1 >;
             std::pair< std::array< mat_t, 3 >, vec_t > retval;
             auto& [matrices, rhs] = retval;
             auto& [A0, A1, A2]    = matrices;
@@ -95,7 +99,7 @@ int main(int argc, char* argv[])
     constexpr auto BT       = BasisTypes::Lagrange;
     constexpr auto QT       = QuadratureTypes::GLeg;
     constexpr auto QO       = q_o_t{mesh_order * 2};
-    constexpr auto dof_inds = std::array{size_t{0}, size_t{1}, size_t{2}};
+    constexpr auto dof_inds = std::array< size_t, 3 >{0, 1, 2};
 
     const auto assembleDomainProblem = [&] {
         system_manager.assembleDomainProblem< BT, QT, QO, dof_inds >(
@@ -108,12 +112,12 @@ int main(int argc, char* argv[])
 
     // Check constraints on assembly state
     system_manager.beginAssembly();
-    CHECK_THROWS(system_manager.beginModify())
-    CHECK_THROWS(system_manager.endModify())
+    CHECK_THROWS(system_manager.beginModify());
+    CHECK_THROWS(system_manager.endModify());
     system_manager.endAssembly();
-    CHECK_THROWS(system_manager.setToZero())
-    CHECK_THROWS(assembleDomainProblem())
-    CHECK_THROWS(assembleBoundaryProblem())
+    CHECK_THROWS(system_manager.setToZero());
+    CHECK_THROWS(assembleDomainProblem());
+    CHECK_THROWS(assembleBoundaryProblem());
     system_manager.beginAssembly();
     system_manager.setToZero();
     assembleDomainProblem();
@@ -122,9 +126,9 @@ int main(int argc, char* argv[])
     system_manager.endAssembly();
 
     // Dirichlet BCs
-    constexpr auto dirichlet_bc_val_def = [node_dist](const SpaceTimePoint& st) {
-        Eigen::Matrix< val_t, 1, 1 > retval;
-        retval[0] = st.space.x() / node_dist.back();
+    constexpr auto dirichlet_bc_val_def = [node_dist](const auto& vals, const auto& ders, const SpaceTimePoint& p) {
+        Eigen::Vector< val_t, 1 > retval;
+        retval[0] = p.space.x() / node_dist.back();
         return retval;
     };
     auto dirichlet_vals      = system_manager.makeSolutionMultiVector();
@@ -138,18 +142,18 @@ int main(int argc, char* argv[])
                          dirichlet_vals_view);
 
     // Check constraints on assembly state
-    CHECK_THROWS(system_manager.applyDirichletBCs(*dirichlet_vals->getVector(0)))
+    CHECK_THROWS(system_manager.applyDirichletBCs(*dirichlet_vals->getVector(0)));
     system_manager.beginModify();
     system_manager.beginModify();
-    CHECK_THROWS(system_manager.beginAssembly())
-    CHECK_THROWS(system_manager.endAssembly())
+    CHECK_THROWS(system_manager.beginAssembly());
+    CHECK_THROWS(system_manager.endAssembly());
     system_manager.applyDirichletBCs(*dirichlet_vals->getVector(0));
     system_manager.endModify();
     system_manager.endModify();
     {
         auto fake_problem = AlgebraicSystemManager{comm, my_partition, probdef_ctwrpr};
         fake_problem.endAssembly();
-        CHECK_THROWS(fake_problem.applyDirichletBCs(*dirichlet_vals->getVector(0)))
+        CHECK_THROWS(fake_problem.applyDirichletBCs(*dirichlet_vals->getVector(0)));
     }
 
     // Solve

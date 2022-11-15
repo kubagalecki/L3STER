@@ -6,50 +6,13 @@
 
 namespace lstr
 {
-namespace detail
-{
-template < BasisTypes BT, ElementTypes ET, el_o_t EO, q_l_t QL, dim_t QD >
-auto computeRefBasisAtQpoints(const Quadrature< QL, QD >& quad)
-    requires(ElementTraits< Element< ET, EO > >::native_dim == QD)
-{
-    EigenRowMajorMatrix< val_t, QL, Element< ET, EO >::n_nodes > retval;
-    for (ptrdiff_t index = 0; const auto& qp : quad.points)
-    {
-        const auto val              = computeRefBasis< ET, EO, BT >(Point{qp});
-        retval(index++, Eigen::all) = val;
-    }
-    return retval;
-}
-
-template < BasisTypes BT, ElementTypes ET, el_o_t EO, q_l_t QL, dim_t QD >
-auto computeRefBasisDersAtQpoints(const Quadrature< QL, QD >& quad)
-    requires(ElementTraits< Element< ET, EO > >::native_dim == QD)
-{
-    using values_at_qp_t = EigenRowMajorMatrix< val_t, QL, Element< ET, EO >::n_nodes >;
-    using ret_t          = std::array< values_at_qp_t, Element< ET, EO >::native_dim >;
-
-    ret_t retval;
-    for (ptrdiff_t index = 0; const auto& qp : quad.points)
-    {
-        const auto ders = computeRefBasisDers< ET, EO, BT >(Point{qp});
-        for (ptrdiff_t d = 0; d < static_cast< ptrdiff_t >(Element< ET, EO >::native_dim); ++d)
-            retval[d](index, Eigen::all) = ders(d, Eigen::all);
-        ++index;
-    }
-    return retval;
-}
-} // namespace detail
-
 template < BasisTypes BT, ElementTypes ET, el_o_t EO, QuadratureTypes QT, q_o_t QO >
 const auto& getReferenceBasisAtDomainQuadrature()
 {
     static const auto value = std::invoke([] {
         const auto quadrature = getQuadrature< QT, QO, ET >();
-        const auto basis_vals = detail::computeRefBasisAtQpoints< BT, ET, EO >(quadrature);
-        const auto basis_ders = detail::computeRefBasisDersAtQpoints< BT, ET, EO >(quadrature);
         return ReferenceBasisAtQuadrature< ET, EO, quadrature.size, quadrature.dim >{
-            .quadrature = quadrature,
-            .basis      = ReferenceBasisAtPoints< ET, EO, quadrature.size >{basis_vals, basis_ders}};
+            .quadrature = quadrature, .basis = detail::evalRefBasisAtPoints< BT, ET, EO >(quadrature.points)};
     });
     return value;
 }
@@ -201,11 +164,8 @@ const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t side)
                     }
                 }
                 const auto quadrature      = detail::makeQuadratureFromCoordsMat(qp_coords, boundary_quad.weights);
-                const auto basis_vals      = detail::computeRefBasisAtQpoints< BT, ET, EO >(quadrature);
-                const auto basis_ders      = detail::computeRefBasisDersAtQpoints< BT, ET, EO >(quadrature);
                 quadrature_array[side_ind] = ReferenceBasisAtQuadrature< ET, EO, quadrature.size, quadrature.dim >{
-                    .quadrature = quadrature,
-                    .basis      = ReferenceBasisAtPoints< ET, EO, quadrature.size >{basis_vals, basis_ders}};
+                    .quadrature = quadrature, .basis = detail::evalRefBasisAtPoints< BT, ET, EO >(quadrature.points)};
             }
             return quadrature_array;
         });
@@ -215,11 +175,9 @@ const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t side)
     {
         static const auto values = std::invoke([] {
             using ref_basis_t      = ReferenceBasisAtQuadrature< ElementTypes::Line, EO, 1, 1 >;
-            constexpr auto compute = [](const Quadrature< 1, 1 >& quad) {
-                const auto basis_vals = detail::computeRefBasisAtQpoints< BT, ET, EO >(quad);
-                const auto basis_ders = detail::computeRefBasisDersAtQpoints< BT, ET, EO >(quad);
+            constexpr auto compute = [](const Quadrature< 1, 1 >& quadrature) {
                 return ReferenceBasisAtQuadrature< ET, EO, 1, 1 >{
-                    .quadrature = quad, .basis = ReferenceBasisAtPoints< ET, EO, 1 >{basis_vals, basis_ders}};
+                    .quadrature = quadrature, .basis = detail::evalRefBasisAtPoints< BT, ET, EO >(quadrature.points)};
             };
             std::array< ref_basis_t, 2 > quadrature_array;
             quadrature_array[0] = compute(

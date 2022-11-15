@@ -125,31 +125,31 @@ auto elementIntersectionSpansAtDim(const Element< T1, 1 >& el1, const Element< T
     constexpr size_t f1_size = std::tuple_size_v< std::decay_t< decltype(f1_o1) > >;
     constexpr size_t f2_size = std::tuple_size_v< std::decay_t< decltype(f2_o1) > >;
 
-    [&]< size_t... I1 >(std::index_sequence< I1... >)
-    {
-        const auto iterate_over_f1 = [&]< size_t Ind1 >(std::integral_constant< size_t, Ind1 >) {
-            auto nodes1 = arrayAtInds(el1.getNodes(), std::get< Ind1 >(f1_o1));
-            std::ranges::sort(nodes1);
-            return [&]< size_t... I2 >(std::index_sequence< I2... >)
-            {
-                const auto iterate_over_f2 = [&]< size_t Ind2 >(std::integral_constant< size_t, Ind2 >) {
-                    auto nodes2 = arrayAtInds(el2.getNodes(), std::get< Ind2 >(f2_o1));
-                    std::ranges::sort(nodes2);
-                    const bool is_matched = std::ranges::equal(nodes1, nodes2);
-                    if (is_matched)
-                    {
-                        intersect_inds1 = span_t{std::get< Ind1 >(f1_oN)};
-                        intersect_inds2 = span_t{std::get< Ind2 >(f2_oN)};
-                    }
-                    return is_matched;
-                };
-                return (iterate_over_f2(std::integral_constant< size_t, I2 >{}) or ...);
-            }
-            (std::make_index_sequence< f2_size >{});
-        };
-        (iterate_over_f1(std::integral_constant< size_t, I1 >{}) or ...);
-    }
-    (std::make_index_sequence< f1_size >{});
+    std::invoke(
+        [&]< size_t... I1 >(std::index_sequence< I1... >) {
+            const auto iterate_over_f1 = [&]< size_t Ind1 >(std::integral_constant< size_t, Ind1 >) {
+                auto nodes1 = arrayAtInds(el1.getNodes(), std::get< Ind1 >(f1_o1));
+                std::ranges::sort(nodes1);
+                return [&]< size_t... I2 >(std::index_sequence< I2... >)
+                {
+                    const auto iterate_over_f2 = [&]< size_t Ind2 >(std::integral_constant< size_t, Ind2 >) {
+                        auto nodes2 = arrayAtInds(el2.getNodes(), std::get< Ind2 >(f2_o1));
+                        std::ranges::sort(nodes2);
+                        const bool is_matched = std::ranges::equal(nodes1, nodes2);
+                        if (is_matched)
+                        {
+                            intersect_inds1 = span_t{std::get< Ind1 >(f1_oN)};
+                            intersect_inds2 = span_t{std::get< Ind2 >(f2_oN)};
+                        }
+                        return is_matched;
+                    };
+                    return (iterate_over_f2(std::integral_constant< size_t, I2 >{}) or ...);
+                }
+                (std::make_index_sequence< f2_size >{});
+            };
+            (iterate_over_f1(std::integral_constant< size_t, I1 >{}) or ...);
+        },
+        std::make_index_sequence< f1_size >{});
 
     return std::make_pair(intersect_inds1, intersect_inds2);
 }
@@ -160,7 +160,7 @@ elementIntersection(const Element< T1, 1 >& el1, const Element< T2, 1 >& el2)
 {
     constexpr auto highest_matchable = detail::getHighestMatchableDim< T1, T2 >();
 
-    if constexpr (highest_matchable == 0) // metis marks 2 lines a neighbours in the dual graph
+    if constexpr (highest_matchable == 0) // metis marks 2 lines as neighbours in the dual graph
         return {};
     else
     {
@@ -181,7 +181,7 @@ consteval auto getPointMatcher()
 {
     return [](const Point< 3 >& p1, const Point< 3 >& p2) {
         constexpr double tolerance = 1e-12;
-        return (Eigen::Matrix< val_t, 3, 1 >{p1} - Eigen::Matrix< val_t, 3, 1 >{p2}).norm() < tolerance;
+        return (Eigen::Vector< val_t, 3 >{p1} - Eigen::Vector< val_t, 3 >{p2}).norm() < tolerance;
     };
 }
 } // namespace detail

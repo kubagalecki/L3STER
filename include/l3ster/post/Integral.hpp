@@ -92,9 +92,9 @@ auto evalElementIntegral(IntKernel&&                                            
     requires detail::IntegralKernel_c< IntKernel, Element< ET, EO >::native_dim, n_fields >
 {
     const auto& quadrature          = basis_at_q.quadrature;
-    const auto  jac_at_qp           = computeJacobiansAtQpoints(element, quadrature);
+    const auto  jac_at_qp           = computeJacobiansAtPoints(element, quadrature.points);
     const auto& basis_vals          = basis_at_q.basis.values;
-    const auto  basis_ders          = computePhysBasisDersAtQpoints(basis_at_q.basis.derivatives, jac_at_qp);
+    const auto  basis_ders          = computePhysBasisDersAtPoints(basis_at_q.basis.derivatives, jac_at_qp);
     const auto  field_vals_and_ders = detail::computeFieldValsAndDers(basis_vals, basis_ders, node_vals);
 
     using result_t = detail::integral_kernel_eval_result_t< IntKernel, Element< ET, EO >::native_dim, n_fields >;
@@ -118,9 +118,9 @@ auto evalElementBoundaryIntegral(
     requires detail::BoundaryIntegralKernel_c< IntKernel, Element< ET, EO >::native_dim, n_fields >
 {
     const auto& quadrature          = basis_at_q.quadrature;
-    const auto  jac_at_qp           = computeJacobiansAtQpoints(*el_view, quadrature);
+    const auto  jac_at_qp           = computeJacobiansAtPoints(*el_view, quadrature.points);
     const auto& basis_vals          = basis_at_q.basis.values;
-    const auto  basis_ders          = computePhysBasisDersAtQpoints(basis_at_q.basis.derivatives, jac_at_qp);
+    const auto  basis_ders          = computePhysBasisDersAtPoints(basis_at_q.basis.derivatives, jac_at_qp);
     const auto  field_vals_and_ders = detail::computeFieldValsAndDers(basis_vals, basis_ders, node_vals);
 
     using result_t = detail::integral_kernel_eval_result_t< IntKernel, Element< ET, EO >::native_dim, n_fields >;
@@ -147,7 +147,7 @@ auto evalLocalIntegral(
 {
     constexpr auto n_fields     = detail::deduce_n_fields< FvalGetter >;
     constexpr auto n_components = detail::n_integral_components< IntKernel, n_fields >;
-    using integral_t            = Eigen::Matrix< val_t, n_components, 1 >;
+    using integral_t            = Eigen::Vector< val_t, n_components >;
     const auto reduce_element   = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) -> integral_t {
         constexpr auto el_dim = Element< ET, EO >::native_dim;
         if constexpr (detail::IntegralKernel_c< IntKernel, el_dim, n_fields >)
@@ -174,7 +174,7 @@ auto evalLocalBoundaryIntegral(IntKernel&&         int_kernel,
 {
     constexpr auto n_fields     = detail::deduce_n_fields< FvalGetter >;
     constexpr auto n_components = detail::n_integral_components< IntKernel, n_fields >;
-    using integral_t            = Eigen::Matrix< val_t, n_components, 1 >;
+    using integral_t            = Eigen::Vector< val_t, n_components >;
     const auto reduce_element =
         [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) -> integral_t {
         constexpr auto el_dim = Element< ET, EO >::native_dim;

@@ -7,7 +7,7 @@ static void BM_PhysBasisDersComputation(benchmark::State& state)
     constexpr auto BT        = BasisTypes::Lagrange;
     const auto     element   = getExampleHexElement< EO >();
     const auto     ref_basis = getReferenceBasisAtDomainQuadrature< BT, ElementTypes::Hex, EO, QT, QO >();
-    const auto     jacobians = computeJacobiansAtQpoints(element, ref_basis.quadrature);
+    const auto     jacobians = computeJacobiansAtPoints(element, ref_basis.quadrature.points);
     setMinStackSize(1ul << 30);
     for (auto _ : state)
         benchmark::DoNotOptimize(computePhysBasisDersAtQpoints(ref_basis.basis_ders, jacobians));

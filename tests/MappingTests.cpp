@@ -1,7 +1,7 @@
 #include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 #include "l3ster/mapping/BoundaryNormal.hpp"
 #include "l3ster/mapping/ComputePhysBasisDer.hpp"
-#include "l3ster/mapping/ComputePhysBasisDersAtQpoints.hpp"
+#include "l3ster/mapping/ComputePhysBasisDersAtPoints.hpp"
 #include "l3ster/mapping/MapReferenceToPhysical.hpp"
 #include "l3ster/mesh/ReadMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
@@ -555,9 +555,9 @@ TEST_CASE("Physical basis derivatives at QPs", "[mapping]")
         const auto bas_ders_at_testp = computePhysBasisDers(J, ref_basis_ders);
 
         const auto& ref_basis_at_qps = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
-        const auto  jacobians_at_qps = computeJacobiansAtQpoints(element, ref_basis_at_qps.quadrature);
+        const auto  jacobians_at_qps = computeJacobiansAtPoints(element, ref_basis_at_qps.quadrature.points);
         const auto  phys_ders_at_qps =
-            computePhysBasisDersAtQpoints(ref_basis_at_qps.basis.derivatives, jacobians_at_qps);
+            computePhysBasisDersAtPoints(ref_basis_at_qps.basis.derivatives, jacobians_at_qps);
 
         for (int i = 0; i < Element< ET, EO >::native_dim; ++i)
             CHECK((phys_ders_at_qps[i](0, Eigen::all) - bas_ders_at_testp(i, Eigen::all)).norm() ==

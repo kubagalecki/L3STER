@@ -30,7 +30,7 @@ constexpr el_side_t matchSidesRecursively(const Element& element, const std::arr
     else if constexpr (I > 0)
         return matchSidesRecursively< I - 1 >(element, sorted_side_nodes);
     else if (matchSide< 0 >(element, sorted_side_nodes))
-        return static_cast< el_side_t >(0u);
+        return 0;
     else
         return std::numeric_limits< el_side_t >::max();
 }

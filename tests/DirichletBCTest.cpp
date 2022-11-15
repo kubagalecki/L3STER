@@ -20,10 +20,11 @@ int main(int argc, char* argv[])
     const auto       mesh         = makeCubeMesh(node_dist);
     auto             my_partition = distributeMesh(comm, mesh, {boundary});
 
-    constexpr auto problem_def    = ConstexprValue< std::array{Pair{d_id_t{0}, std::array{true}}} >{};
-    const auto     dof_intervals  = computeDofIntervals(my_partition, problem_def, comm);
-    const auto     global_dof_map = NodeToGlobalDofMap{my_partition, dof_intervals};
-    const auto     sparsity_graph = detail::makeSparsityGraph(my_partition, problem_def, dof_intervals, comm);
+    constexpr d_id_t domain_id      = 0;
+    constexpr auto   problem_def    = ConstexprValue< std::array{Pair{d_id_t{domain_id}, std::array{true}}} >{};
+    const auto       dof_intervals  = computeDofIntervals(my_partition, problem_def, comm);
+    const auto       global_dof_map = NodeToGlobalDofMap{my_partition, dof_intervals};
+    const auto       sparsity_graph = detail::makeSparsityGraph(my_partition, problem_def, dof_intervals, comm);
 
     const auto bv = my_partition.getBoundaryView(boundary);
 
@@ -64,7 +65,7 @@ int main(int argc, char* argv[])
                     detail::scatterLocalSystem(local_mat, local_vec, *matrix, rhs_view, row_dofs, col_dofs, rhs_dofs);
                 }
             },
-            std::views::single(0));
+            std::views::single(domain_id));
     }
     matrix->endAssembly();
     input_vectors.endAssembly();

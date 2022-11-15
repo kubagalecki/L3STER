@@ -65,7 +65,7 @@ void vtkExportTest2D()
                          bot_top_vals,
                          solution_view);
     computeValuesAtNodes(
-        [&](const SpaceTimePoint& p) {
+        [&](const auto& vals, const auto& ders, const SpaceTimePoint& p) {
             Eigen::Vector2d retval;
             // Kovasznay flow velocity field
             retval[0] = 1. - std::exp(lambda * p.space.x()) * std::cos(2. * pi * p.space.y());
@@ -121,7 +121,7 @@ void vtkExportTest3D()
     auto solution      = system_manager.makeSolutionMultiVector();
     auto solution_view = solution->getDataNonConst(0);
     computeValuesAtNodes(
-        [&](const SpaceTimePoint& point) {
+        [&](const auto& vals, const auto& ders, const SpaceTimePoint& point) {
             Eigen::Vector3d retval;
             const auto&     p = point.space;
             const auto      r = std::sqrt(p.x() * p.x() + p.y() * p.y() + p.z() * p.z());

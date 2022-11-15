@@ -42,30 +42,18 @@ int main(int argc, char* argv[])
     solution1->modify_host();
     {
         auto solution_view = solution1->getDataNonConst(0);
-        computeValuesAtNodes(
-            [](const auto&) {
-                Eigen::Vector< val_t, 1 > retval;
-                retval[0] = 1.;
-                return retval;
-            },
-            my_partition,
-            std::views::single(domain_id),
-            system_manager1.getRhsMap(),
-            ConstexprValue< std::array{0} >{},
-            empty_field_val_getter,
-            solution_view);
-        computeValuesAtNodes(
-            [](const auto&) {
-                Eigen::Vector< val_t, 1 > retval;
-                retval[0] = 2.;
-                return retval;
-            },
-            my_partition,
-            std::views::single(bot_boundary),
-            system_manager1.getRhsMap(),
-            ConstexprValue< std::array{1} >{},
-            empty_field_val_getter,
-            solution_view);
+        computeValuesAtNodes(my_partition,
+                             std::views::single(domain_id),
+                             system_manager1.getRhsMap(),
+                             ConstexprValue< std::array{0} >{},
+                             std::array{1.},
+                             solution_view);
+        computeValuesAtNodes(my_partition,
+                             std::views::single(bot_boundary),
+                             system_manager1.getRhsMap(),
+                             ConstexprValue< std::array{1} >{},
+                             std::array{2.},
+                             solution_view);
     }
     solution1->sync_device();
 
@@ -74,22 +62,16 @@ int main(int argc, char* argv[])
     solution2->modify_host();
     {
         auto solution_view = solution2->getDataNonConst(0);
-        computeValuesAtNodes(
-            [](const auto&) {
-                Eigen::Vector< val_t, 1 > retval;
-                retval[0] = 3.;
-                return retval;
-            },
-            my_partition,
-            std::views::single(domain_id),
-            system_manager2.getRhsMap(),
-            ConstexprValue< std::array{0} >{},
-            empty_field_val_getter,
-            solution_view);
+        computeValuesAtNodes(my_partition,
+                             std::views::single(domain_id),
+                             system_manager2.getRhsMap(),
+                             ConstexprValue< std::array{0} >{},
+                             std::array{3.},
+                             solution_view);
     }
     solution2->sync_device();
 
-    CHECK_THROWS(std::ignore = solution_manager.getNodalValues(0))
+    CHECK_THROWS(std::ignore = solution_manager.getNodalValues(0));
 
     // Update values in the solution manager
     {
@@ -103,7 +85,7 @@ int main(int argc, char* argv[])
             my_partition, *solution_vector, system_manager2.getRhsMap(), field_inds2, problem_def_ctwrpr2);
     }
     solution_manager.communicateSharedValues();
-    CHECK_THROWS(solution_manager.communicateSharedValues())
+    CHECK_THROWS(solution_manager.communicateSharedValues());
 
     bool success = true;
     // Check the first problem's fields

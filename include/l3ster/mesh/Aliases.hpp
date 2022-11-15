@@ -35,6 +35,9 @@ using cond_const_elref_t = std::conditional_t< is_const, const Element< ET, EO >
 template < template < ElementTypes, el_o_t > typename Condition >
 inline constexpr bool assert_all_elements =
     parametrize_type_over_element_types_and_orders_t< std::conjunction, Condition >::value;
+template < template < ElementTypes, el_o_t > typename Condition >
+inline constexpr bool assert_any_element =
+    parametrize_type_over_element_types_and_orders_t< std::disjunction, Condition >::value;
 
 template < typename F, bool is_const, typename... Args >
 struct InvocableOnElementsHelper
