@@ -199,13 +199,12 @@ struct ReferenceBasisFunction
 template < ElementTypes T, el_o_t O, BasisTypes BT >
 auto computeRefBasis(const Point< Element< T, O >::native_dim >& point)
 {
-    constexpr el_locind_t n_basis_fun = Element< T, O >::n_nodes;
-    using ret_t                       = Eigen::Matrix< val_t, 1, n_basis_fun >;
-    ret_t retval; // NOLINT we want raw memory to be written to below
+    constexpr el_locind_t               n_basis_fun = Element< T, O >::n_nodes;
+    Eigen::Vector< val_t, n_basis_fun > retval; // NOLINT we want raw memory to be written to below
     forConstexpr(
         [&]< el_locind_t I >(std::integral_constant< el_locind_t, I >) {
             const auto val = ReferenceBasisFunction< T, O, I, BT >{}(point);
-            retval(0, I)  = val;
+            retval[I]      = val;
         },
         std::make_integer_sequence< el_locind_t, n_basis_fun >{});
     return retval;

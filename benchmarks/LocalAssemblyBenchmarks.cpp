@@ -10,7 +10,7 @@ static void BM_PhysBasisDersComputation(benchmark::State& state)
     const auto     jacobians = computeJacobiansAtPoints(element, ref_basis.quadrature.points);
     setMinStackSize(1ul << 30);
     for (auto _ : state)
-        benchmark::DoNotOptimize(computePhysBasisDersAtQpoints(ref_basis.basis_ders, jacobians));
+        benchmark::DoNotOptimize(computePhysBasisDersAtPoints(ref_basis.basis.derivatives, jacobians));
 
     constexpr auto n_nodes = Element< ElementTypes::Hex, EO >::n_nodes;
     const auto     n_qp    = ref_basis.quadrature.size;

@@ -396,15 +396,15 @@ TEST_CASE("Reference basis at domain QPs", "[mapping]")
 
     SECTION("Values")
     {
-        for (ptrdiff_t basis = 0; basis < ref_bas_at_qp.basis.values.rows(); ++basis)
-            CHECK(ref_bas_at_qp.basis.values(basis, Eigen::all).sum() == Approx{1.});
+        for (const auto& vals_at_qp : ref_bas_at_qp.basis.values)
+            CHECK(vals_at_qp.sum() == Approx{1.});
     }
 
     SECTION("Derivatives")
     {
-        for (const auto& der : ref_bas_at_qp.basis.derivatives)
-            for (ptrdiff_t basis = 0; basis < der.rows(); ++basis)
-                CHECK(der(basis, Eigen::all).sum() == Approx{0.}.margin(1e-13));
+        for (const auto& ders_at_qp : ref_bas_at_qp.basis.derivatives)
+            for (Eigen::Index dim = 0; dim < ders_at_qp.rows(); ++dim)
+                CHECK(ders_at_qp(dim, Eigen::all).sum() == Approx{0.}.margin(1e-13));
     }
 }
 
@@ -540,32 +540,4 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
             check_all_in_plane(b_right, Space::X, 1.);
         }
     }
-}
-
-TEST_CASE("Physical basis derivatives at QPs", "[mapping]")
-{
-    constexpr auto  QT = QuadratureTypes::GLeg;
-    constexpr q_o_t QO = 5;
-    constexpr auto  BT = BasisTypes::Lagrange;
-
-    constexpr auto do_test = []< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
-        const auto test_point        = Point{getQuadrature< QT, QO, ET >().points.front()};
-        const auto J                 = getNatJacobiMatGenerator(element)(test_point);
-        const auto ref_basis_ders    = computeRefBasisDers< ET, EO, BT >(test_point);
-        const auto bas_ders_at_testp = computePhysBasisDers(J, ref_basis_ders);
-
-        const auto& ref_basis_at_qps = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
-        const auto  jacobians_at_qps = computeJacobiansAtPoints(element, ref_basis_at_qps.quadrature.points);
-        const auto  phys_ders_at_qps =
-            computePhysBasisDersAtPoints(ref_basis_at_qps.basis.derivatives, jacobians_at_qps);
-
-        for (int i = 0; i < Element< ET, EO >::native_dim; ++i)
-            CHECK((phys_ders_at_qps[i](0, Eigen::all) - bas_ders_at_testp(i, Eigen::all)).norm() ==
-                  Approx{0.}.margin(1e-13));
-    };
-
-    const auto mesh = makeCubeMesh(std::array{0., .25, .5, .75, 1.});
-    const auto part = mesh.getPartitions()[0];
-    part.visit(do_test,
-               std::views::single(0)); // Only for the hex domain, this won't work for 2D elements in a 3D space
 }

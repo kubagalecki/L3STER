@@ -8,13 +8,13 @@ namespace lstr
 template < ElementTypes ET, el_o_t EO, size_t n_points >
 struct ReferenceBasisAtPoints
 {
-private:
-    using basis_at_qp_t = EigenRowMajorMatrix< val_t, n_points, Element< ET, EO >::n_nodes >;
-    using basis_ders_t  = std::array< basis_at_qp_t, Element< ET, EO >::native_dim >;
+    static constexpr auto n_bases = Element< ET, EO >::n_nodes;
+    static constexpr auto dim     = Element< ET, EO >::native_dim;
+    using basis_vals_t            = std::array< Eigen::Vector< val_t, n_bases >, n_points >;
+    using basis_ders_t            = std::array< EigenRowMajorMatrix< val_t, dim, n_bases >, n_points >;
 
-public:
-    basis_at_qp_t values;
-    basis_ders_t  derivatives;
+    basis_vals_t values;
+    basis_ders_t derivatives;
 };
 
 namespace detail
@@ -26,18 +26,10 @@ template < BasisTypes                                                    BT,
            size_t                                                        n_points >
 auto evalRefBasisAtPoints(const std::array< Point_t, n_points >& points) -> ReferenceBasisAtPoints< ET, EO, n_points >
 {
-    constexpr auto                                  n_nodes    = Element< ET, EO >::n_nodes;
-    constexpr auto                                  native_dim = Element< ET, EO >::native_dim;
-    EigenRowMajorMatrix< val_t, n_points, n_nodes > basis_vals;
-    std::array< decltype(basis_vals), native_dim >  basis_ders;
-    for (size_t point_ind = 0; Point< native_dim > point : points)
-    {
-        basis_vals(point_ind, Eigen::all) = computeRefBasis< ET, EO, BT >(point);
-        const auto ders_at_point          = computeRefBasisDers< ET, EO, BT >(point);
-        for (size_t der_ind = 0; der_ind < native_dim; ++der_ind)
-            basis_ders[der_ind](point_ind, Eigen::all) = ders_at_point(der_ind, Eigen::all);
-        ++point_ind;
-    }
+    typename ReferenceBasisAtPoints< ET, EO, n_points >::basis_vals_t basis_vals;
+    typename ReferenceBasisAtPoints< ET, EO, n_points >::basis_ders_t basis_ders;
+    std::ranges::transform(points, begin(basis_vals), [](auto pt) { return computeRefBasis< ET, EO, BT >(pt); });
+    std::ranges::transform(points, begin(basis_ders), [](auto pt) { return computeRefBasisDers< ET, EO, BT >(pt); });
     return {basis_vals, basis_ders};
 }
 } // namespace detail
