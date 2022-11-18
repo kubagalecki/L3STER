@@ -3,14 +3,18 @@
 template < q_o_t QO, el_o_t EO >
 static void BM_PhysBasisDersComputation(benchmark::State& state)
 {
-    constexpr auto QT        = QuadratureTypes::GLeg;
-    constexpr auto BT        = BasisTypes::Lagrange;
-    const auto     element   = getExampleHexElement< EO >();
-    const auto     ref_basis = getReferenceBasisAtDomainQuadrature< BT, ElementTypes::Hex, EO, QT, QO >();
-    const auto     jacobians = computeJacobiansAtPoints(element, ref_basis.quadrature.points);
-    setMinStackSize(1ul << 30);
+    constexpr auto QT          = QuadratureTypes::GLeg;
+    constexpr auto BT          = BasisTypes::Lagrange;
+    const auto     element     = getExampleHexElement< EO >();
+    const auto&    ref_basis   = getReferenceBasisAtDomainQuadrature< BT, ElementTypes::Hex, EO, QT, QO >();
+    const auto     jac_mat_gen = getNatJacobiMatGenerator(element);
     for (auto _ : state)
-        benchmark::DoNotOptimize(computePhysBasisDersAtPoints(ref_basis.basis.derivatives, jacobians));
+        for (size_t qp_ind = 0; qp_ind < ref_basis.quadrature.size; ++qp_ind)
+        {
+            const auto  jac_mat  = jac_mat_gen(ref_basis.quadrature.points[qp_ind]);
+            const auto& ref_ders = ref_basis.basis.derivatives[qp_ind];
+            benchmark::DoNotOptimize(computePhysBasisDers(jac_mat, ref_ders));
+        }
 
     constexpr auto n_nodes = Element< ElementTypes::Hex, EO >::n_nodes;
     const auto     n_qp    = ref_basis.quadrature.size;
@@ -43,8 +47,7 @@ static void BM_NS3DLocalAssembly(benchmark::State& state)
     constexpr auto  BT = BasisTypes::Lagrange;
     constexpr q_o_t QO = 4 * EO - 1;
 
-    const auto  element         = getExampleHexElement< EO >();
-    const auto& ref_bas_at_quad = getReferenceBasisAtDomainQuadrature< BT, ElementTypes::Hex, EO, QT, QO >();
+    const auto element = getExampleHexElement< EO >();
 
     constexpr size_t n_fields     = 7;
     constexpr size_t n_eq         = 8;
@@ -53,11 +56,10 @@ static void BM_NS3DLocalAssembly(benchmark::State& state)
 
     constexpr auto n_nodes           = Element< ElementTypes ::Hex, EO >::n_nodes;
     constexpr auto loc_mat_rows      = n_nodes * n_fields;
-    constexpr auto local_system_size = loc_mat_rows * (loc_mat_rows + n_eq + 1);
-    const auto     node_values_size  = 4 * n_fields * ref_bas_at_quad.quadrature.size;
-    const auto     basis_vals_size   = 2 * sizeof ref_bas_at_quad;
-    const auto     req_stack_size    = (local_system_size + node_values_size + basis_vals_size) * sizeof(val_t);
-    setMinStackSize((1ul << 26) + req_stack_size);
+    constexpr auto local_system_size = loc_mat_rows * n_eq;
+    const auto     req_stack_size    = local_system_size * sizeof(val_t);
+    setMinStackSize((1ul << 23) + req_stack_size);
+    const auto& ref_bas_at_quad = getReferenceBasisAtDomainQuadrature< BT, ElementTypes::Hex, EO, QT, QO >();
 
     constexpr auto ns3d_kernel = [](const auto& vals, const auto& ders, const auto&) noexcept {
         constexpr size_t nf = 7;

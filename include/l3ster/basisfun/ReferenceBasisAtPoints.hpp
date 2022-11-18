@@ -26,11 +26,11 @@ template < BasisTypes                                                    BT,
            size_t                                                        n_points >
 auto evalRefBasisAtPoints(const std::array< Point_t, n_points >& points) -> ReferenceBasisAtPoints< ET, EO, n_points >
 {
-    typename ReferenceBasisAtPoints< ET, EO, n_points >::basis_vals_t basis_vals;
-    typename ReferenceBasisAtPoints< ET, EO, n_points >::basis_ders_t basis_ders;
-    std::ranges::transform(points, begin(basis_vals), [](auto pt) { return computeRefBasis< ET, EO, BT >(pt); });
-    std::ranges::transform(points, begin(basis_ders), [](auto pt) { return computeRefBasisDers< ET, EO, BT >(pt); });
-    return {basis_vals, basis_ders};
+    auto basis_vals = std::make_unique< typename ReferenceBasisAtPoints< ET, EO, n_points >::basis_vals_t >();
+    auto basis_ders = std::make_unique< typename ReferenceBasisAtPoints< ET, EO, n_points >::basis_ders_t >();
+    std::ranges::transform(points, begin(*basis_vals), [](auto pt) { return computeRefBasis< ET, EO, BT >(pt); });
+    std::ranges::transform(points, begin(*basis_ders), [](auto pt) { return computeRefBasisDers< ET, EO, BT >(pt); });
+    return {*basis_vals, *basis_ders};
 }
 } // namespace detail
 } // namespace lstr

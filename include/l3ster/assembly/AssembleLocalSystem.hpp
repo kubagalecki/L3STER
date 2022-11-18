@@ -75,7 +75,12 @@ auto initLocalSystem()
     constexpr auto local_problem_size = Element< ET, EO >::n_nodes * n_unknowns< Kernel, dim, n_fields >;
     using k_el_t                      = EigenRowMajorMatrix< val_t, local_problem_size, local_problem_size >;
     using f_el_t                      = Eigen::Vector< val_t, local_problem_size >;
-    return std::pair< k_el_t, f_el_t >{k_el_t::Zero(), f_el_t::Zero()};
+    using retval_payload_t            = std::pair< k_el_t, f_el_t >;
+
+    auto retval    = std::make_unique< retval_payload_t >();
+    retval->first  = k_el_t::Zero();
+    retval->second = f_el_t::Zero();
+    return retval;
 }
 
 template < int n_nodes, int n_fields >
@@ -133,7 +138,7 @@ auto assembleLocalSystem(auto&&                                                 
 {
     const auto jacobi_mat_generator = getNatJacobiMatGenerator(element);
     auto       local_system         = detail::initLocalSystem< decltype(kernel), ET, EO, n_fields >();
-    auto& [K_el, F_el]              = local_system;
+    auto& [K_el, F_el]              = *local_system;
 
     const auto process_qp = [&](auto point, val_t weight, const auto& bas_vals, const auto& ref_bas_ders) {
         const auto jacobi_mat         = jacobi_mat_generator(point);
@@ -168,7 +173,7 @@ auto assembleLocalBoundarySystem(
 {
     const auto jacobi_mat_generator = getNatJacobiMatGenerator(*el_view);
     auto       local_system         = detail::initLocalSystem< decltype(kernel), ET, EO, n_fields >();
-    auto& [K_el, F_el]              = local_system;
+    auto& [K_el, F_el]              = *local_system;
 
     const auto process_qp = [&](auto point, val_t weight, const auto& bas_vals, const auto& ref_bas_ders) {
         const auto jacobi_mat      = jacobi_mat_generator(point);

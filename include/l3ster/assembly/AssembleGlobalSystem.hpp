@@ -94,12 +94,13 @@ void assembleGlobalSystem(auto&&                                                
         constexpr auto n_fields = detail::deduce_n_fields< decltype(field_val_getter) >;
         if constexpr (detail::Kernel_c< decltype(kernel), el_dim, n_fields >)
         {
-            const auto  field_vals        = field_val_getter(element.getNodes());
-            const auto& qbv               = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
-            const auto [loc_mat, loc_vec] = assembleLocalSystem(kernel, element, field_vals, qbv, time);
-            const auto row_dofs           = detail::getUnsortedElementDofs< field_inds >(element, row_map);
-            const auto col_dofs           = detail::getUnsortedElementDofs< field_inds >(element, col_map);
-            const auto rhs_dofs           = detail::getUnsortedElementDofs< field_inds >(element, rhs_map);
+            const auto  field_vals         = field_val_getter(element.getNodes());
+            const auto& qbv                = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
+            const auto  local_system       = assembleLocalSystem(kernel, element, field_vals, qbv, time);
+            const auto& [loc_mat, loc_vec] = *local_system;
+            const auto row_dofs            = detail::getUnsortedElementDofs< field_inds >(element, row_map);
+            const auto col_dofs            = detail::getUnsortedElementDofs< field_inds >(element, col_map);
+            const auto rhs_dofs            = detail::getUnsortedElementDofs< field_inds >(element, rhs_map);
             detail::scatterLocalSystem(loc_mat, loc_vec, global_matrix, global_vector, row_dofs, col_dofs, rhs_dofs);
         }
         else
@@ -132,12 +133,13 @@ void assembleGlobalBoundarySystem(auto&&                                        
         constexpr auto n_fields = detail::deduce_n_fields< decltype(field_val_getter) >;
         if constexpr (detail::BoundaryKernel_c< decltype(kernel), el_dim, n_fields >)
         {
-            const auto  field_vals = field_val_getter(el_view->getNodes());
-            const auto& qbv        = getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
-            const auto [loc_mat, loc_vec] = assembleLocalBoundarySystem(kernel, el_view, field_vals, qbv, time);
-            const auto row_dofs           = detail::getUnsortedElementDofs< field_inds >(*el_view, row_map);
-            const auto col_dofs           = detail::getUnsortedElementDofs< field_inds >(*el_view, col_map);
-            const auto rhs_dofs           = detail::getUnsortedElementDofs< field_inds >(*el_view, rhs_map);
+            const auto  field_vals   = field_val_getter(el_view->getNodes());
+            const auto& qbv          = getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
+            const auto  local_system = assembleLocalBoundarySystem(kernel, el_view, field_vals, qbv, time);
+            const auto& [loc_mat, loc_vec] = *local_system;
+            const auto row_dofs            = detail::getUnsortedElementDofs< field_inds >(*el_view, row_map);
+            const auto col_dofs            = detail::getUnsortedElementDofs< field_inds >(*el_view, col_map);
+            const auto rhs_dofs            = detail::getUnsortedElementDofs< field_inds >(*el_view, rhs_map);
             detail::scatterLocalSystem(loc_mat, loc_vec, global_matrix, global_vector, row_dofs, col_dofs, rhs_dofs);
         }
         else

@@ -61,7 +61,7 @@ TEST_CASE("Local system assembly", "[local_asm]")
 
         auto system = assembleLocalSystem(
             diffusion_kernel_2d, element, Eigen::Matrix< val_t, element.n_nodes, 0 >{}, basis_at_q, 0.);
-        auto& [K, F] = system;
+        auto& [K, F] = *system;
         K            = K.template selfadjointView< Eigen::Lower >();
         auto u       = F;
 
