@@ -2,8 +2,10 @@
 #define L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP
 
 #include "l3ster/assembly/SpaceTimePoint.hpp"
+#include "l3ster/basisfun/ReferenceBasisAtQuadrature.hpp"
 #include "l3ster/mapping/BoundaryNormal.hpp"
-#include "l3ster/mapping/ComputePhysBasisDersAtPoints.hpp"
+#include "l3ster/mapping/ComputePhysBasisDer.hpp"
+#include "l3ster/mapping/JacobiMat.hpp"
 #include "l3ster/mapping/MapReferenceToPhysical.hpp"
 #include "l3ster/mesh/BoundaryElementView.hpp"
 
