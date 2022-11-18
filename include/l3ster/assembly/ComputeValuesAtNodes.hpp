@@ -85,20 +85,20 @@ void computeValuesAtNodes(auto&&                               kernel,
             const auto& el_nodes       = element.getNodes();
             const auto& basis_at_nodes = getBasisAtNodes< ET, EO >();
             const auto& node_locations = getNodeLocations< ET, EO >();
-            const auto& basis_vals     = basis_at_nodes.values;
 
-            const auto node_vals           = field_val_getter(el_nodes);
-            const auto jac_at_nodes        = computeJacobiansAtPoints(element, node_locations);
-            const auto basis_ders          = computePhysBasisDersAtPoints(basis_at_nodes.derivatives, jac_at_nodes);
-            const auto field_vals_and_ders = detail::computeFieldValsAndDers(basis_vals, basis_ders, node_vals);
+            const auto node_vals            = field_val_getter(el_nodes);
+            const auto jacobi_mat_generator = getNatJacobiMatGenerator(element);
 
             const auto process_node = [&](size_t node_ind) {
-                const auto [vals, ders] = detail::extractFieldValsAndDersAtQpoint(field_vals_and_ders, node_ind);
-                const auto physical_point =
-                    SpaceTimePoint{.space = nodePhysicalLocation(element, node_ind), .time = time};
-                const auto vals_at_node = std::invoke(kernel, vals, ders, physical_point);
+                const auto ref_coords      = node_locations[node_ind];
+                const auto jacobi_mat      = jacobi_mat_generator(ref_coords);
+                const auto phys_coords     = mapToPhysicalSpace(element, ref_coords);
+                const auto phys_basis_ders = computePhysBasisDers(jacobi_mat, basis_at_nodes.derivatives[node_ind]);
+                const auto field_vals      = detail::computeFieldVals(basis_at_nodes.values[node_ind], node_vals);
+                const auto field_ders      = detail::computeFieldDers(phys_basis_ders, node_vals);
+                const auto ker_res = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time});
                 for (size_t dof_ind = 0; auto dof : getValuesAtInds(map(el_nodes[node_ind]), dofinds_ctwrpr))
-                    std::atomic_ref{values[dof]}.store(vals_at_node[dof_ind++], std::memory_order_relaxed);
+                    std::atomic_ref{values[dof]}.store(ker_res[dof_ind++], std::memory_order_relaxed);
             };
             for (size_t node_ind = 0; node_ind < el_nodes.size(); ++node_ind)
                 if (not mesh.isGhostNode(el_nodes[node_ind]))

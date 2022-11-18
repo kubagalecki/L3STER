@@ -126,7 +126,7 @@ int main(int argc, char* argv[])
     system_manager.endAssembly();
 
     // Dirichlet BCs
-    constexpr auto dirichlet_bc_val_def = [node_dist](const auto& vals, const auto& ders, const SpaceTimePoint& p) {
+    constexpr auto dirichlet_bc_val_def = [node_dist](const auto&, const auto&, const SpaceTimePoint& p) {
         Eigen::Vector< val_t, 1 > retval;
         retval[0] = p.space.x() / node_dist.back();
         return retval;

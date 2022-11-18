@@ -87,25 +87,21 @@ template < typename IntKernel, ElementTypes ET, el_o_t EO, q_l_t QL, int n_field
 auto evalElementIntegral(IntKernel&&                                                                    int_kernel,
                          const Element< ET, EO >&                                                       element,
                          const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >&      node_vals,
-                         const ReferenceBasisAtQuadrature< ET, EO, QL, Element< ET, EO >::native_dim >& basis_at_q,
+                         const ReferenceBasisAtQuadrature< ET, EO, QL, Element< ET, EO >::native_dim >& basis_at_qps,
                          val_t                                                                          time)
     requires detail::IntegralKernel_c< IntKernel, Element< ET, EO >::native_dim, n_fields >
 {
-    const auto& quadrature          = basis_at_q.quadrature;
-    const auto  jac_at_qp           = computeJacobiansAtPoints(element, quadrature.points);
-    const auto& basis_vals          = basis_at_q.basis.values;
-    const auto  basis_ders          = computePhysBasisDersAtPoints(basis_at_q.basis.derivatives, jac_at_qp);
-    const auto  field_vals_and_ders = detail::computeFieldValsAndDers(basis_vals, basis_ders, node_vals);
-
+    const auto jacobi_mat_generator = getNatJacobiMatGenerator(element);
     using result_t = detail::integral_kernel_eval_result_t< IntKernel, Element< ET, EO >::native_dim, n_fields >;
-    constexpr auto init_zero = []() noexcept -> result_t {
-        return result_t::Zero();
+    const auto compute_value_at_qp = [&](ptrdiff_t qp_ind, auto ref_coords) noexcept -> result_t {
+        const auto jacobi_mat    = jacobi_mat_generator(ref_coords);
+        const auto phys_coords   = mapToPhysicalSpace(element, ref_coords);
+        const auto field_vals    = detail::computeFieldVals(basis_at_qps.basis.values[qp_ind], node_vals);
+        const auto field_ders    = detail::computeFieldDers(basis_at_qps.basis.derivatives[qp_ind], node_vals);
+        const auto kernel_result = std::invoke(int_kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time});
+        return jacobi_mat.determinant() * kernel_result;
     };
-    const auto compute_value_at_qp = [&](ptrdiff_t qp_ind, const auto&) noexcept -> result_t {
-        return jac_at_qp[qp_ind].determinant() *
-               detail::evaluateKernel(int_kernel, element, field_vals_and_ders, quadrature, qp_ind, time);
-    };
-    return evalQuadrature(compute_value_at_qp, quadrature, init_zero);
+    return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, result_t{result_t::Zero()});
 }
 
 template < typename IntKernel, ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
@@ -113,27 +109,22 @@ auto evalElementBoundaryIntegral(
     IntKernel&&                                                                    int_kernel,
     const BoundaryElementView< ET, EO >&                                           el_view,
     const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >&      node_vals,
-    const ReferenceBasisAtQuadrature< ET, EO, QL, Element< ET, EO >::native_dim >& basis_at_q,
+    const ReferenceBasisAtQuadrature< ET, EO, QL, Element< ET, EO >::native_dim >& basis_at_qps,
     val_t                                                                          time)
     requires detail::BoundaryIntegralKernel_c< IntKernel, Element< ET, EO >::native_dim, n_fields >
 {
-    const auto& quadrature          = basis_at_q.quadrature;
-    const auto  jac_at_qp           = computeJacobiansAtPoints(*el_view, quadrature.points);
-    const auto& basis_vals          = basis_at_q.basis.values;
-    const auto  basis_ders          = computePhysBasisDersAtPoints(basis_at_q.basis.derivatives, jac_at_qp);
-    const auto  field_vals_and_ders = detail::computeFieldValsAndDers(basis_vals, basis_ders, node_vals);
-
+    const auto jacobi_mat_generator = getNatJacobiMatGenerator(*el_view);
     using result_t = detail::integral_kernel_eval_result_t< IntKernel, Element< ET, EO >::native_dim, n_fields >;
-    constexpr auto init_zero = []() noexcept -> result_t {
-        return result_t::Zero();
+    const auto compute_value_at_qp = [&](ptrdiff_t qp_ind, auto ref_coords) noexcept -> result_t {
+        const auto jacobi_mat  = jacobi_mat_generator(ref_coords);
+        const auto phys_coords = mapToPhysicalSpace(*el_view, ref_coords);
+        const auto normal      = computeBoundaryNormal(el_view, jacobi_mat);
+        const auto field_vals  = detail::computeFieldVals(basis_at_qps.basis.values[qp_ind], node_vals);
+        const auto field_ders  = detail::computeFieldDers(basis_at_qps.basis.derivatives[qp_ind], node_vals);
+        const auto ker_res = std::invoke(int_kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time}, normal);
+        return jacobi_mat.determinant() * ker_res;
     };
-    const auto compute_value_at_qp = [&](ptrdiff_t qp_ind, const auto&) noexcept -> result_t {
-        const auto normal = computeBoundaryNormal(el_view, jac_at_qp[qp_ind]);
-        return jac_at_qp[qp_ind].determinant() *
-               detail::evaluateBoundaryKernel(
-                   int_kernel, el_view, field_vals_and_ders, quadrature, qp_ind, time, normal);
-    };
-    return evalQuadrature(compute_value_at_qp, quadrature, init_zero);
+    return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, result_t{result_t::Zero()});
 }
 
 template < BasisTypes      BT,

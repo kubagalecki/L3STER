@@ -123,10 +123,6 @@ static constexpr auto wrapQuadEvaluator(const auto& eval)
     };
 }
 
-static inline constexpr auto zero_gen = []() noexcept {
-    return 0.;
-};
-
 TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]")
 {
     constexpr auto o0_fun = [](double, double) {
@@ -188,10 +184,10 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
         CHECK(evalQuadrature(o2_fun, quadrature) == o2_int);
         CHECK(evalQuadrature(o3_fun, quadrature) == o3_int);
 
-        CHECK(evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, zero_gen) == o0_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, zero_gen) == o1_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, zero_gen) == o2_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, zero_gen) == o3_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, 0.) == o0_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, 0.) == o1_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, 0.) == o2_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, 0.) == o3_int);
     }
 
     SECTION("9 point quadrature")
@@ -208,12 +204,12 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
         CHECK(evalQuadrature(o4_fun, quadrature) == o4_int);
         CHECK(evalQuadrature(o5_fun, quadrature) == o5_int);
 
-        CHECK(evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, zero_gen) == o0_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, zero_gen) == o1_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, zero_gen) == o2_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, zero_gen) == o3_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o4_fun), quadrature, zero_gen) == o4_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o5_fun), quadrature, zero_gen) == o5_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, 0.) == o0_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, 0.) == o1_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, 0.) == o2_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, 0.) == o3_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o4_fun), quadrature, 0.) == o4_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o5_fun), quadrature, 0.) == o5_int);
     }
 }
 
@@ -271,10 +267,10 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
         CHECK(evalQuadrature(o2_fun, quadrature) == o2_int);
         CHECK(evalQuadrature(o3_fun, quadrature) == o3_int);
 
-        CHECK(evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, zero_gen) == o0_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, zero_gen) == o1_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, zero_gen) == o2_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, zero_gen) == o3_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o0_fun), quadrature, 0.) == o0_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o1_fun), quadrature, 0.) == o1_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o2_fun), quadrature, 0.) == o2_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(o3_fun), quadrature, 0.) == o3_int);
     }
 
     SECTION("512 point quadrature")
@@ -285,6 +281,6 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
         REQUIRE(quadrature.dim == 3);
 
         CHECK(evalQuadrature(trig_fun, quadrature) == trig_int);
-        CHECK(evalQuadrature(wrapQuadEvaluator(trig_fun), quadrature, zero_gen) == trig_int);
+        CHECK(evalQuadrature(wrapQuadEvaluator(trig_fun), quadrature, 0.) == trig_int);
     }
 }
