@@ -109,11 +109,20 @@ void vtkExportTest3D()
         mesh.getPartitions()[0] = convertMeshToOrder< mesh_order >(mesh.getPartitions()[0]);
     }
     const auto my_partition = distributeMesh(comm, mesh, {1, 2, 3, 4, 5, 6});
+    const auto boundary     = my_partition.getBoundaryView(std::array{1, 2, 3, 4, 5, 6});
 
-    constexpr auto problem_def       = std::array{Pair{d_id_t{0}, std::array{true, true, true}}};
-    constexpr auto problemdef_ctwrpr = ConstexprValue< problem_def >{};
-    constexpr auto n_fields          = detail::deduceNFields(problem_def);
-    constexpr auto field_inds        = makeIotaArray< size_t, n_fields >();
+    constexpr d_id_t domain_id = 0;
+    constexpr auto problem_def = std::array{Pair{d_id_t{domain_id}, std::array{true, true, true, false, false, false}},
+                                            Pair{d_id_t{1}, std::array{false, false, false, true, true, true}},
+                                            Pair{d_id_t{2}, std::array{false, false, false, true, true, true}},
+                                            Pair{d_id_t{3}, std::array{false, false, false, true, true, true}},
+                                            Pair{d_id_t{4}, std::array{false, false, false, true, true, true}},
+                                            Pair{d_id_t{5}, std::array{false, false, false, true, true, true}},
+                                            Pair{d_id_t{6}, std::array{false, false, false, true, true, true}}};
+    constexpr auto problemdef_ctwrpr   = ConstexprValue< problem_def >{};
+    constexpr auto n_fields            = detail::deduceNFields(problem_def);
+    constexpr auto domain_field_inds   = std::array< size_t, 3 >{0, 1, 2};
+    constexpr auto boundary_field_inds = std::array< size_t, 3 >{3, 4, 5};
 
     const auto system_manager   = AlgebraicSystemManager{comm, my_partition, problemdef_ctwrpr};
     auto       solution_manager = SolutionManager{my_partition, comm, n_fields};
@@ -131,19 +140,31 @@ void vtkExportTest3D()
             return retval;
         },
         my_partition,
-        std::views::single(0),
+        std::views::single(domain_id),
         system_manager.getRhsMap(),
-        ConstexprValue< field_inds >{},
+        ConstexprValue< domain_field_inds >{},
         empty_field_val_getter,
         solution_view);
-    solution_manager.updateSolution(
-        my_partition, *solution->getVector(0), system_manager.getRhsMap(), field_inds, problemdef_ctwrpr);
+    computeValuesAtBoundaryNodes([&](const auto&,
+                                     const std::array< std::array< val_t, 0 >, 3 >&,
+                                     const auto&,
+                                     const Eigen::Vector3d& normal) -> Eigen::Vector3d { return normal; },
+                                 boundary,
+                                 system_manager.getRhsMap(),
+                                 ConstexprValue< boundary_field_inds >{},
+                                 empty_field_val_getter,
+                                 solution_view);
+    solution_manager.updateSolution(my_partition,
+                                    *solution->getVector(0),
+                                    system_manager.getRhsMap(),
+                                    makeIotaArray< size_t, n_fields >(),
+                                    problemdef_ctwrpr);
     solution_manager.communicateSharedValues();
 
-    auto       exporter   = PvtuExporter{my_partition, solution_manager.getNodeMap()};
-    const auto field_name = "vec3D"sv;
+    auto       exporter    = PvtuExporter{my_partition, solution_manager.getNodeMap()};
+    const auto field_names = std::array{"vec3D"sv, "normal"sv};
     exporter.exportSolution(
-        "test_results_3D", comm, solution_manager, std::views::single(field_name), std::views::single(field_inds));
+        "test_results_3D", comm, solution_manager, field_names, std::array{domain_field_inds, boundary_field_inds});
 }
 
 int main(int argc, char* argv[])
