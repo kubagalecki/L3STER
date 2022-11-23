@@ -41,10 +41,10 @@ auto computeBoundaryNormal(
         switch (el_view.getSide())
         {
         case 0:
-            retval = jacobi_mat.row(0).cross(jacobi_mat.row(1));
+            retval = -jacobi_mat.row(0).cross(jacobi_mat.row(1));
             break;
         case 1:
-            retval = -jacobi_mat.row(0).cross(jacobi_mat.row(1));
+            retval = jacobi_mat.row(0).cross(jacobi_mat.row(1));
             break;
         case 2:
             retval = jacobi_mat.row(0).cross(jacobi_mat.row(2));

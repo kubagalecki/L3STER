@@ -175,18 +175,18 @@ TEST_CASE("Boundary normal computation", "[mapping]")
         const auto top_view        = BoundaryElementView{element, 3};
         const auto left_view       = BoundaryElementView{element, 4};
         const auto right_view      = BoundaryElementView{element, 5};
-        const auto front_normal    = computeBoundaryNormal(front_view, jacobi_mat_eval(Point{0., 0., 1.}));
-        const auto back_normal     = computeBoundaryNormal(back_view, jacobi_mat_eval(Point{0., 0., -1.}));
+        const auto front_normal    = computeBoundaryNormal(front_view, jacobi_mat_eval(Point{0., 0., -1.}));
+        const auto back_normal     = computeBoundaryNormal(back_view, jacobi_mat_eval(Point{0., 0., 1.}));
         const auto bot_normal      = computeBoundaryNormal(bot_view, jacobi_mat_eval(Point{0., -1., 0.}));
         const auto top_normal      = computeBoundaryNormal(top_view, jacobi_mat_eval(Point{0., 1., 0.}));
         const auto left_normal     = computeBoundaryNormal(left_view, jacobi_mat_eval(Point{-1., 0., 0.}));
         const auto right_normal    = computeBoundaryNormal(right_view, jacobi_mat_eval(Point{1., 0., 0.}));
-        CHECK(front_normal[0] == Approx(-std::sqrt(1. / 6.)).epsilon(1e-13));
-        CHECK(front_normal[1] == Approx(-std::sqrt(1. / 6.)).epsilon(1e-13));
-        CHECK(front_normal[2] == Approx(std::sqrt(2. / 3.)).epsilon(1e-13));
-        CHECK(back_normal[0] == Approx(0.).epsilon(1e-13));
-        CHECK(back_normal[1] == Approx(0.).epsilon(1e-13));
-        CHECK(back_normal[2] == Approx(-1.).epsilon(1e-13));
+        CHECK(front_normal[0] == Approx(0.).epsilon(1e-13));
+        CHECK(front_normal[1] == Approx(0.).epsilon(1e-13));
+        CHECK(front_normal[2] == Approx(-1.).epsilon(1e-13));
+        CHECK(back_normal[0] == Approx(-std::sqrt(1. / 6.)).epsilon(1e-13));
+        CHECK(back_normal[1] == Approx(-std::sqrt(1. / 6.)).epsilon(1e-13));
+        CHECK(back_normal[2] == Approx(std::sqrt(2. / 3.)).epsilon(1e-13));
         CHECK(bot_normal[0] == Approx(0.).epsilon(1e-13));
         CHECK(bot_normal[1] == Approx(-1.).epsilon(1e-13));
         CHECK(bot_normal[2] == Approx(0.).epsilon(1e-13));
@@ -438,7 +438,7 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
             const auto& ref_q =
                 getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide()).quadrature;
             for (auto qp : ref_q.points)
-                CHECK(mapToPhysicalSpace(*el_view, Point{qp})[space_ind] == Approx{offs}.epsilon(1e-15));
+                CHECK(mapToPhysicalSpace(*el_view, qp)[space_ind] == Approx{offs}.epsilon(1e-15));
         };
         view.visit(element_checker);
     };
