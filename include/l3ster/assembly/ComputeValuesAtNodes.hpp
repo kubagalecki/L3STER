@@ -68,6 +68,55 @@ concept PotentiallyValidNodalKernel_c =
 template < typename Kernel, size_t n_fields, size_t results_size >
 concept PotentiallyValidBoundaryNodalKernel_c =
     PotentiallyValidNodalKernelDeductionHelper< Kernel, n_fields, results_size >::boundary;
+
+template < size_t max_dofs_per_node, IndexRange_c auto dof_inds >
+auto initValsAndParents(const MeshPartition&                          mesh,
+                        detail::DomainIdRange_c auto&&                domain_ids,
+                        const NodeToLocalDofMap< max_dofs_per_node >& map,
+                        ConstexprValue< dof_inds >                    dofinds_ctwrpr,
+                        detail::FieldValGetter_c auto&&               field_val_getter,
+                        std::span< val_t >                            values) -> std::vector< std::uint8_t >
+{
+    if constexpr (deduce_n_fields< decltype(field_val_getter) > != 0)
+    {
+        std::vector< std::uint8_t > retval(values.size(), 0);
+        const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
+            for (auto node : element.getNodes())
+                if (not mesh.isGhostNode(node))
+                    for (auto dof : getValuesAtInds(map(node), dofinds_ctwrpr))
+                    {
+                        std::atomic_ref{retval[dof]}.fetch_add(1, std::memory_order_relaxed);
+                        std::atomic_ref{values[dof]}.store(0., std::memory_order_relaxed);
+                    }
+        };
+        mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
+        return retval;
+    }
+    else
+        return {};
+}
+
+template < size_t max_dofs_per_node, IndexRange_c auto dof_inds >
+auto initValsAndParents(const BoundaryView&                           boundary,
+                        const NodeToLocalDofMap< max_dofs_per_node >& map,
+                        ConstexprValue< dof_inds >                    dofinds_ctwrpr,
+                        detail::FieldValGetter_c auto&&               field_val_getter,
+                        std::span< val_t >                            values) -> std::vector< std::uint8_t >
+{
+    std::vector< std::uint8_t > retval(values.size(), 0);
+    const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
+        for (auto node :
+             el_view.getSideNodeInds() | std::views::transform([&](auto ind) { return el_view->getNodes()[ind]; }))
+            if (not boundary.getParent()->isGhostNode(node))
+                for (auto dof : getValuesAtInds(map(node), dofinds_ctwrpr))
+                {
+                    std::atomic_ref{retval[dof]}.fetch_add(1, std::memory_order_relaxed);
+                    std::atomic_ref{values[dof]}.store(0., std::memory_order_relaxed);
+                }
+    };
+    boundary.visit(process_element, std::execution::par);
+    return retval;
+}
 } // namespace detail
 
 template < size_t max_dofs_per_node, IndexRange_c auto dof_inds >
@@ -106,6 +155,8 @@ void computeValuesAtNodes(auto&&                                        kernel,
                                                     std::ranges::size(dof_inds) > and
              (std::ranges::all_of(dof_inds, [](size_t dof) { return dof < max_dofs_per_node; }))
 {
+    const auto num_parents =
+        detail::initValsAndParents(mesh, domain_ids, map, dofinds_ctwrpr, field_val_getter, values);
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
         if constexpr (detail::ValueAtNodeKernel_c< decltype(kernel),
                                                    detail::deduce_n_fields< decltype(field_val_getter) >,
@@ -128,7 +179,11 @@ void computeValuesAtNodes(auto&&                                        kernel,
                 const auto field_ders      = detail::computeFieldDers(phys_basis_ders, node_vals);
                 const auto ker_res = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time});
                 for (size_t dof_ind = 0; auto dof : getValuesAtInds(map(el_nodes[node_ind]), dofinds_ctwrpr))
-                    std::atomic_ref{values[dof]}.store(ker_res[dof_ind++], std::memory_order_relaxed);
+                    if constexpr (detail::deduce_n_fields< decltype(field_val_getter) > != 0)
+                        std::atomic_ref{values[dof]}.fetch_add(
+                            ker_res[dof_ind++] / static_cast< double >(num_parents[dof]), std::memory_order_relaxed);
+                    else
+                        std::atomic_ref{values[dof]}.store(ker_res[dof_ind++], std::memory_order_relaxed);
             };
             for (size_t node_ind = 0; node_ind < el_nodes.size(); ++node_ind)
                 if (not mesh.isGhostNode(el_nodes[node_ind]))
@@ -159,31 +214,13 @@ void computeValuesAtBoundaryNodes(auto&&                                        
                                                             std::ranges::size(dof_inds) > and
              (std::ranges::all_of(dof_inds, [](size_t dof) { return dof < max_dofs_per_node; }))
 {
+    const auto num_parents     = detail::initValsAndParents(boundary, map, dofinds_ctwrpr, field_val_getter, values);
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(BoundaryElementView< ET, EO > el_view) {
         if constexpr (detail::ValueAtNodeBoundaryKernel_c< decltype(kernel),
                                                            detail::deduce_n_fields< decltype(field_val_getter) >,
                                                            Element< ET, EO >::native_dim,
                                                            std::ranges::size(dof_inds) >)
         {
-            const auto side_node_inds = std::invoke([&el_view] {
-                std::span< const el_locind_t > retval;
-                const auto fold_expr_helper = [&]< el_side_t side >(std::integral_constant< el_side_t, side >) {
-                    if (side == el_view.getSide())
-                    {
-                        retval = std::get< side >(ElementTraits< Element< ET, EO > >::boundary_table);
-                        return true;
-                    }
-                    else
-                        return false;
-                };
-                std::invoke(
-                    [&]< el_side_t... sides >(std::integer_sequence< el_side_t, sides... >) {
-                        (fold_expr_helper(std::integral_constant< el_side_t, sides >{}) or ...);
-                    },
-                    std::make_integer_sequence< el_side_t, ElementTraits< Element< ET, EO > >::n_sides >{});
-                return retval;
-            });
-
             const auto& el_nodes       = el_view->getNodes();
             const auto& basis_at_nodes = getBasisAtNodes< ET, EO >();
             const auto& node_locations = getNodeLocations< ET, EO >();
@@ -202,9 +239,10 @@ void computeValuesAtBoundaryNodes(auto&&                                        
                 const auto ker_res =
                     std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time}, normal);
                 for (size_t dof_ind = 0; auto dof : getValuesAtInds(map(el_nodes[node_ind]), dofinds_ctwrpr))
-                    std::atomic_ref{values[dof]}.store(ker_res[dof_ind++], std::memory_order_relaxed);
+                    std::atomic_ref{values[dof]}.fetch_add(ker_res[dof_ind++] / static_cast< double >(num_parents[dof]),
+                                                           std::memory_order_relaxed);
             };
-            for (auto node_ind : side_node_inds)
+            for (auto node_ind : el_view.getSideNodeInds())
                 if (not boundary.getParent()->isGhostNode(el_nodes[node_ind]))
                     process_node(node_ind);
         }
