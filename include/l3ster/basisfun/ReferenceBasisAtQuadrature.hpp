@@ -1,7 +1,7 @@
 #ifndef L3STER_BASISFUN_REFERENCEBASISATQUADRATURE_HPP
 #define L3STER_BASISFUN_REFERENCEBASISATQUADRATURE_HPP
 
-#include "l3ster/mesh/ElementTraits.hpp"
+#include "l3ster/basisfun/ReferenceBasisAtPoints.hpp"
 #include "l3ster/quad/GenerateQuadrature.hpp"
 
 namespace lstr
@@ -9,14 +9,8 @@ namespace lstr
 template < ElementTypes ET, el_o_t EO, q_l_t QL, dim_t QD >
 struct ReferenceBasisAtQuadrature
 {
-private:
-    using basis_at_qp_t = Eigen::Matrix< val_t, QL, Element< ET, EO >::n_nodes, Eigen::RowMajor >;
-    using basis_ders_t  = std::array< basis_at_qp_t, Element< ET, EO >::native_dim >;
-
-public:
-    Quadrature< QL, QD > quadrature;
-    basis_at_qp_t        basis_vals;
-    basis_ders_t         basis_ders;
+    Quadrature< QL, QD >                 quadrature;
+    ReferenceBasisAtPoints< ET, EO, QL > basis;
 };
 } // namespace lstr
 #endif // L3STER_BASISFUN_REFERENCEBASISATQUADRATURE_HPP

@@ -28,11 +28,11 @@ namespace detail
 template < el_o_t O, el_locind_t I >
 auto computeLagrangeLineBasisPolynomial()
 {
-    constexpr auto vals = [] {
-        std::array< val_t, O + 1 > ret_val{};
-        ret_val[I] = 1.;
-        return ret_val;
-    }();
+    constexpr auto vals = std::invoke([] {
+        std::array< val_t, O + 1 > retval{};
+        retval[I] = 1.;
+        return retval;
+    });
     return lagrangeInterp(getLobattoRuleAbsc< val_t, O + 1 >(), vals);
 }
 
@@ -199,16 +199,15 @@ struct ReferenceBasisFunction
 template < ElementTypes T, el_o_t O, BasisTypes BT >
 auto computeRefBasis(const Point< Element< T, O >::native_dim >& point)
 {
-    constexpr el_locind_t n_basis_fun = Element< T, O >::n_nodes;
-    using ret_t                       = Eigen::Matrix< val_t, 1, n_basis_fun >;
-    ret_t ret_val; // NOLINT we want raw memory to be written to below
+    constexpr el_locind_t               n_basis_fun = Element< T, O >::n_nodes;
+    Eigen::Vector< val_t, n_basis_fun > retval; // NOLINT we want raw memory to be written to below
     forConstexpr(
         [&]< el_locind_t I >(std::integral_constant< el_locind_t, I >) {
             const auto val = ReferenceBasisFunction< T, O, I, BT >{}(point);
-            ret_val(0, I)  = val;
+            retval[I]      = val;
         },
         std::make_integer_sequence< el_locind_t, n_basis_fun >{});
-    return ret_val;
+    return retval;
 }
 
 namespace detail
@@ -222,19 +221,19 @@ constexpr DerDim derivativeByIndex(dim_t d)
 template < ElementTypes T, el_o_t O, BasisTypes BT >
 auto computeRefBasisDers(const Point< Element< T, O >::native_dim >& point)
 {
-    constexpr dim_t                                               nat_dim     = Element< T, O >::native_dim;
-    constexpr el_locind_t                                         n_basis_fun = Element< T, O >::n_nodes;
-    Eigen::Matrix< val_t, nat_dim, n_basis_fun, Eigen::RowMajor > ret_val;
+    constexpr dim_t                                    nat_dim     = Element< T, O >::native_dim;
+    constexpr el_locind_t                              n_basis_fun = Element< T, O >::n_nodes;
+    EigenRowMajorMatrix< val_t, nat_dim, n_basis_fun > retval;
     forConstexpr(
         [&]< el_locind_t I >(std::integral_constant< el_locind_t, I >) {
             forConstexpr(
                 [&]< dim_t D >(std::integral_constant< dim_t, D >) {
-                    ret_val(D, I) = ReferenceBasisFunction< T, O, I, BT, detail::derivativeByIndex(D) >{}(point);
+                    retval(D, I) = ReferenceBasisFunction< T, O, I, BT, detail::derivativeByIndex(D) >{}(point);
                 },
                 std::make_integer_sequence< dim_t, nat_dim >{});
         },
         std::make_integer_sequence< el_locind_t, n_basis_fun >{});
-    return ret_val;
+    return retval;
 }
 } // namespace lstr
 #endif // L3STER_BASISFUN_REFERENCEBASISFUNCTION_HPP

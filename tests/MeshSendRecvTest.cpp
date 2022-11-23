@@ -1,6 +1,6 @@
 #include "l3ster/comm/ReceiveMesh.hpp"
 #include "l3ster/mesh/ReadMesh.hpp"
-#include "l3ster/util/GlobalResource.hpp"
+#include "l3ster/util/ScopeGuards.hpp"
 
 #include "TestDataPath.h"
 
@@ -8,12 +8,14 @@
 
 int main(int argc, char* argv[])
 {
+    using namespace lstr;
+    L3sterScopeGuard scope_guard{argc, argv};
+    lstr::MpiComm    comm{};
+
     const auto  read_mesh   = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::gmsh_tag);
     const auto& read_part   = read_mesh.getPartitions()[0];
     const auto  serial_part = lstr::SerializedPartition{read_part};
 
-    lstr::GlobalResource< lstr::MpiScopeGuard >::initialize(argc, argv);
-    lstr::MpiComm comm{};
     if (comm.getSize() <= 1)
     {
         std::cerr << "This test requires at least 2 MPI ranks";

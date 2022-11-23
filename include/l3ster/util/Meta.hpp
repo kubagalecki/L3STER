@@ -6,52 +6,57 @@
 #include "l3ster/util/Common.hpp"
 #include "l3ster/util/Concepts.hpp"
 
+#include <functional>
 #include <numeric>
 #include <utility>
 #include <variant>
 
 namespace lstr
 {
-template < auto V >
-struct ConstexprValue
-{
-    using type                  = decltype(V);
-    static constexpr auto value = V;
-};
-
-template < typename... Types >
-struct TypePack
-{
-    static constexpr auto size = sizeof...(Types);
-};
-
-template < auto... Vals >
-struct ValuePack
-{
-    static constexpr auto size = sizeof...(Vals);
-};
-
 namespace detail
 {
 template < typename T >
-struct IsValuePack : std::false_type
-{};
+inline constexpr bool is_value_pack = false;
 template < auto... V >
-struct IsValuePack< ValuePack< V... > > : std::true_type
-{};
+inline constexpr bool is_value_pack< ValuePack< V... > > = true;
+template < typename T >
+inline constexpr bool is_type_pack = false;
+template < typename... V >
+inline constexpr bool is_type_pack< TypePack< V... > > = true;
 
 template < typename T >
-struct IsTypePack : std::false_type
-{};
-template < typename... V >
-struct IsTypePack< TypePack< V... > > : std::true_type
-{};
+inline constexpr bool has_unique_types = false;
+template < typename... Ts >
+inline constexpr bool has_unique_types< TypePack< Ts... > > = std::invoke([] {
+    constexpr auto get_first_occurrence_index = []< typename T >(TypePack< T >) {
+        std::size_t index            = 0;
+        const auto  assert_same_type = [&index]< typename Type >(TypePack< Type >) {
+            if constexpr (std::same_as< T, Type >)
+                return false;
+            else
+            {
+                ++index;
+                return true;
+            }
+        };
+        (assert_same_type(TypePack< Ts >{}) and ...);
+        return index;
+    };
+    std::array< bool, sizeof...(Ts) > type_map{};
+    const auto                        set_first_occurence = [&](auto t_wrpr) {
+        type_map[get_first_occurrence_index(t_wrpr)] = true;
+    };
+    (set_first_occurence(TypePack< Ts >{}), ...);
+    return std::ranges::all_of(type_map, std::identity{});
+});
 } // namespace detail
 
 template < typename T >
-concept ValuePack_c = detail::IsValuePack< T >::value;
+concept ValuePack_c = detail::is_value_pack< T >;
 template < typename T >
-concept TypePack_c = detail::IsTypePack< T >::value;
+concept TypePack_c = detail::is_type_pack< T >;
+template < typename T >
+concept UniqueTypePack_c = TypePack_c< T > and detail::has_unique_types< T >;
 
 namespace detail
 {
@@ -90,7 +95,7 @@ struct Constify
     {
         return in;
     }
-    const std::pointer_traits< T >::element_type* operator()(T in)
+    std::add_const_t< typename std::pointer_traits< T >::element_type >* operator()(T in)
         requires(std::is_pointer_v< T >)
     {
         return in;
@@ -99,9 +104,9 @@ struct Constify
 };
 } // namespace detail
 
-// assumes types in pack T are unique; TODO: write concept which checks this assumption
 template < typename... T >
 constexpr auto constifyVariant(const std::variant< T... >& v)
+    requires UniqueTypePack_c< TypePack< T... > >
 {
     using const_variant_t = std::variant< typename detail::Constify< T >::type... >;
     return std::visit< const_variant_t >(OverloadSet{detail::Constify< T >{}...}, v);
@@ -118,7 +123,7 @@ constexpr auto makeArrayFromValueSet(ValuePack< V... >)
 namespace detail
 {
 template < std::array... Arrays >
-constexpr inline auto repetitions = [] {
+constexpr inline auto repetitions = std::invoke([] {
     std::array< std::size_t, sizeof...(Arrays) > retval;
     auto                                         push_size = [ins_it = begin(retval)](const auto& array) mutable {
         *ins_it++ = array.size();
@@ -126,7 +131,7 @@ constexpr inline auto repetitions = [] {
     (push_size(Arrays), ...);
     std::exclusive_scan(rbegin(retval), rend(retval), rbegin(retval), 1u, std::multiplies<>{});
     return retval;
-}();
+});
 } // namespace detail
 
 template < std::array... Arrays >
@@ -204,7 +209,7 @@ using apply_in_out_t = typename detail::ApplyInnerOuterDeductionHelper< Inner, O
 template < template < auto... > typename Inner, template < typename... > typename Outer, std::array... Params >
 using cart_prod_t = apply_in_out_t< Inner, Outer, decltype(zipArrays(getCartProdComponents< Params... >())) >;
 
-template < array_of< bool > auto A >
+template < ArrayOf_c< bool > auto A >
 consteval auto getTrueInds()
 {
     std::array< size_t, std::ranges::count(A, true) > retval;

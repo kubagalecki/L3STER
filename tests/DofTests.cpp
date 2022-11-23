@@ -155,48 +155,91 @@ TEST_CASE("Node to DOF", "[dof]")
     constexpr size_t     n_parts   = 4;
     auto                 mesh      = makeCubeMesh(node_dist);
     auto&                p0        = mesh.getPartitions()[0];
+    constexpr size_t     n_fields  = 3;
 
-    constexpr size_t                                                             n_fields = 3;
-    std::vector< std::pair< std::array< n_id_t, 2 >, std::bitset< n_fields > > > dof_intervals;
-    n_id_t i1_begin = 0, i1_end = node_dist.size() * node_dist.size() - 1, i2_begin = i1_end + 1,
-           i2_end = p0.getNodes().size() - 1;
-    std::bitset< n_fields > i1_cov{0b110ull}, i2_cov{0b101ull};
-    dof_intervals.emplace_back(std::array{i1_begin, i1_end}, i1_cov);
-    dof_intervals.emplace_back(std::array{i2_begin, i2_end}, i2_cov);
-
-    const auto check_dofs = [&](const std::vector< n_id_t >& nodes, const NodeToDofMap< n_fields >& map) {
-        for (auto node : nodes)
-        {
-            const auto  computed_dofs = map(node);
-            const auto  expected_dof_base{static_cast< global_dof_t >(
-                node > i1_end ? (i1_end - i1_begin + 1) * i1_cov.count() + (node - i2_begin) * i2_cov.count()
-                               : (node - i1_begin) * i1_cov.count())};
-            const auto& cov = node > i1_end ? i2_cov : i1_cov;
-
-            global_dof_t node_dof_count = 0;
-            for (size_t local_dof_ind = 0; auto computed_dof : computed_dofs)
-                if (cov.test(local_dof_ind++))
-                {
-                    const global_dof_t expected_dof = expected_dof_base + node_dof_count++;
-                    CHECK(computed_dof == expected_dof);
-                }
-        }
-    };
-
-    SECTION("Unpartitioned")
+    SECTION("Non-contiguous DOF distribution")
     {
-        const auto map = NodeToDofMap{p0, dof_intervals};
-        check_dofs(p0.getNodes(), map);
+        detail::node_interval_vector_t< n_fields > dof_intervals;
+        n_id_t i1_begin = 0, i1_end = node_dist.size() * node_dist.size() - 1, i2_begin = i1_end + 1,
+               i2_end = p0.getNodes().size() - 1;
+        std::bitset< n_fields > i1_cov{0b110ull}, i2_cov{0b101ull};
+        dof_intervals.emplace_back(std::array{i1_begin, i1_end}, i1_cov);
+        dof_intervals.emplace_back(std::array{i2_begin, i2_end}, i2_cov);
+
+        const auto check_dofs = [&](const std::vector< n_id_t >& nodes, const NodeToGlobalDofMap< n_fields >& map) {
+            for (auto node : nodes)
+            {
+                const auto  computed_dofs = map(node);
+                const auto  expected_dof_base{static_cast< global_dof_t >(
+                    node > i1_end ? (i1_end - i1_begin + 1) * i1_cov.count() + (node - i2_begin) * i2_cov.count()
+                                   : (node - i1_begin) * i1_cov.count())};
+                const auto& cov = node > i1_end ? i2_cov : i1_cov;
+
+                global_dof_t node_dof_count = 0;
+                for (size_t local_dof_ind = 0; auto computed_dof : computed_dofs)
+                    if (cov.test(local_dof_ind++))
+                    {
+                        const global_dof_t expected_dof = expected_dof_base + node_dof_count++;
+                        CHECK(computed_dof == expected_dof);
+                    }
+            }
+        };
+
+        SECTION("Unpartitioned")
+        {
+            const auto map = NodeToGlobalDofMap{p0, dof_intervals};
+            CHECK_FALSE(map.isContiguous());
+            check_dofs(p0.getNodes(), map);
+        }
+
+        SECTION("Partitioned")
+        {
+            mesh                = partitionMesh(mesh, n_parts, {});
+            bool not_contiguous = false;
+            for (const auto& part : mesh.getPartitions())
+            {
+                const auto map = NodeToGlobalDofMap{part, dof_intervals};
+                not_contiguous |= not map.isContiguous();
+                check_dofs(part.getNodes(), map);
+                check_dofs(part.getGhostNodes(), map);
+            }
+            CHECK(not_contiguous); // at least one of the partitions should have a non-contiguous map
+        }
     }
 
-    SECTION("Partitioned")
+    SECTION("Contiguous DOF distribution")
     {
-        mesh = partitionMesh(mesh, n_parts, {});
-        for (const auto& part : mesh.getPartitions())
+        detail::node_interval_vector_t< n_fields > dof_intervals;
+        const auto                                 max_node = node_dist.size() * node_dist.size() * node_dist.size();
+        dof_intervals.emplace_back(std::array< n_id_t, 2 >{0, max_node}, std::bitset< n_fields >{0b111ul});
+
+        const auto check_dofs = [&](const std::vector< n_id_t >& nodes, const NodeToGlobalDofMap< n_fields >& map) {
+            for (auto node : nodes)
+            {
+                const auto   computed_dofs = map(node);
+                global_dof_t dof           = node * n_fields;
+                for (auto mapped_dof : computed_dofs)
+                    CHECK(mapped_dof == dof++);
+            }
+        };
+
+        SECTION("Unpartitioned")
         {
-            const auto map = NodeToDofMap{part, dof_intervals};
-            check_dofs(part.getNodes(), map);
-            check_dofs(part.getGhostNodes(), map);
+            const auto map = NodeToGlobalDofMap{p0, dof_intervals};
+            CHECK(map.isContiguous());
+            check_dofs(p0.getNodes(), map);
+        }
+
+        SECTION("Partitioned")
+        {
+            mesh = partitionMesh(mesh, n_parts, {});
+            for (const auto& part : mesh.getPartitions())
+            {
+                const auto map = NodeToGlobalDofMap{part, dof_intervals};
+                CHECK(map.isContiguous());
+                check_dofs(part.getNodes(), map);
+                check_dofs(part.getGhostNodes(), map);
+            }
         }
     }
 }

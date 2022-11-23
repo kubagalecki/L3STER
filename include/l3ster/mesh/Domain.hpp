@@ -43,24 +43,25 @@ public:
     template < ElementTypes ET, el_o_t EO >
     void reserve(size_t size);
 
-    template < invocable_on_elements F, ExecutionPolicy_c ExecPolicy >
-    void visit(F&& element_visitor, ExecPolicy&& policy);
-    template < invocable_on_const_elements F, ExecutionPolicy_c ExecPolicy >
-    void visit(F&& element_visitor, ExecPolicy&& policy) const;
+    template < ExecutionPolicy_c ExecPolicy >
+    void visit(invocable_on_elements auto&& element_visitor, ExecPolicy&& policy);
+    template < ExecutionPolicy_c ExecPolicy >
+    void visit(invocable_on_const_elements auto&& element_visitor, ExecPolicy&& policy) const;
 
     // Note: `zero` must be the neutral element for the reduction
-    template < typename Zero, typename Proj, typename Red, ExecutionPolicy_c ExecPolicy >
-    Zero reduce(Zero zero, Proj&& projection, Red&& reduction, ExecPolicy&& policy) const
-        requires invocable_on_const_elements_r< Proj, Zero > and requires {
-                                                                     {
-                                                                         reduction(zero, zero)
-                                                                         } -> std::convertible_to< Zero >;
-                                                                 };
+    auto reduce(auto&& zero, auto&& projection, auto&& reduction, ExecutionPolicy_c auto&& policy) const
+        -> std::decay_t< decltype(zero) >
+        requires invocable_on_const_elements_r< decltype(projection), std::decay_t< decltype(zero) > > and
+                 requires {
+                     {
+                         reduction(zero, zero)
+                         } -> std::convertible_to< std::decay_t< decltype(zero) > >;
+                 };
 
-    template < invocable_on_const_elements_r< bool > F, ExecutionPolicy_c ExecPolicy >
-    [[nodiscard]] find_result_t find(F&& predicate, ExecPolicy&& policy);
-    template < invocable_on_const_elements_r< bool > F, ExecutionPolicy_c ExecPolicy >
-    [[nodiscard]] const_find_result_t        find(F&& predicate, ExecPolicy&& policy) const;
+    [[nodiscard]] find_result_t              find(invocable_on_const_elements_r< bool > auto&& predicate,
+                                                  ExecutionPolicy_c auto&&                     policy);
+    [[nodiscard]] const_find_result_t        find(invocable_on_const_elements_r< bool > auto&& predicate,
+                                                  ExecutionPolicy_c auto&&                     policy) const;
     [[nodiscard]] inline find_result_t       find(el_id_t id);
     [[nodiscard]] inline const_find_result_t find(el_id_t id) const;
 
@@ -74,10 +75,8 @@ public:
     std::vector< Element< ET, EO > >& getElementVector();
 
 private:
-    template < typename F, ExecutionPolicy_c ExecPolicy >
-    static auto wrapElementVisitor(F&& element_visitor, ExecPolicy&& policy);
-    template < typename F, ExecutionPolicy_c ExecPolicy >
-    static auto wrapConstElementVisitor(F&& element_visitor, ExecPolicy&& policy);
+    static auto wrapElementVisitor(auto&& element_visitor, ExecutionPolicy_c auto&& policy);
+    static auto wrapConstElementVisitor(auto&& element_visitor, ExecutionPolicy_c auto&& policy);
 
     element_vector_variant_vector_t element_vectors;
     dim_t                           dim = 0;
@@ -161,8 +160,8 @@ void Domain::reserve(size_t size)
         std::get< el_vec_t >(*vector_variant_it).reserve(size);
 }
 
-template < invocable_on_elements F, ExecutionPolicy_c ExecPolicy >
-void Domain::visit(F&& element_visitor, ExecPolicy&& policy)
+template < ExecutionPolicy_c ExecPolicy >
+void Domain::visit(invocable_on_elements auto&& element_visitor, ExecPolicy&& policy)
 {
     const auto vec_variant_visitor = wrapElementVisitor(element_visitor, policy);
     const auto invoke_visitor      = [&vec_variant_visitor](element_vector_variant_t& el_vec) {
@@ -174,8 +173,8 @@ void Domain::visit(F&& element_visitor, ExecPolicy&& policy)
         std::for_each(policy, begin(element_vectors), end(element_vectors), invoke_visitor);
 }
 
-template < invocable_on_const_elements F, ExecutionPolicy_c ExecPolicy >
-void Domain::visit(F&& element_visitor, ExecPolicy&& policy) const
+template < ExecutionPolicy_c ExecPolicy >
+void Domain::visit(invocable_on_const_elements auto&& element_visitor, ExecPolicy&& policy) const
 {
     const auto vec_variant_visitor = wrapConstElementVisitor(element_visitor, policy);
     const auto invoke_visitor      = [&vec_variant_visitor](const element_vector_variant_t& el_vec) {
@@ -187,26 +186,27 @@ void Domain::visit(F&& element_visitor, ExecPolicy&& policy) const
         std::for_each(policy, begin(element_vectors), end(element_vectors), invoke_visitor);
 }
 
-template < typename Zero, typename Proj, typename Red, ExecutionPolicy_c ExecPolicy >
-Zero Domain::reduce(Zero zero, Proj&& projection, Red&& reduction, ExecPolicy&& policy) const
-    requires invocable_on_const_elements_r< Proj, Zero > and requires {
-                                                                 {
-                                                                     reduction(zero, zero)
-                                                                     } -> std::convertible_to< Zero >;
-                                                             }
+auto Domain::reduce(auto&& zero, auto&& projection, auto&& reduction, ExecutionPolicy_c auto&& policy) const
+    -> std::decay_t< decltype(zero) >
+    requires invocable_on_const_elements_r< decltype(projection), std::decay_t< decltype(zero) > > and
+             requires {
+                 {
+                     reduction(zero, zero)
+                     } -> std::convertible_to< std::decay_t< decltype(zero) > >;
+             }
 {
     const auto reduce_element_vector = [&]< ElementTypes ET, el_o_t EO >(const element_vector_t< ET, EO >& el_vec) {
         return std::transform_reduce(policy, begin(el_vec), end(el_vec), zero, reduction, projection);
     };
     const auto reduce_element_vector_variant = [&](const element_vector_variant_t& vec_var) {
-        return std::visit< Zero >(reduce_element_vector, vec_var);
+        return std::visit< std::decay_t< decltype(zero) > >(reduce_element_vector, vec_var);
     };
     return std::transform_reduce(
         policy, begin(element_vectors), end(element_vectors), zero, reduction, reduce_element_vector_variant);
 }
 
-template < invocable_on_const_elements_r< bool > F, ExecutionPolicy_c ExecPolicy >
-Domain::find_result_t Domain::find(F&& predicate, ExecPolicy&& policy)
+Domain::find_result_t Domain::find(invocable_on_const_elements_r< bool > auto&& predicate,
+                                   ExecutionPolicy_c auto&&                     policy)
 {
     std::optional< element_ptr_variant_t > opt_el_ptr_variant;
     std::mutex                             mut;
@@ -228,10 +228,11 @@ Domain::find_result_t Domain::find(F&& predicate, ExecPolicy&& policy)
     return opt_el_ptr_variant;
 }
 
-template < invocable_on_const_elements_r< bool > F, ExecutionPolicy_c ExecPolicy >
-Domain::const_find_result_t Domain::find(F&& predicate, ExecPolicy&& policy) const
+Domain::const_find_result_t Domain::find(invocable_on_const_elements_r< bool > auto&& predicate,
+                                         ExecutionPolicy_c auto&&                     policy) const
 {
-    return detail::constifyFound(const_cast< Domain* >(this)->find(predicate, std::forward< ExecPolicy >(policy)));
+    return detail::constifyFound(
+        const_cast< Domain* >(this)->find(predicate, std::forward< decltype(policy) >(policy)));
 }
 
 Domain::find_result_t Domain::find(el_id_t id)
@@ -250,7 +251,7 @@ Domain::find_result_t Domain::find(el_id_t id)
         // optimization for contiguous case
         if (back_id - front_id + 1u == el_vec.size())
         {
-            opt_el_ptr_variant.emplace(&el_vec[id - front_id]);
+            opt_el_ptr_variant.emplace(std::addressof(el_vec[id - front_id]));
             return true;
         }
 
@@ -258,7 +259,7 @@ Domain::find_result_t Domain::find(el_id_t id)
         if (it == end(el_vec) or it->getId() != id)
             return false;
 
-        opt_el_ptr_variant.emplace(&*it);
+        opt_el_ptr_variant.emplace(std::addressof(*it));
         return true;
     };
     const auto vector_variant_visitor = [&](element_vector_variant_t& var) {
@@ -273,10 +274,9 @@ Domain::const_find_result_t Domain::find(el_id_t id) const
     return detail::constifyFound(const_cast< Domain* >(this)->find(id));
 }
 
-template < typename F, ExecutionPolicy_c ExecPolicy >
-auto Domain::wrapElementVisitor(F&& element_visitor, ExecPolicy&& policy)
+auto Domain::wrapElementVisitor(auto&& element_visitor, ExecutionPolicy_c auto&& policy)
 {
-    if constexpr (SequencedPolicy_c< ExecPolicy >)
+    if constexpr (SequencedPolicy_c< decltype(policy) >)
         return [&element_visitor](auto& element_vector) {
             std::ranges::for_each(element_vector, element_visitor);
         };
@@ -286,10 +286,9 @@ auto Domain::wrapElementVisitor(F&& element_visitor, ExecPolicy&& policy)
         };
 }
 
-template < typename F, ExecutionPolicy_c ExecPolicy >
-auto Domain::wrapConstElementVisitor(F&& element_visitor, ExecPolicy&& policy)
+auto Domain::wrapConstElementVisitor(auto&& element_visitor, ExecutionPolicy_c auto&& policy)
 {
-    if constexpr (SequencedPolicy_c< ExecPolicy >)
+    if constexpr (SequencedPolicy_c< decltype(policy) >)
         return [&element_visitor](const auto& element_vector) {
             std::ranges::for_each(element_vector, element_visitor);
         };

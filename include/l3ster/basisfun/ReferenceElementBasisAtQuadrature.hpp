@@ -1,21 +1,19 @@
 #ifndef L3STER_BASISFUN_REFERENCEELEMENTBASISATQUADRATURE_HPP
 #define L3STER_BASISFUN_REFERENCEELEMENTBASISATQUADRATURE_HPP
 
-#include "l3ster/basisfun/ComputeRefBasisAtQpoints.hpp"
 #include "l3ster/basisfun/ReferenceBasisAtQuadrature.hpp"
+#include "l3ster/basisfun/ReferenceBasisFunction.hpp"
 
 namespace lstr
 {
 template < BasisTypes BT, ElementTypes ET, el_o_t EO, QuadratureTypes QT, q_o_t QO >
 const auto& getReferenceBasisAtDomainQuadrature()
 {
-    static const auto value = [] {
+    static const auto value = std::invoke([] {
         const auto quadrature = getQuadrature< QT, QO, ET >();
-        const auto basis_vals = computeRefBasisAtQpoints< BT, ET, EO >(quadrature);
-        const auto basis_ders = computeRefBasisDersAtQpoints< BT, ET, EO >(quadrature);
         return ReferenceBasisAtQuadrature< ET, EO, quadrature.size, quadrature.dim >{
-            .quadrature = quadrature, .basis_vals = basis_vals, .basis_ders = basis_ders};
-    }();
+            .quadrature = quadrature, .basis = detail::evalRefBasisAtPoints< BT, ET, EO >(quadrature.points)};
+    });
     return value;
 }
 
@@ -30,7 +28,7 @@ auto getReferenceBoundaryQpCoords(const Quadrature< QL, QD >& ref_qp)
     {
         int r = 0;
         for (; r < static_cast< int >(QD); ++r)
-            retval(r, c) = ref_qp.getPoints()[c][r];
+            retval(r, c) = ref_qp.points[c][r];
         retval(r, c) = 0.;
     }
     return retval;
@@ -102,7 +100,7 @@ const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t side)
         // quadratures for the individual sides will need to be stored in a tuple, and the result will need to be a
         // variant. Until then, an array + known return value is much simpler.
 
-        static const auto values = [] {
+        static const auto values = std::invoke([] {
             constexpr auto boundary_type   = ET == ElementTypes::Hex ? ElementTypes::Quad : ElementTypes::Line;
             const auto     boundary_quad   = getQuadrature< QT, QO, boundary_type >();
             const auto     ref_quad_coords = detail::getReferenceBoundaryQpCoords(boundary_quad);
@@ -165,25 +163,21 @@ const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t side)
                         break;
                     }
                 }
-                const auto quadrature      = detail::makeQuadratureFromCoordsMat(qp_coords, boundary_quad.getWeights());
-                const auto basis_vals      = computeRefBasisAtQpoints< BT, ET, EO >(quadrature);
-                const auto basis_ders      = computeRefBasisDersAtQpoints< BT, ET, EO >(quadrature);
+                const auto quadrature      = detail::makeQuadratureFromCoordsMat(qp_coords, boundary_quad.weights);
                 quadrature_array[side_ind] = ReferenceBasisAtQuadrature< ET, EO, quadrature.size, quadrature.dim >{
-                    .quadrature = quadrature, .basis_vals = basis_vals, .basis_ders = basis_ders};
+                    .quadrature = quadrature, .basis = detail::evalRefBasisAtPoints< BT, ET, EO >(quadrature.points)};
             }
             return quadrature_array;
-        }();
+        });
         return values[side];
     }
     else if constexpr (ET == ElementTypes::Line)
     {
-        static const auto values = [] {
+        static const auto values = std::invoke([] {
             using ref_basis_t      = ReferenceBasisAtQuadrature< ElementTypes::Line, EO, 1, 1 >;
-            constexpr auto compute = [](const Quadrature< 1, 1 >& quad) {
-                const auto basis_vals = computeRefBasisAtQpoints< BT, ET, EO >(quad);
-                const auto basis_ders = computeRefBasisDersAtQpoints< BT, ET, EO >(quad);
+            constexpr auto compute = [](const Quadrature< 1, 1 >& quadrature) {
                 return ReferenceBasisAtQuadrature< ET, EO, 1, 1 >{
-                    .quadrature = quad, .basis_vals = basis_vals, .basis_ders = basis_ders};
+                    .quadrature = quadrature, .basis = detail::evalRefBasisAtPoints< BT, ET, EO >(quadrature.points)};
             };
             std::array< ref_basis_t, 2 > quadrature_array;
             quadrature_array[0] = compute(
@@ -191,7 +185,7 @@ const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t side)
             quadrature_array[1] =
                 compute(Quadrature< 1, 1 >{Quadrature< 1, 1 >::q_points_t{std::array< val_t, 1 >{1.}}, std::array{1.}});
             return quadrature_array;
-        }();
+        });
         return values[side];
     }
 }

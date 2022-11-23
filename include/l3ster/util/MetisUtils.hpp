@@ -1,6 +1,10 @@
 #ifndef L3STER_UTIL_METISUTILS_HPP
 #define L3STER_UTIL_METISUTILS_HPP
+
+extern "C"
+{
 #include "metis.h"
+}
 
 #include <memory>
 #include <span>

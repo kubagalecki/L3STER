@@ -11,7 +11,7 @@ static void BM_JacobianComputation(benchmark::State& state)
         benchmark::DoNotOptimize(val);
     }
 }
-BENCHMARK(BM_JacobianComputation)->Name("Compute Jacobian");
+BENCHMARK(BM_JacobianComputation)->Name("Compute Jacobian [hex]");
 
 static void BM_ReferenceBasisComputation(benchmark::State& state)
 {
@@ -24,7 +24,7 @@ static void BM_ReferenceBasisComputation(benchmark::State& state)
         benchmark::DoNotOptimize(ders);
     }
 }
-BENCHMARK(BM_ReferenceBasisComputation)->Name("Compute reference basis");
+BENCHMARK(BM_ReferenceBasisComputation)->Name("Compute reference basis [hex 1]");
 
 static void BM_BasisPhysicalDerivativeComputation(benchmark::State& state)
 {
@@ -38,4 +38,4 @@ static void BM_BasisPhysicalDerivativeComputation(benchmark::State& state)
         benchmark::DoNotOptimize(ders);
     }
 }
-BENCHMARK(BM_BasisPhysicalDerivativeComputation)->Name("Compute basis physical derivatives");
+BENCHMARK(BM_BasisPhysicalDerivativeComputation)->Name("Compute basis physical derivatives [hex 1]");

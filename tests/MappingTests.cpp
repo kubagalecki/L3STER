@@ -1,7 +1,7 @@
 #include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 #include "l3ster/mapping/BoundaryNormal.hpp"
 #include "l3ster/mapping/ComputePhysBasisDer.hpp"
-#include "l3ster/mapping/ComputePhysBasisDersAtQpoints.hpp"
+#include "l3ster/mapping/JacobiMat.hpp"
 #include "l3ster/mapping/MapReferenceToPhysical.hpp"
 #include "l3ster/mesh/ReadMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
@@ -175,18 +175,18 @@ TEST_CASE("Boundary normal computation", "[mapping]")
         const auto top_view        = BoundaryElementView{element, 3};
         const auto left_view       = BoundaryElementView{element, 4};
         const auto right_view      = BoundaryElementView{element, 5};
-        const auto front_normal    = computeBoundaryNormal(front_view, jacobi_mat_eval(Point{0., 0., 1.}));
-        const auto back_normal     = computeBoundaryNormal(back_view, jacobi_mat_eval(Point{0., 0., -1.}));
+        const auto front_normal    = computeBoundaryNormal(front_view, jacobi_mat_eval(Point{0., 0., -1.}));
+        const auto back_normal     = computeBoundaryNormal(back_view, jacobi_mat_eval(Point{0., 0., 1.}));
         const auto bot_normal      = computeBoundaryNormal(bot_view, jacobi_mat_eval(Point{0., -1., 0.}));
         const auto top_normal      = computeBoundaryNormal(top_view, jacobi_mat_eval(Point{0., 1., 0.}));
         const auto left_normal     = computeBoundaryNormal(left_view, jacobi_mat_eval(Point{-1., 0., 0.}));
         const auto right_normal    = computeBoundaryNormal(right_view, jacobi_mat_eval(Point{1., 0., 0.}));
-        CHECK(front_normal[0] == Approx(-std::sqrt(1. / 6.)).epsilon(1e-13));
-        CHECK(front_normal[1] == Approx(-std::sqrt(1. / 6.)).epsilon(1e-13));
-        CHECK(front_normal[2] == Approx(std::sqrt(2. / 3.)).epsilon(1e-13));
-        CHECK(back_normal[0] == Approx(0.).epsilon(1e-13));
-        CHECK(back_normal[1] == Approx(0.).epsilon(1e-13));
-        CHECK(back_normal[2] == Approx(-1.).epsilon(1e-13));
+        CHECK(front_normal[0] == Approx(0.).epsilon(1e-13));
+        CHECK(front_normal[1] == Approx(0.).epsilon(1e-13));
+        CHECK(front_normal[2] == Approx(-1.).epsilon(1e-13));
+        CHECK(back_normal[0] == Approx(-std::sqrt(1. / 6.)).epsilon(1e-13));
+        CHECK(back_normal[1] == Approx(-std::sqrt(1. / 6.)).epsilon(1e-13));
+        CHECK(back_normal[2] == Approx(std::sqrt(2. / 3.)).epsilon(1e-13));
         CHECK(bot_normal[0] == Approx(0.).epsilon(1e-13));
         CHECK(bot_normal[1] == Approx(-1.).epsilon(1e-13));
         CHECK(bot_normal[2] == Approx(0.).epsilon(1e-13));
@@ -396,15 +396,15 @@ TEST_CASE("Reference basis at domain QPs", "[mapping]")
 
     SECTION("Values")
     {
-        for (ptrdiff_t basis = 0; basis < ref_bas_at_qp.basis_vals.rows(); ++basis)
-            CHECK(ref_bas_at_qp.basis_vals(basis, Eigen::all).sum() == Approx{1.});
+        for (const auto& vals_at_qp : ref_bas_at_qp.basis.values)
+            CHECK(vals_at_qp.sum() == Approx{1.});
     }
 
     SECTION("Derivatives")
     {
-        for (const auto& der : ref_bas_at_qp.basis_ders)
-            for (ptrdiff_t basis = 0; basis < der.rows(); ++basis)
-                CHECK(der(basis, Eigen::all).sum() == Approx{0.}.margin(1e-13));
+        for (const auto& ders_at_qp : ref_bas_at_qp.basis.derivatives)
+            for (Eigen::Index dim = 0; dim < ders_at_qp.rows(); ++dim)
+                CHECK(ders_at_qp(dim, Eigen::all).sum() == Approx{0.}.margin(1e-13));
     }
 }
 
@@ -415,27 +415,30 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
     constexpr auto  BT = BasisTypes::Lagrange;
 
     constexpr auto check_all_in_plane = [](const BoundaryView& view, Space normal, val_t offs) {
-        const auto space_ind = [](Space s) {
-            int retval{};
-            switch (s)
-            {
-            case Space::X:
-                retval = 0;
-                break;
-            case Space::Y:
-                retval = 1;
-                break;
-            case Space::Z:
-                retval = 2;;
-                break;
-            }
-            return retval;
-        }(normal);
+        const auto space_ind = std::invoke(
+            [](Space s) {
+                int retval{};
+                switch (s)
+                {
+                case Space::X:
+                    retval = 0;
+                    break;
+                case Space::Y:
+                    retval = 1;
+                    break;
+                case Space::Z:
+                    retval = 2;
+                    ;
+                    break;
+                }
+                return retval;
+            },
+            normal);
         const auto element_checker = [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
             const auto& ref_q =
-                getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.element_side).quadrature;
-            for (auto qp : ref_q.getPoints())
-                CHECK(mapToPhysicalSpace(*el_view.element, Point{qp})[space_ind] == Approx{offs}.epsilon(1e-15));
+                getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide()).quadrature;
+            for (auto qp : ref_q.points)
+                CHECK(mapToPhysicalSpace(*el_view, qp)[space_ind] == Approx{offs}.epsilon(1e-15));
         };
         view.visit(element_checker);
     };
@@ -450,13 +453,13 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
             constexpr el_o_t EO  = 1;
             constexpr q_o_t  QLO = 1;
             const auto       el  = Element< ET, 1 >{
-                       std::array< n_id_t, 2 >{0, 1},
-                       std::array< Point< 3 >, 2 >{Point{node_pos.front(), 0., 0.}, Point{node_pos.back(), 0., 0.}},
-                       0};
+                std::array< n_id_t, 2 >{0, 1},
+                std::array< Point< 3 >, 2 >{Point{node_pos.front(), 0., 0.}, Point{node_pos.back(), 0., 0.}},
+                0};
 
             const auto check_pos = [&](el_side_t side, val_t x_pos) {
                 const auto& ref_q  = getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QLO >(side);
-                const auto& ref_p  = ref_q.quadrature.getPoints().front();
+                const auto& ref_p  = ref_q.quadrature.points.front();
                 const auto  phys_p = mapToPhysicalSpace(el, Point{ref_p});
                 CHECK(phys_p[0] == Approx{x_pos}.epsilon(1e-15));
                 CHECK(phys_p[1] == Approx{0.}.epsilon(1e-15));
@@ -537,31 +540,4 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
             check_all_in_plane(b_right, Space::X, 1.);
         }
     }
-}
-
-TEST_CASE("Physical basis derivatives at QPs", "[mapping]")
-{
-    constexpr auto  QT = QuadratureTypes::GLeg;
-    constexpr q_o_t QO = 5;
-    constexpr auto  BT = BasisTypes::Lagrange;
-
-    constexpr auto do_test = []< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
-        const auto test_point        = Point{getQuadrature< QT, QO, ET >().getPoints().front()};
-        const auto J                 = getNatJacobiMatGenerator(element)(test_point);
-        const auto ref_basis_ders    = computeRefBasisDers< ET, EO, BT >(test_point);
-        const auto bas_ders_at_testp = computePhysBasisDers(J, ref_basis_ders);
-
-        const auto& ref_basis_at_qps = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
-        const auto  jacobians_at_qps = computeJacobiansAtQpoints(element, ref_basis_at_qps.quadrature);
-        const auto  phys_ders_at_qps = computePhysBasisDersAtQpoints(ref_basis_at_qps.basis_ders, jacobians_at_qps);
-
-        for (int i = 0; i < Element< ET, EO >::native_dim; ++i)
-            CHECK((phys_ders_at_qps[i](0, Eigen::all) - bas_ders_at_testp(i, Eigen::all)).norm() ==
-                  Approx{0.}.margin(1e-13));
-    };
-
-    const auto mesh = makeCubeMesh(std::array{0., .25, .5, .75, 1.});
-    const auto part = mesh.getPartitions()[0];
-    part.visit(do_test,
-               std::views::single(0)); // Only for the hex domain, this won't work for 2D elements in a 3D space
 }

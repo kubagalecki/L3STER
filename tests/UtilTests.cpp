@@ -2,7 +2,7 @@
 #include "l3ster/util/Base64.hpp"
 #include "l3ster/util/BitsetManip.hpp"
 #include "l3ster/util/Common.hpp"
-#include "l3ster/util/ConstexprVector.hpp"
+#include "l3ster/util/ConstexprRefStableCollection.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/IndexMap.hpp"
 #include "l3ster/util/Meta.hpp"
@@ -14,6 +14,7 @@
 #include "catch2/catch.hpp"
 #include "tbb/tbb.h"
 
+#include <algorithm>
 #include <random>
 #include <ranges>
 
@@ -90,6 +91,20 @@ TEST_CASE("Constexpr vector", "[util]")
         constexpr bool result = checkConstexprVectorIters();
         CHECK(result);
     }
+}
+
+static consteval auto checkRSC()
+{
+    ConstexprRefStableCollection< size_t > nums;
+    for (size_t i = 1; i < nums.block_size * 2; ++i)
+        nums.push(i);
+    std::ranges::sort(nums | std::views::reverse);
+    return std::ranges::is_sorted(nums, std::greater<>{});
+}
+
+TEST_CASE("Constexpr ref-stable collection", "[util]")
+{
+    static_assert(checkRSC());
 }
 
 TEST_CASE("Stack size manipulation", "[util]")

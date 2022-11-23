@@ -20,14 +20,14 @@ TEST_CASE("Polynomial evaluation", "[math]")
 
     std::mt19937                             prng{std::random_device{}()};
     std::uniform_real_distribution< double > dist{-argument_range, argument_range};
-    const auto                               test_domain = [&] {
+    const auto                               test_domain = std::invoke([&] {
         std::array< double, test_size > ret{};
         std::generate(ret.begin(), ret.end(), [&] { return dist(prng); });
         return ret;
-    }();
+    });
 
     // Note: using pow introduces significant error, so argument_range needs to be kept small
-    const auto test_range = [&] {
+    const auto test_range = std::invoke([&] {
         std::array< double, test_size > ret{};
         std::transform(test_domain.cbegin(), test_domain.cend(), ret.begin(), [&](double x) {
             double r = 0.;
@@ -36,14 +36,14 @@ TEST_CASE("Polynomial evaluation", "[math]")
             return r;
         });
         return ret;
-    }();
+    });
 
-    const auto computed_range = [&] {
+    const auto computed_range = std::invoke([&] {
         std::array< double, test_size > ret{};
         std::transform(
             test_domain.cbegin(), test_domain.cend(), ret.begin(), [&](double x) { return polynomial.evaluate(x); });
         return ret;
-    }();
+    });
 
     constexpr auto approx = [](const double a, const double b) {
         return fabs(a - b) < tol;
@@ -117,7 +117,7 @@ TEST_CASE("Lagrange interpolation", "[math]")
         std::generate(ret.begin(), ret.end(), [&, x0 = -argument_range]() mutable {
             x0 += argument_range;
             return std::uniform_real_distribution< double >{x0, x0 + argument_range}(prng);
-              });
+        });
         return ret;
     };
     const auto make_random_array = [&] {
@@ -128,15 +128,15 @@ TEST_CASE("Lagrange interpolation", "[math]")
         return ret;
     };
 
-    const auto x          = make_random_array_spread();
-    const auto y          = make_random_array();
-    const auto lag_poly   = lagrangeInterp(x, y);
-    const auto y_computed = [&] {
+    const auto     x          = make_random_array_spread();
+    const auto     y          = make_random_array();
+    const auto     lag_poly   = lagrangeInterp(x, y);
+    const auto     y_computed = std::invoke([&] {
         std::array< double, test_size > ret{};
         std::transform(x.cbegin(), x.cend(), ret.begin(), [&](double in) { return lag_poly.evaluate(in); });
         return ret;
-    }();
-    constexpr auto approx = [](const double a, const double b) {
+    });
+    constexpr auto approx     = [](const double a, const double b) {
         constexpr double lagrange_tol = 5e-3;
         return fabs(a - b) < lagrange_tol;
     };

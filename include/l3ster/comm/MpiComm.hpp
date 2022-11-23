@@ -3,7 +3,10 @@
 
 #include "l3ster/util/Concepts.hpp"
 
+extern "C"
+{
 #include "mpi.h"
+}
 
 #include <memory_resource>
 #include <span>
@@ -62,28 +65,6 @@ auto decomposeMpiBuf(R&& buf)
                            static_cast< int >(std::ranges::ssize(buf)));
 }
 } // namespace detail
-
-struct MpiScopeGuard
-{
-    inline MpiScopeGuard(int& argc, char**& argv);
-    MpiScopeGuard(const MpiScopeGuard&)            = delete;
-    MpiScopeGuard(MpiScopeGuard&&)                 = delete;
-    MpiScopeGuard& operator=(const MpiScopeGuard&) = delete;
-    MpiScopeGuard& operator=(MpiScopeGuard&&)      = delete;
-    ~MpiScopeGuard() { MPI_Finalize(); }
-};
-
-MpiScopeGuard::MpiScopeGuard(int& argc, char**& argv)
-{
-    constexpr auto required_mode = MPI_THREAD_SERIALIZED;
-    int            provided_mode{};
-    int            mpi_status = MPI_Init_thread(&argc, &argv, required_mode, &provided_mode);
-    if (mpi_status)
-        throw std::runtime_error{"failed to initialize MPI"};
-    if (provided_mode < required_mode)
-        throw std::runtime_error{
-            "The current version of MPI does not support the required threading mode MPI_THREAD_SERIALIZED"};
-}
 
 class MpiComm
 {
@@ -274,17 +255,17 @@ void MpiComm::receive(R&& recv_range, int source, int tag) const
 template < detail::MpiType_c T >
 T MpiComm::receive(int source, int tag) const
 {
-    T ret_val{};
-    receive(std::span{&ret_val, 1}, source, tag);
-    return ret_val;
+    T retval{};
+    receive(std::span{&retval, 1}, source, tag);
+    return retval;
 }
 
 template < detail::MpiType_c T >
 std::vector< T > MpiComm::receive(size_t count, int source, int tag) const
 {
-    std::vector< T > ret_val(count);
-    receive(ret_val, source, tag);
-    return ret_val;
+    std::vector< T > retval(count);
+    receive(retval, source, tag);
+    return retval;
 }
 
 template < detail::MpiNonblockingBuf_c R >

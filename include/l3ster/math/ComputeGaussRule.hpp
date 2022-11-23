@@ -22,8 +22,11 @@ Reference:
 Golub, G. H., & Welsch, J. H. (1969). Calculation of Gauss quadrature rules.
 Mathematics of Computation, 23(106), 221–221. https://doi.org/10.1090/s0025-5718-69-99647-1
 */
-template < size_t ORDER, mapping< size_t, val_t > A, mapping< size_t, val_t > B, mapping< size_t, val_t > C >
-auto computeGaussRule(A&& a, B&& b, C&& c)
+template < size_t ORDER >
+auto computeGaussRule(Mapping_c< size_t, val_t > auto&& a,
+                      Mapping_c< size_t, val_t > auto&& b,
+                      Mapping_c< size_t, val_t > auto&& c,
+                      std::integral_constant< size_t, ORDER > = {})
 {
     static_assert(ORDER > 0u);
     using matrix_t = Eigen::Matrix< val_t, ORDER, ORDER >;

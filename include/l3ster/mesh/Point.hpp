@@ -13,13 +13,13 @@ template < dim_t DIM >
 class Point
 {
 public:
-    using vector_t = Eigen::Matrix< val_t, DIM, 1u >;
+    using coords_array_t = Eigen::Vector< val_t, DIM >;
 
     Point() = default;
-    explicit Point(const vector_t& coords_) noexcept : coords{coords_} {}
-    explicit Point(const std::array< val_t, DIM >& a) noexcept : coords{a.data()} {}
+    Point(const coords_array_t& coords_) noexcept : coords{coords_} {}
+    Point(const std::array< val_t, DIM >& a) noexcept : coords{a.data()} {}
     template < std::same_as< val_t >... T >
-    explicit Point(T... coords_) : coords{std::array{coords_...}.data()}
+    Point(T... coords_) : coords{std::array{coords_...}.data()}
     {}
 
     [[nodiscard]] val_t  operator[](ptrdiff_t i) const noexcept { return coords.coeff(i); }
@@ -56,10 +56,10 @@ public:
         return coords.coeffRef(2);
     }
 
-    operator vector_t() const noexcept { return coords; }; // NOLINT implicit conversion intended
+    operator coords_array_t() const noexcept { return coords; }; // NOLINT implicit conversion intended
 
 private:
-    vector_t coords;
+    coords_array_t coords;
 };
 
 template < size_t DIM >
@@ -71,7 +71,7 @@ Point(T...) -> Point< sizeof...(T) >;
 template < dim_t DIM >
 bool operator==(const Point< DIM >& p1, const Point< DIM >& p2)
 {
-    return static_cast< Point< DIM >::vector_t >(p1) == static_cast< Point< DIM >::vector_t >(p2);
+    return static_cast< Point< DIM >::coords_array_t >(p1) == static_cast< Point< DIM >::coords_array_t >(p2);
 }
 } // namespace lstr
 #endif // L3STER_MESH_POINT_HPP

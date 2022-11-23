@@ -8,12 +8,32 @@
 #include <concepts>
 #include <limits>
 #include <memory>
+#include <span>
 #include <tuple>
 #include <type_traits>
 #include <vector>
 
 namespace lstr
 {
+template < auto V >
+struct ConstexprValue
+{
+    using type                  = decltype(V);
+    static constexpr auto value = V;
+};
+
+template < typename... Types >
+struct TypePack
+{
+    static constexpr auto size = sizeof...(Types);
+};
+
+template < auto... Vals >
+struct ValuePack
+{
+    static constexpr auto size = sizeof...(Vals);
+};
+
 template < typename... T >
 struct OverloadSet : public T...
 {
@@ -45,6 +65,29 @@ constexpr bool exactlyOneOf(T... args)
     return (static_cast< size_t >(static_cast< bool >(args)) + ...) == 1u;
 }
 
+// If std::unique_ptr<T[]> was a range...
+template < typename T >
+class ArrayOwner
+{
+public:
+    ArrayOwner() = default;
+    explicit ArrayOwner(std::integral auto size) : m_data{std::make_unique_for_overwrite< T[] >(size)}, m_size{size} {}
+
+    T*          begin() { return m_data.get(); }
+    const T*    begin() const { return m_data.get(); }
+    T*          end() { return m_data.get() + m_size; }
+    const T*    end() const { return m_data.get() + m_size; }
+    T*          data() { return m_data.get(); }
+    const T*    data() const { return m_data.get(); }
+    T&          operator[](std::size_t i) { return m_data[i]; }
+    const T&    operator[](std::size_t i) const { return m_data[i]; }
+    std::size_t size() const { return m_size; }
+
+private:
+    std::unique_ptr< T[] > m_data;
+    std::size_t            m_size{};
+};
+
 // Workaround: GCC Bug 97930
 // Needed as template parameter because libstdc++ std::pair is not structural (private base class)
 // TODO: rely on std::pair once fixed upstream
@@ -72,41 +115,22 @@ std::vector< T > concatVectors(std::vector< T > v1, const std::vector< T >& v2)
     return v1;
 }
 
-template < typename T >
-struct alignas(std::max< std::size_t >(64u /* cacheline size */, alignof(T))) CacheAligned
-{
-    template < typename... Args >
-    constexpr CacheAligned(Args&&... args)
-        requires std::constructible_from< T, Args... >
-    : value{std::forward< Args >(args)...}
-    {}
-
-    constexpr T&       operator*() noexcept { return value; }
-    constexpr const T& operator*() const noexcept { return value; }
-    constexpr T*       operator->() noexcept { return std::addressof(value); }
-    constexpr const T* operator->() const noexcept { return std::addressof(value); }
-
-private:
-    T value;
-};
-
-template < std::ranges::sized_range auto inds, typename T, size_t N, std::indirectly_writable< T > Iter >
-Iter copyValuesAtInds(const std::array< T, N >& array, Iter out_iter)
-    requires std::convertible_to< std::ranges::range_value_t< decltype(inds) >, size_t > and
-             (std::ranges::all_of(inds, [](size_t i) { return i < N; }))
+template < IndexRange_c auto inds, typename T, size_t N, std::indirectly_writable< T > Iter >
+Iter copyValuesAtInds(const std::array< T, N >& array, Iter out_iter, ConstexprValue< inds > inds_ctwrpr = {})
+    requires(std::ranges::all_of(inds, [](size_t i) { return i < N; }))
 {
     for (auto i : inds)
         *out_iter++ = array[i];
     return out_iter;
 }
 
-template < std::ranges::sized_range auto inds, typename T, size_t N >
-std::array< T, std::ranges::size(inds) > getValuesAtInds(const std::array< T, N >& array)
-    requires std::convertible_to< std::ranges::range_value_t< decltype(inds) >, size_t > and
-             (std::ranges::all_of(inds, [](size_t i) { return i < N; }))
+template < IndexRange_c auto inds, typename T, size_t N >
+std::array< T, std::ranges::size(inds) > getValuesAtInds(const std::array< T, N >& array,
+                                                         ConstexprValue< inds >    inds_ctwrpr = {})
+    requires(std::ranges::all_of(inds, [](size_t i) { return i < N; }))
 {
     std::array< T, std::ranges::size(inds) > retval;
-    copyValuesAtInds< inds >(array, begin(retval));
+    copyValuesAtInds(array, begin(retval), inds_ctwrpr);
     return retval;
 }
 

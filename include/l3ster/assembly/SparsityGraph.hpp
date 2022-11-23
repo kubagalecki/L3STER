@@ -8,33 +8,40 @@
 #include "Tpetra_FECrsMatrix.hpp"
 #include "Tpetra_FEMultiVector.hpp"
 
-#include "tbb/tbb.h"
+#include "oneapi/tbb/parallel_for.h"
 
 #include <mutex>
 
 namespace lstr::detail
 {
-template < array_of< size_t > auto dof_inds, size_t n_nodes, size_t n_total_dofs >
-auto getDofsFromNodes(const std::array< n_id_t, n_nodes >& nodes, const NodeToDofMap< n_total_dofs >& map)
+template < IndexRange_c auto dof_inds, size_t n_nodes >
+auto getDofsFromNodes(const std::array< n_id_t, n_nodes >& nodes,
+                      const NodeToDofMap_c auto&           map,
+                      ConstexprValue< dof_inds >           dofinds_ctwrpr = {})
 {
-    std::array< global_dof_t, dof_inds.size() * n_nodes > retval;
+    using dof_t = typename std::remove_cvref_t< decltype(map) >::dof_t;
+    std::array< dof_t, std::ranges::size(dof_inds) * n_nodes > retval;
     for (auto insert_it = retval.begin(); auto node : nodes)
-        insert_it = copyValuesAtInds< dof_inds >(map(node), insert_it);
+        insert_it = copyValuesAtInds(map(node), insert_it, dofinds_ctwrpr);
     return retval;
 }
 
-template < array_of< size_t > auto dof_inds, ElementTypes T, el_o_t O, size_t n_total_dofs >
-auto getSortedElementDofs(const Element< T, O >& element, const NodeToDofMap< n_total_dofs >& map)
+template < IndexRange_c auto dof_inds, ElementTypes T, el_o_t O >
+auto getSortedElementDofs(const Element< T, O >&     element,
+                          const NodeToDofMap_c auto& map,
+                          ConstexprValue< dof_inds > dofinds_ctwrpr = {})
 {
     auto nodes_copy = element.getNodes();
     std::ranges::sort(nodes_copy);
-    return getDofsFromNodes< dof_inds >(nodes_copy, map);
+    return getDofsFromNodes(nodes_copy, map, dofinds_ctwrpr);
 }
 
-template < array_of< size_t > auto dof_inds, ElementTypes T, el_o_t O, size_t n_total_dofs >
-auto getUnsortedElementDofs(const Element< T, O >& element, const NodeToDofMap< n_total_dofs >& map)
+template < IndexRange_c auto dof_inds, ElementTypes T, el_o_t O >
+auto getUnsortedElementDofs(const Element< T, O >&     element,
+                            const NodeToDofMap_c auto& map,
+                            ConstexprValue< dof_inds > dofinds_ctwrpr = {})
 {
-    return getDofsFromNodes< dof_inds >(element.getNodes(), map);
+    return getDofsFromNodes(element.getNodes(), map, dofinds_ctwrpr);
 }
 
 class CrsEntries
@@ -42,52 +49,52 @@ class CrsEntries
     static constexpr size_t buf_size        = 1ul << 29;
     static constexpr size_t overflowed_size = std::numeric_limits< size_t >::max();
 
-    [[nodiscard]] global_dof_t*       getBuf(size_t row) noexcept { return std::next(buf.get(), row * row_buf_size); }
+    [[nodiscard]] global_dof_t* getBuf(size_t row) noexcept { return std::next(m_buf.get(), row * m_row_buf_size); }
     [[nodiscard]] const global_dof_t* getBuf(size_t row) const noexcept
     {
-        return std::next(buf.get(), row * row_buf_size);
+        return std::next(m_buf.get(), row * m_row_buf_size);
     }
 
 public:
     CrsEntries(size_t n_rows_)
-        : buf{std::make_unique_for_overwrite< global_dof_t[] >(buf_size)},
-          buf_sizes{std::make_unique< size_t[] >(n_rows_)},
-          overflowed{std::make_unique< std::vector< global_dof_t >[] >(n_rows_)},
-          row_buf_size{buf_size / (n_rows_ == 0 ? size_t{1} : n_rows_)},
-          n_rows{n_rows_}
+        : m_buf{std::make_unique_for_overwrite< global_dof_t[] >(buf_size)},
+          m_buf_sizes{std::make_unique< size_t[] >(n_rows_)},
+          m_overflowed{std::make_unique< std::vector< global_dof_t >[] >(n_rows_)},
+          m_row_buf_size{buf_size / (n_rows_ == 0 ? size_t{1} : n_rows_)},
+          m_n_rows{n_rows_}
     {}
 
     [[nodiscard]] std::span< const global_dof_t > getRowEntries(size_t row) const noexcept
     {
-        const auto row_size      = buf_sizes[row];
+        const auto row_size      = m_buf_sizes[row];
         const auto row_buf_start = getBuf(row);
         if (row_size != overflowed_size) [[likely]]
             return {row_buf_start, row_size};
         else [[unlikely]]
-            return {overflowed[row].data(), overflowed[row].size()};
+            return {m_overflowed[row].data(), m_overflowed[row].size()};
     }
     [[nodiscard]] std::span< global_dof_t > getRowEntriesForOverwrite(size_t row, size_t requested_size)
     {
-        if (requested_size <= row_buf_size) [[likely]]
+        if (requested_size <= m_row_buf_size) [[likely]]
         {
-            buf_sizes[row] = requested_size;
+            m_buf_sizes[row] = requested_size;
             return {getBuf(row), requested_size};
         }
         else [[unlikely]]
         {
-            buf_sizes[row] = overflowed_size;
-            overflowed[row].resize(requested_size);
-            return {overflowed[row].data(), requested_size};
+            m_buf_sizes[row] = overflowed_size;
+            m_overflowed[row].resize(requested_size);
+            return {m_overflowed[row].data(), requested_size};
         }
     }
-    [[nodiscard]] size_t size() const noexcept { return n_rows; }
+    [[nodiscard]] size_t size() const noexcept { return m_n_rows; }
 
 private:
-    std::unique_ptr< global_dof_t[] >                buf;
-    std::unique_ptr< size_t[] >                      buf_sizes;
-    std::unique_ptr< std::vector< global_dof_t >[] > overflowed;
-    const size_t                                     row_buf_size;
-    const size_t                                     n_rows;
+    std::unique_ptr< global_dof_t[] >                m_buf;
+    std::unique_ptr< size_t[] >                      m_buf_sizes;
+    std::unique_ptr< std::vector< global_dof_t >[] > m_overflowed;
+    const size_t                                     m_row_buf_size;
+    const size_t                                     m_n_rows;
 };
 
 template < auto problem_def >
@@ -123,7 +130,7 @@ auto calculateCrsData(const MeshPartition&                                      
         std::memcpy(new_dofs_write_range.data(), union_range.data(), new_dofs_write_range.size_bytes());
     };
 
-    const auto                node_to_dof_map         = NodeToDofMap{mesh, dof_intervals};
+    const auto                node_to_dof_map         = NodeToGlobalDofMap{mesh, dof_intervals};
     const auto                global_to_local_dof_map = IndexMap{owned_plus_shared_dofs};
     std::vector< std::mutex > row_mutexes(owned_plus_shared_dofs.size());
 
@@ -152,7 +159,7 @@ auto calculateCrsData(const MeshPartition&                                      
         };
         mesh.visit(process_element, domain_id, std::execution::par);
     };
-    forConstexpr(process_domain, problem_def_ctwrapper);
+    forEachConstexprParallel(process_domain, problem_def_ctwrapper);
     dealloc_scratchpads();
     return row_entries;
 }
@@ -162,10 +169,11 @@ inline Kokkos::DualView< size_t* > getRowSizes(const CrsEntries& entries)
     Kokkos::DualView< size_t* > retval{"sparse graph row sizes", entries.size()};
     auto                        host_view = retval.view_host();
     retval.modify_host();
-    tbb::parallel_for(tbb::blocked_range< size_t >{0, entries.size()}, [&](const tbb::blocked_range< size_t >& range) {
-        for (size_t row = range.begin(); row != range.end(); ++row)
-            host_view(row) = entries.getRowEntries(row).size();
-    });
+    oneapi::tbb::parallel_for(oneapi::tbb::blocked_range< size_t >{0, entries.size()},
+                              [&](const oneapi::tbb::blocked_range< size_t >& range) {
+                                  for (size_t row = range.begin(); row != range.end(); ++row)
+                                      host_view(row) = entries.getRowEntries(row).size();
+                              });
     retval.sync_device();
     return retval;
 }

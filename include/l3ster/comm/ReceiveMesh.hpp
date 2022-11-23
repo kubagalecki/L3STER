@@ -13,13 +13,13 @@ inline SerializedPartition receivePartition(const MpiComm& comm, int source)
     const auto dom_ids = comm.template receive< d_id_t >(n_doms, source, msg_tag++);
     const auto sizes   = comm.template receive< size_t >(detail::getSizeMsgLength(n_doms), source, msg_tag++);
 
-    SerializedPartition             ret_val{};
+    SerializedPartition             retval{};
     std::vector< MpiComm::Request > messages{};
     constexpr size_t                messages_per_domain = 6;
     messages.reserve(messages_per_domain * n_doms + 2);
     for (size_t i = 0; i < n_doms; ++i)
     {
-        auto& domain = ret_val.domains.emplace(dom_ids[i], SerializedDomain{}).first->second;
+        auto& domain = retval.domains.emplace(dom_ids[i], SerializedDomain{}).first->second;
 
         const auto node_msg_size = sizes[i * 4];
         domain.element_nodes.resize(node_msg_size);
@@ -43,14 +43,14 @@ inline SerializedPartition receivePartition(const MpiComm& comm, int source)
     }
 
     const auto nodes_size = sizes[4 * n_doms];
-    ret_val.nodes.resize(nodes_size);
-    messages.emplace_back(comm.receiveAsync(ret_val.nodes, source, msg_tag++));
+    retval.nodes.resize(nodes_size);
+    messages.emplace_back(comm.receiveAsync(retval.nodes, source, msg_tag++));
 
     const auto ghost_nodes_size = sizes.back();
-    ret_val.ghost_nodes.resize(ghost_nodes_size);
-    messages.emplace_back(comm.receiveAsync(ret_val.ghost_nodes, source, msg_tag));
+    retval.ghost_nodes.resize(ghost_nodes_size);
+    messages.emplace_back(comm.receiveAsync(retval.ghost_nodes, source, msg_tag));
 
-    return ret_val;
+    return retval;
 }
 } // namespace lstr
 #endif // L3STER_COMM_RECEIVEMESH_HPP

@@ -1,9 +1,9 @@
 #ifndef L3STER_QUADRATURE_REFERENCEQUADRATURE_HPP
 #define L3STER_QUADRATURE_REFERENCEQUADRATURE_HPP
 
-#include "Quadrature.hpp"
 #include "l3ster/defs/Typedefs.h"
 #include "l3ster/math/ComputeGaussRule.hpp"
+#include "l3ster/quad/Quadrature.hpp"
 #include "l3ster/quad/QuadratureTypes.h"
 
 #include <algorithm>
@@ -11,20 +11,25 @@
 
 namespace lstr
 {
-template < QuadratureTypes QT, q_o_t QO >
-constexpr auto getRefQuadSize()
+consteval size_t getRefQuadSize(QuadratureTypes QT, q_o_t QO)
 {
-    if constexpr (QT == QuadratureTypes::GLeg)
+    switch (QT)
+    {
+    case QuadratureTypes::GLeg:
         return QO / 2 + 1;
+        break;
+    default:
+        throw "Reference quadrature size is unknown for this quadrature type";
+    }
 }
 
 template < QuadratureTypes QT, q_o_t QO >
 const auto& getReferenceQuadrature()
     requires(QT == QuadratureTypes::GLeg)
 {
-    static const auto value = [] {
-        constexpr size_t size = getRefQuadSize< QT, QO >();
-        using quadrature_t    = Quadrature< size, 1 >;
+    static const auto value = std::invoke([] {
+        constexpr auto size = getRefQuadSize(QT, QO);
+        using quadrature_t  = Quadrature< size, 1 >;
 
         constexpr auto a = [](size_t x) {
             return static_cast< val_t >(2u * x - 1u) / static_cast< val_t >(x);
@@ -35,7 +40,7 @@ const auto& getReferenceQuadrature()
         constexpr auto c = [](size_t x) {
             return static_cast< val_t >(x - 1u) / static_cast< val_t >(x);
         };
-        const auto& [qp, w] = computeGaussRule< size >(a, b, c);
+        const auto& [qp, w] = computeGaussRule(a, b, c, std::integral_constant< size_t, size >{});
 
         typename quadrature_t::q_points_t q_points;
         typename quadrature_t::weights_t  weights;
@@ -43,7 +48,7 @@ const auto& getReferenceQuadrature()
         std::ranges::copy(w, weights.begin());
 
         return quadrature_t{q_points, weights};
-    }();
+    });
     return value;
 }
 } // namespace lstr

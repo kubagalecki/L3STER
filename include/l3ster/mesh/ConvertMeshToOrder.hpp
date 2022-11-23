@@ -9,7 +9,7 @@
 namespace lstr
 {
 template < el_o_t O_C >
-[[nodiscard]] MeshPartition convertMeshToOrder(const MeshPartition& mesh)
+[[nodiscard]] MeshPartition convertMeshToOrder(const MeshPartition& mesh, std::integral_constant< el_o_t, O_C > = {})
 {
     if (not mesh.isDualGraphInitialized())
         throw std::logic_error("Initialize the dual graph of the mesh before converting it to a different order");
@@ -34,11 +34,11 @@ template < el_o_t O_C >
                             return;
                         const auto [nbr_ptr_var, nbr_dom_id] = *mesh.find(nbr_id);
                         std::visit(
-                            [&, ndi = nbr_dom_id]< ElementTypes T_N, el_o_t O_N >(const Element< T_N, O_N >* nbr_ptr) {
+                            [&]< ElementTypes T_N, el_o_t O_N >(const Element< T_N, O_N >* nbr_ptr) {
                                 if constexpr (O_N == 1)
                                 {
                                     const Element< T_N, O_C >& converted_nbr = *std::ranges::lower_bound(
-                                        new_domains.at(ndi).template getElementVector< T_N, O_C >(),
+                                        new_domains.at(nbr_dom_id).template getElementVector< T_N, O_C >(),
                                         nbr_id,
                                         {},
                                         [](const auto& e) { return e.getId(); });

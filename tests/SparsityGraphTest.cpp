@@ -1,7 +1,7 @@
 #include "l3ster/assembly/SparsityGraph.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
-#include "l3ster/util/GlobalResource.hpp"
+#include "l3ster/util/ScopeGuards.hpp"
 
 #include "DenseGraph.hpp"
 #include "TestDataPath.h"
@@ -9,9 +9,8 @@
 int main(int argc, char* argv[])
 {
     using namespace lstr;
-
-    GlobalResource< MpiScopeGuard >::initialize(argc, argv);
-    const MpiComm comm;
+    L3sterScopeGuard scope_guard{argc, argv};
+    const MpiComm    comm;
 
     const std::array node_dist{0., 1., 2., 3., 4., 5.};
     const auto       mesh         = makeCubeMesh(node_dist);

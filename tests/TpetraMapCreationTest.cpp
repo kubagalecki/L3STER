@@ -1,9 +1,9 @@
 #include "TestDataPath.h"
-#include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/assembly/MakeTpetraMap.hpp"
+#include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/util/GlobalResource.hpp"
-#include "l3ster/util/KokkosScopeGuard.hpp"
+#include "l3ster/util/ScopeGuards.hpp"
 
 int main(int argc, char* argv[])
 {

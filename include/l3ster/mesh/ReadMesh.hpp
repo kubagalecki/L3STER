@@ -203,13 +203,13 @@ inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
         parse_entities_asciiv4();
         // TODO: switch over other possible formats once implemented
 
-        const size_t n_physical_domains = [&]() {
+        const size_t n_physical_domains = std::invoke([&]() {
             std::set< d_id_t > unique_physical_ids;
             for (const auto& map : entity_data)
                 for (const auto& [dim, entity] : map)
                     unique_physical_ids.insert(dim);
             return unique_physical_ids.size();
-        }();
+        });
 
         return std::make_pair(entity_data, n_physical_domains);
     };

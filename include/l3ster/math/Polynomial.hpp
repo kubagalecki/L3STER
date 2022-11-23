@@ -30,7 +30,7 @@ struct PolynomialView
     std::reference_wrapper< const std::array< T, ORDER + 1u > > coefs;
 };
 
-template < array Arg >
+template < Array_c Arg >
 PolynomialView(const Arg&) -> PolynomialView< typename Arg::value_type, std::tuple_size_v< Arg > - 1 >;
 
 template < std::floating_point T, size_t ORDER >
@@ -50,7 +50,7 @@ struct Polynomial
     std::array< T, ORDER + 1u > coefs;
 };
 
-template < array Arg >
+template < Array_c Arg >
 Polynomial(const Arg&) -> Polynomial< typename Arg::value_type, std::tuple_size_v< Arg > - 1 >;
 
 template < std::floating_point T, size_t ORDER >

@@ -7,11 +7,13 @@
 
 #include <concepts>
 #include <ranges>
+#include <span>
 
 namespace lstr
 {
 template < std::ranges::contiguous_range R >
 auto asTeuchosView(R&& range)
+    requires std::ranges::sized_range< R >
 {
     return Teuchos::ArrayView{std::ranges::data(range), std::ranges::ssize(range)};
 }

@@ -1,4 +1,5 @@
 #include "l3ster/comm/GatherNodeThroughputs.hpp"
+#include "l3ster/util/ScopeGuards.hpp"
 
 #include <cmath>
 #include <iostream>
@@ -7,8 +8,9 @@ using namespace lstr;
 
 int main(int argc, char* argv[])
 {
-    lstr::MpiScopeGuard mpi_guard{argc, argv};
-    lstr::MpiComm       comm{};
+    using namespace lstr;
+    L3sterScopeGuard scope_guard{argc, argv};
+    MpiComm          comm{};
 
     try
     {

@@ -2,6 +2,7 @@
 #define L3STER_POST_VTKEXPORT_HPP
 
 #include "l3ster/assembly/NodeToDofMap.hpp"
+#include "l3ster/assembly/SolutionManager.hpp"
 #include "l3ster/mesh/NodePhysicalLocation.hpp"
 #include "l3ster/util/Base64.hpp"
 #include "l3ster/util/TrilinosUtils.hpp"
@@ -11,6 +12,59 @@
 
 namespace lstr
 {
+class PvtuExporter
+{
+public:
+    inline PvtuExporter(const MeshPartition& mesh, const Tpetra::Map< local_dof_t, global_dof_t >& local_global_map);
+    void        exportSolution(std::string_view                                                file_name,
+                               const MpiComm&                                                  comm,
+                               const SolutionManager&                                          solution_manager,
+                               SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
+                               SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds);
+    inline void updateNodeCoords(const MeshPartition& mesh);
+
+private:
+    struct SectionSizes
+    {
+        size_t topology, offsets, cell_types;
+    };
+
+    using payload_t = std::variant< std::monostate /* for writing borrowed data */, std::string, ArrayOwner< char > >;
+    struct AsyncWrite
+    {
+        // Member declaration order ensures correct behavior on destruction: 1) block 2) dealloc payload 3) close file
+        std::shared_ptr< MpiComm::FileHandle > file_handle;
+        payload_t                              payload;
+        MpiComm::Request                       request;
+    };
+
+    inline void initTopo(const MeshPartition& mesh);
+
+    void enqueuePvtuFileWrite(std::string_view                                                file_name,
+                              const MpiComm&                                                  comm,
+                              SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
+                              SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds);
+    void enqueueVtuFileWrite(std::string_view                                                file_name,
+                             const MpiComm&                                                  comm,
+                             const SolutionManager&                                          solution_manager,
+                             SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
+                             SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds);
+    auto makeDataDescription(RangeOfConvertibleTo_c< std::string_view > auto&&               names,
+                             SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds,
+                             const std::vector< ArrayOwner< char > >& encoded_fields) const -> std::string;
+
+    size_t
+    enqueueWrite(std::shared_ptr< MpiComm::FileHandle > file, ptrdiff_t pos, ContiguousSizedRangeOf< char > auto&& text)
+        requires std::ranges::borrowed_range< decltype(text) > or std::same_as< std::string&&, decltype(text) > or
+                 std::same_as< ArrayOwner< char >&&, decltype(text) >;
+    inline void flushWriteQueue();
+
+    size_t                    m_n_cells, m_n_nodes;
+    SectionSizes              m_section_sizes;
+    std::string               m_encoded_topo, m_encoded_coords;
+    std::vector< AsyncWrite > m_write_queue; // this needs to be destroyed before the encoded data
+};
+
 namespace detail::vtk
 {
 // The .pvtu top level file
@@ -28,35 +82,39 @@ inline constexpr std::string_view pvtu_preamble  = R"(<?xml version="1.0"?>
 <PPointData)";
 inline constexpr std::string_view pvtu_postamble = R"(</PUnstructuredGrid>
 </VTKFile>)";
-template < std::ranges::range R >
-void appendPvtuPointDataDef(std::string& str, R&& def)
-    requires std::convertible_to< std::ranges::range_value_t< R >, std::pair< std::string_view, dim_t > >
+
+void appendPvtuPointDataDef(std::string&                                      str,
+                            RangeOfConvertibleTo_c< std::string_view > auto&& field_names,
+                            RangeOfConvertibleTo_c< size_t > auto&&           n_field_components)
 {
     bool scal_present = false, vec_present = false; // Only 1 scalar and 1 vector can be present in the header
-    for (const auto& [name, n_comps] : def)
+    auto name_it = std::ranges::begin(field_names);
+    for (auto n_comps : n_field_components)
     {
         const bool is_vector = n_comps > 1;
         if (is_vector and not std::exchange(vec_present, true))
         {
             str += " Vectors=\"";
-            str += name;
+            str += *name_it;
             str += '"';
         }
         else if (not scal_present)
         {
             str += " Scalars=\"";
-            str += name;
+            str += *name_it;
             str += '"';
             scal_present = true;
         }
         if (scal_present and vec_present)
             break;
+        ++name_it;
     }
     str += ">\n";
-    for (const auto& [name, n_comps] : def)
+    name_it = std::ranges::begin(field_names);
+    for (auto n_comps : n_field_components)
     {
         str += R"(  <PDataArray type="Float64" Name=")";
-        str += name;
+        str += *name_it++;
         str += R"(" NumberOfComponents=")";
         str += std::to_string(n_comps);
         str += "\"/>\n";
@@ -65,23 +123,30 @@ void appendPvtuPointDataDef(std::string& str, R&& def)
     str += "<PCellData>\n";
     str += "</PCellData>\n";
 }
+
 inline void appendPvtuPieceDataDef(std::string& str, std::string_view name, int n_ranks)
 {
     for (int rank = 0; rank < n_ranks; ++rank)
     {
-        str += R"(<Piece Source=")";
+        str += "<Piece Source=\"";
         str += name;
         str += '_';
         str += std::to_string(rank);
         str += ".vtu\"/>\n";
     }
 }
-template < std::ranges::range R >
-std::string makePvtuFileContents(std::string_view name, int n_ranks, R&& def)
-    requires std::convertible_to< std::ranges::range_value_t< R >, std::pair< std::string_view, dim_t > >
+
+std::string makePvtuFileContents(std::string_view                                  name,
+                                 int                                               n_ranks,
+                                 RangeOfConvertibleTo_c< std::string_view > auto&& field_names,
+                                 RangeOfConvertibleTo_c< size_t > auto&&           n_field_components)
 {
-    std::string retval{pvtu_preamble};
-    appendPvtuPointDataDef(retval, std::forward< R >(def));
+    std::string retval;
+    retval.reserve(1u << 12);
+    retval += pvtu_preamble;
+    appendPvtuPointDataDef(retval,
+                           std::forward< decltype(field_names) >(field_names),
+                           std::forward< decltype(n_field_components) >(n_field_components));
     appendPvtuPieceDataDef(retval, name, n_ranks);
     retval += pvtu_postamble;
     return retval;
@@ -108,6 +173,7 @@ consteval size_t numSubels()
     else
         static_assert(ET != ET); // Assert every element type has a corresponding branch
 }
+
 template < ElementTypes ET, el_o_t EO >
 consteval size_t numSubelNodes()
 {
@@ -120,11 +186,13 @@ consteval size_t numSubelNodes()
     else
         static_assert(ET != ET); // Assert every element type has a corresponding branch
 }
+
 template < ElementTypes ET, el_o_t EO >
 consteval size_t numSerialTopoEntries()
 {
     return numSubels< ET, EO >() * numSubelNodes< ET, EO >();
 }
+
 template < ElementTypes ET, el_o_t EO >
 consteval unsigned char subelCellType()
 {
@@ -137,6 +205,7 @@ consteval unsigned char subelCellType()
     else
         static_assert(ET != ET); // Assert every element type has a corresponding branch
 }
+
 template < ElementTypes ET, el_o_t EO >
 auto serializeElementSubtopo(const Element< ET, EO >& element)
 {
@@ -187,6 +256,7 @@ auto serializeElementSubtopo(const Element< ET, EO >& element)
         static_assert(ET != ET); // Assert every element type has a corresponding branch
     return retval;
 }
+
 inline std::array< size_t, 2 > getLocalTopoSize(const MeshPartition& mesh)
 {
     constexpr auto get_el_entries = []< ElementTypes ET, el_o_t EO >(const Element< ET, EO >&) {
@@ -200,6 +270,7 @@ inline std::array< size_t, 2 > getLocalTopoSize(const MeshPartition& mesh)
         },
         mesh.getDomainIds());
 }
+
 inline unsigned getLocalNodeIndex(const MeshPartition& mesh, n_id_t node)
 {
     const auto owned_find_result = std::ranges::lower_bound(mesh.getNodes(), node);
@@ -208,6 +279,7 @@ inline unsigned getLocalNodeIndex(const MeshPartition& mesh, n_id_t node)
     const auto ghost_find_result = std::ranges::lower_bound(mesh.getGhostNodes(), node);
     return mesh.getNodes().size() + std::distance(begin(mesh.getGhostNodes()), ghost_find_result);
 }
+
 inline auto serializeTopology(const MeshPartition& mesh)
 {
     constexpr auto n_unsigned_chars = sizeof(std::uint64_t) / sizeof(unsigned char);
@@ -267,204 +339,255 @@ inline auto serializeTopology(const MeshPartition& mesh)
     b64_data.shrink_to_fit();
     return std::make_pair(sizes, std::move(b64_data));
 }
-template < size_t n_fields >
-auto makeNodeDofInfo(const MeshPartition&                            mesh,
-                     const NodeToDofMap< n_fields >&                 node_dof_map,
-                     const Tpetra::Map< local_dof_t, global_dof_t >& local_global_map)
-{
-    std::vector< unsigned char > node_dof_vec;
-    std::vector< local_dof_t >   dof_local_inds;
-    std::vector< unsigned >      node_dof_offsets;
-    node_dof_vec.reserve(local_global_map.getNodeNumElements());
-    dof_local_inds.reserve(local_global_map.getNodeNumElements());
-    node_dof_offsets.reserve(mesh.getNodes().size() + mesh.getGhostNodes().size() + 1);
-    node_dof_offsets.push_back(0);
 
-    const auto process_node = [&](n_id_t global_node) {
-        const auto& node_dofs   = node_dof_map(global_node);
-        unsigned    n_node_dofs = 0;
-        for (unsigned char dof_ind = 0; auto dof : node_dofs)
-        {
-            if (dof != std::numeric_limits< decltype(dof) >::max())
-            {
-                node_dof_vec.push_back(dof_ind);
-                dof_local_inds.push_back(local_global_map.getLocalElement(dof));
-                ++n_node_dofs;
-            }
-            ++dof_ind;
-        }
-        node_dof_offsets.push_back(node_dof_offsets.back() + n_node_dofs);
-    };
-
-    for (auto node : mesh.getNodes())
-        process_node(node);
-    for (auto node : mesh.getGhostNodes())
-        process_node(node);
-
-    node_dof_vec.shrink_to_fit();
-    dof_local_inds.shrink_to_fit();
-    return std::make_tuple(std::move(node_dof_vec), std::move(dof_local_inds), std::move(node_dof_offsets));
-}
 inline std::string makeCoordsSerialized(const MeshPartition& mesh)
 {
-    std::vector< val_t > coords((mesh.getNodes().size() + mesh.getGhostNodes().size()) * 3 + 1);
+    constexpr size_t space_dim        = 3;
+    const auto       n_nodes          = mesh.getNodes().size() + mesh.getGhostNodes().size();
+    const size_t     n_vals_to_encode = n_nodes * space_dim + 1;
+    auto             alloc_to_encode  = ArrayOwner< val_t >(n_vals_to_encode);
+    const auto       data_to_encode   = std::span{alloc_to_encode};
+    const auto       coords           = data_to_encode.subspan(1);
+
     // First 8 bytes encode the data size in bytes
-    coords[0]                  = std::bit_cast< val_t >((coords.size() - 1u) * sizeof(val_t));
+    data_to_encode.front() = std::bit_cast< val_t >(coords.size_bytes());
+
     const auto process_element = [&](const auto& element) {
         const auto node_coords = nodePhysicalLocation(element);
         for (size_t i = 0; const auto& point : node_coords)
         {
             const auto local_node_ind = getLocalNodeIndex(mesh, element.getNodes()[i]);
-            std::atomic_ref{coords[local_node_ind * 3 + 1]}.store(point.x(), std::memory_order_relaxed);
-            std::atomic_ref{coords[local_node_ind * 3 + 2]}.store(point.y(), std::memory_order_relaxed);
-            std::atomic_ref{coords[local_node_ind * 3 + 3]}.store(point.z(), std::memory_order_relaxed);
+            std::atomic_ref{coords[local_node_ind * space_dim]}.store(point.x(), std::memory_order_relaxed);
+            std::atomic_ref{coords[local_node_ind * space_dim + 1]}.store(point.y(), std::memory_order_relaxed);
+            std::atomic_ref{coords[local_node_ind * space_dim + 2]}.store(point.z(), std::memory_order_relaxed);
             ++i;
         }
     };
     mesh.visit(process_element, std::execution::par);
 
     std::string retval;
-    retval.resize(getBase64EncodingSize< val_t >(coords.size()));
-    encodeAsBase64(coords, retval.begin());
+    retval.resize(getBase64EncodingSize< val_t >(n_vals_to_encode));
+    encodeAsBase64(std::as_const(alloc_to_encode), retval.begin());
     return retval;
+}
+
+inline auto encodeFieldImpl(std::span< const val_t > field_vals) -> ArrayOwner< char >
+{
+    const auto n_vals_to_encode = field_vals.size() + 1;
+    const auto bytes_encoded    = getBase64EncodingSize< val_t >(n_vals_to_encode);
+    auto       retval           = ArrayOwner< char >{bytes_encoded};
+    auto       output_it        = retval.begin();
+
+    // Prepend the size of the results in bytes. We need to create a prefix of size divisible by 3
+    auto prefix    = std::array< val_t, 3 >{};
+    prefix.front() = std::bit_cast< val_t >(field_vals.size_bytes());
+    std::ranges::copy(field_vals | std::views::take(2), std::next(begin(prefix)));
+
+    // Encode prefix (case when field_vals.size() < 2 handled correctly)
+    const auto prefix_bytes_written = encodeAsBase64(prefix | std::views::take(n_vals_to_encode), output_it);
+    std::advance(output_it, prefix_bytes_written);
+
+    // Encode remaining values
+    encodeAsBase64(field_vals | std::views::drop(2), output_it);
+    return retval;
+}
+
+auto encodeFieldImpl(SizedRangeOfConvertibleTo_c< std::span< const val_t > > auto&& fields) -> ArrayOwner< char >
+{
+    // Move the node value spans into an array for easy random access
+    const auto                                n_fields = std::ranges::size(fields);
+    std::array< std::span< const val_t >, 3 > field_vals_array;
+    std::ranges::copy(std::forward< decltype(fields) >(fields), begin(field_vals_array));
+    const auto field_values = std::span{begin(field_vals_array), n_fields};
+
+    constexpr size_t n_fields_to_export = 3; // Always export as 3D, pad 2D results with zeros
+    const size_t     n_nodes            = field_values.front().size();
+    const size_t     n_field_vals       = n_fields_to_export * n_nodes;
+    const size_t     n_vals_to_encode   = n_field_vals + 1;
+
+    auto alloc_to_encode = ArrayOwner< val_t >{n_vals_to_encode};
+    alloc_to_encode[0]   = std::bit_cast< val_t >(n_field_vals * sizeof(val_t));
+    const auto node_vals = std::span{alloc_to_encode}.subspan(1);
+
+    // Interleave field values
+    auto&& node_range = std::views::iota(0ul, n_nodes) | std::views::common;
+    std::for_each(std::execution::par, std::ranges::begin(node_range), std::ranges::end(node_range), [&](size_t node) {
+        auto output_iter = std::next(begin(node_vals), static_cast< ptrdiff_t >(node * n_fields_to_export));
+        for (auto fv : field_values)
+            *output_iter++ = fv[node];
+        if (n_fields == 2)
+            *output_iter = 0.;
+    });
+
+    const auto bytes_encoded = getBase64EncodingSize< val_t >(n_vals_to_encode);
+    auto       retval        = ArrayOwner< char >{bytes_encoded};
+    encodeAsBase64(std::as_const(alloc_to_encode), retval.begin());
+    return retval;
+}
+
+auto encodeField(const SolutionManager& solution_manager, IndexRange_c auto&& component_inds) -> ArrayOwner< char >
+{
+    const auto n_fields = std::ranges::size(component_inds);
+    if (n_fields == 0 or n_fields > 3)
+        throw std::runtime_error{"Field groupings must have size 1 (scalar), 2 (2D), or 3 (3D)"};
+
+    if (n_fields == 1) // Directly encode nodal values
+    {
+        const auto field_vals = solution_manager.getNodalValues(*std::ranges::begin(component_inds));
+        return encodeFieldImpl(field_vals);
+    }
+    else // Values of fields in the group should be interleaved before encoding
+        return encodeFieldImpl(std::forward< decltype(component_inds) >(component_inds) |
+                               std::views::transform([&solution_manager](size_t component_index) {
+                                   return solution_manager.getNodalValues(component_index);
+                               }));
+}
+
+auto encodeSolution(const SolutionManager&                                          solution_manager,
+                    SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_components)
+    -> std::vector< ArrayOwner< char > >
+{
+    auto   retval         = std::vector< ArrayOwner< char > >(std::ranges::size(field_components));
+    auto&& grouping_range = std::forward< decltype(field_components) >(field_components) | std::views::common;
+    std::transform(std::execution::par,
+                   std::ranges::begin(grouping_range),
+                   std::ranges::end(grouping_range),
+                   begin(retval),
+                   [&](std::span< const size_t > component_inds) {
+                       return detail::vtk::encodeField(solution_manager, component_inds);
+                   });
+    return retval;
+}
+
+auto makeNumFieldComponentsView(SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds)
+{
+    return field_component_inds | std::views::transform([](auto cmps) -> size_t { return cmps.size() == 1 ? 1 : 3; });
+}
+
+auto makeEncodedFieldSizeView(const std::vector< ArrayOwner< char > >& encoded_fields)
+{
+    return encoded_fields | std::views::transform([](const auto& enc) { return enc.size(); });
+}
+
+inline auto openFileForExport(const std::string& name) -> std::shared_ptr< MpiComm::FileHandle >
+{
+    const auto open_mode = MPI_MODE_CREATE | MPI_MODE_WRONLY | MPI_MODE_UNIQUE_OPEN;
+    const auto comm_self = MpiComm{MPI_COMM_SELF};
+    return std::make_shared< MpiComm::FileHandle >(comm_self.openFile(name.c_str(), open_mode));
+}
+
+inline auto makeVtuFileName(std::string_view name, const MpiComm& comm) -> std::string
+{
+    auto retval = std::string{name};
+    retval += '_';
+    retval += std::to_string(comm.getRank());
+    retval += ".vtu";
+    return retval;
+}
+
+inline auto openVtuFile(std::string_view name, const MpiComm& comm)
+{
+    return openFileForExport(makeVtuFileName(name, comm));
 }
 } // namespace detail::vtk
 
-class PvtuExporter
+PvtuExporter::PvtuExporter(const MeshPartition& mesh, const Tpetra::Map< local_dof_t, global_dof_t >& local_global_map)
+    : m_n_nodes{mesh.getNodes().size() + mesh.getGhostNodes().size()}
 {
-public:
-    template < size_t dofs_per_node >
-    PvtuExporter(const MeshPartition&                              mesh,
-                 const NodeToDofMap< dofs_per_node >&              node_dof_map,
-                 const Tpetra::Map< local_dof_t, global_dof_t >&   local_global_map,
-                 std::vector< std::string >                        field_names,
-                 const std::array< unsigned char, dofs_per_node >& field_grouping);
-
-    inline void exportResults(std::string_view                                          name,
-                              const MpiComm&                                            comm,
-                              const Tpetra::Vector< val_t, local_dof_t, global_dof_t >& sim_values);
-    void updateCoords(const MeshPartition& mesh) { m_serialized_coords = detail::vtk::makeCoordsSerialized(mesh); }
-
-private:
-    struct AsyncWriteRequest
-    {
-        std::shared_ptr< MpiComm::FileHandle > file_handle;
-        std::string                            content;
-        MpiComm::Request                       request;
-    };
-
-    inline auto initTopo(const MeshPartition& mesh) -> std::array< size_t, 3 >;
-    inline void initFieldSizes();
-    inline void initDataSectionOffsets(const std::array< size_t, 3 >& topo_sizes);
-    inline void initFieldGroupingInds();
-    template < size_t dofs_per_node >
-    void initNodeData(const MeshPartition&                            mesh,
-                      const NodeToDofMap< dofs_per_node >&            node_dof_map,
-                      const Tpetra::Map< local_dof_t, global_dof_t >& local_global_map);
-
-    inline auto unpackForEncoding(std::span< const val_t > values) const -> std::vector< std::vector< val_t > >;
-    inline auto encodeData(std::vector< std::vector< val_t > >&& unpacked) const -> std::vector< std::string >;
-    inline auto makeDataDescription() const -> std::string;
-    inline void doExport(std::string_view name, const MpiComm& comm, std::vector< std::string >&& encoded_data);
-
-    inline void enqueueWrite(std::shared_ptr< MpiComm::FileHandle > file, ptrdiff_t pos, const std::string& text);
-    inline void enqueueWrite(std::shared_ptr< MpiComm::FileHandle > file, ptrdiff_t pos, std::string&& text);
-    inline void flushWriteQueue();
-
-    size_t                           m_n_cells, m_n_nodes, m_dofs_per_node;
-    std::string                      m_serialized_topo, m_serialized_coords;
-    std::vector< unsigned char >     m_node_dofs, m_field_sizes, m_field_grouping, m_field_group_inds;
-    std::vector< unsigned >          m_node_dof_offsets;
-    std::vector< local_dof_t >       m_node_local_dofs;
-    std::vector< size_t >            m_data_section_offsets;
-    std::vector< std::string >       m_field_names;
-    std::vector< AsyncWriteRequest > m_write_queue;
-};
-
-template < size_t dofs_per_node >
-PvtuExporter::PvtuExporter(const MeshPartition&                              mesh,
-                           const NodeToDofMap< dofs_per_node >&              node_dof_map,
-                           const Tpetra::Map< local_dof_t, global_dof_t >&   local_global_map,
-                           std::vector< std::string >                        field_names,
-                           const std::array< unsigned char, dofs_per_node >& field_grouping)
-    : m_n_nodes{mesh.getNodes().size() + mesh.getGhostNodes().size()},
-      m_dofs_per_node{dofs_per_node},
-      m_field_grouping(field_grouping.begin(), field_grouping.end()),
-      m_field_names{std::move(field_names)}
-{
-    updateCoords(mesh);
-    const auto topo_sizes = initTopo(mesh);
-    initFieldSizes();
-    initDataSectionOffsets(topo_sizes);
-    initNodeData(mesh, node_dof_map, local_global_map);
-    initFieldGroupingInds();
+    updateNodeCoords(mesh);
+    initTopo(mesh);
 }
 
-auto PvtuExporter::initTopo(const MeshPartition& mesh) -> std::array< size_t, 3 >
+void PvtuExporter::exportSolution(std::string_view                                                file_name,
+                                  const MpiComm&                                                  comm,
+                                  const SolutionManager&                                          solution_manager,
+                                  SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
+                                  SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds)
+{
+    if (std::ranges::size(field_names) != std::ranges::size(field_component_inds))
+        throw std::runtime_error{"exportSolution: field names and groupings must have the same size"};
+
+    flushWriteQueue();
+    if (comm.getRank() == 0)
+        enqueuePvtuFileWrite(file_name, comm, field_names, field_component_inds);
+    enqueueVtuFileWrite(file_name,
+                        comm,
+                        solution_manager,
+                        std::forward< decltype(field_names) >(field_names),
+                        std::forward< decltype(field_component_inds) >(field_component_inds));
+}
+
+void PvtuExporter::updateNodeCoords(const MeshPartition& mesh)
+{
+    flushWriteQueue(); // Async write of previous coords may be in flight
+    m_encoded_coords = detail::vtk::makeCoordsSerialized(mesh);
+}
+
+void PvtuExporter::initTopo(const MeshPartition& mesh)
 {
     auto topo_serialization                                        = detail::vtk::serializeTopology(mesh);
     auto& [sizes, data]                                            = topo_serialization;
     const auto& [num_cells, topo_sec_sz, offs_sec_sz, type_sec_sz] = sizes;
     m_n_cells                                                      = num_cells;
-    m_serialized_topo                                              = std::move(data);
-    return std::array{topo_sec_sz, offs_sec_sz, type_sec_sz};
+    m_section_sizes.topology                                       = topo_sec_sz;
+    m_section_sizes.offsets                                        = offs_sec_sz;
+    m_section_sizes.cell_types                                     = type_sec_sz;
+    m_encoded_topo                                                 = std::move(data);
 }
 
-void PvtuExporter::initFieldSizes()
+void PvtuExporter::enqueuePvtuFileWrite(
+    std::string_view                                                file_name,
+    const MpiComm&                                                  comm,
+    SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
+    SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds)
 {
-    m_field_sizes.assign(m_field_names.size(), 0);
-    for (auto fg : m_field_grouping)
-        ++m_field_sizes[fg];
+    auto&& n_field_components_view = detail::vtk::makeNumFieldComponentsView(field_component_inds);
+    auto   pvtu_contents =
+        detail::vtk::makePvtuFileContents(file_name,
+                                          comm.getSize(),
+                                          std::forward< decltype(field_names) >(field_names),
+                                          std::forward< decltype(n_field_components_view) >(n_field_components_view));
+    std::string pvtu_name{file_name};
+    pvtu_name += ".pvtu";
+    auto pvtu_file = detail::vtk::openFileForExport(pvtu_name);
+    enqueueWrite(std::move(pvtu_file), 0, std::move(pvtu_contents));
 }
 
-void PvtuExporter::initDataSectionOffsets(const std::array< size_t, 3 >& topo_sizes)
+void PvtuExporter::enqueueVtuFileWrite(
+    std::string_view                                                file_name,
+    const MpiComm&                                                  comm,
+    const SolutionManager&                                          solution_manager,
+    SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
+    SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds)
 {
-    static_assert(sizeof(std::uint64_t) == sizeof(val_t)); // we're encoding the number of bytes as val_t
-    m_data_section_offsets.reserve(m_field_names.size() + 4);
-    m_data_section_offsets.push_back(m_serialized_coords.size());
-    for (auto tsz : topo_sizes)
-        m_data_section_offsets.push_back(tsz);
-    for (auto sz : m_field_sizes)
-        m_data_section_offsets.push_back(getBase64EncodingSize< val_t >(sz * m_n_nodes + 1));
-    std::exclusive_scan(begin(m_data_section_offsets), end(m_data_section_offsets), begin(m_data_section_offsets), 0ul);
+    auto enqueue_write =
+        [this, vtu_file_handle = detail::vtk::openVtuFile(file_name, comm), pos = ptrdiff_t{}](auto&& text) mutable {
+            pos += enqueueWrite(vtu_file_handle, pos, std::forward< decltype(text) >(text));
+        };
+
+    auto encoded_fields = detail::vtk::encodeSolution(solution_manager, field_component_inds);
+    enqueue_write(makeDataDescription(field_names, field_component_inds, encoded_fields));
+    enqueue_write(m_encoded_coords);
+    enqueue_write(m_encoded_topo);
+    for (auto& enc_fld : encoded_fields)
+        enqueue_write(std::move(enc_fld));
+    enqueue_write(detail::vtk::vtu_postamble);
 }
 
-template < size_t dofs_per_node >
-void PvtuExporter::initNodeData(const MeshPartition&                            mesh,
-                                const NodeToDofMap< dofs_per_node >&            node_dof_map,
-                                const Tpetra::Map< local_dof_t, global_dof_t >& local_global_map)
+auto PvtuExporter::makeDataDescription(
+    RangeOfConvertibleTo_c< std::string_view > auto&&               names,
+    SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds,
+    const std::vector< ArrayOwner< char > >&                        encoded_fields) const -> std::string
 {
-    auto [node_dofs, local_dofs, offsets] = detail::vtk::makeNodeDofInfo(mesh, node_dof_map, local_global_map);
-    m_node_dofs                           = std::move(node_dofs);
-    m_node_local_dofs                     = std::move(local_dofs);
-    m_node_dof_offsets                    = std::move(offsets);
-}
+    auto&& n_field_components  = detail::vtk::makeNumFieldComponentsView(field_component_inds);
+    auto&& encoded_field_sizes = detail::vtk::makeEncodedFieldSizeView(encoded_fields);
 
-void PvtuExporter::initFieldGroupingInds()
-{
-    std::unordered_map< unsigned char, unsigned char > group_inds;
-    m_field_group_inds.reserve(m_dofs_per_node);
-    for (auto group : m_field_grouping)
-        m_field_group_inds.push_back(group_inds[group]++);
-}
-
-void PvtuExporter::exportResults(std::string_view                                          name,
-                                 const MpiComm&                                            comm,
-                                 const Tpetra::Vector< val_t, local_dof_t, global_dof_t >& sim_values)
-{
-    const auto local_values      = sim_values.getData();
-    const auto local_values_span = std::span{local_values.begin(), local_values.end()};
-
-    auto unpacked_vals = unpackForEncoding(local_values_span);
-    auto encoded_vals  = encodeData(std::move(unpacked_vals));
-    doExport(name, comm, std::move(encoded_vals));
-}
-
-auto PvtuExporter::makeDataDescription() const -> std::string
-{
     std::string retval;
-    const auto  append_data_array =
-        [&](std::string_view type, std::string_view name, size_t n_comps, std::size_t offset) {
+    retval.reserve(1u << 12);
+    retval += detail::vtk::vtu_preamble;
+    auto append_data_array =
+        [&retval,
+         offset = size_t{}](std::string_view type, std::string_view name, size_t n_comps, size_t size_bytes) mutable {
             retval += R"(  <DataArray type=")";
             retval += type;
             retval += R"(" Name=")";
@@ -475,6 +598,7 @@ auto PvtuExporter::makeDataDescription() const -> std::string
             retval += std::to_string(offset);
             retval += "\">\n";
             retval += "  </DataArray>\n";
+            offset += size_bytes;
         };
 
     // Mesh description
@@ -483,38 +607,39 @@ auto PvtuExporter::makeDataDescription() const -> std::string
     retval += R"(" NumberOfCells=")";
     retval += std::to_string(m_n_cells);
     retval += "\">\n<Points>\n";
-    append_data_array("Float64", "Position", 3, m_data_section_offsets[0]);
+    append_data_array("Float64", "Position", 3, m_encoded_coords.size());
     retval += "</Points>\n";
     retval += "<Cells>\n";
-    append_data_array("UInt32", "connectivity", 1, m_data_section_offsets[1]);
-    append_data_array("UInt32", "offsets", 1, m_data_section_offsets[2]);
-    append_data_array("UInt8", "types", 1, m_data_section_offsets[3]);
+    append_data_array("UInt32", "connectivity", 1, m_section_sizes.topology);
+    append_data_array("UInt32", "offsets", 1, m_section_sizes.offsets);
+    append_data_array("UInt8", "types", 1, m_section_sizes.cell_types);
     retval += "</Cells>\n";
 
     // Data description
     retval += "<PointData";
-    if (std::ranges::any_of(m_field_sizes, [](auto sz) { return sz == 1; }))
+    if (std::ranges::any_of(n_field_components, [](size_t sz) { return sz == 1; }))
     {
-        const auto first_scal     = std::ranges::find(m_field_sizes, 1);
-        const auto first_scal_ind = std::distance(begin(m_field_sizes), first_scal);
+        const auto first_scal     = std::ranges::find(n_field_components, 1);
+        const auto first_scal_ind = std::distance(std::ranges::begin(n_field_components), first_scal);
         retval += " Scalars=\"";
-        retval += m_field_names[first_scal_ind];
+        retval += *std::next(std::ranges::begin(names), first_scal_ind);
         retval += "\"";
     }
-    if (std::ranges::any_of(m_field_sizes, [](auto sz) { return sz > 1; }))
+    if (std::ranges::any_of(n_field_components, [](auto sz) { return sz > 1; }))
     {
-        const auto first_vec     = std::ranges::find_if(m_field_sizes, [](auto sz) { return sz > 1; });
-        const auto first_vec_ind = std::distance(begin(m_field_sizes), first_vec);
+        const auto first_vec     = std::ranges::find_if(n_field_components, [](auto sz) { return sz > 1; });
+        const auto first_vec_ind = std::distance(std::ranges::begin(n_field_components), first_vec);
         retval += " Vectors=\"";
-        retval += m_field_names[first_vec_ind];
+        retval += *std::next(std::ranges::begin(names), first_vec_ind);
         retval += "\"";
     }
     retval += ">\n";
-    for (size_t i = 0; const auto& name : m_field_names)
-    {
-        append_data_array("Float64", name, m_field_sizes[i], m_data_section_offsets[i + 4]);
-        ++i;
-    }
+
+    auto sz_it    = std::ranges::begin(encoded_field_sizes);
+    auto n_cmp_it = std::ranges::begin(n_field_components);
+    for (auto&& name : names)
+        append_data_array("Float64", name, *n_cmp_it++, *sz_it++);
+
     retval += "</PointData>\n";
     retval += "<CellData>\n";
     retval += "</CellData>\n";
@@ -524,106 +649,24 @@ auto PvtuExporter::makeDataDescription() const -> std::string
     return retval;
 }
 
-void PvtuExporter::doExport(std::string_view name, const MpiComm& comm, std::vector< std::string >&& encoded_data)
+size_t PvtuExporter::enqueueWrite(std::shared_ptr< MpiComm::FileHandle > file,
+                                  ptrdiff_t                              pos,
+                                  ContiguousSizedRangeOf< char > auto&&  text)
+    requires std::ranges::borrowed_range< decltype(text) > or std::same_as< std::string&&, decltype(text) > or
+             std::same_as< ArrayOwner< char >&&, decltype(text) >
 {
-    flushWriteQueue();
-    const auto open_mode = MPI_MODE_CREATE | MPI_MODE_WRONLY | MPI_MODE_UNIQUE_OPEN;
-    const auto comm_self = MpiComm{MPI_COMM_SELF};
-
-    // Write the .pvtu file
-    if (comm.getRank() == 0)
+    const size_t write_length = std::ranges::size(text);
+    if constexpr (std::ranges::borrowed_range< decltype(text) >)
     {
-        // std::views::zip_view is in C++23...
-        std::vector< std::pair< std::string_view, dim_t > > def;
-        def.reserve(m_field_names.size());
-        std::ranges::transform(m_field_names, m_field_sizes, std::back_inserter(def), [](const auto& n, auto s) {
-            return std::pair< std::string_view, dim_t >{n, s};
-        });
-        auto        pvtu_contents = detail::vtk::makePvtuFileContents(name, comm.getSize(), def);
-        std::string pvtu_name{name};
-        pvtu_name += ".pvtu";
-        auto pvtu_file = std::make_shared< MpiComm::FileHandle >(comm_self.openFile(pvtu_name.c_str(), open_mode));
-        enqueueWrite(std::move(pvtu_file), 0, std::move(pvtu_contents));
+        auto request = file->writeAtAsync(std::forward< decltype(text) >(text), pos);
+        m_write_queue.emplace_back(std::move(file), std::monostate{}, std::move(request));
     }
-
-    // Write the .vtu file
-    std::string vtu_name{name};
-    vtu_name += '_';
-    vtu_name += std::to_string(comm.getRank());
-    vtu_name += ".vtu";
-    const auto vtu_file = std::make_shared< MpiComm::FileHandle >(comm_self.openFile(vtu_name.c_str(), open_mode));
-
-    ptrdiff_t  file_pos  = 0; // manage manually - not sure how the FS file pointer position behaves with async writes
-    const auto enq_write = [&]< typename T >(T && content)
-        requires std::same_as< std::string, std::decay_t< T > >
+    else
     {
-        const auto write_size = static_cast< ptrdiff_t >(content.size());
-        enqueueWrite(vtu_file, file_pos, std::forward< T >(content));
-        file_pos += write_size;
-    };
-    enq_write(std::string{detail::vtk::vtu_preamble});
-    enq_write(makeDataDescription());
-    enq_write(m_serialized_coords);
-    enq_write(m_serialized_topo);
-    for (std::string& d : encoded_data)
-        enq_write(std::move(d));
-    enq_write(std::string{detail::vtk::vtu_postamble});
-}
-
-auto PvtuExporter::unpackForEncoding(std::span< const val_t > values) const -> std::vector< std::vector< val_t > >
-{
-    std::vector< std::vector< val_t > > fields_for_export(m_field_names.size());
-    for (size_t i = 0; auto& field_data : fields_for_export)
-    {
-        field_data.resize(m_field_sizes[i++] * m_n_nodes + 1, 0.);
-        field_data[0] = std::bit_cast< val_t >((field_data.size() - 1u) * sizeof(val_t));
+        auto request = file->writeAtAsync(text, pos);
+        m_write_queue.emplace_back(std::move(file), std::forward< decltype(text) >(text), std::move(request));
     }
-
-    const auto process_node = [&](unsigned local_node_ind) {
-        const auto dofs_begin     = m_node_dof_offsets[local_node_ind];
-        const auto dofs_end       = m_node_dof_offsets[local_node_ind + 1];
-        const auto dof_inds       = std::span{std::next(begin(m_node_dofs), dofs_begin), dofs_end - dofs_begin};
-        const auto local_val_inds = std::span{std::next(begin(m_node_local_dofs), dofs_begin), dof_inds.size()};
-        for (size_t i = 0; auto dof_ind : dof_inds)
-        {
-            const auto field_ind            = m_field_grouping[dof_ind];
-            const auto field_vals_begin_ind = local_node_ind * m_field_sizes[field_ind];
-            const auto slot                 = m_field_group_inds[dof_ind];
-
-            fields_for_export[field_ind][field_vals_begin_ind + slot + 1] = values[local_val_inds[i++]];
-        }
-    };
-    const auto node_range = tbb::blocked_range< unsigned >(0, m_n_nodes);
-    tbb::parallel_for(node_range, [&](const tbb::blocked_range< unsigned >& range) {
-        std::ranges::for_each(std::views::iota(range.begin(), range.end()), process_node);
-    });
-    return fields_for_export;
-}
-
-auto PvtuExporter::encodeData(std::vector< std::vector< val_t > >&& unpacked) const -> std::vector< std::string >
-{
-    std::vector< std::string > retval(unpacked.size());
-    const auto                 encode_field = [&](const std::vector< val_t >& src) {
-        std::string target;
-        target.resize(getBase64EncodingSize< val_t >(src.size()));
-        encodeAsBase64(src, begin(target));
-        return target;
-    };
-    std::transform(std::execution::par, begin(unpacked), end(unpacked), begin(retval), encode_field);
-    unpacked.clear();
-    return retval;
-}
-
-void PvtuExporter::enqueueWrite(std::shared_ptr< MpiComm::FileHandle > file, ptrdiff_t pos, const std::string& text)
-{
-    auto request = file->writeAtAsync(text, pos);
-    m_write_queue.emplace_back(std::move(file), text, std::move(request));
-}
-
-void PvtuExporter::enqueueWrite(std::shared_ptr< MpiComm::FileHandle > file, ptrdiff_t pos, std::string&& text)
-{
-    auto request = file->writeAtAsync(text, pos);
-    m_write_queue.emplace_back(std::move(file), std::move(text), std::move(request));
+    return write_length;
 }
 
 void PvtuExporter::flushWriteQueue()

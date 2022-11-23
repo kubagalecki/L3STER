@@ -3,6 +3,8 @@
 
 #include "l3ster/util/Meta.hpp"
 
+#include "oneapi/tbb/parallel_invoke.h"
+
 #include <iterator>
 #include <numeric>
 #include <vector>
@@ -151,20 +153,33 @@ constexpr void forConstexpr(F&& f, std::integer_sequence< T, I... >)
 template < typename F, std::ranges::sized_range auto R >
 constexpr void forConstexpr(F&& f, ConstexprValue< R >)
 {
-    constexpr auto access_range = [](std::ranges::range auto&& range, std::size_t index) {
-        if constexpr (std::ranges::random_access_range< std::decay_t< decltype(range) > >)
-            return range.begin()[index];
-        else
-        {
-            auto iter = range.begin();
-            for (; index > 0; --index)
-                ++iter;
-            return *iter;
-        }
+    using diff_t                = std::ranges::range_difference_t< decltype(R) >;
+    constexpr auto access_range = [](diff_t index) {
+        return *std::next(std::ranges::cbegin(R), index);
     };
-    forConstexpr(
-        [&]< std::size_t I >(std::integral_constant< std::size_t, I >) { f(ConstexprValue< access_range(R, I) >{}); },
-        std::make_index_sequence< std::ranges::size(R) >{});
+    forConstexpr([&]< diff_t I >(std::integral_constant< diff_t, I >) { f(ConstexprValue< access_range(I) >{}); },
+                 std::make_integer_sequence< diff_t, std::ranges::size(R) >{});
+}
+
+template < typename F, std::ranges::sized_range auto R >
+void forEachConstexprParallel(F&& f, ConstexprValue< R >)
+{
+    if constexpr (std::ranges::size(R) > 1) // tbb::parallel_invoke requires at least 2 function objects
+    {
+        using diff_t                 = std::ranges::range_difference_t< decltype(R) >;
+        const auto invoke_on_indices = [&f]< diff_t... I >(std::integer_sequence< diff_t, I... >)
+        {
+            constexpr auto access_range = [](diff_t index) {
+                return *std::next(std::ranges::cbegin(R), index);
+            };
+            oneapi::tbb::parallel_invoke([&] {
+                f(ConstexprValue< access_range(I) >{});
+            }...);
+        };
+        invoke_on_indices(std::make_integer_sequence< diff_t, std::ranges::size(R) >{});
+    }
+    else
+        std::invoke(std::forward< F >(f), ConstexprValue< *std::ranges::cbegin(R) >{});
 }
 
 template < typename T >
@@ -178,12 +193,12 @@ template <
     std::indirect_binary_predicate< std::ranges::iterator_t< R >, std::ranges::iterator_t< R > > Cmp =
         std::ranges::equal_to,
     std::regular_invocable< std::ranges::range_value_t< R >, std::ranges::range_value_t< R > > Red = std::plus<> >
+constexpr std::ranges::borrowed_subrange_t< R >
+reduceConsecutive(R&& range, Cmp&& comparator = {}, Red&& reduction = {})
     requires std::permutable< std::ranges::iterator_t< R > > and
              std::assignable_from<
                  std::ranges::range_reference_t< R >,
                  std::invoke_result_t< Red, std::ranges::range_value_t< R >, std::ranges::range_value_t< R > > >
-constexpr std::ranges::borrowed_subrange_t< R >
-reduceConsecutive(R&& range, Cmp&& comparator = {}, Red&& reduction = {})
 {
     auto it        = std::ranges::begin(range);
     auto write_pos = it;
@@ -204,6 +219,14 @@ reduceConsecutive(R&& range, Cmp&& comparator = {}, Red&& reduction = {})
         it = ++next_adjacent;
     }
     return std::ranges::borrowed_subrange_t< R >(write_pos, std::ranges::end(range));
+}
+
+template < typename T, size_t size >
+constexpr auto makeIotaArray(const T& first = T{})
+{
+    std::array< T, size > retval;
+    std::iota(begin(retval), end(retval), first);
+    return retval;
 }
 } // namespace lstr
 #endif // L3STER_UTIL_ALGORITHM_HPP

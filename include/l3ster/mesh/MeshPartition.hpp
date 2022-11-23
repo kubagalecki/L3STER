@@ -7,6 +7,8 @@
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/MetisUtils.hpp"
 
+#include "l3ster/util/RobinHoodHashTables.hpp"
+
 #include <map>
 
 namespace lstr
@@ -20,8 +22,7 @@ concept DomainPredicate_c = requires(T op, const DomainView dv) {
                                     } -> std::convertible_to< bool >;
                             };
 template < typename T >
-concept DomainIdRange_c =
-    std::ranges::sized_range< T > and std::convertible_to< std::ranges::range_value_t< T >, d_id_t >;
+concept DomainIdRange_c = SizedRangeOfConvertibleTo_c< T, d_id_t >;
 } // namespace detail
 
 class MeshPartition
@@ -38,111 +39,113 @@ public:
     MeshPartition() = default;
     inline explicit MeshPartition(domain_map_t domains_);
     MeshPartition(domain_map_t domains_, node_vec_t nodes_, node_vec_t ghost_nodes_)
-        : domains{std::move(domains_)}, nodes{std::move(nodes_)}, ghost_nodes{std::move(ghost_nodes_)}
+        : m_domains{std::move(domains_)}, m_nodes{std::move(nodes_)}, m_ghost_nodes{std::move(ghost_nodes_)}
     {}
 
     inline const MetisGraphWrapper& initDualGraph();
-    void                            deleteDualGraph() noexcept { dual_graph.reset(); }
-    [[nodiscard]] bool              isDualGraphInitialized() const noexcept { return dual_graph.has_value(); }
+    void                            deleteDualGraph() noexcept { m_dual_graph.reset(); }
+    [[nodiscard]] bool              isDualGraphInitialized() const noexcept { return m_dual_graph.has_value(); }
     [[nodiscard]] inline const MetisGraphWrapper& getDualGraph() const;
 
     // Iteration (visiting) over elements
-    template < invocable_on_elements F, ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, d_id_t domain_id, ExecPolicy&& policy = {});
-    template < invocable_on_const_elements F, ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, d_id_t domain_id, ExecPolicy&& policy = {}) const;
-    template < invocable_on_elements     F,
-               detail::DomainPredicate_c D,
-               ExecutionPolicy_c         ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, D&& domain_predicate, ExecPolicy&& policy = {});
-    template < invocable_on_const_elements F,
-               detail::DomainPredicate_c   D,
-               ExecutionPolicy_c           ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, D&& domain_predicate, ExecPolicy&& policy = {}) const;
-    template < invocable_on_elements_and< const DomainView > F,
-               detail::DomainPredicate_c                     D,
-               ExecutionPolicy_c                             ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, D&& domain_predicate, ExecPolicy&& policy = {});
-    template < invocable_on_const_elements_and< const DomainView > F,
-               detail::DomainPredicate_c                           D,
-               ExecutionPolicy_c                                   ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, D&& domain_predicate, ExecPolicy&& policy = {}) const;
-    template < invocable_on_elements F, ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, ExecPolicy&& policy = {});
-    template < invocable_on_const_elements F, ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, ExecPolicy&& policy = {}) const;
-    template < invocable_on_elements_and< const DomainView > F,
-               ExecutionPolicy_c                             ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, ExecPolicy&& policy = {});
-    template < invocable_on_const_elements_and< const DomainView > F,
-               ExecutionPolicy_c                                   ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, ExecPolicy&& policy = {}) const;
-    template < invocable_on_elements   F,
-               detail::DomainIdRange_c R,
-               ExecutionPolicy_c       ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, R&& domain_ids, ExecPolicy&& policy = {});
-    template < invocable_on_const_elements F,
-               detail::DomainIdRange_c     R,
-               ExecutionPolicy_c           ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, R&& domain_ids, ExecPolicy&& policy = {}) const;
-    template < invocable_on_elements_and< const DomainView > F,
-               detail::DomainIdRange_c                       R,
-               ExecutionPolicy_c                             ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, R&& domain_ids, ExecPolicy&& policy = {});
-    template < invocable_on_const_elements_and< const DomainView > F,
-               detail::DomainIdRange_c                             R,
-               ExecutionPolicy_c                                   ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, R&& domain_ids, ExecPolicy&& policy = {}) const;
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    void visit(invocable_on_elements auto&& element_visitor, d_id_t domain_id, ExecPolicy&& policy = {});
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    void visit(invocable_on_const_elements auto&& element_visitor, d_id_t domain_id, ExecPolicy&& policy = {}) const;
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    void visit(invocable_on_elements auto&&     element_visitor,
+               detail::DomainPredicate_c auto&& domain_predicate,
+               ExecPolicy&&                     policy = {});
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    void visit(invocable_on_const_elements auto&& element_visitor,
+               detail::DomainPredicate_c auto&&   domain_predicate,
+               ExecPolicy&&                       policy = {}) const;
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    void visit(invocable_on_elements_and< const DomainView > auto&& element_visitor,
+               detail::DomainPredicate_c auto&&                     domain_predicate,
+               ExecPolicy&&                                         policy = {});
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    void visit(invocable_on_const_elements_and< const DomainView > auto&& element_visitor,
+               detail::DomainPredicate_c auto&&                           domain_predicate,
+               ExecPolicy&&                                               policy = {}) const;
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    void visit(invocable_on_elements auto&& element_visitor, ExecPolicy&& policy = {});
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    void visit(invocable_on_const_elements auto&& element_visitor, ExecPolicy&& policy = {}) const;
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    void visit(invocable_on_elements_and< const DomainView > auto&& element_visitor, ExecPolicy&& policy = {});
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    void visit(invocable_on_const_elements_and< const DomainView > auto&& element_visitor,
+               ExecPolicy&&                                               policy = {}) const;
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    void visit(invocable_on_elements auto&&   element_visitor,
+               detail::DomainIdRange_c auto&& domain_ids,
+               ExecPolicy&&                   policy = {});
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    void visit(invocable_on_const_elements auto&& element_visitor,
+               detail::DomainIdRange_c auto&&     domain_ids,
+               ExecPolicy&&                       policy = {}) const;
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    void visit(invocable_on_elements_and< const DomainView > auto&& element_visitor,
+               detail::DomainIdRange_c auto&&                       domain_ids,
+               ExecPolicy&&                                         policy = {});
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    void visit(invocable_on_const_elements_and< const DomainView > auto&& element_visitor,
+               detail::DomainIdRange_c auto&&                             domain_ids,
+               ExecPolicy&&                                               policy = {}) const;
 
     // Reduction over elements
-    // Note: `zero` must be the neutral element for the reduction (as opposed to, e.g., std::reduce)
+    // Note: `zero` must be the identity element for the reduction (as opposed to, e.g., std::reduce)
     // Note: The iteration order is indeterminate, even if std::execution::seq is passed
-    template < typename Zero,
-               typename Proj,
-               typename Red,
-               detail::DomainIdRange_c R,
-               ExecutionPolicy_c       ExecPolicy = std::execution::sequenced_policy >
-    Zero reduce(Zero&& zero, Proj&& projection, Red&& reduction, R&& domain_ids, ExecPolicy&& policy = {}) const
-        requires invocable_on_const_elements_r< Proj, Zero > and requires {
-                                                                     {
-                                                                         reduction(zero, zero)
-                                                                         } -> std::convertible_to< Zero >;
-                                                                 };
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    auto reduce(auto&&                         zero,
+                auto&&                         projection,
+                auto&&                         reduction,
+                detail::DomainIdRange_c auto&& domain_ids,
+                ExecPolicy&&                   policy = {}) const -> std::decay_t< decltype(zero) >
+        requires invocable_on_const_elements_r< decltype(projection), std::decay_t< decltype(zero) > > and
+                 requires {
+                     {
+                         reduction(zero, zero)
+                         } -> std::convertible_to< std::decay_t< decltype(zero) > >;
+                 };
 
     // find
     // Note: if the predicate returns true for multiple elements, the reference to any one of them may be returned
-    template < invocable_on_const_elements_r< bool > F,
-               ExecutionPolicy_c                     ExecPolicy = std::execution::sequenced_policy >
-    [[nodiscard]] find_result_t find(F&& predicate, ExecPolicy&& policy = {});
-    template < invocable_on_const_elements_r< bool > F,
-               ExecutionPolicy_c                     ExecPolicy = std::execution::sequenced_policy >
-    [[nodiscard]] cfind_result_t find(F&& predicate, ExecPolicy&& policy = {}) const;
-    template < invocable_on_const_elements_r< bool > F,
-               detail::DomainPredicate_c             D,
-               ExecutionPolicy_c                     ExecPolicy = std::execution::sequenced_policy >
-    [[nodiscard]] find_result_t find(F&& predicate, D&& domain_predicate, ExecPolicy&& policy = {});
-    template < invocable_on_const_elements_r< bool > F,
-               detail::DomainPredicate_c             D,
-               ExecutionPolicy_c                     ExecPolicy = std::execution::sequenced_policy >
-    [[nodiscard]] cfind_result_t        find(F&& predicate, D&& domain_ids, ExecPolicy&& policy = {}) const;
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    [[nodiscard]] find_result_t find(invocable_on_const_elements_r< bool > auto&& predicate, ExecPolicy&& policy = {});
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    [[nodiscard]] cfind_result_t find(invocable_on_const_elements_r< bool > auto&& predicate,
+                                      ExecPolicy&&                                 policy = {}) const;
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    [[nodiscard]] find_result_t find(invocable_on_const_elements_r< bool > auto&& predicate,
+                                     detail::DomainPredicate_c auto&&             domain_predicate,
+                                     ExecPolicy&&                                 policy = {});
+    template < ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
+    [[nodiscard]] cfind_result_t        find(invocable_on_const_elements_r< bool > auto&& predicate,
+                                             detail::DomainPredicate_c auto&&             domain_ids,
+                                             ExecPolicy&&                                 policy = {}) const;
     [[nodiscard]] inline find_result_t  find(el_id_t id);
     [[nodiscard]] inline cfind_result_t find(el_id_t id) const;
 
     // boundary views
     template < ElementTypes T, el_o_t O >
-    el_boundary_view_result_t getElementBoundaryView(const Element< T, O >& el, d_id_t d) const;
-    template < detail::DomainIdRange_c R >
-    [[nodiscard]] BoundaryView getBoundaryView(R&& boundary_ids) const;
+    el_boundary_view_result_t  getElementBoundaryView(const Element< T, O >& el, d_id_t d) const;
+    [[nodiscard]] BoundaryView getBoundaryView(detail::DomainIdRange_c auto&& boundary_ids) const;
     [[nodiscard]] BoundaryView getBoundaryView(d_id_t id) const { return getBoundaryView(std::views::single(id)); }
 
     // observers
-    [[nodiscard]] DomainView                   getDomainView(d_id_t id) const { return DomainView{domains.at(id), id}; }
-    [[nodiscard]] inline size_t                getNElements() const;
-    [[nodiscard]] auto                         getNDomains() const { return domains.size(); }
-    [[nodiscard]] inline std::vector< d_id_t > getDomainIds() const;
-    [[nodiscard]] const Domain&                getDomain(d_id_t id) const { return domains.at(id); }
-    [[nodiscard]] const node_vec_t&            getNodes() const noexcept { return nodes; }
-    [[nodiscard]] const node_vec_t&            getGhostNodes() const noexcept { return ghost_nodes; }
+    [[nodiscard]] DomainView        getDomainView(d_id_t id) const { return DomainView{m_domains.at(id), id}; }
+    [[nodiscard]] inline size_t     getNElements() const;
+    [[nodiscard]] auto              getNDomains() const { return m_domains.size(); }
+    [[nodiscard]] auto              getDomainIds() const { return m_domains | std::views::keys; }
+    [[nodiscard]] const Domain&     getDomain(d_id_t id) const { return m_domains.at(id); }
+    [[nodiscard]] const node_vec_t& getNodes() const noexcept { return m_nodes; }
+    [[nodiscard]] const node_vec_t& getGhostNodes() const noexcept { return m_ghost_nodes; }
+
+    [[nodiscard]] inline size_t computeTopoHash() const;
+    [[nodiscard]] bool isGhostNode(n_id_t node) const { return std::ranges::binary_search(m_ghost_nodes, node); }
+    [[nodiscard]] bool isOwnedNode(n_id_t node) const { return std::ranges::binary_search(m_nodes, node); }
 
     template < el_o_t O >
     [[nodiscard]] domain_map_t getConversionAlloc() const;
@@ -157,10 +160,9 @@ private:
     template < ElementTypes T, el_o_t O >
     el_boundary_view_result_t getElementBoundaryViewFallback(const Element< T, O >& el, d_id_t d) const;
 
-    domain_map_t                       domains;
-    node_vec_t                         nodes;
-    node_vec_t                         ghost_nodes;
-    std::optional< MetisGraphWrapper > dual_graph;
+    domain_map_t                       m_domains;
+    node_vec_t                         m_nodes, m_ghost_nodes;
+    std::optional< MetisGraphWrapper > m_dual_graph;
 };
 
 MeshPartition::cfind_result_t MeshPartition::constifyFindResult(find_result_t found)
@@ -173,41 +175,46 @@ MeshPartition::cfind_result_t MeshPartition::constifyFindResult(find_result_t fo
 
 const MetisGraphWrapper& MeshPartition::initDualGraph()
 {
-    return dual_graph ? *dual_graph : dual_graph.emplace(makeMetisDualGraph());
+    return m_dual_graph ? *m_dual_graph : m_dual_graph.emplace(makeMetisDualGraph());
 }
 
 const MetisGraphWrapper& MeshPartition::getDualGraph() const
 {
-    if (dual_graph)
-        return *dual_graph;
+    if (m_dual_graph)
+        return *m_dual_graph;
     else
         throw std::runtime_error{"Attempting to access dual graph before initialization"};
 }
 
 // Implementation note: It should be possible to sequentially traverse elements in a deterministic order (e.g. the mesh
 // partitioning facilities rely on this). However, std::execution::sequenced_policy does not make this guarantee (it
-// only guarantees a single thread of execution). For this reason, the code below contains compile-time conditionals
-// which ensure that the "classic" (i.e. deterministically sequenced) traversal algorithms is called when
-// std::execution::seq is passed to the member function.
-
-template < invocable_on_elements F, ExecutionPolicy_c ExecPolicy >
-void MeshPartition::visit(F&& element_visitor, d_id_t domain_id, ExecPolicy&& policy)
+// only guarantees sequential execution). For this reason, the code below contains compile-time conditionals which
+// ensure that the "classic" (i.e. deterministically sequenced) traversal algorithms is called when std::execution::seq
+// is passed to the member function.
+template < ExecutionPolicy_c ExecPolicy >
+void MeshPartition::visit(invocable_on_elements auto&& element_visitor, d_id_t domain_id, ExecPolicy&& policy)
 {
-    const auto dom_it = domains.find(domain_id);
-    if (dom_it != end(domains))
-        dom_it->second.visit(std::forward< F >(element_visitor), std::forward< ExecPolicy >(policy));
+    const auto dom_it = m_domains.find(domain_id);
+    if (dom_it != end(m_domains))
+        dom_it->second.visit(std::forward< decltype(element_visitor) >(element_visitor),
+                             std::forward< ExecPolicy >(policy));
 }
 
-template < invocable_on_const_elements F, ExecutionPolicy_c ExecPolicy >
-void MeshPartition::visit(F&& element_visitor, d_id_t domain_id, ExecPolicy&& policy) const
+template < ExecutionPolicy_c ExecPolicy >
+void MeshPartition::visit(invocable_on_const_elements auto&& element_visitor,
+                          d_id_t                             domain_id,
+                          ExecPolicy&&                       policy) const
 {
-    const auto dom_it = domains.find(domain_id);
-    if (dom_it != end(domains))
-        dom_it->second.visit(std::forward< F >(element_visitor), std::forward< ExecPolicy >(policy));
+    const auto dom_it = m_domains.find(domain_id);
+    if (dom_it != end(m_domains))
+        dom_it->second.visit(std::forward< decltype(element_visitor) >(element_visitor),
+                             std::forward< ExecPolicy >(policy));
 }
 
-template < invocable_on_elements F, detail::DomainPredicate_c D, ExecutionPolicy_c ExecPolicy >
-void MeshPartition::visit(F&& element_visitor, D&& domain_predicate, ExecPolicy&& policy)
+template < ExecutionPolicy_c ExecPolicy >
+void MeshPartition::visit(invocable_on_elements auto&&     element_visitor,
+                          detail::DomainPredicate_c auto&& domain_predicate,
+                          ExecPolicy&&                     policy)
 {
     const auto visit_domain = [&](auto& map_entry) {
         auto& [id, dom] = map_entry;
@@ -215,13 +222,15 @@ void MeshPartition::visit(F&& element_visitor, D&& domain_predicate, ExecPolicy&
             dom.visit(element_visitor, policy);
     };
     if constexpr (SequencedPolicy_c< ExecPolicy >)
-        std::ranges::for_each(domains, visit_domain);
+        std::ranges::for_each(m_domains, visit_domain);
     else
-        std::for_each(policy, begin(domains), end(domains), visit_domain);
+        std::for_each(policy, begin(m_domains), end(m_domains), visit_domain);
 }
 
-template < invocable_on_const_elements F, detail::DomainPredicate_c D, ExecutionPolicy_c ExecPolicy >
-void MeshPartition::visit(F&& element_visitor, D&& domain_predicate, ExecPolicy&& policy) const
+template < ExecutionPolicy_c ExecPolicy >
+void MeshPartition::visit(invocable_on_const_elements auto&& element_visitor,
+                          detail::DomainPredicate_c auto&&   domain_predicate,
+                          ExecPolicy&&                       policy) const
 {
     const auto visit_domain = [&](const auto& map_entry) {
         const auto& [id, dom] = map_entry;
@@ -229,13 +238,15 @@ void MeshPartition::visit(F&& element_visitor, D&& domain_predicate, ExecPolicy&
             dom.visit(element_visitor, policy);
     };
     if constexpr (SequencedPolicy_c< ExecPolicy >)
-        std::ranges::for_each(domains, visit_domain);
+        std::ranges::for_each(m_domains, visit_domain);
     else
-        std::for_each(policy, begin(domains), end(domains), visit_domain);
+        std::for_each(policy, begin(m_domains), end(m_domains), visit_domain);
 }
 
-template < invocable_on_elements_and< const DomainView > F, detail::DomainPredicate_c D, ExecutionPolicy_c ExecPolicy >
-void MeshPartition::visit(F&& element_visitor, D&& domain_predicate, ExecPolicy&& policy)
+template < ExecutionPolicy_c ExecPolicy >
+void MeshPartition::visit(invocable_on_elements_and< const DomainView > auto&& element_visitor,
+                          detail::DomainPredicate_c auto&&                     domain_predicate,
+                          ExecPolicy&&                                         policy)
 {
     const auto visit_domain = [&](auto& map_entry) {
         auto& [id, dom]        = map_entry;
@@ -244,15 +255,15 @@ void MeshPartition::visit(F&& element_visitor, D&& domain_predicate, ExecPolicy&
             dom.visit([&](auto& element) { element_visitor(element, domain_view); }, policy);
     };
     if constexpr (SequencedPolicy_c< ExecPolicy >)
-        std::ranges::for_each(domains, visit_domain);
+        std::ranges::for_each(m_domains, visit_domain);
     else
-        std::for_each(policy, begin(domains), end(domains), visit_domain);
+        std::for_each(policy, begin(m_domains), end(m_domains), visit_domain);
 }
 
-template < invocable_on_const_elements_and< const DomainView > F,
-           detail::DomainPredicate_c                           D,
-           ExecutionPolicy_c                                   ExecPolicy >
-void MeshPartition::visit(F&& element_visitor, D&& domain_predicate, ExecPolicy&& policy) const
+template < ExecutionPolicy_c ExecPolicy >
+void MeshPartition::visit(invocable_on_const_elements_and< const DomainView > auto&& element_visitor,
+                          detail::DomainPredicate_c auto&&                           domain_predicate,
+                          ExecPolicy&&                                               policy) const
 {
     const auto visit_domain = [&](const auto& map_entry) {
         const auto& [id, dom]  = map_entry;
@@ -261,37 +272,37 @@ void MeshPartition::visit(F&& element_visitor, D&& domain_predicate, ExecPolicy&
             dom.visit([&](const auto& element) { element_visitor(element, domain_view); }, policy);
     };
     if constexpr (SequencedPolicy_c< ExecPolicy >)
-        std::ranges::for_each(domains, visit_domain);
+        std::ranges::for_each(m_domains, visit_domain);
     else
-        std::for_each(policy, begin(domains), end(domains), visit_domain);
+        std::for_each(policy, begin(m_domains), end(m_domains), visit_domain);
 }
 
-template < invocable_on_elements F, ExecutionPolicy_c ExecPolicy >
-void MeshPartition::visit(F&& element_visitor, ExecPolicy&& policy)
+template < ExecutionPolicy_c ExecPolicy >
+void MeshPartition::visit(invocable_on_elements auto&& element_visitor, ExecPolicy&& policy)
 {
     const auto visit_domain = [&](auto& map_entry) {
         map_entry.second.visit(element_visitor, policy);
     };
     if constexpr (SequencedPolicy_c< ExecPolicy >)
-        std::ranges::for_each(domains, visit_domain);
+        std::ranges::for_each(m_domains, visit_domain);
     else
-        std::for_each(policy, begin(domains), end(domains), visit_domain);
+        std::for_each(policy, begin(m_domains), end(m_domains), visit_domain);
 }
 
-template < invocable_on_const_elements F, ExecutionPolicy_c ExecPolicy >
-void MeshPartition::visit(F&& element_visitor, ExecPolicy&& policy) const
+template < ExecutionPolicy_c ExecPolicy >
+void MeshPartition::visit(invocable_on_const_elements auto&& element_visitor, ExecPolicy&& policy) const
 {
     const auto visit_domain = [&](const auto& map_entry) {
         map_entry.second.visit(element_visitor, policy);
     };
     if constexpr (SequencedPolicy_c< ExecPolicy >)
-        std::ranges::for_each(domains, visit_domain);
+        std::ranges::for_each(m_domains, visit_domain);
     else
-        std::for_each(policy, begin(domains), end(domains), visit_domain);
+        std::for_each(policy, begin(m_domains), end(m_domains), visit_domain);
 }
 
-template < invocable_on_elements_and< const DomainView > F, ExecutionPolicy_c ExecPolicy >
-void MeshPartition::visit(F&& element_visitor, ExecPolicy&& policy)
+template < ExecutionPolicy_c ExecPolicy >
+void MeshPartition::visit(invocable_on_elements_and< const DomainView > auto&& element_visitor, ExecPolicy&& policy)
 {
     const auto visit_domain = [&](auto& map_entry) {
         auto& [id, dom]        = map_entry;
@@ -299,13 +310,14 @@ void MeshPartition::visit(F&& element_visitor, ExecPolicy&& policy)
         dom.visit([&](auto& element) { element_visitor(element, domain_view); }, policy);
     };
     if constexpr (SequencedPolicy_c< ExecPolicy >)
-        std::ranges::for_each(domains, visit_domain);
+        std::ranges::for_each(m_domains, visit_domain);
     else
-        std::for_each(policy, begin(domains), end(domains), visit_domain);
+        std::for_each(policy, begin(m_domains), end(m_domains), visit_domain);
 }
 
-template < invocable_on_const_elements_and< const DomainView > F, ExecutionPolicy_c ExecPolicy >
-void MeshPartition::visit(F&& element_visitor, ExecPolicy&& policy) const
+template < ExecutionPolicy_c ExecPolicy >
+void MeshPartition::visit(invocable_on_const_elements_and< const DomainView > auto&& element_visitor,
+                          ExecPolicy&&                                               policy) const
 {
     const auto visit_domain = [&](const auto& map_entry) {
         const auto& [id, dom]  = map_entry;
@@ -313,13 +325,15 @@ void MeshPartition::visit(F&& element_visitor, ExecPolicy&& policy) const
         dom.visit([&](const auto& element) { element_visitor(element, domain_view); }, policy);
     };
     if constexpr (SequencedPolicy_c< ExecPolicy >)
-        std::ranges::for_each(domains, visit_domain);
+        std::ranges::for_each(m_domains, visit_domain);
     else
-        std::for_each(policy, begin(domains), end(domains), visit_domain);
+        std::for_each(policy, begin(m_domains), end(m_domains), visit_domain);
 }
 
-template < invocable_on_elements F, detail::DomainIdRange_c R, ExecutionPolicy_c ExecPolicy >
-void MeshPartition::visit(F&& element_visitor, R&& domain_ids, ExecPolicy&& policy)
+template < ExecutionPolicy_c ExecPolicy >
+void MeshPartition::visit(invocable_on_elements auto&&   element_visitor,
+                          detail::DomainIdRange_c auto&& domain_ids,
+                          ExecPolicy&&                   policy)
 {
     const auto visit_domain = [&](d_id_t id) {
         visit(element_visitor, id, policy);
@@ -331,8 +345,10 @@ void MeshPartition::visit(F&& element_visitor, R&& domain_ids, ExecPolicy&& poli
         std::for_each(policy, std::ranges::begin(domain_ids), std::ranges::end(domain_ids), visit_domain);
 }
 
-template < invocable_on_const_elements F, detail::DomainIdRange_c R, ExecutionPolicy_c ExecPolicy >
-void MeshPartition::visit(F&& element_visitor, R&& domain_ids, ExecPolicy&& policy) const
+template < ExecutionPolicy_c ExecPolicy >
+void MeshPartition::visit(invocable_on_const_elements auto&& element_visitor,
+                          detail::DomainIdRange_c auto&&     domain_ids,
+                          ExecPolicy&&                       policy) const
 {
     const auto visit_domain = [&](d_id_t id) {
         visit(element_visitor, id, policy);
@@ -344,12 +360,14 @@ void MeshPartition::visit(F&& element_visitor, R&& domain_ids, ExecPolicy&& poli
         std::for_each(policy, std::ranges::begin(domain_ids), std::ranges::end(domain_ids), visit_domain);
 }
 
-template < invocable_on_elements_and< const DomainView > F, detail::DomainIdRange_c R, ExecutionPolicy_c ExecPolicy >
-void MeshPartition::visit(F&& element_visitor, R&& domain_ids, ExecPolicy&& policy)
+template < ExecutionPolicy_c ExecPolicy >
+void MeshPartition::visit(invocable_on_elements_and< const DomainView > auto&& element_visitor,
+                          detail::DomainIdRange_c auto&&                       domain_ids,
+                          ExecPolicy&&                                         policy)
 {
     const auto visit_domain = [&](d_id_t id) {
-        const auto dom_it = domains.find(id);
-        if (dom_it != end(domains))
+        const auto dom_it = m_domains.find(id);
+        if (dom_it != end(m_domains))
         {
             const auto domain_view = DomainView{dom_it->second, dom_it->first};
             dom_it->second.visit([&](auto& element) { element_visitor(element, domain_view); }, policy);
@@ -362,14 +380,14 @@ void MeshPartition::visit(F&& element_visitor, R&& domain_ids, ExecPolicy&& poli
         std::for_each(policy, std::ranges::begin(domain_ids), std::ranges::end(domain_ids), visit_domain);
 }
 
-template < invocable_on_const_elements_and< const DomainView > F,
-           detail::DomainIdRange_c                             R,
-           ExecutionPolicy_c                                   ExecPolicy >
-void MeshPartition::visit(F&& element_visitor, R&& domain_ids, ExecPolicy&& policy) const
+template < ExecutionPolicy_c ExecPolicy >
+void MeshPartition::visit(invocable_on_const_elements_and< const DomainView > auto&& element_visitor,
+                          detail::DomainIdRange_c auto&&                             domain_ids,
+                          ExecPolicy&&                                               policy) const
 {
     const auto visit_domain = [&](d_id_t id) {
-        const auto dom_it = domains.find(id);
-        if (dom_it != end(domains))
+        const auto dom_it = m_domains.find(id);
+        if (dom_it != end(m_domains))
         {
             const auto domain_view = DomainView{dom_it->second, dom_it->first};
             dom_it->second.visit([&](const auto& element) { element_visitor(element, domain_view); }, policy);
@@ -382,45 +400,56 @@ void MeshPartition::visit(F&& element_visitor, R&& domain_ids, ExecPolicy&& poli
         std::for_each(policy, std::ranges::begin(domain_ids), std::ranges::end(domain_ids), visit_domain);
 }
 
-template < typename Zero, typename Proj, typename Red, detail::DomainIdRange_c R, ExecutionPolicy_c ExecPolicy >
-Zero MeshPartition::reduce(Zero&& zero, Proj&& projection, Red&& reduction, R&& domain_ids, ExecPolicy&& policy) const
-    requires invocable_on_const_elements_r< Proj, Zero > and requires {
-                                                                 {
-                                                                     reduction(zero, zero)
-                                                                     } -> std::convertible_to< Zero >;
-                                                             }
+template < ExecutionPolicy_c ExecPolicy >
+auto MeshPartition::reduce(auto&&                         zero,
+                           auto&&                         projection,
+                           auto&&                         reduction,
+                           detail::DomainIdRange_c auto&& domain_ids,
+                           ExecPolicy&&                   policy) const -> std::decay_t< decltype(zero) >
+    requires invocable_on_const_elements_r< decltype(projection), std::decay_t< decltype(zero) > > and
+             requires {
+                 {
+                     reduction(zero, zero)
+                     } -> std::convertible_to< std::decay_t< decltype(zero) > >;
+             }
 {
     const auto& reduce_domain = [&](d_id_t id) {
-        const auto dom_it = domains.find(id);
-        if (dom_it != end(domains))
+        const auto dom_it = m_domains.find(id);
+        if (dom_it != end(m_domains))
             return dom_it->second.reduce(zero, projection, reduction, policy);
         else
             return zero;
     };
-    return std::transform_reduce(
-        policy, std::ranges::begin(domain_ids), std::ranges::end(domain_ids), zero, reduction, reduce_domain);
+    const auto ids = std::forward< decltype(domain_ids) >(domain_ids) | std::views::common;
+    return std::transform_reduce(policy, ids.begin(), ids.end(), zero, reduction, reduce_domain);
 }
 
-template < invocable_on_const_elements_r< bool > F, ExecutionPolicy_c ExecPolicy >
-MeshPartition::find_result_t MeshPartition::find(F&& predicate, ExecPolicy&& policy)
+template < ExecutionPolicy_c ExecPolicy >
+MeshPartition::find_result_t MeshPartition::find(invocable_on_const_elements_r< bool > auto&& predicate,
+                                                 ExecPolicy&&                                 policy)
 {
     return find(
-        std::forward< F >(predicate), [](const DomainView&) { return true; }, std::forward< ExecPolicy >(policy));
+        std::forward< decltype(predicate) >(predicate),
+        [](const DomainView&) { return true; },
+        std::forward< ExecPolicy >(policy));
 }
 
-template < invocable_on_const_elements_r< bool > F, ExecutionPolicy_c ExecPolicy >
-MeshPartition::cfind_result_t MeshPartition::find(F&& predicate, ExecPolicy&& policy) const
+template < ExecutionPolicy_c ExecPolicy >
+MeshPartition::cfind_result_t MeshPartition::find(invocable_on_const_elements_r< bool > auto&& predicate,
+                                                  ExecPolicy&&                                 policy) const
 {
-    return constifyFindResult(
-        const_cast< MeshPartition* >(this)->find(std::forward< F >(predicate), std::forward< ExecPolicy >(policy)));
+    return constifyFindResult(const_cast< MeshPartition* >(this)->find(std::forward< decltype(predicate) >(predicate),
+                                                                       std::forward< ExecPolicy >(policy)));
 }
 
-template < invocable_on_const_elements_r< bool > F, detail::DomainPredicate_c D, ExecutionPolicy_c ExecPolicy >
-MeshPartition::find_result_t MeshPartition::find(F&& predicate, D&& domain_predicate, ExecPolicy&& policy)
+template < ExecutionPolicy_c ExecPolicy >
+MeshPartition::find_result_t MeshPartition::find(invocable_on_const_elements_r< bool > auto&& predicate,
+                                                 detail::DomainPredicate_c auto&&             domain_predicate,
+                                                 ExecPolicy&&                                 policy)
 {
     find_result_t result;
     std::mutex    mut;
-    (void)std::find_if(policy, begin(domains), end(domains), [&](auto& map_entry) {
+    (void)std::find_if(policy, begin(m_domains), end(m_domains), [&](auto& map_entry) {
         auto& [id, domain]     = map_entry;
         const auto find_result = domain.find(predicate, policy);
         if (find_result)
@@ -433,16 +462,19 @@ MeshPartition::find_result_t MeshPartition::find(F&& predicate, D&& domain_predi
     return result;
 }
 
-template < invocable_on_const_elements_r< bool > F, detail::DomainPredicate_c D, ExecutionPolicy_c ExecPolicy >
-MeshPartition::cfind_result_t MeshPartition::find(F&& predicate, D&& domain_ids, ExecPolicy&& policy) const
+template < ExecutionPolicy_c ExecPolicy >
+MeshPartition::cfind_result_t MeshPartition::find(invocable_on_const_elements_r< bool > auto&& predicate,
+                                                  detail::DomainPredicate_c auto&&             domain_ids,
+                                                  ExecPolicy&&                                 policy) const
 {
-    return constifyFindResult(const_cast< MeshPartition* >(this)->find(
-        std::forward< F >(predicate), std::forward< D >(domain_ids), std::forward< ExecPolicy >(policy)));
+    return constifyFindResult(const_cast< MeshPartition* >(this)->find(std::forward< decltype(predicate) >(predicate),
+                                                                       std::forward< decltype(domain_ids) >(domain_ids),
+                                                                       std::forward< ExecPolicy >(policy)));
 }
 
 MeshPartition::find_result_t MeshPartition::find(el_id_t id)
 {
-    for (auto& [dom_id, dom] : domains)
+    for (auto& [dom_id, dom] : m_domains)
     {
         const auto find_result = dom.find(id);
         if (find_result)
@@ -469,7 +501,7 @@ MeshPartition::el_boundary_view_result_t MeshPartition::getElementBoundaryViewIm
         return detail::matchBoundaryNodesToElement(*domain_element, boundary_nodes);
     };
 
-    const auto adjacent_elems = dual_graph->getElementAdjacent(el.getId());
+    const auto adjacent_elems = m_dual_graph->getElementAdjacent(el.getId());
     for (el_id_t adj_id : adjacent_elems)
     {
         const auto  find_result = find(adj_id);
@@ -510,14 +542,13 @@ MeshPartition::el_boundary_view_result_t MeshPartition::getElementBoundaryView(c
         return getElementBoundaryViewFallback(el, d);
 }
 
-template < detail::DomainIdRange_c R >
-BoundaryView MeshPartition::getBoundaryView(R&& boundary_ids) const
+BoundaryView MeshPartition::getBoundaryView(detail::DomainIdRange_c auto&& boundary_ids) const
 {
     size_t n_boundary_els = 0;
     for (d_id_t id : boundary_ids)
     {
-        const auto dom_it = domains.find(id);
-        if (dom_it != end(domains))
+        const auto dom_it = m_domains.find(id);
+        if (dom_it != end(m_domains))
             n_boundary_els += dom_it->second.getNElements();
     }
     BoundaryView::boundary_element_view_variant_vector_t boundary_elements;
@@ -550,42 +581,35 @@ BoundaryView MeshPartition::getBoundaryView(R&& boundary_ids) const
                 "incorrectly specified boundaries, resulting in the edge/face element being in a different partition "
                 "than its parent area/volume element."};
     }
-    return BoundaryView{std::move(boundary_elements)};
+    return BoundaryView{std::move(boundary_elements), *this};
 }
 
 size_t MeshPartition::getNElements() const
 {
     return std::accumulate(
-        domains.cbegin(), domains.cend(), 0, [](size_t s, const auto& d) { return s + d.second.getNElements(); });
-}
-
-std::vector< d_id_t > MeshPartition::getDomainIds() const
-{
-    std::vector< d_id_t > retval;
-    retval.reserve(domains.size());
-    std::ranges::copy(domains | std::views::keys, back_inserter(retval));
-    return retval;
+        m_domains.cbegin(), m_domains.cend(), 0, [](size_t s, const auto& d) { return s + d.second.getNElements(); });
 }
 
 template < el_o_t O >
 MeshPartition::domain_map_t MeshPartition::getConversionAlloc() const
 {
     domain_map_t retval;
-    for (const auto& [id, dom] : domains)
+    for (const auto& [id, dom] : m_domains)
         retval.emplace_hint(retval.cend(), id, dom.template getConversionAlloc< O >());
     return retval;
 }
 
-MeshPartition::MeshPartition(MeshPartition::domain_map_t domains_) : domains{std::move(domains_)}
+MeshPartition::MeshPartition(MeshPartition::domain_map_t domains_) : m_domains{std::move(domains_)}
 {
     constexpr size_t n_nodes_estimate_factor = 4; // TODO: come up with better heuristic
-    nodes.reserve(getNElements() * n_nodes_estimate_factor);
-    visit(
-        [&](const auto& element) { std::ranges::for_each(element.getNodes(), [&](n_id_t n) { nodes.push_back(n); }); });
-    std::ranges::sort(nodes);
-    const auto range_to_erase = std::ranges::unique(nodes);
-    nodes.erase(begin(range_to_erase), end(range_to_erase));
-    nodes.shrink_to_fit();
+    m_nodes.reserve(getNElements() * n_nodes_estimate_factor);
+    visit([&](const auto& element) {
+        std::ranges::for_each(element.getNodes(), [&](n_id_t n) { m_nodes.push_back(n); });
+    });
+    std::ranges::sort(m_nodes);
+    const auto range_to_erase = std::ranges::unique(m_nodes);
+    m_nodes.erase(begin(range_to_erase), end(range_to_erase));
+    m_nodes.shrink_to_fit();
 }
 
 auto MeshPartition::convertToMetisFormat() const
@@ -626,6 +650,19 @@ MetisGraphWrapper MeshPartition::makeMetisDualGraph() const
     detail::handleMetisErrorCode(error);
 
     return MetisGraphWrapper{xadj, adjncy, getNElements()};
+}
+
+size_t MeshPartition::computeTopoHash() const
+{
+    constexpr auto hash_range = [](std::ranges::contiguous_range auto&& r) -> size_t {
+        const auto data = std::span{std::forward< decltype(r) >(r)};
+        return robin_hood::hash_bytes(data.data(), data.size_bytes());
+    };
+    const auto hash_element = [&](const auto& element) {
+        return hash_range(element.getNodes());
+    };
+    const size_t topo_hash = reduce(size_t{}, hash_element, std::bit_xor<>{}, getDomainIds(), std::execution::par);
+    return topo_hash ^ hash_range(m_nodes) ^ hash_range(m_ghost_nodes);
 }
 } // namespace lstr
 #endif // L3STER_MESH_MESHPARTITION_HPP

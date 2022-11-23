@@ -1,5 +1,5 @@
 #include "l3ster/comm/DistributeMesh.hpp"
-#include "l3ster/util/GlobalResource.hpp"
+#include "l3ster/util/ScopeGuards.hpp"
 
 #include "TestDataPath.h"
 
@@ -8,10 +8,10 @@
 int main(int argc, char* argv[])
 {
     using namespace lstr;
-    GlobalResource< MpiScopeGuard >::initialize(argc, argv);
-    MpiComm comm{};
+    L3sterScopeGuard scope_guard{argc, argv};
+    MpiComm          comm{};
 
-    const auto   part    = readAndDistributeMesh< 2 >(comm, L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag, {});
+    const auto   part = readAndDistributeMesh< 2 >(comm, L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag, {});
     const size_t n_elems = part.getNElements();
 
     size_t sum_elems{};
