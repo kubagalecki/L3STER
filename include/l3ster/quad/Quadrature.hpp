@@ -19,5 +19,7 @@ struct Quadrature
     q_points_t points;
     weights_t  weights;
 };
+template < size_t dim, size_t len >
+Quadrature(std::array< std::array< val_t, dim >, len >, std::array< val_t, len >) -> Quadrature< len, dim >;
 } // namespace lstr
 #endif // L3STER_QUAD_QUADRATURE_HPP

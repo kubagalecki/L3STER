@@ -428,7 +428,6 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
                     break;
                 case Space::Z:
                     retval = 2;
-                    ;
                     break;
                 }
                 return retval;
@@ -438,7 +437,7 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
             const auto& ref_q =
                 getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide()).quadrature;
             for (auto qp : ref_q.points)
-                CHECK(mapToPhysicalSpace(*el_view, qp)[space_ind] == Approx{offs}.epsilon(1e-15));
+                CHECK(mapToPhysicalSpace(*el_view, qp)[space_ind] == Approx{offs}.margin(1.e-15));
         };
         view.visit(element_checker);
     };
