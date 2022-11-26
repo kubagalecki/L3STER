@@ -18,13 +18,13 @@ void vtkExportTest2D()
     const MpiComm comm;
 
     const auto node_distx = [] {
-        std::array< double, 13 > retval;
+        std::array< double, 11 > retval;
         for (size_t i = 0; i < retval.size(); ++i)
             retval[i] = -.5 + i * 2.5 / (retval.size() - 1);
         return retval;
     }();
     const auto node_disty = [] {
-        std::array< double, 21 > retval;
+        std::array< double, 15 > retval;
         for (size_t i = 0; i < retval.size(); ++i)
             retval[i] = -.5 + i * 2. / (retval.size() - 1);
         return retval;
@@ -94,7 +94,7 @@ void vtkExportTest3D()
     const MpiComm comm;
 
     const auto node_dist = [] {
-        std::array< double, 11 > retval;
+        std::array< double, 7 > retval;
         for (size_t i = 0; i < retval.size(); ++i)
             retval[i] = -1. + i * 2. / (retval.size() - 1);
         return retval;
