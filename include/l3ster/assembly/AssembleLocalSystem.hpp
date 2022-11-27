@@ -3,6 +3,7 @@
 
 #include "l3ster/assembly/SpaceTimePoint.hpp"
 #include "l3ster/basisfun/ReferenceBasisAtQuadrature.hpp"
+#include "l3ster/mapping/BoundaryIntegralJacobian.hpp"
 #include "l3ster/mapping/BoundaryNormal.hpp"
 #include "l3ster/mapping/ComputePhysBasisDer.hpp"
 #include "l3ster/mapping/JacobiMat.hpp"
@@ -131,11 +132,11 @@ auto makeRankUpdateMatrix(const std::array< Eigen::Matrix< val_t, n_equations, n
 } // namespace detail
 
 template < ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
-auto assembleLocalSystem(auto&&                                                                         kernel,
-                         const Element< ET, EO >&                                                       element,
-                         const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >&      node_vals,
-                         const ReferenceBasisAtQuadrature< ET, EO, QL, Element< ET, EO >::native_dim >& basis_at_qps,
-                         val_t                                                                          time)
+auto assembleLocalSystem(auto&&                                                                    kernel,
+                         const Element< ET, EO >&                                                  element,
+                         const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
+                         const ReferenceBasisAtQuadrature< ET, EO, QL >&                           basis_at_qps,
+                         val_t                                                                     time)
     requires detail::Kernel_c< decltype(kernel), Element< ET, EO >::native_dim, n_fields >
 {
     const auto jacobi_mat_generator = getNatJacobiMatGenerator(element);
@@ -165,12 +166,11 @@ auto assembleLocalSystem(auto&&                                                 
 }
 
 template < typename Kernel, ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
-auto assembleLocalBoundarySystem(
-    Kernel&&                                                                       kernel,
-    BoundaryElementView< ET, EO >                                                  el_view,
-    const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >&      node_vals,
-    const ReferenceBasisAtQuadrature< ET, EO, QL, Element< ET, EO >::native_dim >& basis_at_qps,
-    val_t                                                                          time)
+auto assembleLocalBoundarySystem(Kernel&&                                                                  kernel,
+                                 BoundaryElementView< ET, EO >                                             el_view,
+                                 const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
+                                 const ReferenceBasisAtQuadrature< ET, EO, QL >&                           basis_at_qps,
+                                 val_t                                                                     time)
     requires detail::BoundaryKernel_c< Kernel, Element< ET, EO >::native_dim, n_fields >
 {
     const auto jacobi_mat_generator = getNatJacobiMatGenerator(*el_view);
@@ -186,7 +186,8 @@ auto assembleLocalBoundarySystem(
         const auto normal          = computeBoundaryNormal(el_view, jacobi_mat);
         const auto [A, F] = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time}, normal);
         const auto rank_update_matrix = detail::makeRankUpdateMatrix(A, bas_vals, phys_basis_ders);
-        const auto rank_update_weight = jacobi_mat.determinant() * weight;
+        const auto bound_jac          = computeBoundaryIntegralJacobian(el_view, jacobi_mat);
+        const auto rank_update_weight = bound_jac * weight;
         K_el.template selfadjointView< Eigen::Lower >().rankUpdate(rank_update_matrix, rank_update_weight);
         F_el += rank_update_matrix * F * rank_update_weight;
     };

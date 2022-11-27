@@ -107,11 +107,11 @@ concept PotentiallyValidBoundaryIntegralKernel_c =
     PotentiallyValidIntegralKernelDeductionHelper< Kernel, n_fields >::boundary;
 
 template < ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
-auto evalElementIntegral(auto&&                                                                         kernel,
-                         const Element< ET, EO >&                                                       element,
-                         const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >&      node_vals,
-                         const ReferenceBasisAtQuadrature< ET, EO, QL, Element< ET, EO >::native_dim >& basis_at_qps,
-                         val_t                                                                          time)
+auto evalElementIntegral(auto&&                                                                    kernel,
+                         const Element< ET, EO >&                                                  element,
+                         const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
+                         const ReferenceBasisAtQuadrature< ET, EO, QL >&                           basis_at_qps,
+                         val_t                                                                     time)
     requires IntegralKernel_c< decltype(kernel), Element< ET, EO >::native_dim, n_fields >
 {
     const auto jacobi_mat_generator = getNatJacobiMatGenerator(element);
@@ -128,12 +128,11 @@ auto evalElementIntegral(auto&&                                                 
 }
 
 template < ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
-auto evalElementBoundaryIntegral(
-    auto&&                                                                         kernel,
-    const BoundaryElementView< ET, EO >&                                           el_view,
-    const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >&      node_vals,
-    const ReferenceBasisAtQuadrature< ET, EO, QL, Element< ET, EO >::native_dim >& basis_at_qps,
-    val_t                                                                          time)
+auto evalElementBoundaryIntegral(auto&&                                                                    kernel,
+                                 const BoundaryElementView< ET, EO >&                                      el_view,
+                                 const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
+                                 const ReferenceBasisAtQuadrature< ET, EO, QL >&                           basis_at_qps,
+                                 val_t                                                                     time)
     requires BoundaryIntegralKernel_c< decltype(kernel), Element< ET, EO >::native_dim, n_fields >
 {
     const auto jacobi_mat_generator = getNatJacobiMatGenerator(*el_view);
@@ -145,7 +144,8 @@ auto evalElementBoundaryIntegral(
         const auto field_vals  = computeFieldVals(basis_at_qps.basis.values[qp_ind], node_vals);
         const auto field_ders  = computeFieldDers(basis_at_qps.basis.derivatives[qp_ind], node_vals);
         const auto ker_res     = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time}, normal);
-        return jacobi_mat.determinant() * ker_res;
+        const auto bound_jac   = computeBoundaryIntegralJacobian(el_view, jacobi_mat);
+        return bound_jac * ker_res;
     };
     return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, result_t{result_t::Zero()});
 }

@@ -13,7 +13,7 @@ int main(int argc, char* argv[])
     L3sterScopeGuard scope_guard{argc, argv};
     const MpiComm    comm;
 
-    const std::array node_dist{0., 1., 2., 3., 4., 5., 6., 7., 8.};
+    const std::array node_dist{0., 1., 2., 3., 4., 5., 6.};
     constexpr auto   mesh_order = 2;
     auto             mesh       = makeSquareMesh(node_dist);
     mesh.getPartitions()[0].initDualGraph();

@@ -335,7 +335,7 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
     SECTION("procedurally generated mesh")
     {
         constexpr el_o_t     order = 2;
-        constexpr std::array dist{0., .2, .4, .6, .8, 1.};
+        constexpr std::array dist{0., .2, .4, .6, .8, 10.};
         constexpr auto       n_edge_els = dist.size() - 1;
         auto                 mesh       = makeCubeMesh(dist);
         auto&                part       = mesh.getPartitions()[0];
