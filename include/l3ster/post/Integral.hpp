@@ -144,7 +144,8 @@ auto evalElementBoundaryIntegral(auto&&                                         
         const auto field_vals  = computeFieldVals(basis_at_qps.basis.values[qp_ind], node_vals);
         const auto field_ders  = computeFieldDers(basis_at_qps.basis.derivatives[qp_ind], node_vals);
         const auto ker_res     = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time}, normal);
-        return jacobi_mat.determinant() * ker_res;
+        const auto bound_jac   = computeBoundaryIntegralJacobian(el_view, jacobi_mat);
+        return bound_jac * ker_res;
     };
     return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, result_t{result_t::Zero()});
 }

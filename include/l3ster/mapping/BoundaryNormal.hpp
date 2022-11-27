@@ -7,7 +7,7 @@ namespace lstr
 {
 template < ElementTypes ET, el_o_t EO >
 auto computeBoundaryNormal(
-    const BoundaryElementView< ET, EO >&                                                        el_view,
+    BoundaryElementView< ET, EO >                                                               el_view,
     const Eigen::Matrix< val_t, Element< ET, EO >::native_dim, Element< ET, EO >::native_dim >& jacobi_mat)
     -> Eigen::Vector< val_t, Element< ET, EO >::native_dim >
 {

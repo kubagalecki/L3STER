@@ -3,6 +3,7 @@
 
 #include "l3ster/assembly/SpaceTimePoint.hpp"
 #include "l3ster/basisfun/ReferenceBasisAtQuadrature.hpp"
+#include "l3ster/mapping/BoundaryIntegralJacobian.hpp"
 #include "l3ster/mapping/BoundaryNormal.hpp"
 #include "l3ster/mapping/ComputePhysBasisDer.hpp"
 #include "l3ster/mapping/JacobiMat.hpp"
@@ -185,7 +186,8 @@ auto assembleLocalBoundarySystem(Kernel&&                                       
         const auto normal          = computeBoundaryNormal(el_view, jacobi_mat);
         const auto [A, F] = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time}, normal);
         const auto rank_update_matrix = detail::makeRankUpdateMatrix(A, bas_vals, phys_basis_ders);
-        const auto rank_update_weight = jacobi_mat.determinant() * weight;
+        const auto bound_jac          = computeBoundaryIntegralJacobian(el_view, jacobi_mat);
+        const auto rank_update_weight = bound_jac * weight;
         K_el.template selfadjointView< Eigen::Lower >().rankUpdate(rank_update_matrix, rank_update_weight);
         F_el += rank_update_matrix * F * rank_update_weight;
     };

@@ -9,7 +9,7 @@
 
 using namespace lstr;
 
-constexpr double tol = 1e-10;
+constexpr double tol = 1e-13;
 
 TEST_CASE("Polynomial evaluation", "[math]")
 {
@@ -63,7 +63,7 @@ TEST_CASE("Polynomial integral", "[math]")
     REQUIRE(decltype(integral)::order == expected_result_order);
     for (size_t i = 0; i < expected_result_order; ++i)
     {
-        CHECK(integral.coefs[i] == Approx(expected_result[i]).epsilon(tol));
+        CHECK(integral.coefs[i] == Approx(expected_result[i]).margin(tol));
     }
 }
 
@@ -78,7 +78,7 @@ TEST_CASE("Polynomial derivative", "[math]")
     REQUIRE(decltype(derivative)::order == expected_result_order);
     for (size_t i = 0; i < expected_result_order; ++i)
     {
-        CHECK(derivative.coefs[i] == Approx(expected_result[i]).epsilon(tol));
+        CHECK(derivative.coefs[i] == Approx(expected_result[i]).margin(tol));
     }
 
     constexpr auto constant            = Polynomial{std::array{1.}};
@@ -90,21 +90,21 @@ TEST_CASE("Polynomial derivative", "[math]")
 
 TEST_CASE("Polynomial roots", "[math]")
 {
-    CHECK(std::get< 0 >(Polynomial{std::array{-2., 1.}}.roots()).real() == Approx{.5}.epsilon(tol));
+    CHECK(std::get< 0 >(Polynomial{std::array{-2., 1.}}.roots()).real() == Approx{.5}.margin(tol));
 
     const auto o2_roots = Polynomial{std::array{-1., 2., 3.}}.roots();
-    CHECK(o2_roots[0].imag() == Approx{0.}.epsilon(tol));
-    CHECK(o2_roots[1].imag() == Approx{0.}.epsilon(tol));
-    CHECK(o2_roots[0].real() == Approx{-1.}.epsilon(tol));
-    CHECK(o2_roots[1].real() == Approx{3.}.epsilon(tol));
+    CHECK(o2_roots[0].imag() == Approx{0.}.margin(tol));
+    CHECK(o2_roots[1].imag() == Approx{0.}.margin(tol));
+    CHECK(o2_roots[0].real() == Approx{-1.}.margin(tol));
+    CHECK(o2_roots[1].real() == Approx{3.}.margin(tol));
 
     const auto o3_roots = Polynomial{std::array{-1., 2., 1., -2.}}.roots();
-    CHECK(o3_roots[0].imag() == Approx{0.}.epsilon(tol));
-    CHECK(o3_roots[1].imag() == Approx{0.}.epsilon(tol));
-    CHECK(o3_roots[2].imag() == Approx{0.}.epsilon(tol));
-    CHECK(o3_roots[0].real() == Approx{-1.}.epsilon(tol));
-    CHECK(o3_roots[1].real() == Approx{1.}.epsilon(tol));
-    CHECK(o3_roots[2].real() == Approx{2.}.epsilon(tol));
+    CHECK(o3_roots[0].imag() == Approx{0.}.margin(tol));
+    CHECK(o3_roots[1].imag() == Approx{0.}.margin(tol));
+    CHECK(o3_roots[2].imag() == Approx{0.}.margin(tol));
+    CHECK(o3_roots[0].real() == Approx{-1.}.margin(tol));
+    CHECK(o3_roots[1].real() == Approx{1.}.margin(tol));
+    CHECK(o3_roots[2].real() == Approx{2.}.margin(tol));
 }
 
 TEST_CASE("Lagrange interpolation", "[math]")
@@ -183,8 +183,8 @@ TEST_CASE("Lobatto abscissas", "[math]")
         const auto& la     = getLobattoRuleAbsc< double, 4 >();
         const auto  a12abs = .2 * std::sqrt(5.);
         CHECK(la[0] == -1.);
-        CHECK(la[1] == Approx(-a12abs).epsilon(1e-14));
-        CHECK(la[2] == Approx(a12abs).epsilon(1e-14));
+        CHECK(la[1] == Approx(-a12abs).margin(1e-14));
+        CHECK(la[2] == Approx(a12abs).margin(1e-14));
         CHECK(la[3] == 1.);
     }
 
@@ -193,9 +193,9 @@ TEST_CASE("Lobatto abscissas", "[math]")
         const auto& la     = getLobattoRuleAbsc< double, 5 >();
         const auto  a13abs = std::sqrt(21.) / 7.;
         CHECK(la[0] == -1.);
-        CHECK(la[1] == Approx(-a13abs).epsilon(1e-14));
+        CHECK(la[1] == Approx(-a13abs).margin(1e-14));
         CHECK(la[2] == 0.);
-        CHECK(la[3] == Approx(a13abs).epsilon(1e-14));
+        CHECK(la[3] == Approx(a13abs).margin(1e-14));
         CHECK(la[4] == 1.);
     }
 
@@ -205,10 +205,10 @@ TEST_CASE("Lobatto abscissas", "[math]")
         const auto  a14abs = std::sqrt((7. + 2 * std::sqrt(7.)) / 21.);
         const auto  a23abs = std::sqrt((7. - 2 * std::sqrt(7.)) / 21.);
         CHECK(la[0] == -1.);
-        CHECK(la[1] == Approx(-a14abs).epsilon(1e-14));
-        CHECK(la[2] == Approx(-a23abs).epsilon(1e-14));
-        CHECK(la[3] == Approx(a23abs).epsilon(1e-14));
-        CHECK(la[4] == Approx(a14abs).epsilon(1e-14));
+        CHECK(la[1] == Approx(-a14abs).margin(1e-14));
+        CHECK(la[2] == Approx(-a23abs).margin(1e-14));
+        CHECK(la[3] == Approx(a23abs).margin(1e-14));
+        CHECK(la[4] == Approx(a14abs).margin(1e-14));
         CHECK(la[5] == 1.);
     }
 }
