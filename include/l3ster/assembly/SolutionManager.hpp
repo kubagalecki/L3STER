@@ -35,7 +35,7 @@ public:
     [[nodiscard]] inline const map_t&             getNodeMap() const;
 
     template < detail::ProblemDef_c auto problem_def >
-    void updateSolution(const MeshPartition&                                          problem_ind,
+    void updateSolution(const MeshPartition&                                          mesh,
                         const solution_vector_t&                                      solution,
                         const node_dof_map_t< problem_def >&                          node_dof_map,
                         std::span< const size_t, detail::deduceNFields(problem_def) > solution_inds,
