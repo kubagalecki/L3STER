@@ -465,7 +465,7 @@ auto makeNumFieldComponentsView(SizedRangeOfConvertibleTo_c< std::span< const si
     return field_component_inds | std::views::transform([](auto cmps) -> size_t { return cmps.size() == 1 ? 1 : 3; });
 }
 
-auto makeEncodedFieldSizeView(const std::vector< ArrayOwner< char > >& encoded_fields)
+inline auto makeEncodedFieldSizeView(const std::vector< ArrayOwner< char > >& encoded_fields)
 {
     return encoded_fields | std::views::transform([](const auto& enc) { return enc.size(); });
 }

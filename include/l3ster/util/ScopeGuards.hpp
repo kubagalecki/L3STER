@@ -30,12 +30,12 @@ struct KokkosScopeGuard
 
 struct L3sterScopeGuard
 {
-    L3sterScopeGuard(int& argc, char** argv);
+    inline L3sterScopeGuard(int& argc, char** argv);
     L3sterScopeGuard(const L3sterScopeGuard&)            = delete;
     L3sterScopeGuard(L3sterScopeGuard&&)                 = delete;
     L3sterScopeGuard& operator=(const L3sterScopeGuard&) = delete;
     L3sterScopeGuard& operator=(L3sterScopeGuard&&)      = delete;
-    ~L3sterScopeGuard();
+    inline ~L3sterScopeGuard();
 };
 
 L3sterScopeGuard::L3sterScopeGuard(int& argc, char** argv)
