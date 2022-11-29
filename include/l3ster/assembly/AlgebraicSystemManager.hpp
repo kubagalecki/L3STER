@@ -107,6 +107,8 @@ private:
         std::optional< const bc_t > dirichlet_bcs; // May be null
         const dof_map_local_t       row_map, col_map, rhs_map;
         Teuchos::RCP< const map_t > owned_map;
+        Teuchos::ArrayRCP< val_t >  rhs_alloc; // Host view of the rhs
+        std::span< val_t >          rhs_view;  // We need a thread safe view, which Teuchos::ArrayRCP is not
     };
     static inline std::map< CacheKey, std::weak_ptr< CacheEntry > > cache{};
 
@@ -132,8 +134,6 @@ private:
 
     // We need to hold strong ownership of the cache entry (the cache holds weak ownership)
     std::shared_ptr< CacheEntry > m_cache_ptr;
-    Teuchos::ArrayRCP< val_t >    m_rhs_alloc; // Host view of the rhs
-    std::span< val_t >            m_rhs_view;  // We need a thread safe view, which Teuchos::ArrayRCP is not
 };
 
 template < detail::ProblemDef_c auto problem_def >
@@ -276,7 +276,7 @@ void AlgebraicSystemManager< n_fields >::assembleDomainProblem(
                                                    std::forward< R >(domain_ids),
                                                    std::forward< FvalGetter >(fval_getter),
                                                    *m_cache_ptr->matrix,
-                                                   m_rhs_view,
+                                                   m_cache_ptr->rhs_view,
                                                    getRowMap(),
                                                    getColMap(),
                                                    getRhsMap(),
@@ -301,7 +301,7 @@ void AlgebraicSystemManager< n_fields >::assembleBoundaryProblem(Kernel&&       
                                                            boundary,
                                                            std::forward< FvalGetter >(fval_getter),
                                                            *m_cache_ptr->matrix,
-                                                           m_rhs_view,
+                                                           m_cache_ptr->rhs_view,
                                                            getRowMap(),
                                                            getColMap(),
                                                            getRhsMap(),
@@ -325,14 +325,14 @@ void AlgebraicSystemManager< n_fields >::openRhs()
 {
     m_cache_ptr->rhs->sync_host();
     m_cache_ptr->rhs->modify_host();
-    m_rhs_alloc = m_cache_ptr->rhs->getDataNonConst(0);
-    m_rhs_view  = m_rhs_alloc;
+    m_cache_ptr->rhs_alloc = m_cache_ptr->rhs->getDataNonConst(0);
+    m_cache_ptr->rhs_view  = m_cache_ptr->rhs_alloc;
 }
 template < size_t n_fields >
 void AlgebraicSystemManager< n_fields >::closeRhs()
 {
-    m_rhs_view  = {};
-    m_rhs_alloc = {};
+    m_cache_ptr->rhs_view  = {};
+    m_cache_ptr->rhs_alloc = {};
     m_cache_ptr->rhs->sync_device();
 }
 
@@ -399,6 +399,7 @@ AlgebraicSystemManager< n_fields >::makeCacheEntry(const MpiComm&               
         dbcs.emplace(sparsity_graph, std::move(owned_bcdofs), std::move(shared_bcdofs));
     }
 
+    const auto rhs_alloc = rhs->getDataNonConst(0);
     return CacheEntry{.state         = State::OpenForAssembly,
                       .matrix        = std::move(matrix),
                       .rhs           = std::move(rhs),
@@ -406,7 +407,9 @@ AlgebraicSystemManager< n_fields >::makeCacheEntry(const MpiComm&               
                       .row_map       = std::move(row_map),
                       .col_map       = std::move(col_map),
                       .rhs_map       = std::move(rhs_map),
-                      .owned_map     = sparsity_graph->getRowMap()};
+                      .owned_map     = sparsity_graph->getRowMap(),
+                      .rhs_alloc     = rhs_alloc,
+                      .rhs_view      = rhs_alloc};
 }
 } // namespace lstr
 #endif // L3STER_ASSEMBLY_ALGEBRAICSYSTEMMANAGER_HPP
