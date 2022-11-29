@@ -12,6 +12,13 @@
 
 using namespace lstr;
 
+TEST_CASE("Declare element orders", "[mesh]")
+{
+    REQUIRE(element_orders.size() == 2);
+    CHECK(element_orders.front() == 1);
+    CHECK(element_orders.back() == 2);
+}
+
 TEST_CASE("2D mesh import", "[mesh]")
 {
     auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag);
