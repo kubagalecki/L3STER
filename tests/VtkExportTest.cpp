@@ -1,10 +1,12 @@
-#include "l3ster/post/VtkExport.hpp"
+#include "Common.hpp"
+
 #include "l3ster/assembly/AlgebraicSystemManager.hpp"
 #include "l3ster/assembly/ComputeValuesAtNodes.hpp"
 #include "l3ster/assembly/SolutionManager.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
+#include "l3ster/post/VtkExport.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
 #include <numbers>
@@ -86,7 +88,12 @@ void vtkExportTest2D()
     const auto field_names     = std::array{"C1"sv, "Cpi"sv, "vel"sv};
     const auto field_comp_inds = std::array< std::span< const size_t >, 3 >{
         std::span{std::addressof(scalar_inds[0]), 1}, std::span{std::addressof(scalar_inds[1]), 1}, vec_inds};
-    exporter.exportSolution("test_results_2D", comm, solution_manager, field_names, field_comp_inds);
+    if (comm.getRank() == 0)
+    {
+        [[maybe_unused]] auto _ = system("mkdir -p 2D");
+    }
+    comm.barrier();
+    exporter.exportSolution("2D/results", comm, solution_manager, field_names, field_comp_inds);
 }
 
 void vtkExportTest3D()
@@ -163,8 +170,21 @@ void vtkExportTest3D()
 
     auto       exporter    = PvtuExporter{my_partition, solution_manager.getNodeMap()};
     const auto field_names = std::array{"vec3D"sv, "normal"sv};
-    exporter.exportSolution(
-        "test_results_3D", comm, solution_manager, field_names, std::array{domain_field_inds, boundary_field_inds});
+    CHECK_THROWS(exporter.exportSolution("path/to/nonexistent/directory/test_results_3D",
+                                         comm,
+                                         solution_manager,
+                                         field_names,
+                                         std::array{domain_field_inds, boundary_field_inds}));
+    if (comm.getRank() == 0)
+    {
+        [[maybe_unused]] auto _ = system("mkdir -p 3D");
+    }
+    comm.barrier();
+    exporter.exportSolution("3D/results.nonsense_extension",
+                            comm,
+                            solution_manager,
+                            field_names,
+                            std::array{domain_field_inds, boundary_field_inds});
 }
 
 int main(int argc, char* argv[])
