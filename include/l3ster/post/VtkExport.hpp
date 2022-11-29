@@ -7,6 +7,7 @@
 #include "l3ster/util/Base64.hpp"
 #include "l3ster/util/TrilinosUtils.hpp"
 
+#include <filesystem>
 #include <string>
 #include <string_view>
 
@@ -129,7 +130,7 @@ inline void appendPvtuPieceDataDef(std::string& str, std::string_view name, int 
     for (int rank = 0; rank < n_ranks; ++rank)
     {
         str += "<Piece Source=\"";
-        str += name;
+        str += std::filesystem::path{name}.stem().string();
         str += '_';
         str += std::to_string(rank);
         str += ".vtu\"/>\n";
@@ -478,7 +479,7 @@ inline auto openFileForExport(const std::string& name) -> std::shared_ptr< MpiCo
 
 inline auto makeVtuFileName(std::string_view name, const MpiComm& comm) -> std::string
 {
-    auto retval = std::string{name};
+    auto retval = std::filesystem::path{name}.replace_extension().string();
     retval += '_';
     retval += std::to_string(comm.getRank());
     retval += ".vtu";
@@ -547,9 +548,8 @@ void PvtuExporter::enqueuePvtuFileWrite(
                                           comm.getSize(),
                                           std::forward< decltype(field_names) >(field_names),
                                           std::forward< decltype(n_field_components_view) >(n_field_components_view));
-    std::string pvtu_name{file_name};
-    pvtu_name += ".pvtu";
-    auto pvtu_file = detail::vtk::openFileForExport(pvtu_name);
+    const auto pvtu_name = std::filesystem::path(file_name).replace_extension("pvtu").string();
+    auto       pvtu_file = detail::vtk::openFileForExport(pvtu_name);
     enqueueWrite(std::move(pvtu_file), 0, std::move(pvtu_contents));
 }
 
@@ -560,10 +560,11 @@ void PvtuExporter::enqueueVtuFileWrite(
     SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
     SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds)
 {
-    auto enqueue_write =
-        [this, vtu_file_handle = detail::vtk::openVtuFile(file_name, comm), pos = ptrdiff_t{}](auto&& text) mutable {
-            pos += enqueueWrite(vtu_file_handle, pos, std::forward< decltype(text) >(text));
-        };
+    const auto file_name_vtu_ext = std::filesystem::path{file_name}.replace_extension("vtu").string();
+    const auto vtu_file_handle   = detail::vtk::openVtuFile(file_name_vtu_ext, comm);
+    auto       enqueue_write     = [this, &vtu_file_handle, pos = ptrdiff_t{}](auto&& text) mutable {
+        pos += enqueueWrite(vtu_file_handle, pos, std::forward< decltype(text) >(text));
+    };
 
     auto encoded_fields = detail::vtk::encodeSolution(solution_manager, field_component_inds);
     enqueue_write(makeDataDescription(field_names, field_component_inds, encoded_fields));

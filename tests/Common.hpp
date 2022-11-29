@@ -12,7 +12,7 @@
         }                                                                                                              \
         catch (const Except&)                                                                                          \
         {                                                                                                              \
-            throw std::runtime_error{"Expression which was expected to throw failed to do so"};                       \
+            throw std::runtime_error{"Expression which was expected to throw failed to do so"};                        \
         }                                                                                                              \
         catch (...)                                                                                                    \
         {}                                                                                                             \
