@@ -4,8 +4,7 @@
 #include "l3ster/assembly/AssembleGlobalSystem.hpp"
 #include "l3ster/bcs/DirichletBC.hpp"
 #include "l3ster/bcs/GetDirichletDofs.hpp"
-
-#include <typeinfo>
+#include "l3ster/util/WeakCache.hpp"
 
 namespace lstr
 {
@@ -78,6 +77,7 @@ private:
     // MPI and Kokkos are finalized.
     struct CacheTagBase
     {
+        [[nodiscard]] virtual const void* get() const    = 0;
         CacheTagBase()                                   = default;
         CacheTagBase(const CacheTagBase&)                = default;
         CacheTagBase& operator=(const CacheTagBase&)     = default;
@@ -87,7 +87,10 @@ private:
     };
     template < detail::ProblemDef_c auto problem_def, detail::ProblemDef_c auto dbc_def >
     struct CacheTag : CacheTagBase
-    {};
+    {
+        static constexpr int      tag = 0;
+        [[nodiscard]] const void* get() const final { return std::addressof(tag); }
+    };
     struct CacheKey
     {
         std::unique_ptr< CacheTagBase > tag;
@@ -95,8 +98,7 @@ private:
 
         bool operator<(const CacheKey& other) const
         {
-            return std::array{mesh_hash, typeid(*tag).hash_code()} <
-                   std::array{other.mesh_hash, typeid(*other.tag).hash_code()};
+            return std::make_pair(mesh_hash, tag->get()) < std::make_pair(other.mesh_hash, other.tag->get());
         }
     };
     struct CacheEntry
@@ -110,7 +112,7 @@ private:
         Teuchos::ArrayRCP< val_t >  rhs_alloc; // Host view of the rhs
         std::span< val_t >          rhs_view;  // We need a thread safe view, which Teuchos::ArrayRCP is not
     };
-    static inline std::map< CacheKey, std::weak_ptr< CacheEntry > > cache{};
+    static inline WeakCache< CacheKey, CacheEntry > cache{};
 
     template < detail::ProblemDef_c auto problem_def, detail::ProblemDef_c auto dirichlet_def >
     static std::shared_ptr< CacheEntry > initOrRetrieveFromCache(const MpiComm&       comm,
@@ -357,17 +359,13 @@ AlgebraicSystemManager< n_fields >::initOrRetrieveFromCache(const MpiComm&      
     auto       tag             = std::unique_ptr< CacheTagBase >(new CacheTag< problem_def, dirichlet_def >);
     const auto mesh_hash       = mesh.computeTopoHash();
     auto       cache_key       = CacheKey{std::move(tag), mesh_hash};
-    const auto lookup_result   = cache.find(cache_key);
-    const char local_cache_hit = lookup_result != end(cache) and not lookup_result->second.expired();
+    const auto lookup_result   = cache.get(cache_key);
+    const char local_cache_hit = bool{lookup_result};
     char       global_cache_hit{};
     comm.allReduce(&local_cache_hit, &global_cache_hit, 1, MPI_LAND);
-
     if (global_cache_hit)
-        return lookup_result->second.lock();
-
-    auto cache_entry = std::make_shared< CacheEntry >(makeCacheEntry(comm, mesh, problemdef_ctwrpr, dbcdef_ctwrpr));
-    cache.insert_or_assign(std::move(cache_key), cache_entry);
-    return cache_entry;
+        return lookup_result;
+    return cache.push(std::move(cache_key), makeCacheEntry(comm, mesh, problemdef_ctwrpr, dbcdef_ctwrpr));
 }
 
 template < size_t n_fields >

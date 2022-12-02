@@ -10,6 +10,10 @@
 
 namespace lstr
 {
+// General
+template < typename From, typename To >
+concept DecaysTo_c = std::same_as< std::decay_t< From >, To >;
+
 // Range concepts
 template < typename R, typename T >
 concept RangeOfConvertibleTo_c = std::ranges::range< R > and std::convertible_to< std::ranges::range_value_t< R >, T >;
