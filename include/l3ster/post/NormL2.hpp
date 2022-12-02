@@ -17,7 +17,7 @@ auto computeNormL2(const MpiComm&       comm,
         requires requires {
                      {
                          std::invoke(eval_residual, vals, ders, point)
-                         } -> EigenVector_c;
+                     } -> EigenVector_c;
                  }
     {
         const auto residual = std::invoke(eval_residual, vals, ders, point);
@@ -46,7 +46,7 @@ auto computeBoundaryNormL2(const MpiComm&      comm,
         requires requires {
                      {
                          std::invoke(eval_residual, vals, ders, point, normal)
-                         } -> EigenVector_c;
+                     } -> EigenVector_c;
                  }
     {
         const auto residual = std::invoke(eval_residual, vals, ders, point, normal);

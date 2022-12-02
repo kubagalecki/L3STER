@@ -94,17 +94,17 @@ inline Domain deserializeDomain(const SerializedDomain& domain)
 inline MeshPartition deserializePartition(const SerializedPartition& partition)
 {
     MeshPartition::domain_map_t domain_map;
-    for (const auto& [id, domain] : partition.domains)
+    for (const auto& [id, domain] : partition.m_domains)
         domain_map.emplace(id, detail::deserializeDomain(domain));
-    return MeshPartition{std::move(domain_map), partition.nodes, partition.ghost_nodes};
+    return MeshPartition{std::move(domain_map), partition.m_nodes, partition.m_n_owned_nodes};
 }
 
 inline MeshPartition deserializePartition(SerializedPartition&& partition)
 {
     MeshPartition::domain_map_t domain_map;
-    for (const auto& [id, domain] : partition.domains)
+    for (const auto& [id, domain] : partition.m_domains)
         domain_map.emplace(id, detail::deserializeDomain(domain));
-    return MeshPartition{std::move(domain_map), std::move(partition.nodes), std::move(partition.ghost_nodes)};
+    return MeshPartition{std::move(domain_map), std::move(partition.m_nodes), partition.m_n_owned_nodes};
 }
 } // namespace lstr
 #endif // L3STER_COMM_DESERIALIZEMESH_HPP

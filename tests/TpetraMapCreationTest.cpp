@@ -25,9 +25,9 @@ int main(int argc, char* argv[])
 
     constexpr auto problem_def   = ConstexprValue< std::array{Pair{d_id_t{0}, std::array{false, true}}} >{};
     const auto     dof_intervals = computeDofIntervals(mesh, problem_def, comm);
-    const auto     tpetra_map    = makeTpetraMap(mesh.getNodes(), dof_intervals, comm);
+    const auto     tpetra_map    = makeTpetraMap(mesh.getOwnedNodes(), dof_intervals, comm);
     const auto     map_entries   = tpetra_map->getNodeElementList();
-    if (std::ranges::equal(mesh.getNodes(), tpetra_map->getNodeElementList()))
+    if (std::ranges::equal(mesh.getOwnedNodes(), tpetra_map->getNodeElementList()))
         return EXIT_SUCCESS;
     else
         return EXIT_FAILURE;

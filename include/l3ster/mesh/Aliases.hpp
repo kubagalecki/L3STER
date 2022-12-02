@@ -93,22 +93,22 @@ concept invocable_on_elements = detail::is_invocable_on_elements< T, false >;
 template < typename T >
 concept invocable_on_const_elements = detail::is_invocable_on_elements< T, true >;
 template < typename T, typename... Args >
-concept invocable_on_elements_and = not
-invocable_on_elements< T >&& detail::is_invocable_on_elements< T, false, Args... >;
+concept invocable_on_elements_and =
+    not invocable_on_elements< T > && detail::is_invocable_on_elements< T, false, Args... >;
 template < typename T, typename... Args >
-concept invocable_on_const_elements_and = not
-invocable_on_const_elements< T >&& detail::is_invocable_on_elements< T, true, Args... >;
+concept invocable_on_const_elements_and =
+    not invocable_on_const_elements< T > && detail::is_invocable_on_elements< T, true, Args... >;
 
 template < typename T, typename R >
 concept invocable_on_elements_r = detail::is_invocable_r_on_elements< R, T, false >;
 template < typename T, typename R >
 concept invocable_on_const_elements_r = detail::is_invocable_r_on_elements< R, T, true >;
 template < typename T, typename R, typename... Args >
-concept invocable_on_elements_r_and = not
-invocable_on_elements_r< T, R >&& detail::is_invocable_r_on_elements< R, T, false, Args... >;
+concept invocable_on_elements_r_and =
+    not invocable_on_elements_r< T, R > && detail::is_invocable_r_on_elements< R, T, false, Args... >;
 template < typename T, typename R, typename... Args >
-concept invocable_on_const_elements_r_and = not
-invocable_on_const_elements_r< T, R >&& detail::is_invocable_r_on_elements< R, T, true, Args... >;
+concept invocable_on_const_elements_r_and =
+    not invocable_on_const_elements_r< T, R > && detail::is_invocable_r_on_elements< R, T, true, Args... >;
 
 template < typename T >
 concept invocable_on_boundary_element_views = detail::is_invocable_on_boundary_element_views< T >;

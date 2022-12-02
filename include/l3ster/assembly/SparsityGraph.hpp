@@ -134,8 +134,7 @@ auto calculateCrsData(const MeshPartition&                                      
     const auto                global_to_local_dof_map = IndexMap{owned_plus_shared_dofs};
     std::vector< std::mutex > row_mutexes(owned_plus_shared_dofs.size());
 
-    const auto process_domain = [&]< auto dom_def >(ConstexprValue< dom_def >)
-    {
+    const auto process_domain = [&]< auto dom_def >(ConstexprValue< dom_def >) {
         constexpr auto  domain_id        = dom_def.first;
         constexpr auto& coverage         = dom_def.second;
         constexpr auto  covered_dof_inds = getTrueInds< coverage >();
@@ -185,7 +184,7 @@ makeSparsityGraph(const MeshPartition&                                        me
                   const node_interval_vector_t< deduceNFields(problem_def) >& dof_intervals,
                   const MpiComm&                                              comm)
 {
-    auto owned_dofs = detail::getNodeDofs(mesh.getNodes(), dof_intervals);
+    auto owned_dofs = detail::getNodeDofs(mesh.getOwnedNodes(), dof_intervals);
     auto owned_map  = makeTpetraMap(owned_dofs, comm);
     auto owned_plus_shared_dofs =
         concatVectors(std::move(owned_dofs), detail::getNodeDofs(mesh.getGhostNodes(), dof_intervals));

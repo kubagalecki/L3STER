@@ -12,7 +12,7 @@ static void BM_SparsityPatternAssembly(benchmark::State& state)
                                                             Pair{d_id_t{2}, std::array{false, true}}} >{};
 
     const auto dof_intervals          = detail::computeLocalDofIntervals(mesh, problem_def);
-    const auto owned_plus_shared_dofs = detail::getNodeDofs(mesh.getNodes(), dof_intervals);
+    const auto owned_plus_shared_dofs = detail::getNodeDofs(mesh.getOwnedNodes(), dof_intervals);
 
     for (auto _ : state)
     {
@@ -28,7 +28,7 @@ static void BM_OwnerOrSharedNodeDeterminationNotGhost(benchmark::State& state)
     auto&      part            = mesh.getPartitions()[0];
     const auto n_nodes_visited = part.reduce(
         0ul,
-        [](const auto& element) { return element.getNodes().size(); },
+        [](const auto& element) { return element.getOwnedNodes().size(); },
         std::plus<>{},
         std::views::single(1),
         std::execution::par);
@@ -42,7 +42,7 @@ static void BM_OwnerOrSharedNodeDeterminationNotGhost(benchmark::State& state)
         for (const auto& prt : mesh.getPartitions())
             prt.visit(
                 [&](const auto& element) {
-                    for (auto node : element.getNodes())
+                    for (auto node : element.getOwnedNodes())
                         benchmark::DoNotOptimize(not prt.isGhostNode(node));
                 },
                 std::views::single(1));
@@ -63,7 +63,7 @@ static void BM_OwnerOrSharedNodeDeterminationShared(benchmark::State& state)
     auto&      part            = mesh.getPartitions()[0];
     const auto n_nodes_visited = part.reduce(
         0ul,
-        [](const auto& element) { return element.getNodes().size(); },
+        [](const auto& element) { return element.getOwnedNodes().size(); },
         std::plus<>{},
         std::views::single(1),
         std::execution::par);
@@ -77,7 +77,7 @@ static void BM_OwnerOrSharedNodeDeterminationShared(benchmark::State& state)
         for (const auto& prt : mesh.getPartitions())
             prt.visit(
                 [&](const auto& element) {
-                    for (auto node : element.getNodes())
+                    for (auto node : element.getOwnedNodes())
                         benchmark::DoNotOptimize(prt.isOwnedNode(node));
                 },
                 std::views::single(1));

@@ -9,7 +9,7 @@ namespace lstr
 namespace detail
 {
 template < size_t n_fields >
-std::vector< global_dof_t > getNodeDofs(const std::vector< n_id_t >&                      sorted_nodes,
+std::vector< global_dof_t > getNodeDofs(std::span< const n_id_t >                         sorted_nodes,
                                         const detail::node_interval_vector_t< n_fields >& dof_intervals)
 {
     std::vector< global_dof_t > retval;
@@ -45,7 +45,7 @@ inline Tpetra::global_size_t getInvalidSize()
 
 template < size_t n_fields >
 Teuchos::RCP< const Tpetra::Map< local_dof_t, global_dof_t > >
-makeTpetraMap(const std::vector< n_id_t >&                      nodes,
+makeTpetraMap(std::span< const n_id_t >                         nodes,
               const detail::node_interval_vector_t< n_fields >& dof_intervals,
               const MpiComm&                                    comm)
 {

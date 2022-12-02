@@ -73,11 +73,9 @@ template < std::array A >
     requires std::integral< typename decltype(A)::value_type >
 constexpr auto int_seq_from_array()
 {
-    return []< size_t... I >(std::index_sequence< I... >)
-    {
+    return []< size_t... I >(std::index_sequence< I... >) {
         return std::integer_sequence< typename decltype(A)::value_type, A[I]... >{};
-    }
-    (std::make_index_sequence< A.size() >{});
+    }(std::make_index_sequence< A.size() >{});
 }
 } // namespace detail
 
@@ -138,8 +136,7 @@ template < std::array... Arrays >
     requires(sizeof...(Arrays) > 0)
 constexpr auto getCartProdComponents()
 {
-    constexpr auto deduction_helper = []< std::size_t... ArrInd >(std::index_sequence< ArrInd... >)
-    {
+    constexpr auto deduction_helper = []< std::size_t... ArrInd >(std::index_sequence< ArrInd... >) {
         constexpr auto repeat_by_ind = []< std::size_t Ind >(std::integral_constant< std::size_t, Ind >) {
             constexpr auto repeat = [](const auto& array, std::size_t pack_ind) {
                 constexpr auto prod_size = (Arrays.size() * ...);
@@ -170,8 +167,7 @@ constexpr std::size_t deduceArraySizes(const std::array< T, N >&...)
 template < std::array... V >
 auto zipArrays(ValuePack< V... >)
 {
-    constexpr auto return_deduction_helper = []< std::size_t... I >(std::index_sequence< I... >)
-    {
+    constexpr auto return_deduction_helper = []< std::size_t... I >(std::index_sequence< I... >) {
         constexpr auto make_nth_entry = []< std::size_t N >(std::integral_constant< std::size_t, N >) {
             return ValuePack< V[N]... >{};
         };

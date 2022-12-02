@@ -92,7 +92,7 @@ int main(int argc, char* argv[])
     {
         const auto field0_vals = solution_manager.getNodalValues(field_inds1[0]);
         const auto field1_vals = solution_manager.getNodalValues(field_inds1[1]);
-        const auto n_nodes     = my_partition.getNodes().size() + my_partition.getGhostNodes().size();
+        const auto n_nodes     = my_partition.getAllNodes().size();
         const auto n_rows      = static_cast< size_t >(field0_vals.size());
         if (n_rows != n_nodes)
         {
@@ -116,9 +116,9 @@ int main(int argc, char* argv[])
 
         std::vector< n_id_t > bad_nodes;
         const auto            lookup_node_local_ind = [&](n_id_t node) {
-            const auto owned_it = std::ranges::find(my_partition.getNodes(), node);
-            if (owned_it != my_partition.getNodes().end())
-                return std::distance(my_partition.getNodes().begin(), owned_it);
+            const auto owned_it = std::ranges::find(my_partition.getOwnedNodes(), node);
+            if (owned_it != my_partition.getOwnedNodes().end())
+                return std::distance(my_partition.getOwnedNodes().begin(), owned_it);
             else
                 return std::distance(my_partition.getGhostNodes().begin(),
                                      std::ranges::find(my_partition.getGhostNodes(), node));

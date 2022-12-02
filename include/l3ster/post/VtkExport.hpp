@@ -274,11 +274,11 @@ inline std::array< size_t, 2 > getLocalTopoSize(const MeshPartition& mesh)
 
 inline unsigned getLocalNodeIndex(const MeshPartition& mesh, n_id_t node)
 {
-    const auto owned_find_result = std::ranges::lower_bound(mesh.getNodes(), node);
-    if (owned_find_result != end(mesh.getNodes()) and *owned_find_result == node)
-        return std::distance(begin(mesh.getNodes()), owned_find_result);
+    const auto owned_find_result = std::ranges::lower_bound(mesh.getOwnedNodes(), node);
+    if (owned_find_result != end(mesh.getOwnedNodes()) and *owned_find_result == node)
+        return std::distance(begin(mesh.getOwnedNodes()), owned_find_result);
     const auto ghost_find_result = std::ranges::lower_bound(mesh.getGhostNodes(), node);
-    return mesh.getNodes().size() + std::distance(begin(mesh.getGhostNodes()), ghost_find_result);
+    return mesh.getOwnedNodes().size() + std::distance(begin(mesh.getGhostNodes()), ghost_find_result);
 }
 
 inline auto serializeTopology(const MeshPartition& mesh)
@@ -344,7 +344,7 @@ inline auto serializeTopology(const MeshPartition& mesh)
 inline std::string makeCoordsSerialized(const MeshPartition& mesh)
 {
     constexpr size_t space_dim        = 3;
-    const auto       n_nodes          = mesh.getNodes().size() + mesh.getGhostNodes().size();
+    const auto       n_nodes          = mesh.getAllNodes().size();
     const size_t     n_vals_to_encode = n_nodes * space_dim + 1;
     auto             alloc_to_encode  = ArrayOwner< val_t >(n_vals_to_encode);
     const auto       data_to_encode   = std::span{alloc_to_encode};
@@ -493,7 +493,7 @@ inline auto openVtuFile(std::string_view name, const MpiComm& comm)
 } // namespace detail::vtk
 
 PvtuExporter::PvtuExporter(const MeshPartition& mesh, const Tpetra::Map< local_dof_t, global_dof_t >& local_global_map)
-    : m_n_nodes{mesh.getNodes().size() + mesh.getGhostNodes().size()}
+    : m_n_nodes{mesh.getAllNodes().size()}
 {
     updateNodeCoords(mesh);
     initTopo(mesh);

@@ -130,8 +130,7 @@ auto elementIntersectionSpansAtDim(const Element< T1, 1 >& el1, const Element< T
             const auto iterate_over_f1 = [&]< size_t Ind1 >(std::integral_constant< size_t, Ind1 >) {
                 auto nodes1 = arrayAtInds(el1.getNodes(), std::get< Ind1 >(f1_o1));
                 std::ranges::sort(nodes1);
-                return [&]< size_t... I2 >(std::index_sequence< I2... >)
-                {
+                return [&]< size_t... I2 >(std::index_sequence< I2... >) {
                     const auto iterate_over_f2 = [&]< size_t Ind2 >(std::integral_constant< size_t, Ind2 >) {
                         auto nodes2 = arrayAtInds(el2.getNodes(), std::get< Ind2 >(f2_o1));
                         std::ranges::sort(nodes2);
@@ -144,8 +143,7 @@ auto elementIntersectionSpansAtDim(const Element< T1, 1 >& el1, const Element< T
                         return is_matched;
                     };
                     return (iterate_over_f2(std::integral_constant< size_t, I2 >{}) or ...);
-                }
-                (std::make_index_sequence< f2_size >{});
+                }(std::make_index_sequence< f2_size >{});
             };
             (iterate_over_f1(std::integral_constant< size_t, I1 >{}) or ...);
         },

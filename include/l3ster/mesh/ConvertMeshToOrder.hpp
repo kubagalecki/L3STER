@@ -16,7 +16,7 @@ template < el_o_t O_C >
 
     const auto&         dual_graph  = mesh.getDualGraph();
     auto                new_domains = mesh.getConversionAlloc< O_C >();
-    n_id_t              max_node    = mesh.getNodes().size();
+    n_id_t              max_node    = mesh.getOwnedNodes().size();
     std::vector< bool > converted(mesh.getNElements(), false);
 
     const auto convert_domain = [&](const Domain& old_domain, Domain& new_domain) {
@@ -62,7 +62,7 @@ template < el_o_t O_C >
     for (auto domain_id : mesh.getDomainIds())
         convert_domain(mesh.getDomain(domain_id), new_domains[domain_id]);
 
-    return MeshPartition{std::move(new_domains), consecutiveIndices(max_node), {}};
+    return MeshPartition{std::move(new_domains), consecutiveIndices(max_node), max_node};
 }
 } // namespace lstr
 #endif // L3STER_MESH_CONVERTMESHTOORDER_HPP

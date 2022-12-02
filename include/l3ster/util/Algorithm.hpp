@@ -16,7 +16,7 @@ std::vector< size_t > sortingPermutation(It first, It last, F&& compare)
     requires requires(It i, F f) {
                  {
                      f(*i, *i)
-                     } -> std::convertible_to< bool >;
+                 } -> std::convertible_to< bool >;
              }
 {
     std::vector< size_t > indices(std::distance(first, last));
@@ -38,7 +38,7 @@ void copyPermuted(It_in first_in, It_in last_in, It_perm first_perm, It_out firs
     requires requires(It_perm it) {
                  {
                      *it
-                     } -> std::convertible_to< std::ptrdiff_t >;
+                 } -> std::convertible_to< std::ptrdiff_t >;
              }
 {
     for (auto i = std::distance(first_in, last_in); i > 0; --i)
@@ -88,11 +88,9 @@ constexpr auto makeTupleIf(T&&... arg)
 template < tuple_like T, tuple_invocable< T > F >
 constexpr decltype(auto) forEachTuple(T& t, F&& f)
 {
-    [&]< size_t... I >(std::index_sequence< I... >)
-    {
+    [&]< size_t... I >(std::index_sequence< I... >) {
         (f(std::get< I >(t)), ...);
-    }
-    (std::make_index_sequence< std::tuple_size_v< T > >{});
+    }(std::make_index_sequence< std::tuple_size_v< T > >{});
     return std::forward< F >(f);
 }
 
@@ -167,8 +165,7 @@ void forEachConstexprParallel(F&& f, ConstexprValue< R >)
     if constexpr (std::ranges::size(R) > 1) // tbb::parallel_invoke requires at least 2 function objects
     {
         using diff_t                 = std::ranges::range_difference_t< decltype(R) >;
-        const auto invoke_on_indices = [&f]< diff_t... I >(std::integer_sequence< diff_t, I... >)
-        {
+        const auto invoke_on_indices = [&f]< diff_t... I >(std::integer_sequence< diff_t, I... >) {
             constexpr auto access_range = [](diff_t index) {
                 return *std::next(std::ranges::cbegin(R), index);
             };

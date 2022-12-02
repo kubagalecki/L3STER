@@ -16,8 +16,7 @@ auto getDirichletDofs(const MeshPartition&                                      
         const auto dirichlet_dofs = makeTeuchosRCP< Tpetra::FEMultiVector<> >(
             sparsity_graph->getColMap(), sparsity_graph->getImporter(), size_t{1});
         dirichlet_dofs->beginAssembly();
-        const auto process_domain = [&]< auto domain_def >(ConstexprValue< domain_def >)
-        {
+        const auto process_domain = [&]< auto domain_def >(ConstexprValue< domain_def >) {
             constexpr auto  domain_id        = domain_def.first;
             constexpr auto& coverage         = domain_def.second;
             constexpr auto  covered_dof_inds = getTrueInds< coverage >();

@@ -55,7 +55,7 @@ public:
                  requires {
                      {
                          reduction(zero, zero)
-                         } -> std::convertible_to< std::decay_t< decltype(zero) > >;
+                     } -> std::convertible_to< std::decay_t< decltype(zero) > >;
                  };
 
     [[nodiscard]] find_result_t              find(invocable_on_const_elements_r< bool > auto&& predicate,
@@ -192,7 +192,7 @@ auto Domain::reduce(auto&& zero, auto&& projection, auto&& reduction, ExecutionP
              requires {
                  {
                      reduction(zero, zero)
-                     } -> std::convertible_to< std::decay_t< decltype(zero) > >;
+                 } -> std::convertible_to< std::decay_t< decltype(zero) > >;
              }
 {
     const auto reduce_element_vector = [&]< ElementTypes ET, el_o_t EO >(const element_vector_t< ET, EO >& el_vec) {

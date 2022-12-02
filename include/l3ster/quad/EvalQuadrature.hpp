@@ -15,14 +15,14 @@ template < typename T >
 concept NoexceptSimplyPlusable_c = requires(T a, T b) {
                                        {
                                            a + b
-                                           } noexcept -> std::convertible_to< T >;
+                                       } noexcept -> std::convertible_to< T >;
                                    };
 
 template < typename T, typename Q >
 concept QuadIntegrable_c = requires(T fun, Q::q_points_t::value_type point, Q::weights_t::value_type weight) {
                                {
                                    std::apply(fun, point) * weight
-                                   } -> NoexceptSimplyPlusable_c;
+                               } -> NoexceptSimplyPlusable_c;
                            };
 
 template < typename Integrator, typename Q >

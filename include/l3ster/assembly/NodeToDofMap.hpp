@@ -111,9 +111,9 @@ bool NodeToGlobalDofMap< dofs_per_node >::tryInitAsContiguous(
     const MeshPartition& mesh, const detail::node_interval_vector_t< dofs_per_node >& dof_intervals)
 {
     const auto min_node_in_partition = std::min(
-        mesh.getNodes().size() != 0 ? mesh.getNodes().front() : std::numeric_limits< n_id_t >::max(),
+        mesh.getOwnedNodes().size() != 0 ? mesh.getOwnedNodes().front() : std::numeric_limits< n_id_t >::max(),
         mesh.getGhostNodes().size() != 0 ? mesh.getGhostNodes().front() : std::numeric_limits< n_id_t >::max());
-    const auto max_node_in_partition = std::max(mesh.getNodes().size() != 0 ? mesh.getNodes().back() : 0,
+    const auto max_node_in_partition = std::max(mesh.getOwnedNodes().size() != 0 ? mesh.getOwnedNodes().back() : 0,
                                                 mesh.getGhostNodes().size() != 0 ? mesh.getGhostNodes().back() : 0);
     global_dof_t base_dof{};
     for (const auto& interval : dof_intervals)
@@ -139,9 +139,9 @@ template < size_t dofs_per_node >
 void NodeToGlobalDofMap< dofs_per_node >::initNonContiguous(
     const MeshPartition& mesh, const detail::node_interval_vector_t< dofs_per_node >& dof_intervals)
 {
-    auto&      map = m_data.template emplace< map_t >(mesh.getNodes().size() + mesh.getGhostNodes().size());
+    auto&      map = m_data.template emplace< map_t >(mesh.getOwnedNodes().size() + mesh.getGhostNodes().size());
     const auto dof_interval_starts = detail::computeIntervalStarts(dof_intervals);
-    const auto add_entries         = [&](const std::vector< n_id_t >& nodes) {
+    const auto add_entries         = [&](std::span< const n_id_t > nodes) {
         const auto compute_node_dofs = [&](n_id_t node_id, ptrdiff_t interval_ind) {
             const auto dof_int_start = dof_interval_starts[interval_ind];
             const auto& [delim, cov] = dof_intervals[interval_ind];
@@ -164,7 +164,7 @@ void NodeToGlobalDofMap< dofs_per_node >::initNonContiguous(
             map.emplace(n, node_dofs);
         }
     };
-    add_entries(mesh.getNodes());
+    add_entries(mesh.getOwnedNodes());
     add_entries(mesh.getGhostNodes());
 }
 
@@ -172,9 +172,9 @@ template < size_t dofs_per_node >
 NodeToLocalDofMap< dofs_per_node >::NodeToLocalDofMap(const MeshPartition&                            mesh,
                                                       const NodeToGlobalDofMap< dofs_per_node >&      global_map,
                                                       const Tpetra::Map< local_dof_t, global_dof_t >& local_global_map)
-    : m_map(mesh.getNodes().size() + mesh.getGhostNodes().size())
+    : m_map(mesh.getAllNodes().size())
 {
-    const auto add_dofs_for_nodes = [&](const std::vector< n_id_t >& nodes) {
+    const auto add_dofs_for_nodes = [&](std::span< const n_id_t > nodes) {
         for (n_id_t node : nodes)
         {
             payload_t& local_dofs = m_map[node];
@@ -185,7 +185,7 @@ NodeToLocalDofMap< dofs_per_node >::NodeToLocalDofMap(const MeshPartition&      
             });
         }
     };
-    add_dofs_for_nodes(mesh.getNodes());
+    add_dofs_for_nodes(mesh.getOwnedNodes());
     add_dofs_for_nodes(mesh.getGhostNodes());
 }
 } // namespace lstr

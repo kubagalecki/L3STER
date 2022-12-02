@@ -15,7 +15,7 @@ concept IntegralKernel_c = requires(T                                           
                                     SpaceTimePoint                                   point) {
                                {
                                    std::invoke(int_kernel, node_vals, node_ders, point)
-                                   } noexcept -> EigenVector_c;
+                               } noexcept -> EigenVector_c;
                            };
 
 template < typename T, dim_t dim, size_t n_fields >
@@ -26,7 +26,7 @@ concept BoundaryIntegralKernel_c = requires(T                                   
                                             Eigen::Vector< val_t, dim >                      normal) {
                                        {
                                            std::invoke(int_kernel, node_vals, node_ders, point, normal)
-                                           } noexcept -> EigenVector_c;
+                                       } noexcept -> EigenVector_c;
                                    };
 
 template < typename IntKernel, dim_t dim, size_t n_fields >

@@ -64,11 +64,11 @@ SolutionManager::SolutionManager(const MeshPartition& mesh, const MpiComm& comm,
 inline auto SolutionManager::makeNodeMaps(const MeshPartition& mesh, const MpiComm& comm)
 {
     using comm_t             = const Teuchos::MpiComm< int >;
-    const auto n_owned_nodes = mesh.getNodes().size();
+    const auto n_owned_nodes = mesh.getOwnedNodes().size();
     const auto n_ghost_nodes = mesh.getGhostNodes().size();
     const auto n_nodes_total = n_owned_nodes + n_ghost_nodes;
     const auto nodes_alloc   = std::make_unique_for_overwrite< global_dof_t[] >(n_nodes_total);
-    std::ranges::copy(mesh.getGhostNodes(), std::ranges::copy(mesh.getNodes(), nodes_alloc.get()).out);
+    std::ranges::copy(mesh.getGhostNodes(), std::ranges::copy(mesh.getOwnedNodes(), nodes_alloc.get()).out);
     const auto owned_plus_shared_nodes = std::span{nodes_alloc.get(), n_nodes_total};
     const auto owned_nodes             = owned_plus_shared_nodes.subspan(0, n_owned_nodes);
     const auto make_map                = [teuchos_comm = makeTeuchosRCP< comm_t >(comm.get())](auto dofs) {
