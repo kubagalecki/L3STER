@@ -409,5 +409,22 @@ AlgebraicSystemManager< n_fields >::makeCacheEntry(const MpiComm&               
                       .rhs_alloc     = rhs_alloc,
                       .rhs_view      = rhs_alloc};
 }
+
+namespace detail
+{
+consteval auto makeEmptyDirichletBCDef(const detail::ProblemDef_c auto& problem_def)
+{
+    return std::array< typename std::decay_t< decltype(problem_def) >::value_type, 0 >{};
+}
+} // namespace detail
+
+template < detail::ProblemDef_c auto problem_def,
+           detail::ProblemDef_c auto dirichlet_def = detail::makeEmptyDirichletBCDef(problem_def) >
+auto makeAlgebraicSystemManager(const MpiComm&                  comm,
+                                const MeshPartition&            mesh,
+                                ConstexprValue< problem_def >   problemdef_ctwrpr,
+                                ConstexprValue< dirichlet_def > bcdef_ctwrpr = {})
+    -> std::shared_ptr< AlgebraicSystemManager< detail::deduceNFields(problem_def) > >
+{}
 } // namespace lstr
 #endif // L3STER_ASSEMBLY_ALGEBRAICSYSTEMMANAGER_HPP

@@ -99,8 +99,8 @@ void DirichletBCAlgebraic::apply(const vector_t& bc_vals, matrix_t& matrix, vect
     rhs.modify_host();
     auto rhs_data = rhs.getDataNonConst();
 
-    std::vector< val_t >       local_vals(matrix.getNodeMaxNumRowEntries(), 0.);
-    std::vector< val_t >       col_copy_vals(m_dirichlet_col_mat->getNodeMaxNumRowEntries());
+    std::vector< val_t >       local_vals(matrix.getLocalMaxNumRowEntries(), 0.);
+    std::vector< val_t >       col_copy_vals(m_dirichlet_col_mat->getLocalMaxNumRowEntries());
     std::vector< local_dof_t > cols_to_zero_out(col_copy_vals.size());
 
     const auto process_dbc_row = [&](local_dof_t local_row) {
@@ -140,7 +140,7 @@ void DirichletBCAlgebraic::apply(const vector_t& bc_vals, matrix_t& matrix, vect
     };
 
     m_dirichlet_col_mat->resumeFill();
-    for (local_dof_t local_row = 0; static_cast< size_t >(local_row) < matrix.getNodeNumRows(); ++local_row)
+    for (local_dof_t local_row = 0; static_cast< size_t >(local_row) < matrix.getLocalNumRows(); ++local_row)
     {
         if (std::ranges::binary_search(m_owned_bc_dofs, local_row))
             process_dbc_row(local_row);
