@@ -6,14 +6,14 @@
 namespace lstr::detail
 {
 template < detail::ProblemDef_c auto problem_def, detail::ProblemDef_c auto dirichlet_def >
-auto getDirichletDofs(const MeshPartition&                                                         mesh,
-                      const Teuchos::RCP< const Tpetra::FECrsGraph< local_dof_t, global_dof_t > >& sparsity_graph,
-                      const NodeToGlobalDofMap< detail::deduceNFields(problem_def) >&              dof_map,
-                      ConstexprValue< problem_def >                                                probdef_ctwrpr,
-                      ConstexprValue< dirichlet_def >                                              dirichletdef_ctwrpr)
+auto getDirichletDofs(const MeshPartition&                                            mesh,
+                      const Teuchos::RCP< const tpetra_fecrsgraph_t >&                sparsity_graph,
+                      const NodeToGlobalDofMap< detail::deduceNFields(problem_def) >& dof_map,
+                      ConstexprValue< problem_def >                                   probdef_ctwrpr,
+                      ConstexprValue< dirichlet_def >                                 dirichletdef_ctwrpr)
 {
     const auto mark_owned_dirichlet_dofs = [&] {
-        const auto dirichlet_dofs = makeTeuchosRCP< Tpetra::FEMultiVector<> >(
+        const auto dirichlet_dofs = makeTeuchosRCP< tpetra_femultivector_t >(
             sparsity_graph->getColMap(), sparsity_graph->getImporter(), size_t{1});
         dirichlet_dofs->beginAssembly();
         const auto process_domain = [&]< auto domain_def >(ConstexprValue< domain_def >) {
@@ -31,24 +31,26 @@ auto getDirichletDofs(const MeshPartition&                                      
         dirichlet_dofs->endAssembly();
         return dirichlet_dofs;
     };
-    const auto mark_dirichlet_dof_cols = [&](const Teuchos::RCP< const Tpetra::Vector<> >& owned_dirichlet_dofs) {
-        const auto dirichlet_dof_cols = makeTeuchosRCP< Tpetra::Vector<> >(sparsity_graph->getColMap());
-        const auto importer           = Tpetra::Import<>{owned_dirichlet_dofs->getMap(), dirichlet_dof_cols->getMap()};
+    const auto mark_dirichlet_dof_cols = [&](const Teuchos::RCP< const tpetra_vector_t >& owned_dirichlet_dofs) {
+        const auto dirichlet_dof_cols = makeTeuchosRCP< tpetra_vector_t >(sparsity_graph->getColMap());
+        const auto importer           = tpetra_import_t{owned_dirichlet_dofs->getMap(), dirichlet_dof_cols->getMap()};
         dirichlet_dof_cols->doImport(*owned_dirichlet_dofs, importer, Tpetra::REPLACE);
         return dirichlet_dof_cols;
     };
-    constexpr auto extract_marked_dofs = [](const Teuchos::RCP< const Tpetra::Vector<> >& marked_dofs) {
+    constexpr auto extract_marked_dofs = [](const Teuchos::RCP< const tpetra_vector_t >& marked_dofs) {
         constexpr auto is_marked = [](val_t v) {
             return v > .5;
         };
-        const auto                  entries = marked_dofs->getData();
-        const auto                  n_ones  = std::ranges::count_if(entries, is_marked);
+        const auto&                 marked_dofs_map = *marked_dofs->getMap();
+        const auto                  entries         = marked_dofs->getLocalViewHost(Tpetra::Access::ReadOnly);
+        const auto                  entries_span    = asSpan(Kokkos::subview(entries, Kokkos::ALL, 0));
+        const auto                  n_ones          = std::ranges::count_if(entries_span, is_marked);
         std::vector< global_dof_t > retval;
         retval.reserve(n_ones);
-        for (local_dof_t local_dof = 0; auto v : entries)
+        for (local_dof_t local_dof = 0; auto v : entries_span)
         {
             if (is_marked(v))
-                retval.push_back(marked_dofs->getMap()->getGlobalElement(local_dof));
+                retval.push_back(marked_dofs_map.getGlobalElement(local_dof));
             ++local_dof;
         }
         std::ranges::sort(retval);

@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
     const auto     dof_intervals = computeDofIntervals(mesh, problem_def, comm);
     const auto     tpetra_map    = makeTpetraMap(mesh.getOwnedNodes(), dof_intervals, comm);
     const auto     map_entries   = tpetra_map->getLocalElementList();
-    if (std::ranges::equal(mesh.getOwnedNodes(), tpetra_map->getNodeElementList()))
+    if (std::ranges::equal(mesh.getOwnedNodes(), tpetra_map->getLocalElementList()))
         return EXIT_SUCCESS;
     else
         return EXIT_FAILURE;

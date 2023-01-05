@@ -5,24 +5,41 @@
 #include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/IndexMap.hpp"
 
-#include "Tpetra_FECrsMatrix.hpp"
-#include "Tpetra_FEMultiVector.hpp"
-
-#include "oneapi/tbb/parallel_for.h"
-
 #include <mutex>
 
 namespace lstr::detail
 {
-template < IndexRange_c auto dof_inds, size_t n_nodes >
-auto getDofsFromNodes(const std::array< n_id_t, n_nodes >& nodes,
-                      const NodeToDofMap_c auto&           map,
-                      ConstexprValue< dof_inds >           dofinds_ctwrpr = {})
+template < IndexRange_c auto dof_inds, size_t n_nodes, size_t dofs_per_node >
+auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&       nodes,
+                      const NodeToGlobalDofMap< dofs_per_node >& map,
+                      ConstexprValue< dof_inds >                 dofinds_ctwrpr = {})
 {
-    using dof_t = typename std::remove_cvref_t< decltype(map) >::dof_t;
-    std::array< dof_t, std::ranges::size(dof_inds) * n_nodes > retval;
-    for (auto insert_it = retval.begin(); auto node : nodes)
-        insert_it = copyValuesAtInds(map(node), insert_it, dofinds_ctwrpr);
+    std::array< global_dof_t, std::ranges::size(dof_inds) * n_nodes > retval;
+    std::ranges::copy(nodes | std::views::transform([&](n_id_t node) {
+                          return getValuesAtInds(map(node), dofinds_ctwrpr);
+                      }) | std::views::join,
+                      begin(retval));
+    return retval;
+}
+
+template < IndexRange_c auto dof_inds, size_t n_nodes, size_t dofs_per_node, size_t num_maps >
+auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                nodes,
+                      const NodeToLocalDofMap< dofs_per_node, num_maps >& map,
+                      ConstexprValue< dof_inds >                          dofinds_ctwrpr = {})
+{
+    using dof_array_t = std::array< local_dof_t, std::ranges::size(dof_inds) * n_nodes >;
+    std::array< dof_array_t, num_maps >                    retval;
+    std::array< typename dof_array_t::iterator, num_maps > iters;
+    std::ranges::transform(retval, begin(iters), [](auto& arr) { return arr.begin(); });
+    for (auto node : nodes)
+    {
+        const auto& all_dof_arrays = map(node);
+        for (size_t i = 0; const auto& all_dofs : all_dof_arrays)
+        {
+            iters[i] = copyValuesAtInds(all_dofs, iters[i], dofinds_ctwrpr);
+            ++i;
+        }
+    }
     return retval;
 }
 
@@ -178,7 +195,7 @@ inline Kokkos::DualView< size_t* > getRowSizes(const CrsEntries& entries)
 }
 
 template < detail::ProblemDef_c auto problem_def >
-Teuchos::RCP< const Tpetra::FECrsGraph< local_dof_t, global_dof_t > >
+Teuchos::RCP< const tpetra_fecrsgraph_t >
 makeSparsityGraph(const MeshPartition&                                        mesh,
                   ConstexprValue< problem_def >                               problemdef_ctwrapper,
                   const node_interval_vector_t< deduceNFields(problem_def) >& dof_intervals,
@@ -193,8 +210,7 @@ makeSparsityGraph(const MeshPartition&                                        me
     const auto row_entries = calculateCrsData(mesh, problemdef_ctwrapper, dof_intervals, owned_plus_shared_dofs);
     const auto row_sizes   = getRowSizes(row_entries);
 
-    using graph_t = Tpetra::FECrsGraph< local_dof_t, global_dof_t >;
-    auto retval   = makeTeuchosRCP< graph_t >(owned_map, owned_plus_shared_map, row_sizes);
+    auto retval = makeTeuchosRCP< tpetra_fecrsgraph_t >(owned_map, owned_plus_shared_map, row_sizes);
     retval->beginAssembly();
     for (ptrdiff_t local_row = 0; local_row < static_cast< ptrdiff_t >(owned_plus_shared_dofs.size()); ++local_row)
     {

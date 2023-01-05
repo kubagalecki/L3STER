@@ -39,15 +39,15 @@ int main(int argc, char* argv[])
     constexpr auto dirichletdef_ctwrpr = ConstexprValue< dirichlet_def >{};
 
     constexpr auto n_fields       = detail::deduceNFields(problem_def);
-    auto           system_manager = AlgebraicSystemManager{comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr};
+    auto           system_manager = makeAlgebraicSystemManager(comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr);
 
     // Check that the underlying data gets cached
     {
         const auto system_manager_shallow_copy =
-            AlgebraicSystemManager{comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr};
-        if (std::addressof(*system_manager.getMatrix()) != std::addressof(*system_manager_shallow_copy.getMatrix()))
+            makeAlgebraicSystemManager(comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr);
+        if (std::addressof(*system_manager->getMatrix()) != std::addressof(*system_manager_shallow_copy->getMatrix()))
         {
-            std::cerr << "Algebraic system caching failure\n";
+            std::cerr << "Algebraic system was not cached correctly pre-assembly\n";
             comm.abort();
         }
     }
@@ -102,28 +102,26 @@ int main(int argc, char* argv[])
     constexpr auto dof_inds = std::array< size_t, 3 >{0, 1, 2};
 
     const auto assembleDomainProblem = [&] {
-        system_manager.assembleDomainProblem< BT, QT, QO, dof_inds >(
+        system_manager->assembleDomainProblem< BT, QT, QO, dof_inds >(
             diffusion_kernel2d, my_partition, std::views::single(domain_id), fieldval_getter);
     };
     const auto assembleBoundaryProblem = [&] {
-        system_manager.assembleBoundaryProblem< BT, QT, QO, dof_inds >(
+        system_manager->assembleBoundaryProblem< BT, QT, QO, dof_inds >(
             neumann_bc_kernel, adiabatic_bound_view, fieldval_getter);
     };
 
     // Check constraints on assembly state
-    system_manager.beginAssembly();
-    CHECK_THROWS(system_manager.beginModify());
-    CHECK_THROWS(system_manager.endModify());
-    system_manager.endAssembly();
-    CHECK_THROWS(system_manager.setToZero());
+    system_manager->beginAssembly();
+    CHECK_THROWS(system_manager->beginModify());
+    CHECK_THROWS(system_manager->endModify());
+    system_manager->endAssembly();
     CHECK_THROWS(assembleDomainProblem());
     CHECK_THROWS(assembleBoundaryProblem());
-    system_manager.beginAssembly();
-    system_manager.setToZero();
+    system_manager->beginAssembly();
     assembleDomainProblem();
     assembleBoundaryProblem();
-    system_manager.endAssembly();
-    system_manager.endAssembly();
+    system_manager->endAssembly();
+    system_manager->endAssembly();
 
     // Dirichlet BCs
     constexpr auto dirichlet_bc_val_def = [node_dist](const auto&, const auto&, const SpaceTimePoint& p) {
@@ -131,57 +129,62 @@ int main(int argc, char* argv[])
         retval[0] = p.space.x() / node_dist.back();
         return retval;
     };
-    auto dirichlet_vals      = system_manager.makeSolutionMultiVector();
-    auto dirichlet_vals_view = dirichlet_vals->getDataNonConst(0);
-    computeValuesAtNodes(dirichlet_bc_val_def,
-                         my_partition,
-                         std::array{left_boundary, right_boundary},
-                         system_manager.getRhsMap(),
-                         ConstexprValue< std::array{0} >{},
-                         empty_field_val_getter,
-                         dirichlet_vals_view);
+    auto dirichlet_vals = system_manager->getDirichletBCValueVector()->getLocalViewHost(Tpetra::Access::ReadWrite);
+    {
+        auto dirichlet_vals_view = asSpan(Kokkos::subview(dirichlet_vals, Kokkos::ALL, 0));
+        computeValuesAtNodes(dirichlet_bc_val_def,
+                             my_partition,
+                             std::array{left_boundary, right_boundary},
+                             system_manager->getDofMap(),
+                             ConstexprValue< std::array{0} >{},
+                             empty_field_val_getter,
+                             dirichlet_vals_view);
+    }
 
     // Check constraints on assembly state
-    CHECK_THROWS(system_manager.applyDirichletBCs(*dirichlet_vals->getVector(0)));
-    system_manager.beginModify();
-    system_manager.beginModify();
-    CHECK_THROWS(system_manager.beginAssembly());
-    CHECK_THROWS(system_manager.endAssembly());
-    system_manager.applyDirichletBCs(*dirichlet_vals->getVector(0));
-    system_manager.endModify();
-    system_manager.endModify();
+    CHECK_THROWS(system_manager->applyDirichletBCs());
+    system_manager->beginModify();
+    system_manager->beginModify();
+    CHECK_THROWS(system_manager->beginAssembly());
+    CHECK_THROWS(system_manager->endAssembly());
+    system_manager->applyDirichletBCs();
+    system_manager->endModify();
+    system_manager->endModify();
     {
-        auto fake_problem = AlgebraicSystemManager{comm, my_partition, probdef_ctwrpr};
-        fake_problem.endAssembly();
-        CHECK_THROWS(fake_problem.applyDirichletBCs(*dirichlet_vals->getVector(0)));
+        auto fake_problem = makeAlgebraicSystemManager(comm, my_partition, probdef_ctwrpr);
+        fake_problem->endAssembly();
+        CHECK_THROWS(fake_problem->applyDirichletBCs());
     }
 
     // Solve
-    auto solution_mv = system_manager.makeSolutionMultiVector();
-    auto solver      = Amesos2::KLU2< Tpetra::CrsMatrix< val_t, local_dof_t, global_dof_t >,
-                                 Tpetra::MultiVector< val_t, local_dof_t, global_dof_t > >{
-        system_manager.getMatrix(), solution_mv, system_manager.getRhs()};
+    auto solver = Amesos2::Lapack< Tpetra::CrsMatrix< val_t, local_dof_t, global_dof_t >,
+                                   Tpetra::MultiVector< val_t, local_dof_t, global_dof_t > >{
+        system_manager->getMatrix(), system_manager->getSolutionVector(), system_manager->getRhs()};
+    if (not solver.matrixShapeOK())
+    {
+        std::cerr << "Bad matrix shape\n";
+        comm.abort();
+    }
     solver.preOrdering().symbolicFactorization().numericFactorization().solve();
 
-    const auto     solution         = solution_mv->getVector(0);
+    const auto     solution         = std::as_const(*system_manager).getSolutionVector();
     auto           solution_manager = SolutionManager{my_partition, comm, n_fields};
     constexpr auto field_inds       = makeIotaArray< size_t, n_fields >();
-    solution_manager.updateSolution(my_partition, *solution, system_manager.getRhsMap(), field_inds, probdef_ctwrpr);
+    solution_manager.updateSolution(my_partition, *solution, system_manager->getDofMap(), field_inds, probdef_ctwrpr);
     solution_manager.communicateSharedValues();
 
     // Check that the underlying data cache is still usable after the solve
     {
         const auto system_manager_shallow_copy =
-            AlgebraicSystemManager{comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr};
-        if (std::addressof(*system_manager.getMatrix()) != std::addressof(*system_manager_shallow_copy.getMatrix()))
+            makeAlgebraicSystemManager(comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr);
+        if (std::addressof(*system_manager->getMatrix()) != std::addressof(*system_manager_shallow_copy->getMatrix()))
         {
-            std::cerr << "Algebraic system caching failed after solve\n";
+            std::cerr << "Algebraic system was not cached correctly post-assembly\n";
             comm.abort();
         }
     }
 
     // Check results
-    const auto     solution_view = solution->getData();
     constexpr auto compute_error =
         [node_dist](const auto& vals, const auto& ders, const SpaceTimePoint& point) noexcept {
             Eigen::Matrix< val_t, 3, 1 > error;
@@ -208,6 +211,7 @@ int main(int argc, char* argv[])
         error_msg << "The error exceeded the allowed tolerance. The L2 error components were:\nvalue:\t\t\t" << error[0]
                   << "\nx derivative:\t" << error[1] << "\ny derivative:\t" << error[2] << '\n';
         std::cerr << error_msg.view();
+        comm.abort();
         return EXIT_FAILURE;
     }
     const auto boundary_error =
@@ -216,6 +220,7 @@ int main(int argc, char* argv[])
     {
         std::cerr << "The error on the boundary exceeded the allowed tolerance. Since the error in the domain did not, "
                      "this is in all likelyhood an error in the computation of the norm on the boundary";
+        comm.abort();
         return EXIT_FAILURE;
     }
 }

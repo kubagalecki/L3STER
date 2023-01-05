@@ -16,7 +16,7 @@ namespace lstr
 class PvtuExporter
 {
 public:
-    inline PvtuExporter(const MeshPartition& mesh, const Tpetra::Map< local_dof_t, global_dof_t >& local_global_map);
+    inline PvtuExporter(const MeshPartition& mesh, const tpetra_map_t& local_global_map);
     void        exportSolution(std::string_view                                                file_name,
                                const MpiComm&                                                  comm,
                                const SolutionManager&                                          solution_manager,
@@ -434,13 +434,13 @@ auto encodeField(const SolutionManager& solution_manager, IndexRange_c auto&& co
 
     if (n_fields == 1) // Directly encode nodal values
     {
-        const auto field_vals = solution_manager.getNodalValues(*std::ranges::begin(component_inds));
+        const auto field_vals = solution_manager.getFieldView(*std::ranges::begin(component_inds));
         return encodeFieldImpl(field_vals);
     }
     else // Values of fields in the group should be interleaved before encoding
         return encodeFieldImpl(std::forward< decltype(component_inds) >(component_inds) |
                                std::views::transform([&solution_manager](size_t component_index) {
-                                   return solution_manager.getNodalValues(component_index);
+                                   return solution_manager.getFieldView(component_index);
                                }));
 }
 
@@ -492,7 +492,7 @@ inline auto openVtuFile(std::string_view name, const MpiComm& comm)
 }
 } // namespace detail::vtk
 
-PvtuExporter::PvtuExporter(const MeshPartition& mesh, const Tpetra::Map< local_dof_t, global_dof_t >& local_global_map)
+PvtuExporter::PvtuExporter(const MeshPartition& mesh, const tpetra_map_t& local_global_map)
     : m_n_nodes{mesh.getAllNodes().size()}
 {
     updateNodeCoords(mesh);

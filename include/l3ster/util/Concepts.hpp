@@ -13,6 +13,8 @@ namespace lstr
 // General
 template < typename From, typename To >
 concept DecaysTo_c = std::same_as< std::decay_t< From >, To >;
+template < typename T >
+concept Arithmetic_c = std::integral< T > or std::floating_point< T >;
 
 // Range concepts
 template < typename R, typename T >

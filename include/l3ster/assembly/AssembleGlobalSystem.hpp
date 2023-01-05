@@ -77,16 +77,14 @@ concept PotentiallyValidBoundaryKernel_c = PotentiallyValidKernelDeductionHelper
 inline constexpr detail::EmptyFieldValGetter empty_field_val_getter{};
 
 template < BasisTypes BT, QuadratureTypes QT, q_o_t QO, ArrayOf_c< size_t > auto field_inds, size_t dofs_per_node >
-void assembleGlobalSystem(auto&&                                                 kernel,
-                          const MeshPartition&                                   mesh,
-                          detail::DomainIdRange_c auto&&                         domain_ids,
-                          detail::FieldValGetter_c auto&&                        field_val_getter,
-                          Tpetra::CrsMatrix< val_t, local_dof_t, global_dof_t >& global_matrix,
-                          std::span< val_t >                                     global_vector,
-                          const NodeToLocalDofMap< dofs_per_node >&              row_map,
-                          const NodeToLocalDofMap< dofs_per_node >&              col_map,
-                          const NodeToLocalDofMap< dofs_per_node >&              rhs_map,
-                          val_t                                                  time = 0.)
+void assembleGlobalSystem(auto&&                                       kernel,
+                          const MeshPartition&                         mesh,
+                          detail::DomainIdRange_c auto&&               domain_ids,
+                          detail::FieldValGetter_c auto&&              field_val_getter,
+                          tpetra_crsmatrix_t&                          global_matrix,
+                          std::span< val_t >                           global_vector,
+                          const NodeToLocalDofMap< dofs_per_node, 3 >& dof_map,
+                          val_t                                        time = 0.)
     requires detail::PotentiallyValidKernel_c< decltype(kernel), detail::deduce_n_fields< decltype(field_val_getter) > >
 {
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
@@ -94,13 +92,11 @@ void assembleGlobalSystem(auto&&                                                
         constexpr auto n_fields = detail::deduce_n_fields< decltype(field_val_getter) >;
         if constexpr (detail::Kernel_c< decltype(kernel), el_dim, n_fields >)
         {
-            const auto  field_vals         = field_val_getter(element.getNodes());
-            const auto& qbv                = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
-            const auto  local_system       = assembleLocalSystem(kernel, element, field_vals, qbv, time);
-            const auto& [loc_mat, loc_vec] = *local_system;
-            const auto row_dofs            = detail::getUnsortedElementDofs< field_inds >(element, row_map);
-            const auto col_dofs            = detail::getUnsortedElementDofs< field_inds >(element, col_map);
-            const auto rhs_dofs            = detail::getUnsortedElementDofs< field_inds >(element, rhs_map);
+            const auto  field_vals                    = field_val_getter(element.getNodes());
+            const auto& qbv                           = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
+            const auto  local_system                  = assembleLocalSystem(kernel, element, field_vals, qbv, time);
+            const auto& [loc_mat, loc_vec]            = *local_system;
+            const auto [row_dofs, col_dofs, rhs_dofs] = detail::getUnsortedElementDofs< field_inds >(element, dof_map);
             detail::scatterLocalSystem(loc_mat, loc_vec, global_matrix, global_vector, row_dofs, col_dofs, rhs_dofs);
         }
         else
@@ -116,15 +112,13 @@ void assembleGlobalSystem(auto&&                                                
 }
 
 template < BasisTypes BT, QuadratureTypes QT, q_o_t QO, ArrayOf_c< size_t > auto field_inds, size_t dofs_per_node >
-void assembleGlobalBoundarySystem(auto&&                                                 kernel,
-                                  const BoundaryView&                                    boundary,
-                                  detail::FieldValGetter_c auto&&                        field_val_getter,
-                                  Tpetra::CrsMatrix< val_t, local_dof_t, global_dof_t >& global_matrix,
-                                  std::span< val_t >                                     global_vector,
-                                  const NodeToLocalDofMap< dofs_per_node >&              row_map,
-                                  const NodeToLocalDofMap< dofs_per_node >&              col_map,
-                                  const NodeToLocalDofMap< dofs_per_node >&              rhs_map,
-                                  val_t                                                  time = 0.)
+void assembleGlobalBoundarySystem(auto&&                                       kernel,
+                                  const BoundaryView&                          boundary,
+                                  detail::FieldValGetter_c auto&&              field_val_getter,
+                                  tpetra_crsmatrix_t&                          global_matrix,
+                                  std::span< val_t >                           global_vector,
+                                  const NodeToLocalDofMap< dofs_per_node, 3 >& dof_map,
+                                  val_t                                        time = 0.)
     requires detail::PotentiallyValidBoundaryKernel_c< decltype(kernel),
                                                        detail::deduce_n_fields< decltype(field_val_getter) > >
 {
@@ -136,10 +130,8 @@ void assembleGlobalBoundarySystem(auto&&                                        
             const auto  field_vals   = field_val_getter(el_view->getNodes());
             const auto& qbv          = getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
             const auto  local_system = assembleLocalBoundarySystem(kernel, el_view, field_vals, qbv, time);
-            const auto& [loc_mat, loc_vec] = *local_system;
-            const auto row_dofs            = detail::getUnsortedElementDofs< field_inds >(*el_view, row_map);
-            const auto col_dofs            = detail::getUnsortedElementDofs< field_inds >(*el_view, col_map);
-            const auto rhs_dofs            = detail::getUnsortedElementDofs< field_inds >(*el_view, rhs_map);
+            const auto& [loc_mat, loc_vec]            = *local_system;
+            const auto [row_dofs, col_dofs, rhs_dofs] = detail::getUnsortedElementDofs< field_inds >(*el_view, dof_map);
             detail::scatterLocalSystem(loc_mat, loc_vec, global_matrix, global_vector, row_dofs, col_dofs, rhs_dofs);
         }
         else

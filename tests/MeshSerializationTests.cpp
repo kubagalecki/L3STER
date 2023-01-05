@@ -6,7 +6,7 @@
 
 using namespace lstr;
 
-bool operator==(const MeshPartition& p1, const MeshPartition& p2)
+bool compareEqual(const MeshPartition& p1, const MeshPartition& p2)
 {
     bool result = true;
 
@@ -41,5 +41,5 @@ TEST_CASE("Mesh serialization", "[mesh-serial]")
 
     CHECK(std::ranges::equal(deserialized_part.getOwnedNodes(), original_part.getOwnedNodes()));
     CHECK(std::ranges::equal(deserialized_part.getGhostNodes(), original_part.getGhostNodes()));
-    CHECK(deserialized_part == original_part);
+    CHECK(compareEqual(deserialized_part, original_part));
 }

@@ -112,20 +112,33 @@ configure_file( TestDataPath.h.in TestDataPath.h )
 ### Coverage gathering ###
 
 if ( L3STER_ENABLE_COVERAGE )
-    set( script_file ${CMAKE_CURRENT_BINARY_DIR}/generate_coverage_report.sh )
-    set( gcovr_invocation "gcovr -x -d --exclude-unreachable-branches --exclude-throw-branches -r ${CMAKE_CURRENT_SOURCE_DIR}/../.. -e ${CMAKE_CURRENT_SOURCE_DIR} -o coverage_report.xml ./\n" )
+    set( script_file "${CMAKE_CURRENT_BINARY_DIR}/generate_coverage_report.sh" )
+    set( coverage_dir "${CMAKE_CURRENT_SOURCE_DIR}/../coverage" )
+    set( report_index 0 )
+    set( gcovr_invocation "gcovr -d --json --exclude-unreachable-branches --exclude-throw-branches -r \"${CMAKE_CURRENT_SOURCE_DIR}/../..\" -e \"${CMAKE_CURRENT_SOURCE_DIR}\" " )
+
     file( WRITE ${script_file}
+          "mkdir \"${coverage_dir}\" \n"
+          "cd tests/ \n"
           "${gcovr_invocation}"
+          "-o \"${coverage_dir}/coverage_report_${report_index}.json\" ./\n"
           "rm gmon.out\n\n"
           )
     foreach ( test ${L3STER_MPI_TESTS} )
+        math( EXPR report_index "${report_index} + 1" )
         file( APPEND ${script_file}
               "cd ${test}\n"
               "${gcovr_invocation}"
-              "rm ./profile_data*\n"
-              "cd ..\n\n"
+              "-o \"${coverage_dir}/coverage_report_${report_index}.json\" ./ \n"
+              "rm ./profile_data* \n"
+              "cd .. \n\n"
               )
     endforeach ()
+    file( APPEND ${script_file}
+          "cd \"${coverage_dir}\" \n"
+          "gcovr --add-tracefile \"coverage_report*.json\" --json report.json \n"
+          "rm coverage_report* \n"
+          )
 endif ()
 
 #######################################################################################################################

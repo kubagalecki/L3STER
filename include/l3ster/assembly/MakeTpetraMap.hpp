@@ -44,23 +44,19 @@ inline Tpetra::global_size_t getInvalidSize()
 } // namespace detail
 
 template < size_t n_fields >
-Teuchos::RCP< const Tpetra::Map< local_dof_t, global_dof_t > >
-makeTpetraMap(std::span< const n_id_t >                         nodes,
-              const detail::node_interval_vector_t< n_fields >& dof_intervals,
-              const MpiComm&                                    comm)
+Teuchos::RCP< const tpetra_map_t > makeTpetraMap(std::span< const n_id_t >                         nodes,
+                                                 const detail::node_interval_vector_t< n_fields >& dof_intervals,
+                                                 const MpiComm&                                    comm)
 {
-    using map_t             = Tpetra::Map< local_dof_t, global_dof_t >;
     const auto dofs         = detail::getNodeDofs(nodes, dof_intervals);
     auto       teuchos_comm = detail::makeTeuchosComm(comm);
-    return makeTeuchosRCP< const map_t >(detail::getInvalidSize(), dofs, 0, teuchos_comm);
+    return makeTeuchosRCP< const tpetra_map_t >(detail::getInvalidSize(), dofs, 0, teuchos_comm);
 }
 
-inline Teuchos::RCP< const Tpetra::Map< local_dof_t, global_dof_t > >
-makeTpetraMap(const std::vector< global_dof_t >& dofs, const MpiComm& comm)
+inline Teuchos::RCP< const tpetra_map_t > makeTpetraMap(const std::vector< global_dof_t >& dofs, const MpiComm& comm)
 {
-    using map_t       = Tpetra::Map< local_dof_t, global_dof_t >;
     auto teuchos_comm = detail::makeTeuchosComm(comm);
-    return makeTeuchosRCP< const map_t >(detail::getInvalidSize(), dofs, 0, teuchos_comm);
+    return makeTeuchosRCP< const tpetra_map_t >(detail::getInvalidSize(), dofs, 0, teuchos_comm);
 }
 } // namespace lstr
 #endif // L3STER_ASSEMBLY_MAKETPETRAMAP_HPP

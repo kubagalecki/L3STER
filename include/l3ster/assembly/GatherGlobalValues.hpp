@@ -11,13 +11,12 @@ auto gatherGlobalValues(const std::array< n_id_t, n_nodes >& nodes,
                         const SolutionManager&               solution_manager,
                         ConstexprValue< field_inds > = {})
 {
-    EigenRowMajorMatrix< val_t, n_nodes, std::ranges::size(field_inds) > retval;
+    constexpr auto                                    num_fields = std::ranges::size(field_inds);
+    EigenRowMajorMatrix< val_t, n_nodes, num_fields > retval;
     for (size_t node_ind = 0; auto node : nodes)
     {
-        const auto local_node_index = solution_manager.getNodeMap().getLocalElement(node);
-        for (size_t i = 0; auto field_ind : field_inds)
-            retval(node_ind, i++) = solution_manager.getNodalValues(field_ind)[local_node_index];
-        ++node_ind;
+        const auto node_vals = solution_manager.getNodeValues(node, std::span{field_inds});
+        std::ranges::copy(node_vals, std::next(retval.data(), num_fields * node_ind++));
     }
     return retval;
 }

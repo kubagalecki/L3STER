@@ -19,7 +19,7 @@ concept ValueAtNodeKernel_c =
              SpaceTimePoint                                   p) {
         {
             std::invoke(kernel, vals, ders, p)
-            } -> EigenVector_c;
+        } -> EigenVector_c;
     } and
     (std::invoke_result_t< Kernel,
                            std::array< val_t, n_fields >,
@@ -35,7 +35,7 @@ concept ValueAtNodeBoundaryKernel_c =
              Eigen::Vector< val_t, dim >                      normal) {
         {
             std::invoke(kernel, vals, ders, p, normal)
-            } -> EigenVector_c;
+        } -> EigenVector_c;
     } and
     (std::invoke_result_t< Kernel,
                            std::array< val_t, n_fields >,
@@ -69,13 +69,13 @@ template < typename Kernel, size_t n_fields, size_t results_size >
 concept PotentiallyValidBoundaryNodalKernel_c =
     PotentiallyValidNodalKernelDeductionHelper< Kernel, n_fields, results_size >::boundary;
 
-template < size_t max_dofs_per_node, IndexRange_c auto dof_inds >
-auto initValsAndParents(const MeshPartition&                          mesh,
-                        detail::DomainIdRange_c auto&&                domain_ids,
-                        const NodeToLocalDofMap< max_dofs_per_node >& map,
-                        ConstexprValue< dof_inds >                    dofinds_ctwrpr,
-                        detail::FieldValGetter_c auto&&               field_val_getter,
-                        std::span< val_t >                            values) -> std::vector< std::uint8_t >
+template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps >
+auto initValsAndParents(const MeshPartition&                                    mesh,
+                        detail::DomainIdRange_c auto&&                          domain_ids,
+                        const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
+                        ConstexprValue< dof_inds >                              dofinds_ctwrpr,
+                        detail::FieldValGetter_c auto&&                         field_val_getter,
+                        std::span< val_t >                                      values) -> std::vector< std::uint8_t >
 {
     if constexpr (deduce_n_fields< decltype(field_val_getter) > != 0)
     {
@@ -83,7 +83,7 @@ auto initValsAndParents(const MeshPartition&                          mesh,
         const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
             for (auto node : element.getNodes())
                 if (not mesh.isGhostNode(node))
-                    for (auto dof : getValuesAtInds(map(node), dofinds_ctwrpr))
+                    for (auto dof : getValuesAtInds(map(node).front(), dofinds_ctwrpr))
                     {
                         std::atomic_ref{retval[dof]}.fetch_add(1, std::memory_order_relaxed);
                         std::atomic_ref{values[dof]}.store(0., std::memory_order_relaxed);
@@ -96,19 +96,19 @@ auto initValsAndParents(const MeshPartition&                          mesh,
         return {};
 }
 
-template < size_t max_dofs_per_node, IndexRange_c auto dof_inds >
-auto initValsAndParents(const BoundaryView&                           boundary,
-                        const NodeToLocalDofMap< max_dofs_per_node >& map,
-                        ConstexprValue< dof_inds >                    dofinds_ctwrpr,
-                        detail::FieldValGetter_c auto&&               field_val_getter,
-                        std::span< val_t >                            values) -> std::vector< std::uint8_t >
+template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps >
+auto initValsAndParents(const BoundaryView&                                     boundary,
+                        const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
+                        ConstexprValue< dof_inds >                              dofinds_ctwrpr,
+                        detail::FieldValGetter_c auto&&                         field_val_getter,
+                        std::span< val_t >                                      values) -> std::vector< std::uint8_t >
 {
     std::vector< std::uint8_t > retval(values.size(), 0);
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
         for (auto node :
              el_view.getSideNodeInds() | std::views::transform([&](auto ind) { return el_view->getNodes()[ind]; }))
             if (not boundary.getParent()->isGhostNode(node))
-                for (auto dof : getValuesAtInds(map(node), dofinds_ctwrpr))
+                for (auto dof : getValuesAtInds(map(node).front(), dofinds_ctwrpr))
                 {
                     std::atomic_ref{retval[dof]}.fetch_add(1, std::memory_order_relaxed);
                     std::atomic_ref{values[dof]}.store(0., std::memory_order_relaxed);
@@ -119,19 +119,19 @@ auto initValsAndParents(const BoundaryView&                           boundary,
 }
 } // namespace detail
 
-template < size_t max_dofs_per_node, IndexRange_c auto dof_inds >
-void computeValuesAtNodes(const MeshPartition&                                  mesh,
-                          detail::DomainIdRange_c auto&&                        domain_ids,
-                          const NodeToLocalDofMap< max_dofs_per_node >&         map,
-                          ConstexprValue< dof_inds >                            dofinds_ctwrpr,
-                          std::span< const val_t, std::ranges::size(dof_inds) > values_in,
-                          std::span< val_t >                                    values_out)
+template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps >
+void computeValuesAtNodes(const MeshPartition&                                    mesh,
+                          detail::DomainIdRange_c auto&&                          domain_ids,
+                          const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
+                          ConstexprValue< dof_inds >                              dofinds_ctwrpr,
+                          std::span< const val_t, std::ranges::size(dof_inds) >   values_in,
+                          std::span< val_t >                                      values_out)
     requires(std::ranges::all_of(dof_inds, [](size_t dof) { return dof < max_dofs_per_node; }))
 {
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
         const auto& el_nodes     = element.getNodes();
         const auto  process_node = [&](size_t node_ind) {
-            for (size_t dof_ind = 0; auto dof : getValuesAtInds(map(el_nodes[node_ind]), dofinds_ctwrpr))
+            for (size_t dof_ind = 0; auto dof : getValuesAtInds(map(el_nodes[node_ind]).front(), dofinds_ctwrpr))
                 std::atomic_ref{values_out[dof]}.store(values_in[dof_ind++], std::memory_order_relaxed);
         };
         for (size_t node_ind = 0; node_ind < el_nodes.size(); ++node_ind)
@@ -141,15 +141,15 @@ void computeValuesAtNodes(const MeshPartition&                                  
     mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
 }
 
-template < size_t max_dofs_per_node, IndexRange_c auto dof_inds >
-void computeValuesAtNodes(auto&&                                        kernel,
-                          const MeshPartition&                          mesh,
-                          detail::DomainIdRange_c auto&&                domain_ids,
-                          const NodeToLocalDofMap< max_dofs_per_node >& map,
-                          ConstexprValue< dof_inds >                    dofinds_ctwrpr,
-                          detail::FieldValGetter_c auto&&               field_val_getter,
-                          std::span< val_t >                            values,
-                          val_t                                         time = 0.)
+template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps >
+void computeValuesAtNodes(auto&&                                                  kernel,
+                          const MeshPartition&                                    mesh,
+                          detail::DomainIdRange_c auto&&                          domain_ids,
+                          const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
+                          ConstexprValue< dof_inds >                              dofinds_ctwrpr,
+                          detail::FieldValGetter_c auto&&                         field_val_getter,
+                          std::span< val_t >                                      values,
+                          val_t                                                   time = 0.)
     requires detail::PotentiallyValidNodalKernel_c< decltype(kernel),
                                                     detail::deduce_n_fields< decltype(field_val_getter) >,
                                                     std::ranges::size(dof_inds) > and
@@ -178,7 +178,7 @@ void computeValuesAtNodes(auto&&                                        kernel,
                 const auto field_vals      = detail::computeFieldVals(basis_at_nodes.values[node_ind], node_vals);
                 const auto field_ders      = detail::computeFieldDers(phys_basis_ders, node_vals);
                 const auto ker_res = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time});
-                for (size_t dof_ind = 0; auto dof : getValuesAtInds(map(el_nodes[node_ind]), dofinds_ctwrpr))
+                for (size_t dof_ind = 0; auto dof : getValuesAtInds(map(el_nodes[node_ind]).front(), dofinds_ctwrpr))
                     if constexpr (detail::deduce_n_fields< decltype(field_val_getter) > != 0)
                         std::atomic_ref{values[dof]}.fetch_add(
                             ker_res[dof_ind++] / static_cast< double >(num_parents[dof]), std::memory_order_relaxed);
@@ -201,14 +201,14 @@ void computeValuesAtNodes(auto&&                                        kernel,
     mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
 }
 
-template < size_t max_dofs_per_node, IndexRange_c auto dof_inds >
-void computeValuesAtBoundaryNodes(auto&&                                        kernel,
-                                  const BoundaryView&                           boundary,
-                                  const NodeToLocalDofMap< max_dofs_per_node >& map,
-                                  ConstexprValue< dof_inds >                    dofinds_ctwrpr,
-                                  detail::FieldValGetter_c auto&&               field_val_getter,
-                                  std::span< val_t >                            values,
-                                  val_t                                         time = 0.)
+template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps >
+void computeValuesAtBoundaryNodes(auto&&                                                  kernel,
+                                  const BoundaryView&                                     boundary,
+                                  const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
+                                  ConstexprValue< dof_inds >                              dofinds_ctwrpr,
+                                  detail::FieldValGetter_c auto&&                         field_val_getter,
+                                  std::span< val_t >                                      values,
+                                  val_t                                                   time = 0.)
     requires detail::PotentiallyValidBoundaryNodalKernel_c< decltype(kernel),
                                                             detail::deduce_n_fields< decltype(field_val_getter) >,
                                                             std::ranges::size(dof_inds) > and
@@ -238,7 +238,7 @@ void computeValuesAtBoundaryNodes(auto&&                                        
                 const auto field_ders      = detail::computeFieldDers(phys_basis_ders, node_vals);
                 const auto ker_res =
                     std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time}, normal);
-                for (size_t dof_ind = 0; auto dof : getValuesAtInds(map(el_nodes[node_ind]), dofinds_ctwrpr))
+                for (size_t dof_ind = 0; auto dof : getValuesAtInds(map(el_nodes[node_ind]).front(), dofinds_ctwrpr))
                     std::atomic_ref{values[dof]}.fetch_add(ker_res[dof_ind++] / static_cast< double >(num_parents[dof]),
                                                            std::memory_order_relaxed);
             };
