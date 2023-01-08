@@ -1,9 +1,5 @@
 #!/bin/bash
 
-if [ -z "$GATHER_COVERAGE" ]; then
-  GATHER_COVERAGE=OFF
-fi
-
 if [ -n "$DEPLOYMENT_TESTS" ]; then
   TEST_DIR=.
 else
@@ -37,8 +33,3 @@ fi
 
 cmake --build . -- -j "$(grep -c ^processor /proc/cpuinfo)" || exit 1
 ctest --output-on-failure --repeat until-pass:2 --timeout 1500 --test-dir $TEST_DIR || exit 1
-
-if [ "$GATHER_COVERAGE" != "OFF" ]; then
-  chmod +x tests/generate_coverage_report.sh || exit 1
-  ./tests/generate_coverage_report.sh || exit 1
-fi

@@ -81,20 +81,20 @@ jobs:
     env:
       BUILD_TYPE: Debug
       TOOLCHAIN_PATH: ../cmake/toolchains/Coverage.cmake
-      GATHER_COVERAGE: ON
     steps:
       - uses: actions/checkout@v3.3.0
       - name: Build and run tests
         run: scripts/ci/build-and-run-tests.sh
+      - name: Gather coverage results via gcovr
+        run: gcovr -x --exclude-unreachable-branches --exclude-throw-branches -r "$GITHUB_WORKSPACE" -e "$GITHUB_WORKSPACE/tests" -o coverage_report.xml build/tests
       - name: Cleanup
         if: always()
         run: rm -rf build/
       - uses: codecov/codecov-action@v3
         with:
-          files: coverage/report.json
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
           verbose: true
       - name: Delete coverage data
         if: always()
-        run: rm -rf coverage/
+        run: rm -f coverage_report.xml "*.gcov"
