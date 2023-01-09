@@ -11,69 +11,90 @@ jobs:
     name: Build base container
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v3
-      - uses: whoan/docker-build-with-cache-action@v5.11.1
+      - uses: actions/checkout@v3.3.0
+      - uses: whoan/docker-build-with-cache-action@v6
         id: docker-base-cache
         with:
-          username: "${{ secrets.DOCKER_HUB_USERNAME }}"
+          username: kubagalecki
           password: "${{ secrets.DOCKER_HUB_TOKEN }}"
-          image_name: "${{ secrets.DOCKER_HUB_IMAGE }}"
+          image_name: l3ster-base
           dockerfile: scripts/ci/Dockerfile.base
 
   unit_tests_and_static_analysis:
     name: Static analysis and unit tests
     needs: build_base_container
     runs-on: self-hosted
+    container: kubagalecki/l3ster-base:latest
     env:
-      CMAKE_BUILD_TYPE: Release
-      CMAKE_TOOLCHAIN_PATH: ../cmake/toolchains/StaticAnalysis.cmake
+      BUILD_TYPE: Release
+      TOOLCHAIN_PATH: ../cmake/toolchains/StaticAnalysis.cmake
     steps:
-      - uses: actions/checkout@v3
-      - name: Append docker base
-        run: sed -i '1 i\FROM '"$DOCKER_BASE" $GITHUB_WORKSPACE/Dockerfile
-      - uses: ./scripts/ci/run-tests
+      - uses: actions/checkout@v3.3.0
+      - name: Build and run tests
+        run: scripts/ci/build-and-run-tests.sh
+      - name: Cleanup
+        if: always()
+        run: rm -rf build/
 
   sanitizers:
     name: Sanitizers
     needs: unit_tests_and_static_analysis
-    continue-on-error: true
     runs-on: self-hosted
+    container: kubagalecki/l3ster-base:latest
     env:
-      CMAKE_BUILD_TYPE: ${{ matrix.build_type }}
-      CMAKE_TOOLCHAIN_PATH: "../cmake/toolchains/${{ matrix.sanitizer }}Sanitizer.cmake"
+      BUILD_TYPE: ${{ matrix.build_type }}
+      TOOLCHAIN_PATH: "../cmake/toolchains/${{ matrix.sanitizer }}Sanitizer.cmake"
     strategy:
       matrix:
         build_type: [ Debug, Release ]
-        sanitizer: [ Address, Thread, UndefinedBehavior ]
+        sanitizer: [ Address, UndefinedBehavior ] # Thread disabled, too many false positives with TBB
     steps:
-      - uses: actions/checkout@v3
-      - name: Append docker base
-        run: sed -i '1 i\FROM '"$DOCKER_BASE" $GITHUB_WORKSPACE/Dockerfile
-      - uses: ./scripts/ci/run-tests
-
-  coverage:
-    name: Code coverage
-    needs: sanitizers
-    runs-on: self-hosted
-    env:
-      CMAKE_BUILD_TYPE: Debug
-      CMAKE_TOOLCHAIN_PATH: ../cmake/toolchains/Coverage.cmake
-      REPORT_COVERAGE: ON
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-    steps:
-      - uses: actions/checkout@v3
-      - name: Append docker base
-        run: sed -i '1 i\FROM '"$DOCKER_BASE" $GITHUB_WORKSPACE/Dockerfile
-      - uses: ./scripts/ci/run-tests
+      - uses: actions/checkout@v3.3.0
+      - name: Build and run tests
+        run: scripts/ci/build-and-run-tests.sh
+      - name: Cleanup
+        if: always()
+        run: rm -rf build/
 
   deployment:
     name: Deployment tests
     needs: unit_tests_and_static_analysis
     runs-on: self-hosted
+    container: kubagalecki/l3ster-base:latest
     env:
       DEPLOYMENT_TESTS: true
+      BUILD_TYPE: Release
+      TOOLCHAIN_PATH: ../cmake/toolchains/StaticAnalysis.cmake
     steps:
-      - uses: actions/checkout@v3
-      - name: Append docker base
-        run: sed -i '1 i\FROM '"$DOCKER_BASE" $GITHUB_WORKSPACE/Dockerfile
-      - uses: ./scripts/ci/run-tests
+      - uses: actions/checkout@v3.3.0
+      - name: Build and run tests
+        run: scripts/ci/build-and-run-tests.sh
+      - name: Cleanup
+        if: always()
+        run: rm -rf build/
+
+  coverage:
+    name: Code coverage
+    needs: [ sanitizers, deployment ]
+    runs-on: self-hosted
+    container: kubagalecki/l3ster-base:latest
+    env:
+      BUILD_TYPE: Debug
+      TOOLCHAIN_PATH: ../cmake/toolchains/Coverage.cmake
+    steps:
+      - uses: actions/checkout@v3.3.0
+      - name: Build and run tests
+        run: scripts/ci/build-and-run-tests.sh
+      - name: Gather coverage results via gcovr
+        run: gcovr -x --exclude-unreachable-branches --exclude-throw-branches -r "$GITHUB_WORKSPACE" -e "$GITHUB_WORKSPACE/tests" -o coverage_report.xml build/tests
+      - name: Cleanup
+        if: always()
+        run: rm -rf build/
+      - uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+          verbose: true
+      - name: Delete coverage data
+        if: always()
+        run: rm -f coverage_report.xml

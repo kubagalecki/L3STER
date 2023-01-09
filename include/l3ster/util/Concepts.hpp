@@ -10,6 +10,12 @@
 
 namespace lstr
 {
+// General
+template < typename From, typename To >
+concept DecaysTo_c = std::same_as< std::decay_t< From >, To >;
+template < typename T >
+concept Arithmetic_c = std::integral< T > or std::floating_point< T >;
+
 // Range concepts
 template < typename R, typename T >
 concept RangeOfConvertibleTo_c = std::ranges::range< R > and std::convertible_to< std::ranges::range_value_t< R >, T >;
@@ -60,7 +66,7 @@ concept tuple_gettable = requires(T t) {
                              typename std::tuple_element_t< I, T >;
                              {
                                  std::get< I >(t)
-                                 } -> std::same_as< std::tuple_element_t< I, T > >;
+                             } -> std::same_as< std::tuple_element_t< I, T > >;
                          };
 
 template < typename, typename >
@@ -78,7 +84,7 @@ concept tuple_like = requires {
                          std::tuple_size_v< T >;
                          {
                              std::tuple_size_v< T >
-                             } -> std::convertible_to< std::size_t >;
+                         } -> std::convertible_to< std::size_t >;
                          typename detail::fold_tuple_gettable< T, std::make_index_sequence< std::tuple_size_v< T > > >;
                      };
 
@@ -89,20 +95,30 @@ struct is_tuple_invocable : std::false_type
 {};
 
 template < typename T, tuple_like tuple_t >
-    struct is_tuple_invocable< T, tuple_t > : std::conditional_t < std::invoke([]< size_t... I >(std::index_sequence< I... >)
-{
-    return (std::is_invocable_v< T, std::tuple_element_t< I, tuple_t > > and ...);
-}, std::make_index_sequence< std::tuple_size_v< tuple_t > >{}), std::true_type, std::false_type > {};
+struct is_tuple_invocable< T, tuple_t > :
+    std::conditional_t< std::invoke(
+                            []< size_t... I >(std::index_sequence< I... >) {
+                                return (std::is_invocable_v< T, std::tuple_element_t< I, tuple_t > > and ...);
+                            },
+                            std::make_index_sequence< std::tuple_size_v< tuple_t > >{}),
+                        std::true_type,
+                        std::false_type >
+{};
 
 template < typename R, typename T, typename tuple_t >
 struct is_tuple_r_invocable : std::false_type
 {};
 
 template < typename R, typename T, tuple_like tuple_t >
-    struct is_tuple_r_invocable< R, T, tuple_t > : std::conditional_t < std::invoke([]< size_t... I >(std::index_sequence< I... >)
-{
-    return (std::is_invocable_r_v< R, T, std::tuple_element_t< I, tuple_t > > and ...);
-}, std::make_index_sequence< std::tuple_size_v< tuple_t > >{}), std::true_type, std::false_type > {};
+struct is_tuple_r_invocable< R, T, tuple_t > :
+    std::conditional_t< std::invoke(
+                            []< size_t... I >(std::index_sequence< I... >) {
+                                return (std::is_invocable_r_v< R, T, std::tuple_element_t< I, tuple_t > > and ...);
+                            },
+                            std::make_index_sequence< std::tuple_size_v< tuple_t > >{}),
+                        std::true_type,
+                        std::false_type >
+{};
 } // namespace detail
 
 template < typename T, typename tuple_t >
@@ -115,14 +131,14 @@ template < typename T, typename Domain, typename Range >
 concept Mapping_c = requires(T f, Domain x) {
                         {
                             f(x)
-                            } -> std::convertible_to< Range >;
+                        } -> std::convertible_to< Range >;
                     };
 
 template < typename T, template < typename > typename Predicate >
 concept predicate_trait_specialized = requires {
                                           {
                                               Predicate< std::decay_t< T > >::value
-                                              } -> std::convertible_to< bool >;
+                                          } -> std::convertible_to< bool >;
                                       };
 
 // Execution policy concepts

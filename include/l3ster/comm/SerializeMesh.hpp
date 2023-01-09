@@ -102,20 +102,22 @@ SerializedDomain::SerializedDomain(const Domain& domain)
 struct SerializedPartition
 {
     SerializedPartition() = default;
-    explicit SerializedPartition(const MeshPartition& part) : nodes{part.m_nodes}, ghost_nodes{part.m_ghost_nodes}
+    explicit SerializedPartition(const MeshPartition& part)
+        : m_nodes{part.m_nodes}, m_n_owned_nodes{part.m_n_owned_nodes}
     {
         for (const auto& [id, dom] : part.m_domains)
-            domains.emplace(id, dom);
+            m_domains.emplace(id, dom);
     }
     explicit SerializedPartition(MeshPartition&& part)
-        : nodes{std::move(part.m_nodes)}, ghost_nodes{std::move(part.m_ghost_nodes)}
+        : m_nodes{std::move(part.m_nodes)}, m_n_owned_nodes{part.m_n_owned_nodes}
     {
         for (const auto& [id, dom] : part.m_domains)
-            domains.emplace(id, dom);
+            m_domains.emplace(id, dom);
     }
 
-    std::map< d_id_t, SerializedDomain > domains;
-    std::vector< n_id_t >                nodes, ghost_nodes;
+    std::map< d_id_t, SerializedDomain > m_domains;
+    std::vector< n_id_t >                m_nodes;
+    size_t                               m_n_owned_nodes;
 };
 } // namespace lstr
 #endif // L3STER_COMM_SERIALIZEMESH_HPP

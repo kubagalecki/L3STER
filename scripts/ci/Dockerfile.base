@@ -3,18 +3,22 @@
 # This way dependencies don't need to be rebuilt every CI run.
 ###############################################################
 
-FROM archlinux:latest
+FROM ubuntu:latest
 
-RUN pacman -Syu --noconfirm git python3 unzip patch cmake make gcovr gcc gcc-fortran
-RUN git clone https://github.com/spack/spack.git && . spack/share/spack/setup-env.sh && spack compiler find
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata && apt-get upgrade -y
+RUN apt-get install -y git curl tar python3 unzip xz-utils bzip2 lbzip2 patch binutils cmake make gcovr gpg gcc g++ gfortran
+RUN git clone https://github.com/spack/spack.git && \
+    cd spack && git checkout tags/v0.19.0 -b v0.19.0 && cd .. && \
+    . spack/share/spack/setup-env.sh && spack compiler find
 RUN . spack/share/spack/setup-env.sh && \
-    spack external find cmake && \
-    spack install trilinos@13.2.0 cxxstd=17 +openmp +rol ^parmetis ^hwloc && \
+    spack external find tar xz curl git cmake && \
+    spack install trilinos@13.4.0 cxxstd=17 +openmp && \
     spack gc -y && \
     spack clean -a
 RUN . spack/share/spack/setup-env.sh && \
     spack install eigen && \
-    spack install catch2 && \
+    spack install catch2@2.13.8 && \
     spack install intel-oneapi-tbb && \
+    spack install metis && \
     spack gc -y && \
     spack clean -a

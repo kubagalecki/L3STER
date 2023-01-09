@@ -12,7 +12,7 @@ static void BM_SparsityPatternAssembly(benchmark::State& state)
                                                             Pair{d_id_t{2}, std::array{false, true}}} >{};
 
     const auto dof_intervals          = detail::computeLocalDofIntervals(mesh, problem_def);
-    const auto owned_plus_shared_dofs = detail::getNodeDofs(mesh.getNodes(), dof_intervals);
+    const auto owned_plus_shared_dofs = detail::getNodeDofs(mesh.getOwnedNodes(), dof_intervals);
 
     for (auto _ : state)
     {

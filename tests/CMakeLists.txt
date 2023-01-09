@@ -66,7 +66,7 @@ function( add_mpi_test source name nprocs )
         set( args ${ARGV4} )
     endif ()
     foreach ( np ${nprocs} )
-        set( test_params "-n;${np};$<TARGET_FILE:${test_target}>;${args}" )
+        set( test_params "--map-by;socket;-n;${np};$<TARGET_FILE:${test_target}>;${args}" )
         set( test_name ${name}_np_${np} )
         set( test_dir ${CMAKE_CURRENT_BINARY_DIR}/${test_name} )
         file( MAKE_DIRECTORY ${test_dir} )
@@ -106,26 +106,5 @@ execute_process( COMMAND lscpu
                  )
 set( L3STER_TESTS_DATA_PATH "${CMAKE_CURRENT_SOURCE_DIR}/data" )
 configure_file( TestDataPath.h.in TestDataPath.h )
-
-#######################################################################################################################
-
-### Coverage gathering ###
-
-if ( L3STER_ENABLE_COVERAGE )
-    set( script_file ${CMAKE_CURRENT_BINARY_DIR}/generate_coverage_report.sh )
-    set( gcovr_invocation "gcovr -x -d --exclude-unreachable-branches --exclude-throw-branches -r ${CMAKE_CURRENT_SOURCE_DIR}/../.. -e ${CMAKE_CURRENT_SOURCE_DIR} -o coverage_report.xml ./\n" )
-    file( WRITE ${script_file}
-          "${gcovr_invocation}"
-          "rm gmon.out\n\n"
-          )
-    foreach ( test ${L3STER_MPI_TESTS} )
-        file( APPEND ${script_file}
-              "cd ${test}\n"
-              "${gcovr_invocation}"
-              "rm ./profile_data*\n"
-              "cd ..\n\n"
-              )
-    endforeach ()
-endif ()
 
 #######################################################################################################################

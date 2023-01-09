@@ -33,7 +33,7 @@ public:
                      {
                          std::invoke(
                              std::forward< Red >(reduction), std::forward< Zero >(zero), std::forward< Zero >(zero))
-                         } -> std::convertible_to< std::remove_cvref_t< Zero > >;
+                     } -> std::convertible_to< std::remove_cvref_t< Zero > >;
                  };
 
     [[nodiscard]] const MeshPartition* getParent() const { return m_parent_partition; }
@@ -65,7 +65,7 @@ Zero BoundaryView::reduce(Zero&& zero, Proj&& projection, Red&& reduction, ExecP
              requires(std::remove_cvref_t< Zero > z, std::remove_cvref_t< Red > r) {
                  {
                      std::invoke(std::forward< Red >(reduction), std::forward< Zero >(zero), std::forward< Zero >(zero))
-                     } -> std::convertible_to< std::remove_cvref_t< Zero > >;
+                 } -> std::convertible_to< std::remove_cvref_t< Zero > >;
              }
 {
     return std::transform_reduce(

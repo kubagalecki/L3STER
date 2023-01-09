@@ -52,17 +52,17 @@ void vtkExportTest2D()
     constexpr auto vec_inds          = std::array< size_t, 2 >{1, 3};
     constexpr auto all_field_inds    = makeIotaArray< size_t, n_fields >();
 
-    const auto system_manager   = AlgebraicSystemManager{comm, my_partition, problemdef_ctwrpr};
+    const auto system_manager   = makeAlgebraicSystemManager(comm, my_partition, problemdef_ctwrpr);
     auto       solution_manager = SolutionManager{my_partition, comm, n_fields};
 
-    auto         solution      = system_manager.makeSolutionMultiVector();
-    auto         solution_view = solution->getDataNonConst(0);
+    auto         solution      = system_manager->getSolutionVector();
+    auto         solution_view = solution->getDataNonConst();
     const double Re            = 40.;
     const double lambda        = Re / 2. - std::sqrt(Re * Re / 4. - 4. * pi * pi);
     const auto   bot_top_vals  = std::array< val_t, 2 >{1., pi};
     computeValuesAtNodes(my_partition,
                          std::array{bot_boundary, top_boundary},
-                         system_manager.getRhsMap(),
+                         system_manager->getDofMap(),
                          ConstexprValue< scalar_inds >{},
                          bot_top_vals,
                          solution_view);
@@ -76,12 +76,12 @@ void vtkExportTest2D()
         },
         my_partition,
         std::views::single(domain_id),
-        system_manager.getRhsMap(),
+        system_manager->getDofMap(),
         ConstexprValue< vec_inds >{},
         empty_field_val_getter,
         solution_view);
     solution_manager.updateSolution(
-        my_partition, *solution->getVector(0), system_manager.getRhsMap(), all_field_inds, problemdef_ctwrpr);
+        my_partition, *solution, system_manager->getDofMap(), all_field_inds, problemdef_ctwrpr);
     solution_manager.communicateSharedValues();
 
     auto       exporter        = PvtuExporter{my_partition, solution_manager.getNodeMap()};
@@ -131,11 +131,11 @@ void vtkExportTest3D()
     constexpr auto domain_field_inds   = std::array< size_t, 3 >{0, 1, 2};
     constexpr auto boundary_field_inds = std::array< size_t, 3 >{3, 4, 5};
 
-    const auto system_manager   = AlgebraicSystemManager{comm, my_partition, problemdef_ctwrpr};
+    const auto system_manager   = makeAlgebraicSystemManager(comm, my_partition, problemdef_ctwrpr);
     auto       solution_manager = SolutionManager{my_partition, comm, n_fields};
 
-    auto solution      = system_manager.makeSolutionMultiVector();
-    auto solution_view = solution->getDataNonConst(0);
+    auto solution      = system_manager->getSolutionVector();
+    auto solution_view = solution->getDataNonConst();
     computeValuesAtNodes(
         [&](const auto& vals, const auto& ders, const SpaceTimePoint& point) {
             Eigen::Vector3d retval;
@@ -148,7 +148,7 @@ void vtkExportTest3D()
         },
         my_partition,
         std::views::single(domain_id),
-        system_manager.getRhsMap(),
+        system_manager->getDofMap(),
         ConstexprValue< domain_field_inds >{},
         empty_field_val_getter,
         solution_view);
@@ -157,15 +157,12 @@ void vtkExportTest3D()
                                      const auto&,
                                      const Eigen::Vector3d& normal) -> Eigen::Vector3d { return normal; },
                                  boundary,
-                                 system_manager.getRhsMap(),
+                                 system_manager->getDofMap(),
                                  ConstexprValue< boundary_field_inds >{},
                                  empty_field_val_getter,
                                  solution_view);
-    solution_manager.updateSolution(my_partition,
-                                    *solution->getVector(0),
-                                    system_manager.getRhsMap(),
-                                    makeIotaArray< size_t, n_fields >(),
-                                    problemdef_ctwrpr);
+    solution_manager.updateSolution(
+        my_partition, *solution, system_manager->getDofMap(), makeIotaArray< size_t, n_fields >(), problemdef_ctwrpr);
     solution_manager.communicateSharedValues();
 
     auto       exporter    = PvtuExporter{my_partition, solution_manager.getNodeMap()};

@@ -1,5 +1,0 @@
-name: test
-description: configure, build, and run tests using the toolchain, build type, etc. specified in env variables
-runs:
-  using: docker
-  image: ../../../Dockerfile

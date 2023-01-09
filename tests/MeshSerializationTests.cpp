@@ -4,10 +4,10 @@
 #include "TestDataPath.h"
 #include "catch2/catch.hpp"
 
-bool operator==(const lstr::MeshPartition& p1, const lstr::MeshPartition& p2)
-{
-    using namespace lstr;
+using namespace lstr;
 
+bool compareEqual(const MeshPartition& p1, const MeshPartition& p2)
+{
     bool result = true;
 
     p1.visit([&]< ElementTypes T1, el_o_t O1 >(const Element< T1, O1 >& el1, DomainView dv) {
@@ -34,12 +34,12 @@ bool operator==(const lstr::MeshPartition& p1, const lstr::MeshPartition& p2)
 
 TEST_CASE("Mesh serialization", "[mesh-serial]")
 {
-    const auto  mesh              = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::gmsh_tag);
+    const auto  mesh              = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::gmsh_tag);
     const auto& original_part     = mesh.getPartitions()[0];
-    const auto  serialized_part   = lstr::SerializedPartition{original_part};
-    const auto  deserialized_part = lstr::deserializePartition(serialized_part);
+    const auto  serialized_part   = SerializedPartition{original_part};
+    const auto  deserialized_part = deserializePartition(serialized_part);
 
-    CHECK(deserialized_part.getNodes() == original_part.getNodes());
-    CHECK(deserialized_part.getGhostNodes() == original_part.getGhostNodes());
-    CHECK(deserialized_part == original_part);
+    CHECK(std::ranges::equal(deserialized_part.getOwnedNodes(), original_part.getOwnedNodes()));
+    CHECK(std::ranges::equal(deserialized_part.getGhostNodes(), original_part.getGhostNodes()));
+    CHECK(compareEqual(deserialized_part, original_part));
 }

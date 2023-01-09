@@ -17,7 +17,7 @@ TEST_CASE("Local system assembly", "[local_asm]")
         constexpr auto        ET       = ElementTypes::Quad;
         constexpr el_o_t      EO       = 4;
         constexpr auto        QT       = QuadratureTypes::GLeg;
-        constexpr q_o_t       QO       = 2 * EO;
+        constexpr q_o_t       QO       = 11; // Needs to be large enough for the local system buffer to overflow
         constexpr auto        BT       = BasisTypes::Lagrange;
         constexpr auto        el_nodes = typename Element< ET, EO >::node_array_t{};
         ElementData< ET, EO > data{{Point{1., -1., 0.}, Point{2., -1., 0.}, Point{1., 1., 1.}, Point{2., 1., 1.}}};
@@ -62,7 +62,6 @@ TEST_CASE("Local system assembly", "[local_asm]")
         auto system = assembleLocalSystem(
             diffusion_kernel_2d, element, Eigen::Matrix< val_t, element.n_nodes, 0 >{}, basis_at_q, 0.);
         auto& [K, F] = *system;
-        K            = K.template selfadjointView< Eigen::Lower >();
         auto u       = F;
 
         constexpr auto boundary_nodes = std::invoke([] {

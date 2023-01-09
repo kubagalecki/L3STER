@@ -89,10 +89,10 @@ auto computeLocalDofIntervals(const MeshPartition& mesh, ConstexprValue< problem
             return std::make_pair(pair_ce.first, toBitset(pair_ce.second));
         });
 
-    const auto            n_nodes = mesh.getNodes().size() + mesh.getGhostNodes().size();
+    const auto            n_nodes = mesh.getAllNodes().size();
     std::vector< n_id_t > node_ids;
     node_ids.reserve(n_nodes);
-    std::ranges::merge(mesh.getNodes(), mesh.getGhostNodes(), std::back_inserter(node_ids));
+    std::ranges::merge(mesh.getOwnedNodes(), mesh.getGhostNodes(), std::back_inserter(node_ids));
 
     std::vector< field_coverage_t > field_coverage(n_nodes);
     for (const auto& [dom_id, fields] : problem_def_converted)

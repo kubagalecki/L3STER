@@ -54,11 +54,9 @@ static void BM_NS3DLocalAssembly(benchmark::State& state)
     using nodal_vals_t            = Eigen::Matrix< val_t, element.n_nodes, n_fields >;
     const nodal_vals_t nodal_vals = nodal_vals_t::Random();
 
-    constexpr auto n_nodes           = Element< ElementTypes ::Hex, EO >::n_nodes;
-    constexpr auto loc_mat_rows      = n_nodes * n_fields;
-    constexpr auto local_system_size = loc_mat_rows * n_eq;
-    const auto     req_stack_size    = local_system_size * sizeof(val_t);
-    setMinStackSize((1ul << 23) + req_stack_size);
+    constexpr auto n_nodes      = Element< ElementTypes ::Hex, EO >::n_nodes;
+    constexpr auto loc_mat_rows = n_nodes * n_fields;
+    setMinStackSize(1ul << 30);
     const auto& ref_bas_at_quad = getReferenceBasisAtDomainQuadrature< BT, ElementTypes::Hex, EO, QT, QO >();
 
     constexpr auto ns3d_kernel = [](const auto& vals, const auto& ders, const auto&) noexcept {
@@ -137,7 +135,11 @@ static void BM_NS3DLocalAssembly(benchmark::State& state)
     };
 
     for (auto _ : state)
-        benchmark::DoNotOptimize(assembleLocalSystem(ns3d_kernel, element, nodal_vals, ref_bas_at_quad, 0.));
+    {
+        const auto local_system = assembleLocalSystem(ns3d_kernel, element, nodal_vals, ref_bas_at_quad, 0.);
+        benchmark::DoNotOptimize(local_system.get());
+        benchmark::ClobberMemory();
+    }
 
     const auto flops_per_qp = /* physical basis derivative computation */ n_nodes * 3 * 3 * 2 +
                               /* field value computation */ n_fields * n_nodes * 2 * 4 +
@@ -152,7 +154,6 @@ static void BM_NS3DLocalAssembly(benchmark::State& state)
     BENCHMARK_TEMPLATE(BM_NS3DLocalAssembly, ELO)                                                                      \
         ->Name("Local NS3D system assembly [Hex, EO " #ELO "]")                                                        \
         ->Unit(benchmark::k##UNIT);
-NS3D_ASSEMBLY_BENCH(1, Microsecond);
 NS3D_ASSEMBLY_BENCH(2, Microsecond);
 NS3D_ASSEMBLY_BENCH(4, Millisecond);
 NS3D_ASSEMBLY_BENCH(6, Second);

@@ -27,7 +27,7 @@ concept Kernel_c = requires(K                                                ker
                             SpaceTimePoint                                   point) {
                        {
                            std::invoke(kernel, node_vals, node_ders, point)
-                           } noexcept -> ValidKernelResult_c;
+                       } noexcept -> ValidKernelResult_c;
                    };
 
 template < typename K, dim_t dim, size_t n_fields >
@@ -38,7 +38,7 @@ concept BoundaryKernel_c = requires(K                                           
                                     Eigen::Vector< val_t, dim >                      normal) {
                                {
                                    std::invoke(kernel, node_vals, node_ders, point, normal)
-                                   } noexcept -> ValidKernelResult_c;
+                               } noexcept -> ValidKernelResult_c;
                            };
 
 template < typename Kernel, dim_t dim, size_t n_fields >
@@ -70,21 +70,9 @@ using kernel_result_t = typename kernel_result< Kernel, dim, n_fields >::type;
 template < typename Kernel, dim_t dim, size_t n_fields >
 inline constexpr std::size_t n_unknowns =
     kernel_result_t< Kernel, dim, n_fields >::first_type::value_type::ColsAtCompileTime;
-
-template < typename Kernel, ElementTypes ET, el_o_t EO, size_t n_fields >
-auto initLocalSystem()
-{
-    constexpr auto dim                = Element< ET, EO >::native_dim;
-    constexpr auto local_problem_size = Element< ET, EO >::n_nodes * n_unknowns< Kernel, dim, n_fields >;
-    using k_el_t                      = EigenRowMajorMatrix< val_t, local_problem_size, local_problem_size >;
-    using f_el_t                      = Eigen::Vector< val_t, local_problem_size >;
-    using retval_payload_t            = std::pair< k_el_t, f_el_t >;
-
-    auto retval    = std::make_unique< retval_payload_t >();
-    retval->first  = k_el_t::Zero();
-    retval->second = f_el_t::Zero();
-    return retval;
-}
+template < typename Kernel, dim_t dim, size_t n_fields >
+inline constexpr std::size_t n_equations =
+    kernel_result_t< Kernel, dim, n_fields >::first_type::value_type::RowsAtCompileTime;
 
 template < int n_nodes, int n_fields >
 auto computeFieldVals(const Eigen::Vector< val_t, n_nodes >&                 basis_vals,
@@ -118,16 +106,118 @@ auto makeRankUpdateMatrix(const std::array< Eigen::Matrix< val_t, n_equations, n
                           const Eigen::Vector< val_t, n_bases >&                                        basis_vals,
                           const EigenRowMajorMatrix< val_t, dim, n_bases >&                             basis_ders)
 {
-    EigenRowMajorMatrix< val_t, n_bases * n_unknowns, n_equations > retval;
+    Eigen::Matrix< val_t, n_bases * n_unknowns, n_equations, Eigen::ColMajor > retval;
     for (size_t basis_ind = 0; basis_ind < static_cast< size_t >(n_bases); ++basis_ind)
     {
-        retval(Eigen::seqN(basis_ind * n_unknowns, Eigen::fix< n_unknowns >), Eigen::all) =
-            basis_vals[basis_ind] * kernel_result[0].transpose();
+        auto block = retval.template block< n_unknowns, n_equations >(basis_ind * n_unknowns, 0);
+        block      = basis_vals[basis_ind] * kernel_result[0].transpose();
         for (size_t dim_ind = 0; dim_ind < static_cast< size_t >(dim); ++dim_ind)
-            retval(Eigen::seqN(basis_ind * n_unknowns, Eigen::fix< n_unknowns >), Eigen::all) +=
-                basis_ders(dim_ind, basis_ind) * kernel_result[dim_ind + 1].transpose();
+            block += basis_ders(dim_ind, basis_ind) * kernel_result[dim_ind + 1].transpose();
     }
     return retval;
+}
+
+template < size_t problem_size, size_t update_size >
+class LocalSystemManager
+{
+public:
+    using matrix_t        = EigenRowMajorSquareMatrix< val_t, problem_size >;
+    using vector_t        = Eigen::Vector< val_t, problem_size >;
+    using system_t        = std::pair< matrix_t, vector_t >;
+    using system_ptr_t    = std::unique_ptr< system_t >;
+    using update_matrix_t = Eigen::Matrix< val_t, problem_size, update_size, Eigen::ColMajor >;
+    using update_vector_t = Eigen::Vector< val_t, update_size >;
+
+    inline LocalSystemManager();
+    inline system_ptr_t getSystem();
+    inline void update(const update_matrix_t& update_matrix, const update_vector_t& update_vector, val_t update_weight);
+
+private:
+    static constexpr size_t target_update_size = 64;
+    static constexpr size_t updates_per_batch =
+        target_update_size % update_size == 0 ? target_update_size / update_size : target_update_size / update_size + 1;
+    static constexpr size_t batch_update_size = update_size * updates_per_batch;
+    using batch_update_matrix_t     = Eigen::Matrix< val_t, problem_size, batch_update_size, Eigen::ColMajor >;
+    using batch_update_matrix_ptr_t = std::unique_ptr< batch_update_matrix_t >;
+
+    inline void flush();
+    inline void flushBuf(const batch_update_matrix_t& batch_matrix, size_t batch_size, val_t weight);
+    inline void pushToBuf(const update_matrix_t& update_matrix, val_t update_weight);
+
+    batch_update_matrix_ptr_t m_posw_buf = std::make_unique< batch_update_matrix_t >(),
+                              m_negw_buf = std::make_unique< batch_update_matrix_t >();
+    size_t       m_posw_batch_size{}, m_negw_batch_size{};
+    system_ptr_t m_system = std::make_unique< system_t >();
+};
+
+template < typename Kernel, ElementTypes ET, el_o_t EO, size_t n_fields >
+auto makeLocalSystemManager()
+{
+    constexpr auto dim                = Element< ET, EO >::native_dim;
+    constexpr auto local_problem_size = Element< ET, EO >::n_nodes * n_unknowns< Kernel, dim, n_fields >;
+    constexpr auto update_size        = n_equations< Kernel, dim, n_fields >;
+    return LocalSystemManager< local_problem_size, update_size >{};
+}
+
+template < size_t problem_size, size_t update_size >
+LocalSystemManager< problem_size, update_size >::LocalSystemManager()
+{
+    m_system->first.setZero();
+    m_system->second.setZero();
+}
+
+template < size_t problem_size, size_t update_size >
+LocalSystemManager< problem_size, update_size >::system_ptr_t
+LocalSystemManager< problem_size, update_size >::getSystem()
+{
+    flush();
+    m_system->first = m_system->first.template selfadjointView< Eigen::Lower >();
+    return std::move(m_system);
+}
+
+template < size_t problem_size, size_t update_size >
+void LocalSystemManager< problem_size, update_size >::update(const update_matrix_t& update_matrix,
+                                                             const update_vector_t& update_vector,
+                                                             val_t                  update_weight)
+{
+    m_system->second += update_matrix * update_vector * update_weight;
+    pushToBuf(update_matrix, update_weight);
+}
+
+template < size_t problem_size, size_t update_size >
+void LocalSystemManager< problem_size, update_size >::flush()
+{
+    flushBuf(*m_posw_buf, m_posw_batch_size, 1.);
+    flushBuf(*m_negw_buf, m_negw_batch_size, -1.);
+}
+
+template < size_t problem_size, size_t update_size >
+void LocalSystemManager< problem_size, update_size >::flushBuf(const batch_update_matrix_t& batch_matrix,
+                                                               size_t                       batch_size,
+                                                               val_t                        weight)
+{
+    if (batch_size > 0)
+        m_system->first.template selfadjointView< Eigen::Lower >().rankUpdate(
+            batch_matrix.leftCols(batch_size * update_size), weight);
+}
+
+template < size_t problem_size, size_t update_size >
+void LocalSystemManager< problem_size, update_size >::pushToBuf(const update_matrix_t& update_matrix,
+                                                                val_t                  update_weight)
+{
+    const auto  pos_wgt  = update_weight >= 0;
+    const auto& buf      = pos_wgt ? m_posw_buf : m_negw_buf;
+    auto&       buf_size = pos_wgt ? m_posw_batch_size : m_negw_batch_size;
+    std::transform(std::execution::unseq,
+                   update_matrix.data(),
+                   std::next(update_matrix.data(), problem_size * update_size),
+                   std::next(buf->data(), problem_size * update_size * buf_size++),
+                   [weight_sqrt = std::sqrt(std::abs(update_weight))](val_t v) { return v * weight_sqrt; });
+    if (buf_size == updates_per_batch)
+    {
+        m_system->first.template selfadjointView< Eigen::Lower >().rankUpdate(*buf, pos_wgt ? 1. : -1.);
+        buf_size = 0;
+    }
 }
 } // namespace detail
 
@@ -140,10 +230,8 @@ auto assembleLocalSystem(auto&&                                                 
     requires detail::Kernel_c< decltype(kernel), Element< ET, EO >::native_dim, n_fields >
 {
     const auto jacobi_mat_generator = getNatJacobiMatGenerator(element);
-    auto       local_system         = detail::initLocalSystem< decltype(kernel), ET, EO, n_fields >();
-    auto& [K_el, F_el]              = *local_system;
-
-    const auto process_qp = [&](auto point, val_t weight, const auto& bas_vals, const auto& ref_bas_ders) {
+    auto       local_system_manager = detail::makeLocalSystemManager< decltype(kernel), ET, EO, n_fields >();
+    const auto process_qp           = [&](auto point, val_t weight, const auto& bas_vals, const auto& ref_bas_ders) {
         const auto jacobi_mat         = jacobi_mat_generator(point);
         const auto phys_basis_ders    = computePhysBasisDers(jacobi_mat, ref_bas_ders);
         const auto field_vals         = detail::computeFieldVals(bas_vals, node_vals);
@@ -152,17 +240,14 @@ auto assembleLocalSystem(auto&&                                                 
         const auto [A, F]             = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time});
         const auto rank_update_matrix = detail::makeRankUpdateMatrix(A, bas_vals, phys_basis_ders);
         const auto rank_update_weight = jacobi_mat.determinant() * weight;
-        K_el.template selfadjointView< Eigen::Lower >().rankUpdate(rank_update_matrix, rank_update_weight);
-        F_el += rank_update_matrix * F * rank_update_weight;
+        local_system_manager.update(rank_update_matrix, F, rank_update_weight);
     };
     for (size_t qp_ind = 0; qp_ind < basis_at_qps.quadrature.size; ++qp_ind)
         process_qp(basis_at_qps.quadrature.points[qp_ind],
                    basis_at_qps.quadrature.weights[qp_ind],
                    basis_at_qps.basis.values[qp_ind],
                    basis_at_qps.basis.derivatives[qp_ind]);
-
-    K_el = K_el.template selfadjointView< Eigen::Lower >();
-    return local_system;
+    return local_system_manager.getSystem();
 }
 
 template < typename Kernel, ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
@@ -174,10 +259,8 @@ auto assembleLocalBoundarySystem(Kernel&&                                       
     requires detail::BoundaryKernel_c< Kernel, Element< ET, EO >::native_dim, n_fields >
 {
     const auto jacobi_mat_generator = getNatJacobiMatGenerator(*el_view);
-    auto       local_system         = detail::initLocalSystem< decltype(kernel), ET, EO, n_fields >();
-    auto& [K_el, F_el]              = *local_system;
-
-    const auto process_qp = [&](auto point, val_t weight, const auto& bas_vals, const auto& ref_bas_ders) {
+    auto       local_system_manager = detail::makeLocalSystemManager< decltype(kernel), ET, EO, n_fields >();
+    const auto process_qp           = [&](auto point, val_t weight, const auto& bas_vals, const auto& ref_bas_ders) {
         const auto jacobi_mat      = jacobi_mat_generator(point);
         const auto phys_basis_ders = computePhysBasisDers(jacobi_mat, ref_bas_ders);
         const auto field_vals      = detail::computeFieldVals(bas_vals, node_vals);
@@ -188,17 +271,14 @@ auto assembleLocalBoundarySystem(Kernel&&                                       
         const auto rank_update_matrix = detail::makeRankUpdateMatrix(A, bas_vals, phys_basis_ders);
         const auto bound_jac          = computeBoundaryIntegralJacobian(el_view, jacobi_mat);
         const auto rank_update_weight = bound_jac * weight;
-        K_el.template selfadjointView< Eigen::Lower >().rankUpdate(rank_update_matrix, rank_update_weight);
-        F_el += rank_update_matrix * F * rank_update_weight;
+        local_system_manager.update(rank_update_matrix, F, rank_update_weight);
     };
     for (size_t qp_ind = 0; qp_ind < basis_at_qps.quadrature.size; ++qp_ind)
         process_qp(basis_at_qps.quadrature.points[qp_ind],
                    basis_at_qps.quadrature.weights[qp_ind],
                    basis_at_qps.basis.values[qp_ind],
                    basis_at_qps.basis.derivatives[qp_ind]);
-
-    K_el = K_el.template selfadjointView< Eigen::Lower >();
-    return local_system;
+    return local_system_manager.getSystem();
 }
 } // namespace lstr
 #endif // L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP

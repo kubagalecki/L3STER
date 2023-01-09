@@ -20,7 +20,7 @@ int main(int argc, char* argv[])
                                                             Pair{d_id_t{1}, std::array{true, false}},
                                                             Pair{d_id_t{3}, std::array{true, true}}} >{};
     const auto     dof_intervals  = computeDofIntervals(my_partition, problem_def, comm);
-    const auto     all_dofs       = detail::getNodeDofs(mesh.getPartitions()[0].getNodes(), dof_intervals);
+    const auto     all_dofs       = detail::getNodeDofs(mesh.getPartitions()[0].getOwnedNodes(), dof_intervals);
     const auto     sparsity_graph = detail::makeSparsityGraph(my_partition, problem_def, dof_intervals, comm);
     const auto     dense_graph    = DenseGraph{mesh.getPartitions()[0], problem_def, dof_intervals, all_dofs};
 
@@ -31,15 +31,15 @@ int main(int argc, char* argv[])
         if (sparsity_graph->getGlobalNumCols() != all_dofs.size())
             throw std::logic_error{"Incorrect number of global columns"};
 
-        const auto                               n_my_rows = sparsity_graph->getNodeNumRows();
-        std::vector< global_dof_t >              alloc(sparsity_graph->getGlobalNumCols());
-        const Teuchos::ArrayView< global_dof_t > view{alloc};
-        size_t                                   row_size = 0;
+        const auto n_my_rows = sparsity_graph->getLocalNumRows();
+        auto       view =
+            tpetra_crsgraph_t::nonconst_global_inds_host_view_type("Global cols", sparsity_graph->getGlobalNumCols());
+        size_t row_size = 0;
 
         const auto check_row_global_cols = [&](const auto& dense_row) {
             if (row_size != dense_row.count())
                 throw std::logic_error{"Incorrect row size"};
-            if (std::ranges::any_of(alloc | std::views::take(row_size),
+            if (std::ranges::any_of(std::views::counted(view.data(), row_size),
                                     [&](global_dof_t col_ind) { return not dense_row.test(col_ind); }))
                 throw std::logic_error{"Incorrect column indices"};
         };

@@ -45,10 +45,10 @@ private:
     data_t m_data;
 };
 
-template < size_t dofs_per_node >
+template < size_t dofs_per_node, size_t num_maps >
 class NodeToLocalDofMap
 {
-    using payload_t = std::array< local_dof_t, dofs_per_node >;
+    using payload_t = std::array< std::array< local_dof_t, dofs_per_node >, num_maps >;
     using map_t     = robin_hood::unordered_flat_map< n_id_t, payload_t >;
 
 public:
@@ -56,14 +56,21 @@ public:
     using dof_t                              = local_dof_t;
 
     NodeToLocalDofMap() = default;
-    NodeToLocalDofMap(const MeshPartition&                            nodes,
-                      const NodeToGlobalDofMap< dofs_per_node >&      global_map,
-                      const Tpetra::Map< local_dof_t, global_dof_t >& local_global_map);
+    NodeToLocalDofMap(const MeshPartition&                       nodes,
+                      const NodeToGlobalDofMap< dofs_per_node >& global_map,
+                      const std::same_as< tpetra_map_t > auto&... local_global_maps)
+        requires(sizeof...(local_global_maps) == num_maps);
     [[nodiscard]] const payload_t& operator()(n_id_t node) const noexcept { return m_map.find(node)->second; }
 
 private:
     map_t m_map;
 };
+
+template < size_t dofs_per_node >
+NodeToLocalDofMap(const MeshPartition&                       nodes,
+                  const NodeToGlobalDofMap< dofs_per_node >& global_map,
+                  const std::same_as< tpetra_map_t > auto&... local_global_maps)
+    -> NodeToLocalDofMap< dofs_per_node, sizeof...(local_global_maps) >;
 
 namespace detail
 {
@@ -71,8 +78,8 @@ template < typename T >
 inline constexpr bool is_node_map = false;
 template < size_t dpn >
 inline constexpr bool is_node_map< NodeToGlobalDofMap< dpn > > = true;
-template < size_t dpn >
-inline constexpr bool is_node_map< NodeToLocalDofMap< dpn > > = true;
+template < size_t dpn, size_t nm >
+inline constexpr bool is_node_map< NodeToLocalDofMap< dpn, nm > > = true;
 } // namespace detail
 
 template < typename T >
@@ -111,9 +118,9 @@ bool NodeToGlobalDofMap< dofs_per_node >::tryInitAsContiguous(
     const MeshPartition& mesh, const detail::node_interval_vector_t< dofs_per_node >& dof_intervals)
 {
     const auto min_node_in_partition = std::min(
-        mesh.getNodes().size() != 0 ? mesh.getNodes().front() : std::numeric_limits< n_id_t >::max(),
+        mesh.getOwnedNodes().size() != 0 ? mesh.getOwnedNodes().front() : std::numeric_limits< n_id_t >::max(),
         mesh.getGhostNodes().size() != 0 ? mesh.getGhostNodes().front() : std::numeric_limits< n_id_t >::max());
-    const auto max_node_in_partition = std::max(mesh.getNodes().size() != 0 ? mesh.getNodes().back() : 0,
+    const auto max_node_in_partition = std::max(mesh.getOwnedNodes().size() != 0 ? mesh.getOwnedNodes().back() : 0,
                                                 mesh.getGhostNodes().size() != 0 ? mesh.getGhostNodes().back() : 0);
     global_dof_t base_dof{};
     for (const auto& interval : dof_intervals)
@@ -139,9 +146,9 @@ template < size_t dofs_per_node >
 void NodeToGlobalDofMap< dofs_per_node >::initNonContiguous(
     const MeshPartition& mesh, const detail::node_interval_vector_t< dofs_per_node >& dof_intervals)
 {
-    auto&      map = m_data.template emplace< map_t >(mesh.getNodes().size() + mesh.getGhostNodes().size());
+    auto&      map = m_data.template emplace< map_t >(mesh.getOwnedNodes().size() + mesh.getGhostNodes().size());
     const auto dof_interval_starts = detail::computeIntervalStarts(dof_intervals);
-    const auto add_entries         = [&](const std::vector< n_id_t >& nodes) {
+    const auto add_entries         = [&](std::span< const n_id_t > nodes) {
         const auto compute_node_dofs = [&](n_id_t node_id, ptrdiff_t interval_ind) {
             const auto dof_int_start = dof_interval_starts[interval_ind];
             const auto& [delim, cov] = dof_intervals[interval_ind];
@@ -164,29 +171,27 @@ void NodeToGlobalDofMap< dofs_per_node >::initNonContiguous(
             map.emplace(n, node_dofs);
         }
     };
-    add_entries(mesh.getNodes());
+    add_entries(mesh.getOwnedNodes());
     add_entries(mesh.getGhostNodes());
 }
 
-template < size_t dofs_per_node >
-NodeToLocalDofMap< dofs_per_node >::NodeToLocalDofMap(const MeshPartition&                            mesh,
-                                                      const NodeToGlobalDofMap< dofs_per_node >&      global_map,
-                                                      const Tpetra::Map< local_dof_t, global_dof_t >& local_global_map)
-    : m_map(mesh.getNodes().size() + mesh.getGhostNodes().size())
+template < size_t dofs_per_node, size_t num_maps >
+NodeToLocalDofMap< dofs_per_node, num_maps >::NodeToLocalDofMap(
+    const MeshPartition&                       mesh,
+    const NodeToGlobalDofMap< dofs_per_node >& global_map,
+    const std::same_as< tpetra_map_t > auto&... local_global_maps)
+    requires(sizeof...(local_global_maps) == num_maps)
+    : m_map(mesh.getAllNodes().size())
 {
-    const auto add_dofs_for_nodes = [&](const std::vector< n_id_t >& nodes) {
-        for (n_id_t node : nodes)
-        {
-            payload_t& local_dofs = m_map[node];
-            std::ranges::transform(global_map(node), begin(local_dofs), [&](auto global_dof) {
-                return global_dof == NodeToGlobalDofMap< dofs_per_node >::invalid_dof
-                         ? invalid_dof
-                         : local_global_map.getLocalElement(global_dof);
-            });
-        }
+    const auto get_node_dofs = [&](n_id_t node, const tpetra_map_t& map) {
+        std::array< local_dof_t, dofs_per_node > retval;
+        std::ranges::transform(global_map(node), begin(retval), [&](global_dof_t dof) {
+            return dof == NodeToGlobalDofMap< dofs_per_node >::invalid_dof ? invalid_dof : map.getLocalElement(dof);
+        });
+        return retval;
     };
-    add_dofs_for_nodes(mesh.getNodes());
-    add_dofs_for_nodes(mesh.getGhostNodes());
+    for (n_id_t node : mesh.getAllNodes())
+        m_map[node] = payload_t{get_node_dofs(node, local_global_maps)...};
 }
 } // namespace lstr
 #endif // L3STER_ASSEMBLY_NODETODOFMAP_HPP

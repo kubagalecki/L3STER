@@ -33,22 +33,22 @@ inline MeshPartition distributeMesh(const MpiComm& comm, const Mesh& mesh, const
         return deserializePartition(receivePartition(comm, rank_zero));
 }
 
-template < el_o_t ORDER, MeshFormat FORMAT >
-Mesh readAndConvertMesh(std::string_view mesh_file, MeshFormatTag< FORMAT > format_tag)
+template < el_o_t order, MeshFormat mesh_format >
+Mesh readAndConvertMesh(std::string_view mesh_file, MeshFormatTag< mesh_format > format_tag)
 {
     auto mesh = readMesh(mesh_file, format_tag);
     mesh.getPartitions()[0].initDualGraph();
-    mesh.getPartitions()[0] = convertMeshToOrder< ORDER >(mesh.getPartitions()[0]);
+    mesh.getPartitions()[0] = convertMeshToOrder< order >(mesh.getPartitions()[0]);
     return mesh;
 }
 
-template < el_o_t ORDER, MeshFormat FORMAT >
+template < el_o_t order, MeshFormat mesh_format >
 MeshPartition readAndDistributeMesh(const MpiComm&               comm,
                                     std::string_view             mesh_file,
-                                    MeshFormatTag< FORMAT >      format_tag,
+                                    MeshFormatTag< mesh_format > format_tag,
                                     const std::vector< d_id_t >& boundaries)
 {
-    const Mesh mesh = comm.getRank() == 0 ? readAndConvertMesh< ORDER >(mesh_file, format_tag) : Mesh{};
+    const Mesh mesh = comm.getRank() == 0 ? readAndConvertMesh< order >(mesh_file, format_tag) : Mesh{};
     return distributeMesh(comm, mesh, boundaries);
 }
 } // namespace lstr

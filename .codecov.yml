@@ -1,5 +1,5 @@
 codecov:
-  require_ci_to_pass: yes
+  require_ci_to_pass: no
 
 coverage:
   precision: 2
@@ -20,6 +20,4 @@ comment:
   require_changes: no
 
 ignore:
-  - "build"
-  - "tests"
   - "include/l3ster/util/RobinHoodHashTables.hpp" # TPL

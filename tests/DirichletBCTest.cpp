@@ -33,15 +33,14 @@ int main(int argc, char* argv[])
         detail::getDirichletDofs(my_partition, sparsity_graph, global_dof_map, problem_def, dirichlet_def);
     const auto dirichlet_bc = DirichletBCAlgebraic{sparsity_graph, owned_bcdofs, shared_bcdofs};
 
-    auto                    matrix = makeTeuchosRCP< Tpetra::FECrsMatrix<> >(sparsity_graph);
-    Tpetra::FEMultiVector<> input_vectors{sparsity_graph->getRowMap(), sparsity_graph->getImporter(), 2};
-    Tpetra::MultiVector<>   result_vectors{sparsity_graph->getRowMap(), 2};
+    auto                   matrix = makeTeuchosRCP< tpetra_fecrsmatrix_t >(sparsity_graph);
+    tpetra_femultivector_t input_vectors{sparsity_graph->getRowMap(), sparsity_graph->getImporter(), 2};
+    tpetra_multivector_t   result_vectors{sparsity_graph->getRowMap(), 2};
     matrix->beginAssembly();
     input_vectors.beginAssembly();
 
-    const auto row_map = NodeToLocalDofMap{my_partition, global_dof_map, *matrix->getRowMap()};
-    const auto col_map = NodeToLocalDofMap{my_partition, global_dof_map, *matrix->getColMap()};
-    const auto rhs_map = NodeToLocalDofMap{my_partition, global_dof_map, *input_vectors.getMap()};
+    const auto dof_map = NodeToLocalDofMap{
+        my_partition, global_dof_map, *matrix->getRowMap(), *matrix->getColMap(), *input_vectors.getMap()};
 
     {
         auto rhs      = input_vectors.getVectorNonConst(0)->getDataNonConst();
@@ -59,9 +58,8 @@ int main(int argc, char* argv[])
                     local_mat                    = local_mat.template selfadjointView< Eigen::Lower >();
                     local_vec                    = local_vec_t::Random();
 
-                    const auto row_dofs = detail::getUnsortedElementDofs< std::array{size_t{0}} >(element, row_map);
-                    const auto col_dofs = detail::getUnsortedElementDofs< std::array{size_t{0}} >(element, col_map);
-                    const auto rhs_dofs = detail::getUnsortedElementDofs< std::array{size_t{0}} >(element, rhs_map);
+                    const auto [row_dofs, col_dofs, rhs_dofs] =
+                        detail::getUnsortedElementDofs< std::array{size_t{0}} >(element, dof_map);
                     detail::scatterLocalSystem(local_mat, local_vec, *matrix, rhs_view, row_dofs, col_dofs, rhs_dofs);
                 }
             },
@@ -98,34 +96,37 @@ int main(int argc, char* argv[])
 
     matrix->apply(*bc_val_vector, *result_vector1, Teuchos::NO_TRANS);
     matrix->apply(*bc_val_vector, *result_vector2, Teuchos::TRANS);
-    const auto data_notransp = result_vector1->getData();
-    const auto data_transp   = result_vector2->getData();
-    for (auto i : std::views::iota(0, data_notransp.size()))
+    const auto data_notransp =
+        Kokkos::subview(result_vector1->getLocalViewHost(Tpetra::Access::ReadOnly), Kokkos::ALL, 0);
+    const auto data_transp =
+        Kokkos::subview(result_vector2->getLocalViewHost(Tpetra::Access::ReadOnly), Kokkos::ALL, 0);
+    for (int i = 0; i < data_notransp.extent_int(0); ++i)
         if (not approx(data_notransp[i], data_transp[i]))
         {
             std::cerr << "Application of Dirichlet BC broke the symmetry of the matrix\n";
-            return 1;
+            comm.abort();
         }
 
-    Amesos2::KLU2< Tpetra::CrsMatrix<>, Tpetra::MultiVector<> > solver{matrix, result_vector1, rhs_vector};
+    Amesos2::KLU2< tpetra_crsmatrix_t, tpetra_multivector_t > solver{matrix, result_vector1, rhs_vector};
 
     if (not solver.matrixShapeOK())
     {
         std::cerr << "Bad matrix shape\n";
-        return 1;
+        comm.abort();
     }
 
     solver.preOrdering().symbolicFactorization().numericFactorization().solve();
 
-    const auto solution_vals = result_vector1->getData();
-    const auto bc_vals       = bc_val_vector->getData();
+    const auto solution_vals =
+        Kokkos::subview(result_vector1->getLocalViewHost(Tpetra::Access::ReadOnly), Kokkos::ALL, 0);
+    const auto bc_vals = Kokkos::subview(bc_val_vector->getLocalViewHost(Tpetra::Access::ReadOnly), Kokkos::ALL, 0);
     for (auto global_bcdof : owned_bcdofs)
     {
         const auto local_bcdof = matrix->getRowMap()->getLocalElement(global_bcdof);
         if (not approx(solution_vals[local_bcdof], bc_vals[local_bcdof]))
         {
             std::cerr << "Result of solve does not satisfy the Dirichlet BC\n";
-            return 1;
+            comm.abort();
         }
     }
 }

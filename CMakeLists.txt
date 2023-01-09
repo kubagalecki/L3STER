@@ -43,12 +43,12 @@ include( "cmake/ImportLibrary.cmake" )
 
 # Import libraries
 # Trilinos
-define_trilinos_target( ${L3STER_ENABLE_VERBOSITY} 13.2 Tpetra Belos MueLu )
-list( APPEND L3STER_DEPENDENCY_LIST Trilinos )
+define_trilinos_target( ${L3STER_ENABLE_VERBOSITY} 13.4 Tpetra Belos MueLu )
+list( APPEND L3STER_INTERFACE_DEPENDENCIES Trilinos )
 
 # Eigen
 find_package( Eigen3 3.4 REQUIRED )
-list( APPEND L3STER_DEPENDENCY_LIST Eigen3::Eigen )
+list( APPEND L3STER_CMAKE_DEPENDENCIES Eigen3::Eigen )
 
 # Hwloc
 importlibrary( hwloc.h "${L3STER_ENABLE_VERBOSITY}" )
@@ -58,7 +58,7 @@ importlibrary( metis.h "${L3STER_ENABLE_VERBOSITY}" )
 
 # TBB
 find_package( TBB REQUIRED )
-list( APPEND L3STER_DEPENDENCY_LIST TBB::tbb )
+list( APPEND L3STER_CMAKE_DEPENDENCIES TBB::tbb )
 
 #######################################################################################################################
 
@@ -70,7 +70,8 @@ target_include_directories( L3STER INTERFACE
                             $<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>
                             )
 set_target_properties( L3STER PROPERTIES INTERFACE_COMPILE_FEATURES cxx_std_20 )
-target_link_libraries( L3STER INTERFACE ${L3STER_DEPENDENCY_LIST} )
+target_link_libraries( L3STER INTERFACE ${L3STER_CMAKE_DEPENDENCIES} )
+target_link_libraries( L3STER INTERFACE ${L3STER_INTERFACE_DEPENDENCIES} )
 
 # Explicitly state L3STER sources - this is helpful to the IDE, but not required for a correct build
 file( GLOB_RECURSE L3STER_SOURCES
@@ -104,8 +105,9 @@ endif ()
 include( GNUInstallDirs )
 include( CMakePackageConfigHelpers )
 
-# Mark L3STER and Trilinos for export (Trilinos is an interface target, hence the need for export)
-install( TARGETS L3STER Trilinos EXPORT L3STERTargets )
+# Mark L3STER and interface targets for export
+set( L3STER_EXPORT_TARGETS L3STER ${L3STER_INTERFACE_DEPENDENCIES} )
+install( TARGETS ${L3STER_EXPORT_TARGETS} EXPORT L3STERTargets )
 
 # Export L3STER
 install( EXPORT L3STERTargets

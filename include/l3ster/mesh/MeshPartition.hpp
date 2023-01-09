@@ -19,7 +19,7 @@ template < typename T >
 concept DomainPredicate_c = requires(T op, const DomainView dv) {
                                 {
                                     std::invoke(op, dv)
-                                    } -> std::convertible_to< bool >;
+                                } -> std::convertible_to< bool >;
                             };
 template < typename T >
 concept DomainIdRange_c = SizedRangeOfConvertibleTo_c< T, d_id_t >;
@@ -33,14 +33,18 @@ public:
     using find_result_t             = std::optional< std::pair< element_ptr_variant_t, d_id_t > >;
     using cfind_result_t            = std::optional< std::pair< element_cptr_variant_t, d_id_t > >;
     using el_boundary_view_result_t = std::pair< cfind_result_t, el_side_t >;
+    using node_span_t               = std::span< const n_id_t >;
 
     friend struct SerializedPartition;
 
     MeshPartition() = default;
-    inline explicit MeshPartition(domain_map_t domains_);
-    MeshPartition(domain_map_t domains_, node_vec_t nodes_, node_vec_t ghost_nodes_)
-        : m_domains{std::move(domains_)}, m_nodes{std::move(nodes_)}, m_ghost_nodes{std::move(ghost_nodes_)}
+    inline explicit MeshPartition(domain_map_t domains);
+    MeshPartition(domain_map_t domains, std::vector< n_id_t > nodes, size_t n_owned_nodes)
+        : m_domains{std::move(domains)}, m_nodes{std::move(nodes)}, m_n_owned_nodes{n_owned_nodes}
     {}
+    MeshPartition(domain_map_t                                 domains,
+                  SizedRangeOfConvertibleTo_c< n_id_t > auto&& nodes,
+                  SizedRangeOfConvertibleTo_c< n_id_t > auto&& ghost_nodes);
 
     inline const MetisGraphWrapper& initDualGraph();
     void                            deleteDualGraph() noexcept { m_dual_graph.reset(); }
@@ -107,7 +111,7 @@ public:
                  requires {
                      {
                          reduction(zero, zero)
-                         } -> std::convertible_to< std::decay_t< decltype(zero) > >;
+                     } -> std::convertible_to< std::decay_t< decltype(zero) > >;
                  };
 
     // find
@@ -135,17 +139,18 @@ public:
     [[nodiscard]] BoundaryView getBoundaryView(d_id_t id) const { return getBoundaryView(std::views::single(id)); }
 
     // observers
-    [[nodiscard]] DomainView        getDomainView(d_id_t id) const { return DomainView{m_domains.at(id), id}; }
-    [[nodiscard]] inline size_t     getNElements() const;
-    [[nodiscard]] auto              getNDomains() const { return m_domains.size(); }
-    [[nodiscard]] auto              getDomainIds() const { return m_domains | std::views::keys; }
-    [[nodiscard]] const Domain&     getDomain(d_id_t id) const { return m_domains.at(id); }
-    [[nodiscard]] const node_vec_t& getNodes() const noexcept { return m_nodes; }
-    [[nodiscard]] const node_vec_t& getGhostNodes() const noexcept { return m_ghost_nodes; }
+    [[nodiscard]] DomainView    getDomainView(d_id_t id) const { return DomainView{m_domains.at(id), id}; }
+    [[nodiscard]] inline size_t getNElements() const;
+    [[nodiscard]] auto          getNDomains() const { return m_domains.size(); }
+    [[nodiscard]] auto          getDomainIds() const { return m_domains | std::views::keys; }
+    [[nodiscard]] const Domain& getDomain(d_id_t id) const { return m_domains.at(id); }
+    [[nodiscard]] node_span_t   getOwnedNodes() const { return m_nodes | std::views::take(m_n_owned_nodes); }
+    [[nodiscard]] node_span_t   getGhostNodes() const { return m_nodes | std::views::drop(m_n_owned_nodes); }
+    [[nodiscard]] node_span_t   getAllNodes() const { return m_nodes; }
 
     [[nodiscard]] inline size_t computeTopoHash() const;
-    [[nodiscard]] bool isGhostNode(n_id_t node) const { return std::ranges::binary_search(m_ghost_nodes, node); }
-    [[nodiscard]] bool isOwnedNode(n_id_t node) const { return std::ranges::binary_search(m_nodes, node); }
+    [[nodiscard]] bool isGhostNode(n_id_t node) const { return std::ranges::binary_search(getGhostNodes(), node); }
+    [[nodiscard]] bool isOwnedNode(n_id_t node) const { return std::ranges::binary_search(getOwnedNodes(), node); }
 
     template < el_o_t O >
     [[nodiscard]] domain_map_t getConversionAlloc() const;
@@ -161,9 +166,30 @@ private:
     el_boundary_view_result_t getElementBoundaryViewFallback(const Element< T, O >& el, d_id_t d) const;
 
     domain_map_t                       m_domains;
-    node_vec_t                         m_nodes, m_ghost_nodes;
+    node_vec_t                         m_nodes;
+    size_t                             m_n_owned_nodes;
     std::optional< MetisGraphWrapper > m_dual_graph;
 };
+
+MeshPartition::MeshPartition(MeshPartition::domain_map_t domains_) : m_domains{std::move(domains_)}
+{
+    robin_hood::unordered_flat_set< n_id_t > nodes;
+    visit([&](const auto& element) { std::ranges::for_each(element.getNodes(), [&](n_id_t n) { nodes.insert(n); }); });
+    m_nodes.reserve(nodes.size());
+    std::ranges::copy(nodes, std::back_inserter(m_nodes));
+    std::ranges::sort(m_nodes);
+    m_n_owned_nodes = m_nodes.size();
+}
+
+MeshPartition::MeshPartition(domain_map_t                                 domains,
+                             SizedRangeOfConvertibleTo_c< n_id_t > auto&& nodes,
+                             SizedRangeOfConvertibleTo_c< n_id_t > auto&& ghost_nodes)
+    : m_domains{std::move(domains)}, m_n_owned_nodes{std::ranges::size(nodes)}
+{
+    m_nodes.reserve(std::ranges::size(nodes) + std::ranges::size(ghost_nodes));
+    std::ranges::copy(std::forward< decltype(nodes) >(nodes), std::back_inserter(m_nodes));
+    std::ranges::copy(std::forward< decltype(ghost_nodes) >(ghost_nodes), std::back_inserter(m_nodes));
+}
 
 MeshPartition::cfind_result_t MeshPartition::constifyFindResult(find_result_t found)
 {
@@ -410,7 +436,7 @@ auto MeshPartition::reduce(auto&&                         zero,
              requires {
                  {
                      reduction(zero, zero)
-                     } -> std::convertible_to< std::decay_t< decltype(zero) > >;
+                 } -> std::convertible_to< std::decay_t< decltype(zero) > >;
              }
 {
     const auto& reduce_domain = [&](d_id_t id) {
@@ -599,19 +625,6 @@ MeshPartition::domain_map_t MeshPartition::getConversionAlloc() const
     return retval;
 }
 
-MeshPartition::MeshPartition(MeshPartition::domain_map_t domains_) : m_domains{std::move(domains_)}
-{
-    constexpr size_t n_nodes_estimate_factor = 4; // TODO: come up with better heuristic
-    m_nodes.reserve(getNElements() * n_nodes_estimate_factor);
-    visit([&](const auto& element) {
-        std::ranges::for_each(element.getNodes(), [&](n_id_t n) { m_nodes.push_back(n); });
-    });
-    std::ranges::sort(m_nodes);
-    const auto range_to_erase = std::ranges::unique(m_nodes);
-    m_nodes.erase(begin(range_to_erase), end(range_to_erase));
-    m_nodes.shrink_to_fit();
-}
-
 auto MeshPartition::convertToMetisFormat() const
 {
     std::vector< idx_t > eind, eptr;
@@ -639,7 +652,7 @@ MetisGraphWrapper MeshPartition::makeMetisDualGraph() const
     auto& [eptr, eind]        = mesh_in_metis_format;
 
     auto  ne      = static_cast< idx_t >(getNElements());
-    auto  nn      = static_cast< idx_t >(getNodes().size());
+    auto  nn      = static_cast< idx_t >(getOwnedNodes().size());
     idx_t ncommon = 2;
     idx_t numflag = 0;
 
@@ -662,7 +675,7 @@ size_t MeshPartition::computeTopoHash() const
         return hash_range(element.getNodes());
     };
     const size_t topo_hash = reduce(size_t{}, hash_element, std::bit_xor<>{}, getDomainIds(), std::execution::par);
-    return topo_hash ^ hash_range(m_nodes) ^ hash_range(m_ghost_nodes);
+    return topo_hash ^ hash_range(m_nodes);
 }
 } // namespace lstr
 #endif // L3STER_MESH_MESHPARTITION_HPP

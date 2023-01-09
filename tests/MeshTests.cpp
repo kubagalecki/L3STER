@@ -12,6 +12,13 @@
 
 using namespace lstr;
 
+TEST_CASE("Declare element orders", "[mesh]")
+{
+    REQUIRE(element_orders.size() == 2);
+    CHECK(element_orders.front() == 1);
+    CHECK(element_orders.back() == 2);
+}
+
 TEST_CASE("2D mesh import", "[mesh]")
 {
     auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag);
@@ -29,7 +36,7 @@ TEST_CASE("2D mesh import", "[mesh]")
     };
     part.visit(update_max_node);
     REQUIRE(max_node + 1 == expected_n_nodes);
-    REQUIRE(max_node + 1 == part.getNodes().size());
+    REQUIRE(max_node + 1 == part.getOwnedNodes().size());
     REQUIRE(part.getGhostNodes().size() == 0);
 
     // BoundaryView
@@ -54,7 +61,7 @@ TEST_CASE("3D mesh import", "[mesh]")
     constexpr size_t expected_nvertices = 5885;
     constexpr size_t expected_nelements = 5664;
     CHECK(part.getNElements() == expected_nelements);
-    CHECK(part.getNodes().size() == expected_nvertices);
+    CHECK(part.getOwnedNodes().size() == expected_nvertices);
 
     for (int i = 2; i <= 7; ++i)
         CHECK_NOTHROW(part.getBoundaryView(i));
@@ -265,7 +272,7 @@ TEST_CASE("Serial mesh partitioning", "[mesh]")
     auto& p2 = mesh.getPartitions()[1];
     CHECK(p1.getNElements() == Approx(p2.getNElements()).epsilon(.1));
     std::vector< n_id_t > intersects;
-    std::ranges::set_intersection(p1.getNodes(), p2.getNodes(), std::back_inserter(intersects));
+    std::ranges::set_intersection(p1.getOwnedNodes(), p2.getOwnedNodes(), std::back_inserter(intersects));
     CHECK(intersects.empty());
     intersects.clear();
     std::ranges::set_intersection(p1.getGhostNodes(), p2.getGhostNodes(), std::back_inserter(intersects));
@@ -327,9 +334,9 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
                 throw std::logic_error{"Incorrect element order"};
         };
         CHECK_NOTHROW(part.visit(validate_elorder));
-        CHECK(part.getNodes().size() == 44745u);
-        for (size_t i = 0; i < part.getNodes().size() - 1; ++i)
-            CHECK(part.getNodes()[i] + 1 == part.getNodes()[i + 1]);
+        CHECK(part.getOwnedNodes().size() == 44745u);
+        for (size_t i = 0; i < part.getOwnedNodes().size() - 1; ++i)
+            CHECK(part.getOwnedNodes()[i] + 1 == part.getOwnedNodes()[i + 1]);
     }
 
     SECTION("procedurally generated mesh")
@@ -341,7 +348,7 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
         auto&                part       = mesh.getPartitions()[0];
         part.initDualGraph();
         const auto n_elements = part.getNElements();
-        const auto n_nodes_o1 = part.getNodes().size();
+        const auto n_nodes_o1 = part.getOwnedNodes().size();
         REQUIRE(n_elements == n_edge_els * n_edge_els * n_edge_els + 6 * n_edge_els * n_edge_els);
         REQUIRE(n_nodes_o1 == dist.size() * dist.size() * dist.size());
 
@@ -349,13 +356,13 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
         CHECK(part.getNElements() == n_elements);
         const auto expected_edge_nodes = (dist.size() - 1) * order + 1;
         const auto expected_n_nodes    = expected_edge_nodes * expected_edge_nodes * expected_edge_nodes;
-        CHECK(part.getNodes().size() == expected_n_nodes);
+        CHECK(part.getOwnedNodes().size() == expected_n_nodes);
         const auto validate_elorder = [&]< ElementTypes T, el_o_t O >(const Element< T, O >&) {
             if constexpr (O != 2)
                 throw std::logic_error{"Incorrect element order"};
         };
         CHECK_NOTHROW(part.visit(validate_elorder));
-        for (size_t i = 0; i < part.getNodes().size() - 1; ++i)
-            CHECK(part.getNodes()[i] + 1 == part.getNodes()[i + 1]);
+        for (size_t i = 0; i < part.getOwnedNodes().size() - 1; ++i)
+            CHECK(part.getOwnedNodes()[i] + 1 == part.getOwnedNodes()[i + 1]);
     }
 }

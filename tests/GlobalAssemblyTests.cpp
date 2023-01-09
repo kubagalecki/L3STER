@@ -46,7 +46,7 @@ TEST_CASE("Sparsity pattern assembly", "[global_asm]")
                                                                Pair{d_id_t{2}, std::array{true, true}}} >{};
 
     const auto dof_intervals = detail::computeLocalDofIntervals(mesh, probdef_ctwrpr);
-    const auto dofs          = detail::getNodeDofs(mesh.getNodes(), dof_intervals);
+    const auto dofs          = detail::getNodeDofs(mesh.getOwnedNodes(), dof_intervals);
     const auto sparse_graph  = detail::calculateCrsData(mesh, probdef_ctwrpr, dof_intervals, dofs);
     const auto dense_graph   = DenseGraph{mesh, probdef_ctwrpr, dof_intervals, dofs};
 
