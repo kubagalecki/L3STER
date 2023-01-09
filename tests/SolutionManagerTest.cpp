@@ -72,6 +72,7 @@ int main(int argc, char* argv[])
     // Update values in the solution manager
     solution_manager.updateSolution(
         my_partition, *solution1, system_manager1->getDofMap(), field_inds1, problem_def_ctwrpr1);
+    solution_manager.communicateSharedValues();
     solution_manager.updateSolution(
         my_partition, *solution2, system_manager2->getDofMap(), field_inds2, problem_def_ctwrpr2);
     solution_manager.communicateSharedValues();

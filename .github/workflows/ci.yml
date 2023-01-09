@@ -97,4 +97,4 @@ jobs:
           verbose: true
       - name: Delete coverage data
         if: always()
-        run: rm -f coverage_report.xml "*.gcov"
+        run: rm -f coverage_report.xml
