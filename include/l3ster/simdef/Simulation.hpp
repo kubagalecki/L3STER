@@ -5,14 +5,11 @@
 
 namespace lstr::def
 {
-template < typename... Kernels >
+template < std::copy_constructible... Kernels >
 class Simulation
 {
-    using kernel_set_t   = KernelSet< Kernels... >;
-    using kernel_token_t = typename kernel_set_t::KernelToken;
-    using components_t   = SimulationComponents< Kernels... >;
-    using equation_t     = components_t::Equation;
-    using dirichlet_bc_t = components_t::DirichletBoundaryCondition;
+    using equation_t     = SimulationComponents< Kernels... >::Equation;
+    using dirichlet_bc_t = SimulationComponents< Kernels... >::DirichletBoundaryCondition;
 
     struct Problem
     {
@@ -22,9 +19,10 @@ class Simulation
     };
 
 public:
-    constexpr Simulation(const Kernel< Kernels >&... kernels) : m_kernels{kernels...} {}
+    constexpr Simulation(const Kernel< Kernels >&... kernels)
+        : m_components{std::forward< decltype(kernels) >(kernels)...}
+    {}
 
-    constexpr auto        getKernelToken(std::string_view name) const { return m_kernels.getToken(name); }
     constexpr auto&       components() { return m_components; }
     constexpr const auto& components() const { return m_components; }
 
@@ -38,11 +36,10 @@ public:
     constexpr const auto& getProblems() const { return m_problems; }
 
 private:
-    kernel_set_t                       m_kernels;
     SimulationComponents< Kernels... > m_components;
     ConstexprVector< Problem >         m_problems;
 };
-template < typename... Kernels >
-Simulation(Kernel< Kernels >...) -> Simulation< Kernels... >;
+template < std::copy_constructible... Kernels >
+Simulation(const Kernel< Kernels >&...) -> Simulation< Kernels... >;
 } // namespace lstr::def
 #endif // L3STER_SIMDEF_SIMULATION_HPP

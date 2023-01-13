@@ -6,7 +6,6 @@ using namespace lstr;
 
 static consteval auto makeSim()
 {
-    using namespace std::string_view_literals;
     const auto dummy_kernel1 = [](auto in) {
     };
     const auto dummy_kernel2 = [](auto in) {
@@ -23,18 +22,15 @@ static consteval auto makeSim()
                         def::Kernel{"k3", dummy_kernel3},
                         def::Kernel{"k4", dummy_kernel4},
                         def::Kernel{"k5", dummy_kernel5}};
-    const auto      token1 = sim.getKernelToken("k1");
-    const auto      token2 = sim.getKernelToken("k2");
-    const auto      token3 = sim.getKernelToken("k3");
-    const auto      token4 = sim.getKernelToken("k4");
-    const auto      token5 = sim.getKernelToken("k5");
-    const auto      field  = sim.components().addField("field", 3, {1, 2});
-    sim.components().addValue("val", 1);
-    auto eq  = sim.components().addEquation(token1, {field}, {0}, 1, 0);
-    auto bc  = sim.components().addBoundaryCondition(token2, {field}, {1, 2, 3, 4}, 1, 0);
-    auto dbc = sim.components().addDirichletBoundaryCondition(token5, {field}, {5, 6});
-    sim.components().addDomainTransform(token3);
-    sim.components().addDomainReduction(token4);
+
+    const auto field = sim.components().defineField("field", 3, {1, 2});
+    const auto eq    = sim.components().defineEquation("k1", {field}, {0}, 1, 0);
+    const auto bc    = sim.components().defineBoundaryCondition("k2", {field}, {1, 2, 3, 4}, 1, 0);
+    const auto dbc   = sim.components().defineDirichletBoundaryCondition("k5", {field}, {5, 6});
+
+    std::ignore = sim.components().defineValue("val", 1);
+    std::ignore = sim.components().defineDomainTransform("k3");
+    std::ignore = sim.components().defineDomainReduction("k4");
 
     sim.defineProblem({eq}, {bc}, {dbc});
 
