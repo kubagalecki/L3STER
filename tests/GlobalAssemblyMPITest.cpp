@@ -11,8 +11,6 @@
 
 #include "Amesos2.hpp"
 
-bool terminate_called = false;
-
 // Solve 2D diffusion problem
 int main(int argc, char* argv[])
 {

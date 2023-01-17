@@ -6,22 +6,13 @@ using namespace lstr;
 
 static consteval auto makeSim()
 {
-    const auto dummy_kernel1 = [](auto in) {
+    const auto dummy_kernel = [](auto in) {
     };
-    const auto dummy_kernel2 = [](auto in) {
-    };
-    const auto dummy_kernel3 = [](auto in) {
-    };
-    const auto dummy_kernel4 = [](auto in) {
-    };
-    const auto dummy_kernel5 = [](auto in) {
-    };
-
-    def::Simulation sim{def::Kernel{"k1", dummy_kernel1},
-                        def::Kernel{"k2", dummy_kernel2},
-                        def::Kernel{"k3", dummy_kernel3},
-                        def::Kernel{"k4", dummy_kernel4},
-                        def::Kernel{"k5", dummy_kernel5}};
+    def::Simulation sim{def::Kernel{"k1", dummy_kernel},
+                        def::Kernel{"k2", dummy_kernel},
+                        def::Kernel{"k3", dummy_kernel},
+                        def::Kernel{"k4", dummy_kernel},
+                        def::Kernel{"k5", dummy_kernel}};
 
     const auto field = sim.components().defineField("field", 3, {1, 2});
     const auto eq    = sim.components().defineEquation("k1", {field}, {0}, 1, 0);
@@ -32,7 +23,7 @@ static consteval auto makeSim()
     std::ignore = sim.components().defineDomainTransform("k3");
     std::ignore = sim.components().defineDomainReduction("k4");
 
-    sim.defineProblem({eq}, {bc}, {dbc});
+    std::ignore = sim.components().defineProblem({eq}, {bc}, {dbc});
 
     return sim;
 }
@@ -73,6 +64,8 @@ static consteval void checkOps(const auto& sim)
         throw "Incorrect number of domain transforms";
     if (sim.components().getBoundaryTransforms().size() != 0)
         throw "Incorrect number of boundary transforms";
+    if (sim.components().getValueTransforms().size() != 0)
+        throw "Incorrect number of value transforms";
     if (sim.components().getDomainReductions().size() != 1)
         throw "Incorrect number of domain reductions";
     if (sim.components().getBoundaryReductions().size() != 0)
@@ -88,7 +81,7 @@ static consteval bool checkSim()
     return true;
 }
 
-TEST_CASE("Adding fields", "[simdef]")
+TEST_CASE("Simulation definition", "[simdef]")
 {
     REQUIRE(checkSim());
 }

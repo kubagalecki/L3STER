@@ -63,7 +63,7 @@ auto getUnsortedElementDofs(const Element< T, O >&     element,
 
 class CrsEntries
 {
-    static constexpr size_t buf_size        = 1ul << 29;
+    static constexpr size_t buf_size        = 1ul << 30;
     static constexpr size_t overflowed_size = std::numeric_limits< size_t >::max();
 
     [[nodiscard]] global_dof_t* getBuf(size_t row) noexcept { return std::next(m_buf.get(), row * m_row_buf_size); }

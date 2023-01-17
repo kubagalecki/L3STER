@@ -85,6 +85,12 @@ class SimulationComponents
     {
         size_t kernel_index;
     };
+    struct Problem
+    {
+        ConstexprVector< const Equation* >                   equations;
+        ConstexprVector< const Equation* >                   bcs;
+        ConstexprVector< const DirichletBoundaryCondition* > dirichlet_bcs;
+    };
 
 public:
     constexpr SimulationComponents(const Kernel< Kernels >&... kernels) : m_kernels{kernels...} {}
@@ -130,6 +136,10 @@ public:
     {
         return std::addressof(m_boundary_transforms.emplace(m_kernels.getIndex(kernel_name)));
     }
+    [[nodiscard]] constexpr const Operation* defineValueTransform(std::string_view kernel_name)
+    {
+        return std::addressof(m_value_transforms.emplace(m_kernels.getIndex(kernel_name)));
+    }
     [[nodiscard]] constexpr const Operation* defineDomainReduction(std::string_view kernel_name)
     {
         return std::addressof(m_domain_reductions.emplace(m_kernels.getIndex(kernel_name)));
@@ -137,6 +147,13 @@ public:
     [[nodiscard]] constexpr const Operation* defineBoundaryReduction(std::string_view kernel_name)
     {
         return std::addressof(m_boundary_reductions.emplace(m_kernels.getIndex(kernel_name)));
+    }
+    [[nodiscard]] constexpr const Problem*
+    defineProblem(ConstexprVector< const Equation* >                   equations,
+                  ConstexprVector< const Equation* >                   bcs,
+                  ConstexprVector< const DirichletBoundaryCondition* > dirichlet_bcs)
+    {
+        return std::addressof(m_problems.emplace(std::move(equations), std::move(bcs), std::move(dirichlet_bcs)));
     }
 
     [[nodiscard]] constexpr const auto& getFields() const { return m_fields; }
@@ -146,8 +163,10 @@ public:
     [[nodiscard]] constexpr const auto& getDirichletConditions() const { return m_dirichlet_conditions; }
     [[nodiscard]] constexpr const auto& getDomainTransforms() const { return m_domain_transforms; }
     [[nodiscard]] constexpr const auto& getBoundaryTransforms() const { return m_boundary_transforms; }
+    [[nodiscard]] constexpr const auto& getValueTransforms() const { return m_value_transforms; }
     [[nodiscard]] constexpr const auto& getDomainReductions() const { return m_domain_reductions; }
     [[nodiscard]] constexpr const auto& getBoundaryReductions() const { return m_boundary_reductions; }
+    [[nodiscard]] constexpr const auto& getProblems() const { return m_problems; }
 
 private:
     KernelSet< Kernels... >                                    m_kernels;
@@ -155,8 +174,9 @@ private:
     ConstexprRefStableCollection< Value >                      m_values;
     ConstexprRefStableCollection< Equation >                   m_equations, m_boundary_conditions;
     ConstexprRefStableCollection< DirichletBoundaryCondition > m_dirichlet_conditions;
-    ConstexprRefStableCollection< Operation > m_domain_transforms, m_boundary_transforms, m_domain_reductions,
-        m_boundary_reductions;
+    ConstexprRefStableCollection< Operation > m_domain_transforms, m_boundary_transforms, m_value_transforms,
+        m_domain_reductions, m_boundary_reductions;
+    ConstexprRefStableCollection< Problem > m_problems;
 };
 } // namespace lstr::def
 #endif // L3STER_SIMDEF_SIMULATIONCOMPONENTS_HPP
