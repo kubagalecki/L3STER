@@ -31,6 +31,8 @@ concept ContiguousSizedRangeOf = std::ranges::contiguous_range< R > and
                                  std::same_as< std::ranges::range_value_t< R >, T > and std::ranges::sized_range< R >;
 template < typename R >
 concept IndexRange_c = SizedRangeOfConvertibleTo_c< R, std::size_t >;
+template < typename R >
+concept SizedRandomAccessRange_c = std::ranges::random_access_range< R > and std::ranges::sized_range< R >;
 
 namespace detail
 {
@@ -146,5 +148,8 @@ template < typename T >
 concept ExecutionPolicy_c = std::is_execution_policy_v< std::remove_cvref_t< T > >;
 template < typename T >
 concept SequencedPolicy_c = std::same_as< std::execution::sequenced_policy, std::remove_cvref_t< T > >;
+template < typename T >
+concept SimpleExecutionPolicy_c = std::same_as< std::execution::sequenced_policy, std::remove_cvref_t< T > > or
+                                  std::same_as< std::execution::parallel_policy, std::remove_cvref_t< T > >;
 } // namespace lstr
 #endif // L3STER_UTIL_CONCEPTS_HPP

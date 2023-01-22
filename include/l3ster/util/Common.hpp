@@ -140,5 +140,11 @@ enum struct Space
     Y,
     Z
 };
+
+enum struct Access
+{
+    ReadOnly,
+    ReadWrite
+};
 } // namespace lstr
 #endif // L3STER_UTIL_COMMON_HPP

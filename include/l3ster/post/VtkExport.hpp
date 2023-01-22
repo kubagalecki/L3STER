@@ -263,12 +263,12 @@ inline std::array< size_t, 2 > getLocalTopoSize(const MeshPartition& mesh)
     constexpr auto get_el_entries = []< ElementTypes ET, el_o_t EO >(const Element< ET, EO >&) {
         return std::array{numSubels< ET, EO >(), numSerialTopoEntries< ET, EO >()};
     };
-    return mesh.reduce(
+    return mesh.transformReduce(
         std::array< size_t, 2 >{},
-        get_el_entries,
         [](const std::array< size_t, 2 > a1, std::array< size_t, 2 > a2) {
             return std::array< size_t, 2 >{a1[0] + a2[0], a1[1] + a2[1]};
         },
+        get_el_entries,
         mesh.getDomainIds());
 }
 
@@ -450,13 +450,9 @@ auto encodeSolution(const SolutionManager&                                      
 {
     auto   retval         = std::vector< ArrayOwner< char > >(std::ranges::size(field_components));
     auto&& grouping_range = std::forward< decltype(field_components) >(field_components) | std::views::common;
-    std::transform(std::execution::par,
-                   std::ranges::begin(grouping_range),
-                   std::ranges::end(grouping_range),
-                   begin(retval),
-                   [&](std::span< const size_t > component_inds) {
-                       return detail::vtk::encodeField(solution_manager, component_inds);
-                   });
+    util::tbb::parallelTransform(grouping_range, begin(retval), [&](std::span< const size_t > component_inds) {
+        return detail::vtk::encodeField(solution_manager, component_inds);
+    });
     return retval;
 }
 

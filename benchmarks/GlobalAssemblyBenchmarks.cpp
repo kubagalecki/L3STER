@@ -26,10 +26,10 @@ static void BM_OwnerOrSharedNodeDeterminationNotGhost(benchmark::State& state)
 {
     auto       mesh            = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     auto&      part            = mesh.getPartitions()[0];
-    const auto n_nodes_visited = part.reduce(
+    const auto n_nodes_visited = part.transformReduce(
         0ul,
-        [](const auto& element) { return element.getNodes().size(); },
         std::plus<>{},
+        [](const auto& element) { return element.getNodes().size(); },
         std::views::single(1),
         std::execution::par);
 
@@ -61,10 +61,10 @@ static void BM_OwnerOrSharedNodeDeterminationShared(benchmark::State& state)
 {
     auto       mesh            = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     auto&      part            = mesh.getPartitions()[0];
-    const auto n_nodes_visited = part.reduce(
+    const auto n_nodes_visited = part.transformReduce(
         0ul,
-        [](const auto& element) { return element.getNodes().size(); },
         std::plus<>{},
+        [](const auto& element) { return element.getNodes().size(); },
         std::views::single(1),
         std::execution::par);
 

@@ -178,11 +178,11 @@ auto evalLocalIntegral(auto&&                  kernel,
             std::terminate();
         }
     };
-    return mesh.reduce(integral_t{integral_t::Zero()},
-                       reduce_element,
-                       std::plus<>{},
-                       std::forward< decltype(domain_ids) >(domain_ids),
-                       std::execution::par);
+    return mesh.transformReduce(integral_t{integral_t::Zero()},
+                                std::plus<>{},
+                                reduce_element,
+                                std::forward< decltype(domain_ids) >(domain_ids),
+                                std::execution::par);
 }
 
 template < BasisTypes BT, QuadratureTypes QT, q_o_t QO >

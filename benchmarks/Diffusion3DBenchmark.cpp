@@ -1,4 +1,4 @@
-#define L3STER_ELEMENT_ORDERS 4
+#define L3STER_ELEMENT_ORDERS 2
 #include "Amesos2.hpp"
 #include "DataPath.h"
 #include "caliper/cali.h"
@@ -157,8 +157,8 @@ int main(int argc, char* argv[])
     CALI_MARK_END("Dirichlet BCs");
 
     CALI_MARK_BEGIN("Solve algebraic problem");
-    auto solver = Amesos2::Lapack< Tpetra::CrsMatrix< val_t, local_dof_t, global_dof_t >,
-                                   Tpetra::MultiVector< val_t, local_dof_t, global_dof_t > >{
+    auto solver = Amesos2::KLU2< Tpetra::CrsMatrix< val_t, local_dof_t, global_dof_t >,
+                                 Tpetra::MultiVector< val_t, local_dof_t, global_dof_t > >{
         system_manager->getMatrix(), system_manager->getSolutionVector(), system_manager->getRhs()};
     solver.preOrdering().symbolicFactorization().numericFactorization();
     solver.solve();
