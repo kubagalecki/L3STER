@@ -125,10 +125,16 @@ int main(int argc, char* argv[])
     CALI_MARK_END("Solution manager creation");
 
     CALI_MARK_BEGIN("Problem assembly");
+    CALI_MARK_BEGIN("Initialize");
     system_manager->beginAssembly();
+    CALI_MARK_END("Initialize");
+    CALI_MARK_BEGIN("Rank-local assembly");
     system_manager->assembleDomainProblem< BT, QT, QO, dof_inds >(
         diffusion_kernel3d, my_partition, std::views::single(domain_id), empty_field_val_getter);
+    CALI_MARK_END("Rank-local assembly");
+    CALI_MARK_BEGIN("Communicate off-node rows");
     system_manager->endAssembly();
+    CALI_MARK_END("Communicate off-node rows");
     CALI_MARK_END("Problem assembly");
 
     constexpr auto dirichlet_bc_val_def = [](const auto&, const auto&, const SpaceTimePoint& p) {
