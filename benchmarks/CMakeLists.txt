@@ -44,4 +44,4 @@ function( addMpiBenchmark source name nprocs )
     set( L3STER_MPI_BENCHMARKS ${L3STER_MPI_BENCHMARKS} PARENT_SCOPE )
 endfunction()
 
-addmpibenchmark( Diffusion3DBenchmark.cpp Solve_diffusion_problem_3D 1;2;4 )
+addmpibenchmark( Diffusion3DBenchmark.cpp Solve_diffusion_problem_3D "1;2;4" )

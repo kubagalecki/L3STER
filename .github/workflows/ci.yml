@@ -90,8 +90,9 @@ jobs:
       - name: Cleanup
         if: always()
         run: rm -rf build/
-      - uses: codecov/codecov-action@v3
+      - uses: codecov/codecov-action@v3.1.1
         with:
+          files: coverage_report.xml
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
           verbose: true
