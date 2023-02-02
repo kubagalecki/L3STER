@@ -59,10 +59,9 @@ TEST_CASE("Local system assembly", "[local_asm]")
             return p.x();
         };
 
-        auto system = assembleLocalSystem(
+        const auto& [K, F] = assembleLocalSystem(
             diffusion_kernel_2d, element, Eigen::Matrix< val_t, element.n_nodes, 0 >{}, basis_at_q, 0.);
-        auto& [K, F] = *system;
-        auto u       = F;
+        auto u = F;
 
         constexpr auto boundary_nodes = std::invoke([] {
             constexpr auto& boundary_table = ElementTraits< Element< ET, EO > >::boundary_table;

@@ -134,6 +134,21 @@ std::array< T, std::ranges::size(inds) > getValuesAtInds(const std::array< T, N 
     return retval;
 }
 
+template < std::default_initializable T >
+T& getThreadLocal()
+{
+    thread_local T value;
+    return value;
+}
+
+template < std::integral T >
+constexpr T intDivRoundUp(T enumerator, T denominator)
+{
+    const auto rem  = enumerator % denominator;
+    const auto quot = enumerator / denominator;
+    return rem == 0 ? quot : quot + 1;
+}
+
 enum struct Space
 {
     X,
