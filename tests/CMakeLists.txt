@@ -37,7 +37,6 @@ add_executable( L3STER_tests TestsMain.cpp
                 MeshTests.cpp
                 NodeAllocationTests.cpp
                 QuadratureTests.cpp
-                SimDefTests.cpp
                 UtilTests.cpp
                 )
 target_include_directories( L3STER_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR} )
