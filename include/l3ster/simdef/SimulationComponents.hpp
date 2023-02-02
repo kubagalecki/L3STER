@@ -77,9 +77,10 @@ class SimulationComponents
     };
     struct DirichletBoundaryCondition
     {
-        size_t                          kernel_index;
-        ConstexprVector< const Field* > fields;
-        ConstexprVector< d_id_t >       domains;
+        size_t                                       kernel_index;
+        ConstexprVector< const Field* >              fields;
+        ConstexprVector< ConstexprVector< size_t > > field_components;
+        ConstexprVector< d_id_t >                    domains;
     };
     struct Operation
     {
