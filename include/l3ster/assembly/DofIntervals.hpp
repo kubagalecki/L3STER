@@ -339,11 +339,7 @@ auto computeIntervalStarts(const node_interval_vector_t< n_fields >& intervals)
 template < std::input_iterator I, std::sentinel_for< I > S >
 I findNodeInterval(I begin, S end, n_id_t node)
 {
-    return std::ranges::find_if(
-        begin,
-        end,
-        [node = node](n_id_t hi) { return hi >= node; },
-        [](const auto& interval) { return interval.first[1]; });
+    return std::ranges::lower_bound(begin, end, node, {}, [](const auto& interval) { return interval.first.back(); });
 }
 } // namespace detail
 

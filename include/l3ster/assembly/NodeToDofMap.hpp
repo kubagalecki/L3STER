@@ -2,6 +2,7 @@
 #define L3STER_ASSEMBLY_NODETODOFMAP_HPP
 
 #include "l3ster/assembly/DofIntervals.hpp"
+#include "l3ster/util/RobinHoodHashTables.hpp"
 
 #include "Tpetra_CrsGraph.hpp"
 
@@ -19,7 +20,7 @@ class NodeToGlobalDofMap
         std::array< std::uint8_t, dofs_per_node > dof_inds;
         std::uint8_t                              n_dofs;
     };
-    using map_t  = std::unordered_map< n_id_t, payload_t >;
+    using map_t  = robin_hood::unordered_flat_map< n_id_t, payload_t >;
     using data_t = std::variant< map_t, ContiguousCaseInfo >;
 
 public:
