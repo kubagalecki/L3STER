@@ -3,6 +3,7 @@
 
 #include "l3ster/mesh/ElementIntersecting.hpp"
 #include "l3ster/mesh/Mesh.hpp"
+#include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/Common.hpp"
 #include "l3ster/util/MetisUtils.hpp"
 
@@ -11,6 +12,7 @@ namespace lstr
 template < el_o_t O_CONV >
 [[nodiscard]] MeshPartition convertMeshToOrder(const MeshPartition& mesh, std::integral_constant< el_o_t, O_CONV > = {})
 {
+    L3STER_PROFILE_FUNCTION;
     static_assert(std::ranges::binary_search(element_orders, O_CONV),
                   "You must declare the element orders you wish to use via the L3STER_ELEMENT_ORDERS macro");
     if (not mesh.isDualGraphInitialized())

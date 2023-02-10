@@ -87,6 +87,7 @@ void assembleGlobalSystem(auto&&                                       kernel,
                           val_t                                        time = 0.)
     requires detail::PotentiallyValidKernel_c< decltype(kernel), detail::deduce_n_fields< decltype(field_val_getter) > >
 {
+    L3STER_PROFILE_FUNCTION;
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
         constexpr auto el_dim   = Element< ET, EO >::native_dim;
         constexpr auto n_fields = detail::deduce_n_fields< decltype(field_val_getter) >;
@@ -121,6 +122,7 @@ void assembleGlobalBoundarySystem(auto&&                                       k
     requires detail::PotentiallyValidBoundaryKernel_c< decltype(kernel),
                                                        detail::deduce_n_fields< decltype(field_val_getter) > >
 {
+    L3STER_PROFILE_FUNCTION;
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
         constexpr auto el_dim   = Element< ET, EO >::native_dim;
         constexpr auto n_fields = detail::deduce_n_fields< decltype(field_val_getter) >;

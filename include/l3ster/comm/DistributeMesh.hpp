@@ -11,6 +11,7 @@ namespace lstr
 {
 inline MeshPartition distributeMesh(const MpiComm& comm, const Mesh& mesh, const std::vector< d_id_t >& boundaries)
 {
+    L3STER_PROFILE_FUNCTION;
     constexpr int rank_zero = 0;
     const auto    n_ranks   = comm.getSize();
     const auto    my_rank   = comm.getRank();

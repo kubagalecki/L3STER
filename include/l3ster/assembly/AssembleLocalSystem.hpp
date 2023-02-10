@@ -9,6 +9,7 @@
 #include "l3ster/mapping/JacobiMat.hpp"
 #include "l3ster/mapping/MapReferenceToPhysical.hpp"
 #include "l3ster/mesh/BoundaryElementView.hpp"
+#include "l3ster/util/Caliper.hpp"
 
 namespace lstr
 {
@@ -120,7 +121,7 @@ public:
                 val_t                                                                         weight);
 
 private:
-    static constexpr size_t target_update_size = 64;
+    static constexpr size_t target_update_size = 128;
     static constexpr size_t updates_per_batch  = intDivRoundUp(target_update_size, update_size);
     static constexpr size_t batch_update_size  = update_size * updates_per_batch;
     using batch_update_matrix_t = Eigen::Matrix< val_t, problem_size, batch_update_size, Eigen::ColMajor >;
@@ -249,6 +250,7 @@ const auto& assembleLocalSystem(auto&&                                          
                                 val_t                                                                     time)
     requires detail::Kernel_c< decltype(kernel), Element< ET, EO >::native_dim, n_fields >
 {
+    L3STER_PROFILE_FUNCTION;
     const auto jacobi_mat_generator = getNatJacobiMatGenerator(element);
     auto&      local_system_manager = detail::getLocalSystemManager< decltype(kernel), ET, EO, n_fields >();
     const auto process_qp           = [&](auto point, val_t weight, const auto& bas_vals, const auto& ref_bas_ders) {
@@ -278,6 +280,7 @@ assembleLocalBoundarySystem(Kernel&&                                            
                             val_t                                                                     time)
     requires detail::BoundaryKernel_c< Kernel, Element< ET, EO >::native_dim, n_fields >
 {
+    L3STER_PROFILE_FUNCTION;
     const auto jacobi_mat_generator = getNatJacobiMatGenerator(*el_view);
     auto&      local_system_manager = detail::getLocalSystemManager< decltype(kernel), ET, EO, n_fields >();
     const auto process_qp           = [&](auto point, val_t weight, const auto& bas_vals, const auto& ref_bas_ders) {

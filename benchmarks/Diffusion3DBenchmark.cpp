@@ -1,7 +1,7 @@
-#define L3STER_ELEMENT_ORDERS 2
+#define L3STER_ELEMENT_ORDERS 4
 #include "Amesos2.hpp"
 #include "DataPath.h"
-#include "caliper/cali.h"
+
 #include "l3ster/l3ster.hpp"
 
 int main(int argc, char* argv[])
@@ -11,9 +11,6 @@ int main(int argc, char* argv[])
 
     L3sterScopeGuard scope_guard{argc, argv};
     const MpiComm    comm;
-
-    cali_config_set("CALI_CALIPER_ATTRIBUTE_DEFAULT_SCOPE", "process");
-    CALI_MARK_BEGIN("main");
 
     constexpr auto        mesh_order   = L3STER_ELEMENT_ORDERS;
     constexpr d_id_t      domain_id    = 0;
@@ -31,7 +28,6 @@ int main(int argc, char* argv[])
         return retval;
     });
 
-    CALI_MARK_BEGIN("Read, convert, and distribute mesh");
     Mesh mesh;
     if (comm.getRank() == 0)
     {
@@ -41,7 +37,6 @@ int main(int argc, char* argv[])
     }
     const auto my_partition =
         distributeMesh(comm, mesh, std::vector< d_id_t >(boundary_ids.begin(), boundary_ids.end()));
-    CALI_MARK_END("Read, convert, and distribute mesh");
     const auto boundary_view = my_partition.getBoundaryView(boundary_ids);
 
     {
@@ -68,7 +63,6 @@ int main(int argc, char* argv[])
     constexpr auto T_inds      = std::array< size_t, 1 >{0};
     constexpr auto T_grad_inds = std::array< size_t, 3 >{1, 2, 3};
     const auto field_inds_view = std::array{std::span< const size_t >{T_inds}, std::span< const size_t >{T_grad_inds}};
-    constexpr auto field_names = std::array{"T"sv, "gradT"sv};
     constexpr auto dof_inds    = field_inds;
     constexpr auto BT          = BasisTypes::Lagrange;
     constexpr auto QT          = QuadratureTypes::GLeg;
@@ -116,26 +110,12 @@ int main(int argc, char* argv[])
             return retval;
         };
 
-    CALI_MARK_BEGIN("Algebraic system manager creation");
-    auto system_manager = makeAlgebraicSystemManager(comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr);
-    CALI_MARK_END("Algebraic system manager creation");
-
-    CALI_MARK_BEGIN("Solution manager creation");
+    auto system_manager   = makeAlgebraicSystemManager(comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr);
     auto solution_manager = SolutionManager{my_partition, comm, n_fields};
-    CALI_MARK_END("Solution manager creation");
-
-    CALI_MARK_BEGIN("Problem assembly");
-    CALI_MARK_BEGIN("Initialize");
     system_manager->beginAssembly();
-    CALI_MARK_END("Initialize");
-    CALI_MARK_BEGIN("Rank-local assembly");
     system_manager->assembleDomainProblem< BT, QT, QO, dof_inds >(
         diffusion_kernel3d, my_partition, std::views::single(domain_id), empty_field_val_getter);
-    CALI_MARK_END("Rank-local assembly");
-    CALI_MARK_BEGIN("Communicate off-node rows");
     system_manager->endAssembly();
-    CALI_MARK_END("Communicate off-node rows");
-    CALI_MARK_END("Problem assembly");
 
     constexpr auto dirichlet_bc_val_def = [](const auto&, const auto&, const SpaceTimePoint& p) {
         Eigen::Vector< val_t, 1 > retval;
@@ -143,8 +123,6 @@ int main(int argc, char* argv[])
         return retval;
     };
 
-    CALI_MARK_BEGIN("Dirichlet BCs");
-    CALI_MARK_BEGIN("Compute values");
     auto dirichlet_vals = system_manager->getDirichletBCValueVector()->getLocalViewHost(Tpetra::Access::ReadWrite);
     computeValuesAtNodes(dirichlet_bc_val_def,
                          my_partition,
@@ -153,39 +131,8 @@ int main(int argc, char* argv[])
                          ConstexprValue< T_inds >{},
                          empty_field_val_getter,
                          asSpan(Kokkos::subview(dirichlet_vals, Kokkos::ALL, 0)));
-    CALI_MARK_END("Compute values");
 
-    CALI_MARK_BEGIN("Impose");
     system_manager->beginModify();
     system_manager->applyDirichletBCs();
     system_manager->endModify();
-    CALI_MARK_END("Impose");
-    CALI_MARK_END("Dirichlet BCs");
-
-    CALI_MARK_BEGIN("Solve algebraic problem");
-    auto solver = Amesos2::KLU2< Tpetra::CrsMatrix< val_t, local_dof_t, global_dof_t >,
-                                 Tpetra::MultiVector< val_t, local_dof_t, global_dof_t > >{
-        system_manager->getMatrix(), system_manager->getSolutionVector(), system_manager->getRhs()};
-    solver.preOrdering().symbolicFactorization().numericFactorization();
-    solver.solve();
-    CALI_MARK_END("Solve algebraic problem");
-
-    CALI_MARK_BEGIN("Communicate solution");
-    const auto solution = system_manager->getSolutionVector();
-    solution_manager.updateSolution(my_partition, *solution, system_manager->getDofMap(), field_inds, probdef_ctwrpr);
-    solution_manager.communicateSharedValues();
-    CALI_MARK_END("Communicate solution");
-
-    CALI_MARK_BEGIN("Export results");
-    {
-        CALI_MARK_BEGIN("Create exporter");
-        auto exporter = PvtuExporter{my_partition, solution_manager.getNodeMap()};
-        CALI_MARK_END("Create exporter");
-        CALI_MARK_BEGIN("Do export");
-        exporter.exportSolution("results.pvtu", comm, solution_manager, field_names, field_inds_view);
-        CALI_MARK_END("Do export");
-    }
-    CALI_MARK_END("Export results");
-
-    CALI_MARK_END("main");
 }

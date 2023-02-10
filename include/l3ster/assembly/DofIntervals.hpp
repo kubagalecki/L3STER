@@ -4,6 +4,7 @@
 #include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/util/BitsetManip.hpp"
+#include "l3ster/util/Caliper.hpp"
 
 namespace lstr
 {
@@ -348,6 +349,7 @@ auto computeDofIntervals(const MeshPartition&          mesh,
                          ConstexprValue< problem_def > problemdef_ctwrapper,
                          const MpiComm&                comm)
 {
+    L3STER_PROFILE_FUNCTION;
     const auto local_intervals  = detail::computeLocalDofIntervals(mesh, problemdef_ctwrapper);
     auto       global_data      = detail::gatherGlobalDofIntervals(local_intervals, problemdef_ctwrapper, comm);
     auto& [_, global_intervals] = global_data;

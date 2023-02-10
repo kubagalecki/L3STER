@@ -90,6 +90,7 @@ template < size_t dofs_per_node >
 NodeToGlobalDofMap< dofs_per_node >::NodeToGlobalDofMap(
     const MeshPartition& mesh, const detail::node_interval_vector_t< dofs_per_node >& dof_intervals)
 {
+    L3STER_PROFILE_FUNCTION;
     if (not tryInitAsContiguous(mesh, dof_intervals))
         initNonContiguous(mesh, dof_intervals);
 }
@@ -184,6 +185,7 @@ NodeToLocalDofMap< dofs_per_node, num_maps >::NodeToLocalDofMap(
     requires(sizeof...(local_global_maps) == num_maps)
     : m_map(mesh.getAllNodes().size())
 {
+    L3STER_PROFILE_FUNCTION;
     const auto get_node_dofs = [&](n_id_t node, const tpetra_map_t& map) {
         std::array< local_dof_t, dofs_per_node > retval;
         std::ranges::transform(global_map(node), begin(retval), [&](global_dof_t dof) {

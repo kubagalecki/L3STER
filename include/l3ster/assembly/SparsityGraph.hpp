@@ -2,6 +2,7 @@
 #define L3STER_ASSEMBLY_SPARSITYGRAPH_HPP
 
 #include "l3ster/assembly/MakeTpetraMap.hpp"
+#include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/CrsGraph.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/IndexMap.hpp"
@@ -89,6 +90,7 @@ auto computeNodeDofs(const MeshPartition& mesh, const NodeToGlobalDofMap< max_do
 inline auto makeContiguousGraph(std::vector< robin_hood::unordered_flat_set< n_id_t > > graph)
     -> util::CrsGraph< global_dof_t >
 {
+    L3STER_PROFILE_FUNCTION;
     auto retval =
         util::CrsGraph< global_dof_t >{graph | std::views::transform([](const auto& set) { return set.size(); })};
     util::tbb::parallelFor(std::views::iota(size_t{}, graph.size()), [&](size_t row_ind) {
@@ -105,6 +107,7 @@ auto computeDofGraph(const MeshPartition&                                    mes
                      std::span< const global_dof_t >                         owned_plus_shared_dofs,
                      ConstexprValue< problem_def > problem_def_ctwrapper) -> util::CrsGraph< global_dof_t >
 {
+    L3STER_PROFILE_FUNCTION;
     const auto available_concurrency = static_cast< size_t >(oneapi::tbb::this_task_arena::max_concurrency());
     const auto num_mutexes           = std::bit_ceil(available_concurrency) << 6;
     auto       get_row_lock          = [mutexes = std::vector< std::mutex >(num_mutexes),
@@ -153,10 +156,11 @@ auto computeDofGraph(const MeshPartition&                                    mes
 
 inline auto computeRowSizes(const util::CrsGraph< global_dof_t >& dof_graph) -> Kokkos::DualView< size_t* >
 {
+    L3STER_PROFILE_FUNCTION;
     Kokkos::DualView< size_t* > retval{"sparse graph row sizes", dof_graph.size()};
     auto                        host_view = retval.view_host();
     retval.modify_host();
-    std::ranges::transform(std::views::iota(size_t{}, dof_graph.size()), host_view.data(), [&](auto row_dof) {
+    util::tbb::parallelTransform(std::views::iota(size_t{}, dof_graph.size()), host_view.data(), [&](auto row_dof) {
         return dof_graph(row_dof).size();
     });
     retval.sync_device();
@@ -177,6 +181,7 @@ makeSparsityGraph(const MeshPartition&                                    mesh,
                   ConstexprValue< problem_def >                           problemdef_ctwrapper,
                   const MpiComm&                                          comm)
 {
+    L3STER_PROFILE_FUNCTION;
     const auto [all_dofs, n_owned_dofs] = computeNodeDofs(mesh, global_node_to_dof_map);
     const auto owned_plus_shared_dofs   = std::span{all_dofs};
     const auto owned_dofs               = owned_plus_shared_dofs.subspan(0, n_owned_dofs);
@@ -185,9 +190,13 @@ makeSparsityGraph(const MeshPartition&                                    mesh,
     const auto [owned_map, owned_plus_shared_map] = makeDofMaps(owned_dofs, owned_plus_shared_dofs, comm);
     auto retval = makeTeuchosRCP< tpetra_fecrsgraph_t >(owned_map, owned_plus_shared_map, row_sizes);
     retval->beginAssembly();
+    L3STER_PROFILE_REGION_BEGIN("Insert into Tpetra::FECrsGraph");
     for (size_t row_dof_ind = 0; auto row_dof : all_dofs)
         retval->insertGlobalIndices(row_dof, asTeuchosView(dof_graph(row_dof_ind++)));
+    L3STER_PROFILE_REGION_END("Insert into Tpetra::FECrsGraph");
+    L3STER_PROFILE_REGION_BEGIN("Communicate data");
     retval->endAssembly();
+    L3STER_PROFILE_REGION_END("Communicate data");
     return retval;
 }
 } // namespace lstr::detail
