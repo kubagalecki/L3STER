@@ -130,11 +130,11 @@ AlgebraicSystemManager< n_fields >::AlgebraicSystemManager(const MpiComm&       
     : m_state{State::OpenForAssembly}
 {
     const auto dof_intervals       = computeDofIntervals(mesh, problemdef_ctwrpr, comm);
-    const auto node_global_dof_map = NodeToGlobalDofMap< n_fields >{mesh, dof_intervals};
+    const auto node_global_dof_map = NodeToGlobalDofMap{mesh, dof_intervals};
+    const auto sparsity_graph      = detail::makeSparsityGraph(mesh, node_global_dof_map, problemdef_ctwrpr, comm);
 
-    const auto sparsity_graph = detail::makeSparsityGraph(mesh, problemdef_ctwrpr, dof_intervals, comm);
-    m_matrix                  = makeTeuchosRCP< tpetra_fecrsmatrix_t >(sparsity_graph);
-    m_rhs = makeTeuchosRCP< tpetra_femultivector_t >(sparsity_graph->getRowMap(), sparsity_graph->getImporter(), 1u);
+    m_matrix = makeTeuchosRCP< tpetra_fecrsmatrix_t >(sparsity_graph);
+    m_rhs    = makeTeuchosRCP< tpetra_femultivector_t >(sparsity_graph->getRowMap(), sparsity_graph->getImporter(), 1u);
     m_matrix->beginAssembly();
     m_rhs->beginAssembly();
     m_rhs_view = Kokkos::subview(m_rhs->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);

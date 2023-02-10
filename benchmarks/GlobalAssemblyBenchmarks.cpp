@@ -8,16 +8,18 @@ static void BM_SparsityPatternAssembly(benchmark::State& state)
     part.initDualGraph();
     const auto mesh = convertMeshToOrder< 2 >(part);
 
-    constexpr auto problem_def = ConstexprValue< std::array{Pair{d_id_t{1}, std::array{true, false}},
-                                                            Pair{d_id_t{2}, std::array{false, true}}} >{};
+    constexpr auto problemdef_ctwrapper = ConstexprValue< std::array{Pair{d_id_t{1}, std::array{true, false}},
+                                                                     Pair{d_id_t{2}, std::array{false, true}}} >{};
 
-    const auto dof_intervals          = detail::computeLocalDofIntervals(mesh, problem_def);
-    const auto owned_plus_shared_dofs = detail::getNodeDofs(mesh.getOwnedNodes(), dof_intervals);
+    const auto dof_intervals          = detail::computeLocalDofIntervals(mesh, problemdef_ctwrapper);
+    const auto owned_plus_shared_dofs = detail::getNodeDofs(mesh.getAllNodes(), dof_intervals);
+    const auto global_dof_map         = NodeToGlobalDofMap{mesh, dof_intervals};
 
     for (auto _ : state)
     {
-        const auto entries = detail::calculateCrsData(mesh, problem_def, dof_intervals, owned_plus_shared_dofs);
-        benchmark::DoNotOptimize(entries);
+        const auto dof_graph =
+            detail::computeDofGraph(mesh, global_dof_map, owned_plus_shared_dofs, problemdef_ctwrapper);
+        benchmark::DoNotOptimize(dof_graph);
     }
 }
 BENCHMARK(BM_SparsityPatternAssembly)->Name("Sparsity pattern assembly")->UseRealTime()->Unit(benchmark::kMillisecond);

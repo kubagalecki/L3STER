@@ -13,12 +13,11 @@ public:
     DenseGraph(const MeshPartition&                                                        mesh,
                ConstexprValue< problem_def >                                               problemdef_ctwrpr,
                const detail::node_interval_vector_t< detail::deduceNFields(problem_def) >& dof_intervals,
-               const std::vector< global_dof_t >&                                          dofs)
-        : dim{dofs.size()}, entries{dim * dim}
+               size_t                                                                      n_dofs)
+        : dim{n_dofs}, entries{dim * dim}
     {
         const auto node_to_dof_map = NodeToGlobalDofMap{mesh, dof_intervals};
-        const auto process_domain  = [&]< auto dom_def >(ConstexprValue< dom_def >)
-        {
+        const auto process_domain  = [&]< auto dom_def >(ConstexprValue< dom_def >) {
             constexpr auto  domain_id        = dom_def.first;
             constexpr auto& coverage         = dom_def.second;
             constexpr auto  covered_dof_inds = getTrueInds< coverage >();
@@ -41,8 +40,11 @@ public:
     {
         for (size_t row = 0; row < dim; ++row)
         {
+            const auto row_data = getRow(row);
+            std::cout << row << ": ";
             for (size_t col = 0; col < dim; ++col)
-                std::cout << (getRow(row).test(col) ? 'X' : ' ');
+                if (row_data.test(col))
+                    std::cout << col << ' ';
             std::cout << '\n';
         }
     }

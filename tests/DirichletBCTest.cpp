@@ -24,7 +24,7 @@ int main(int argc, char* argv[])
     constexpr auto   problem_def    = ConstexprValue< std::array{Pair{d_id_t{domain_id}, std::array{true}}} >{};
     const auto       dof_intervals  = computeDofIntervals(my_partition, problem_def, comm);
     const auto       global_dof_map = NodeToGlobalDofMap{my_partition, dof_intervals};
-    const auto       sparsity_graph = detail::makeSparsityGraph(my_partition, problem_def, dof_intervals, comm);
+    const auto       sparsity_graph = detail::makeSparsityGraph(my_partition, global_dof_map, problem_def, comm);
 
     const auto bv = my_partition.getBoundaryView(boundary);
 
