@@ -15,6 +15,7 @@ template < std::integral VertexType >
 class CrsGraph
 {
 public:
+    CrsGraph() = default;
     template < std::ranges::range R >
         requires std::convertible_to< std::ranges::range_value_t< R >, std::size_t >
     CrsGraph(R&& adj_sizes);
@@ -23,23 +24,10 @@ public:
     auto        operator()(std::size_t vertex_ind) const noexcept -> std::span< const VertexType >;
     std::size_t size() const noexcept { return m_size; }
 
-    void print() const
-    {
-        std::stringstream msg;
-        for (std::size_t v : std::views::iota(size_t{}, m_size))
-        {
-            msg << v << ": ";
-            for (auto a : this->operator()(v))
-                msg << a << ' ';
-            msg << '\n';
-        }
-        std::cout << msg.view();
-    }
-
 private:
     auto initAdjOffsets(auto&& adj_sizes) -> std::unique_ptr< std::size_t[] >;
 
-    std::size_t                      m_size;
+    std::size_t                      m_size{};
     std::unique_ptr< std::size_t[] > m_adj_offsets;
     std::unique_ptr< VertexType[] >  m_adjacent;
 };

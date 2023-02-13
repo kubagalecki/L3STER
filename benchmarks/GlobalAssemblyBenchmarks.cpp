@@ -1,8 +1,48 @@
 #include "Common.hpp"
 #include "DataPath.h"
 
+static void BM_LocalDofIntervalComputation(benchmark::State& state)
+{
+    GlobalResource< KokkosScopeGuard >::getMaybeUninitialized();
+
+    auto  read_mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
+    auto& part      = read_mesh.getPartitions()[0];
+    part.initDualGraph();
+    const auto mesh = convertMeshToOrder< 2 >(part);
+
+    constexpr auto problemdef_ctwrapper = ConstexprValue< std::array{Pair{d_id_t{1}, std::array{true, false}},
+                                                                     Pair{d_id_t{2}, std::array{false, true}}} >{};
+
+    for (auto _ : state)
+        benchmark::DoNotOptimize(detail::computeLocalDofIntervals(mesh, problemdef_ctwrapper));
+}
+BENCHMARK(BM_LocalDofIntervalComputation)
+    ->Name("Compute local DOF intervals")
+    ->UseRealTime()
+    ->Unit(benchmark::kMillisecond);
+
+static void BM_GlobalDofMapComputation(benchmark::State& state)
+{
+    GlobalResource< KokkosScopeGuard >::getMaybeUninitialized();
+
+    auto  read_mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
+    auto& part      = read_mesh.getPartitions()[0];
+    part.initDualGraph();
+    const auto mesh = convertMeshToOrder< 2 >(part);
+
+    constexpr auto problemdef_ctwrapper = ConstexprValue< std::array{Pair{d_id_t{1}, std::array{true, false}},
+                                                                     Pair{d_id_t{2}, std::array{false, true}}} >{};
+
+    const auto dof_intervals = detail::computeLocalDofIntervals(mesh, problemdef_ctwrapper);
+    for (auto _ : state)
+        benchmark::DoNotOptimize(NodeToGlobalDofMap{mesh, dof_intervals});
+}
+BENCHMARK(BM_GlobalDofMapComputation)->Name("Compute global DOF map")->UseRealTime()->Unit(benchmark::kMillisecond);
+
 static void BM_SparsityPatternAssembly(benchmark::State& state)
 {
+    GlobalResource< KokkosScopeGuard >::getMaybeUninitialized();
+
     auto  read_mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     auto& part      = read_mesh.getPartitions()[0];
     part.initDualGraph();
@@ -16,11 +56,8 @@ static void BM_SparsityPatternAssembly(benchmark::State& state)
     const auto global_dof_map         = NodeToGlobalDofMap{mesh, dof_intervals};
 
     for (auto _ : state)
-    {
-        const auto dof_graph =
-            detail::computeDofGraph(mesh, global_dof_map, owned_plus_shared_dofs, problemdef_ctwrapper);
-        benchmark::DoNotOptimize(dof_graph);
-    }
+        benchmark::DoNotOptimize(
+            detail::computeDofGraph(mesh, global_dof_map, owned_plus_shared_dofs, problemdef_ctwrapper));
 }
 BENCHMARK(BM_SparsityPatternAssembly)->Name("Sparsity pattern assembly")->UseRealTime()->Unit(benchmark::kMillisecond);
 

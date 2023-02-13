@@ -15,6 +15,7 @@ add_test( NAME "Non_MPI_benchmarks"
           COMMAND $<TARGET_FILE:Non_MPI_benchmarks> --benchmark_counters_tabular=true
           WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/non_MPI_benchmarks_wd"
           )
+set_tests_properties( Non_MPI_benchmarks PROPERTIES ENVIRONMENT "OMP_PROC_BIND=false" )
 
 set( L3STER_BENCH_DATA_PATH "${CMAKE_CURRENT_SOURCE_DIR}/data" )
 configure_file( DataPath.h.in DataPath.h )
@@ -46,4 +47,4 @@ function( addMpiBenchmark source name nprocs )
     set( L3STER_MPI_BENCHMARKS ${L3STER_MPI_BENCHMARKS} PARENT_SCOPE )
 endfunction()
 
-addMpiBenchmark( Diffusion3DBenchmark.cpp Solve_diffusion_problem_3D "1;2;4;8" )
+addmpibenchmark( Diffusion3DBenchmark.cpp Solve_diffusion_problem_3D "1;2;4;8" )
