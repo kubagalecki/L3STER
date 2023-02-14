@@ -1,5 +1,5 @@
-#include "BelosBlockCGSolMgr.hpp"
-#include "BelosTpetraOperator.hpp"
+#include "BelosSolverFactory_Tpetra.hpp"
+#include "Ifpack2_Factory.hpp"
 
 #define L3STER_ELEMENT_ORDERS 4
 #include "l3ster/l3ster.hpp"
@@ -66,6 +66,7 @@ int main(int argc, char* argv[])
     constexpr auto T_inds      = std::array< size_t, 1 >{0};
     constexpr auto T_grad_inds = std::array< size_t, 3 >{1, 2, 3};
     const auto field_inds_view = std::array{std::span< const size_t >{T_inds}, std::span< const size_t >{T_grad_inds}};
+    constexpr auto field_names = std::array{"T"sv, "gradT"sv};
     constexpr auto dof_inds    = field_inds;
     constexpr auto BT          = BasisTypes::Lagrange;
     constexpr auto QT          = QuadratureTypes::GLeg;
@@ -88,7 +89,7 @@ int main(int argc, char* argv[])
             Az  = mat_t::Zero();
             rhs = vec_t::Zero();
 
-            // -k * div T = s
+            // -k * div q = s
             Ax(0, 1) = -k;
             Ay(0, 2) = -k;
             Az(0, 3) = -k;
@@ -112,9 +113,30 @@ int main(int argc, char* argv[])
 
             return retval;
         };
+    constexpr auto error_kernel =
+        []< typename DerT >(const auto& vals, const std::array< DerT, 3 >& ders, const SpaceTimePoint& point) noexcept {
+            Eigen::Matrix< val_t, 4, 1 > error;
+            const auto& [T, qx, qy, qz]          = vals;
+            const auto& [x_ders, y_ders, z_ders] = ders;
 
-    auto system_manager   = makeAlgebraicSystemManager(comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr);
-    auto solution_manager = SolutionManager{my_partition, comm, n_fields};
+            const auto& q_xx = x_ders[1];
+            const auto& q_yy = y_ders[2];
+            const auto& q_zz = z_ders[3];
+            const auto& T_x  = x_ders[0];
+            const auto& T_y  = y_ders[0];
+            const auto& T_z  = z_ders[0];
+
+            constexpr double k = 1.;
+            constexpr double s = 1.;
+
+            error[0] = k * (q_xx + q_yy + q_zz) + s;
+            error[1] = T_x - qx;
+            error[2] = T_y - qy;
+            error[3] = T_z - qz;
+            return error;
+        };
+
+    auto system_manager = makeAlgebraicSystemManager(comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr);
     system_manager->beginAssembly();
     system_manager->assembleDomainProblem< BT, QT, QO, dof_inds >(
         diffusion_kernel3d, my_partition, std::views::single(domain_id), empty_field_val_getter);
@@ -139,9 +161,25 @@ int main(int argc, char* argv[])
     system_manager->applyDirichletBCs();
     system_manager->endModify();
 
+    L3STER_PROFILE_REGION_BEGIN("Set up Ifpack2::ILUT preconditioner");
+    auto precond_params = makeTeuchosRCP< Teuchos::ParameterList >();
+    precond_params->set("fact: ilut level-of-fill", 1.);
+    precond_params->set("fact: drop tolerance", 0.);
+    Ifpack2::Factory precond_factory;
+    auto             preconditioner = precond_factory.create("ILUT", system_manager->getMatrix());
+    preconditioner->setParameters(*precond_params);
+    L3STER_PROFILE_REGION_BEGIN("Initialize");
+    preconditioner->initialize();
+    L3STER_PROFILE_REGION_END("Initialize");
+    L3STER_PROFILE_REGION_BEGIN("Compute");
+    preconditioner->compute();
+    L3STER_PROFILE_REGION_END("Compute");
+    L3STER_PROFILE_REGION_END("Set up Ifpack2::ILUT preconditioner");
+
     L3STER_PROFILE_REGION_BEGIN("Set up Belos::LinearProblem");
     auto algebraic_problem = makeTeuchosRCP< Belos::LinearProblem< val_t, tpetra_multivector_t, tpetra_operator_t > >(
         system_manager->getMatrix(), system_manager->getSolutionVector(), system_manager->getRhs());
+    algebraic_problem->setLeftPrec(preconditioner);
     if (not algebraic_problem->setProblem())
         throw std::runtime_error{"Failed to set up Belos::LinearProblem"};
     L3STER_PROFILE_REGION_END("Set up Belos::LinearProblem");
@@ -149,21 +187,45 @@ int main(int argc, char* argv[])
     L3STER_PROFILE_REGION_BEGIN("Set up Belos::BlockCGSolMgr");
     auto solver_params = makeTeuchosRCP< Teuchos::ParameterList >();
     solver_params->set("Block Size", 1);
-    solver_params->set("Maximum Iterations", static_cast< int >(system_manager->getRhs()->getGlobalLength()));
+    solver_params->set("Maximum Iterations", 10'000);
     solver_params->set("Convergence Tolerance", 1.e-5);
-    solver_params->set("Verbosity",
-                       Belos::Errors + Belos::Warnings + Belos::TimingDetails + Belos::StatusTestDetails +
-                           Belos::IterationDetails + Belos::FinalSummary);
-    solver_params->set("Output Frequency", 50);
-    Teuchos::RCP< Belos::SolverManager< val_t, tpetra_multivector_t, tpetra_operator_t > > solver =
-        makeTeuchosRCP< Belos::BlockCGSolMgr< val_t, tpetra_multivector_t, tpetra_operator_t > >(algebraic_problem,
-                                                                                                 solver_params);
+    solver_params->set("Verbosity", Belos::Warnings + Belos::IterationDetails + Belos::FinalSummary);
+    solver_params->set("Output Frequency", 100);
+    Belos::SolverFactory< val_t, tpetra_multivector_t, tpetra_operator_t > solver_factory;
+    auto solver = solver_factory.create("Block CG", solver_params);
+    solver->setProblem(algebraic_problem);
     L3STER_PROFILE_REGION_END("Set up Belos::BlockCGSolMgr");
 
     L3STER_PROFILE_REGION_BEGIN("Solve the algebraic problem");
-    auto solver_retval = solver->solve();
+    if (solver->solve() != Belos::Converged)
+        throw std::runtime_error{"Solver failed to converge"};
     L3STER_PROFILE_REGION_END("Solve the algebraic problem");
 
+    L3STER_PROFILE_REGION_BEGIN("Solution management");
+    auto solution_manager = SolutionManager{my_partition, comm, n_fields};
+    solution_manager.updateSolution(
+        my_partition, *system_manager->getSolutionVector(), system_manager->getDofMap(), field_inds, probdef_ctwrpr);
+    solution_manager.communicateSharedValues();
+    L3STER_PROFILE_REGION_END("Solution management");
+
+    L3STER_PROFILE_REGION_BEGIN("Compute solution error");
+    const auto fval_getter = [&](const auto& nodes) {
+        return gatherGlobalValues< field_inds >(nodes, solution_manager);
+    };
+    const auto error =
+        computeNormL2< BT, QT, QO >(comm, error_kernel, my_partition, std::views::single(domain_id), fval_getter);
+    L3STER_PROFILE_REGION_END("Compute solution error");
+
     if (comm.getRank() == 0)
-        std::cout << (solver_retval == Belos::Converged ? "The solver converged\n" : "The solver did not converge\n");
+    {
+        std::cout << "The L2 error components are:";
+        for (int i = 0; i < error.size(); ++i)
+            std::cout << "\n\t" << error[i];
+        std::cout << std::endl;
+    }
+
+    L3STER_PROFILE_REGION_BEGIN("Export results to VTK");
+    auto exporter = PvtuExporter{my_partition, solution_manager.getNodeMap()};
+    exporter.exportSolution("Cube_Diffusion.pvtu", comm, solution_manager, field_names, field_inds_view);
+    L3STER_PROFILE_REGION_END("Export results to VTK");
 }

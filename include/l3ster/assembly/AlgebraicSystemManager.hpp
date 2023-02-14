@@ -27,8 +27,8 @@ public:
                                            ConstexprValue< dirichlet_def > dbcdef_ctwrpr)
         -> std::shared_ptr< AlgebraicSystemManager >;
 
-    [[nodiscard]] const auto& getMatrix() const { return m_matrix; }
-    [[nodiscard]] const auto& getRhs() const { return m_rhs; }
+    [[nodiscard]] auto        getMatrix() const -> Teuchos::RCP< const tpetra_crsmatrix_t > { return m_matrix; }
+    [[nodiscard]] auto        getRhs() const -> Teuchos::RCP< const tpetra_multivector_t > { return m_rhs; }
     [[nodiscard]] const auto& getDofMap() const { return m_node_dof_map; }
     [[nodiscard]] auto        getSolutionVector() const { return m_owned_values->getVector(0); }
     [[nodiscard]] auto        getSolutionVector() { return m_owned_values->getVectorNonConst(0); }

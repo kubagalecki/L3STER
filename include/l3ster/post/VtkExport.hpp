@@ -491,6 +491,7 @@ inline auto openVtuFile(std::string_view name, const MpiComm& comm)
 PvtuExporter::PvtuExporter(const MeshPartition& mesh, const tpetra_map_t& local_global_map)
     : m_n_nodes{mesh.getAllNodes().size()}
 {
+    L3STER_PROFILE_FUNCTION;
     updateNodeCoords(mesh);
     initTopo(mesh);
 }
@@ -501,6 +502,7 @@ void PvtuExporter::exportSolution(std::string_view                              
                                   SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
                                   SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds)
 {
+    L3STER_PROFILE_FUNCTION;
     if (std::ranges::size(field_names) != std::ranges::size(field_component_inds))
         throw std::runtime_error{"exportSolution: field names and groupings must have the same size"};
 
