@@ -23,16 +23,18 @@ inline auto getDomainPredicate(const std::vector< d_id_t >& boundaries)
 template < std::invocable< const DomainView > F >
 std::array< idx_t, 3 > getDomainData(const MeshPartition& part, F&& domain_predicate)
 {
-    idx_t n_elements = 0, topology_size = 0, max_node = 0;
+    size_t n_elements = 0, topology_size = 0, max_node = 0;
     part.visit(
         [&](const auto& el) {
             ++n_elements;
             topology_size += el.getNodes().size();
-            const idx_t max_el_node = *std::ranges::max_element(el.getNodes());
-            max_node                = std::max(max_node, max_el_node);
+            const auto max_el_node = *std::ranges::max_element(el.getNodes());
+            max_node               = std::max(max_node, max_el_node);
         },
         std::forward< F >(domain_predicate));
-    return {n_elements, topology_size, max_node + 1};
+    return {exactIntegerCast< idx_t >(n_elements),
+            exactIntegerCast< idx_t >(topology_size),
+            exactIntegerCast< idx_t >(max_node + 1)};
 }
 
 template < std::invocable< const DomainView > F >
@@ -65,8 +67,8 @@ inline auto getMetisOptionsForPartitioning()
 
     opts[METIS_OPTION_OBJTYPE] = METIS_OBJTYPE_VOL;
     opts[METIS_OPTION_CONTIG]  = 1;
-    opts[METIS_OPTION_NCUTS]   = 3;
-    opts[METIS_OPTION_NSEPS]   = 3;
+    opts[METIS_OPTION_NCUTS]   = 2;
+    opts[METIS_OPTION_NSEPS]   = 2;
     opts[METIS_OPTION_NITER]   = 20;
 
     return opts;
@@ -107,14 +109,13 @@ auto partitionDomains(const MeshPartition&          part,
                       std::vector< real_t >         part_weights)
 {
     idx_t n_elements = domain_data[0], max_node = domain_data[2];
-    auto  metis_input = detail::prepMetisInput(part, domain_data, std::forward< F >(is_not_boundary));
-    auto& [e_ind, e_ptr, node_comm_vol, node_weight] = metis_input;
+    auto [e_ind, e_ptr, node_comm_vol, node_weight] =
+        detail::prepMetisInput(part, domain_data, std::forward< F >(is_not_boundary));
     std::vector< idx_t > epart(n_elements), npart(max_node);
-
-    const int error_code = detail::invokeMetisPartitioner(
+    const int            error_code = detail::invokeMetisPartitioner(
         n_elements, max_node, epart, npart, e_ind, e_ptr, node_comm_vol, node_weight, n_parts, std::move(part_weights));
     detail::handleMetisErrorCode(error_code);
-    return std::make_tuple(std::move(epart), std::move(npart));
+    return std::make_pair(std::move(epart), std::move(npart));
 }
 
 auto distributeDomainElements(const MeshPartition&                      part,

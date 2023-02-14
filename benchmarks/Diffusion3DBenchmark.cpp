@@ -1,11 +1,14 @@
-#define L3STER_ELEMENT_ORDERS 4
-#include "Amesos2.hpp"
-#include "DataPath.h"
+#include "BelosBlockCGSolMgr.hpp"
+#include "BelosTpetraOperator.hpp"
 
+#define L3STER_ELEMENT_ORDERS 4
 #include "l3ster/l3ster.hpp"
+
+#include "DataPath.h"
 
 int main(int argc, char* argv[])
 {
+    L3STER_PROFILE_FUNCTION;
     using namespace lstr;
     using namespace std::string_view_literals;
 
@@ -135,4 +138,32 @@ int main(int argc, char* argv[])
     system_manager->beginModify();
     system_manager->applyDirichletBCs();
     system_manager->endModify();
+
+    L3STER_PROFILE_REGION_BEGIN("Set up Belos::LinearProblem");
+    auto algebraic_problem = makeTeuchosRCP< Belos::LinearProblem< val_t, tpetra_multivector_t, tpetra_operator_t > >(
+        system_manager->getMatrix(), system_manager->getSolutionVector(), system_manager->getRhs());
+    if (not algebraic_problem->setProblem())
+        throw std::runtime_error{"Failed to set up Belos::LinearProblem"};
+    L3STER_PROFILE_REGION_END("Set up Belos::LinearProblem");
+
+    L3STER_PROFILE_REGION_BEGIN("Set up Belos::BlockCGSolMgr");
+    auto solver_params = makeTeuchosRCP< Teuchos::ParameterList >();
+    solver_params->set("Block Size", 1);
+    solver_params->set("Maximum Iterations", static_cast< int >(system_manager->getRhs()->getGlobalLength()));
+    solver_params->set("Convergence Tolerance", 1.e-5);
+    solver_params->set("Verbosity",
+                       Belos::Errors + Belos::Warnings + Belos::TimingDetails + Belos::StatusTestDetails +
+                           Belos::IterationDetails + Belos::FinalSummary);
+    solver_params->set("Output Frequency", 50);
+    Teuchos::RCP< Belos::SolverManager< val_t, tpetra_multivector_t, tpetra_operator_t > > solver =
+        makeTeuchosRCP< Belos::BlockCGSolMgr< val_t, tpetra_multivector_t, tpetra_operator_t > >(algebraic_problem,
+                                                                                                 solver_params);
+    L3STER_PROFILE_REGION_END("Set up Belos::BlockCGSolMgr");
+
+    L3STER_PROFILE_REGION_BEGIN("Solve the algebraic problem");
+    auto solver_retval = solver->solve();
+    L3STER_PROFILE_REGION_END("Solve the algebraic problem");
+
+    if (comm.getRank() == 0)
+        std::cout << (solver_retval == Belos::Converged ? "The solver converged\n" : "The solver did not converge\n");
 }

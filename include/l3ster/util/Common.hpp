@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <concepts>
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <span>
@@ -62,7 +63,29 @@ template < typename... T >
 constexpr bool exactlyOneOf(T... args)
     requires(std::convertible_to< T, bool > and ...)
 {
-    return (static_cast< size_t >(static_cast< bool >(args)) + ...) == 1u;
+    return (static_cast< std::size_t >(static_cast< bool >(args)) + ...) == std::size_t{1};
+}
+
+template < std::integral To, std::integral From >
+To exactIntegerCast(From from)
+    requires std::convertible_to< From, To >
+{
+    constexpr auto max_from = static_cast< std::uintmax_t >(std::numeric_limits< From >::max());
+    constexpr auto min_from = static_cast< std::intmax_t >(std::numeric_limits< From >::min());
+    constexpr auto max_to   = static_cast< std::uintmax_t >(std::numeric_limits< To >::max());
+    constexpr auto min_to   = static_cast< std::intmax_t >(std::numeric_limits< To >::min());
+
+    if constexpr (max_from > max_to)
+        if (static_cast< std::uintmax_t >(from) > max_to)
+            throw std::runtime_error{
+                "The value being converted is greater then the maximum value representable by the target type"};
+
+    if constexpr (min_from < min_to)
+        if (static_cast< std::intmax_t >(from) < min_to)
+            throw std::runtime_error{
+                "The value being converted is less than the minimum value representable by the target type"};
+
+    return static_cast< To >(from);
 }
 
 // If std::unique_ptr<T[]> was a range...

@@ -175,16 +175,15 @@ inline auto makeDofMaps(std::span< const global_dof_t > owned,
 template < detail::ProblemDef_c auto problem_def >
 Teuchos::RCP< const tpetra_fecrsgraph_t >
 makeSparsityGraph(const MeshPartition&                                    mesh,
-                  const NodeToGlobalDofMap< deduceNFields(problem_def) >& global_node_to_dof_map,
+                  const NodeToGlobalDofMap< deduceNFields(problem_def) >& node_to_dof_map,
                   ConstexprValue< problem_def >                           problemdef_ctwrapper,
                   const MpiComm&                                          comm)
 {
     L3STER_PROFILE_FUNCTION;
-    const auto [all_dofs, n_owned_dofs] = computeNodeDofs(mesh, global_node_to_dof_map);
+    const auto [all_dofs, n_owned_dofs] = computeNodeDofs(mesh, node_to_dof_map);
     const auto owned_plus_shared_dofs   = std::span{all_dofs};
     const auto owned_dofs               = owned_plus_shared_dofs.subspan(0, n_owned_dofs);
-    auto [dof_graph, row_sizes] =
-        computeDofGraph(mesh, global_node_to_dof_map, owned_plus_shared_dofs, problemdef_ctwrapper);
+    auto [dof_graph, row_sizes] = computeDofGraph(mesh, node_to_dof_map, owned_plus_shared_dofs, problemdef_ctwrapper);
     const auto [owned_map, owned_plus_shared_map] = makeDofMaps(owned_dofs, owned_plus_shared_dofs, comm);
     auto retval = makeTeuchosRCP< tpetra_fecrsgraph_t >(owned_map, owned_plus_shared_map, row_sizes);
     retval->beginAssembly();

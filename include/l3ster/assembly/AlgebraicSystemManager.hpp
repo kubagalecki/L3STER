@@ -184,8 +184,12 @@ void AlgebraicSystemManager< n_fields >::endAssembly()
         return;
 
     m_rhs_view = {};
+    L3STER_PROFILE_REGION_BEGIN("RHS");
     m_rhs->endAssembly();
+    L3STER_PROFILE_REGION_END("RHS");
+    L3STER_PROFILE_REGION_BEGIN("Matrix");
     m_matrix->endAssembly();
+    L3STER_PROFILE_REGION_END("Matrix");
     m_state = State::Closed;
 }
 

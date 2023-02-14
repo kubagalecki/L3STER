@@ -600,8 +600,10 @@ auto MeshPartition::convertToMetisFormat() const
         const auto el_ptr = find(id)->first;
         std::visit(
             [&]< ElementTypes T, el_o_t O >(const Element< T, O >* element) {
-                std::ranges::for_each(element->getNodes(), [&](auto n) { eind.push_back(n); });
-                eptr.push_back(eptr.back() + element->getNodes().size());
+                std::ranges::copy(element->getNodes() |
+                                      std::views::transform([](auto n) { return exactIntegerCast< idx_t >(n); }),
+                                  std::back_inserter(eind));
+                eptr.push_back(exactIntegerCast< idx_t >(eptr.back() + element->getNodes().size()));
             },
             el_ptr);
     };
@@ -610,19 +612,17 @@ auto MeshPartition::convertToMetisFormat() const
 
 MetisGraphWrapper MeshPartition::makeMetisDualGraph() const
 {
-    auto mesh_in_metis_format = convertToMetisFormat();
-    auto& [eptr, eind]        = mesh_in_metis_format;
-
-    auto  ne      = static_cast< idx_t >(getNElements());
-    auto  nn      = static_cast< idx_t >(getOwnedNodes().size());
-    idx_t ncommon = 2;
-    idx_t numflag = 0;
+    auto [eptr, eind] = convertToMetisFormat();
+    auto  ne          = exactIntegerCast< idx_t >(getNElements());
+    auto  nn          = exactIntegerCast< idx_t >(getOwnedNodes().size());
+    idx_t ncommon     = 2;
+    idx_t numflag     = 0;
 
     idx_t* xadj{};
     idx_t* adjncy{};
 
-    const auto error = METIS_MeshToDual(&ne, &nn, eptr.data(), eind.data(), &ncommon, &numflag, &xadj, &adjncy);
-    detail::handleMetisErrorCode(error);
+    const auto error_code = METIS_MeshToDual(&ne, &nn, eptr.data(), eind.data(), &ncommon, &numflag, &xadj, &adjncy);
+    detail::handleMetisErrorCode(error_code);
 
     return MetisGraphWrapper{xadj, adjncy, getNElements()};
 }
