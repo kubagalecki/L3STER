@@ -161,12 +161,12 @@ int main(int argc, char* argv[])
     system_manager->applyDirichletBCs();
     system_manager->endModify();
 
-    L3STER_PROFILE_REGION_BEGIN("Set up Ifpack2::ILUT preconditioner");
+    L3STER_PROFILE_REGION_BEGIN("Set up Ifpack2 ILU(0) preconditioner");
     auto precond_params = makeTeuchosRCP< Teuchos::ParameterList >();
-    precond_params->set("fact: ilut level-of-fill", 1.);
-    precond_params->set("fact: drop tolerance", 0.);
+    precond_params->set("fact: iluk level-of-fill", 0.);
+    precond_params->set("fact: relax value", 0.);
     Ifpack2::Factory precond_factory;
-    auto             preconditioner = precond_factory.create("ILUT", system_manager->getMatrix());
+    auto             preconditioner = precond_factory.create("RILUK", system_manager->getMatrix());
     preconditioner->setParameters(*precond_params);
     L3STER_PROFILE_REGION_BEGIN("Initialize");
     preconditioner->initialize();
