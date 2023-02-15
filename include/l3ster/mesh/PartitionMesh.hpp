@@ -264,6 +264,7 @@ makeMeshFromPartitionComponents(std::vector< MeshPartition::domain_map_t >&&    
                                         const std::vector< d_id_t >& boundaries,
                                         std::vector< real_t >        part_weights = {})
 {
+    L3STER_PROFILE_FUNCTION;
     if (mesh.getPartitions().size() != 1)
         throw std::logic_error{"Cannot partition a mesh which is either empty or has already been partitioned"};
 

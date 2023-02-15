@@ -8,7 +8,6 @@
 
 int main(int argc, char* argv[])
 {
-    L3STER_PROFILE_FUNCTION;
     using namespace lstr;
     using namespace std::string_view_literals;
 
@@ -161,12 +160,11 @@ int main(int argc, char* argv[])
     system_manager->applyDirichletBCs();
     system_manager->endModify();
 
-    L3STER_PROFILE_REGION_BEGIN("Set up Ifpack2 ILU(0) preconditioner");
+    L3STER_PROFILE_REGION_BEGIN("Set up Ifpack2 Chebyshev preconditioner");
     auto precond_params = makeTeuchosRCP< Teuchos::ParameterList >();
-    precond_params->set("fact: iluk level-of-fill", 0.);
-    precond_params->set("fact: relax value", 0.);
+    precond_params->set("chebyshev: degree", 3);
     Ifpack2::Factory precond_factory;
-    auto             preconditioner = precond_factory.create("RILUK", system_manager->getMatrix());
+    auto             preconditioner = precond_factory.create("CHEBYSHEV", system_manager->getMatrix());
     preconditioner->setParameters(*precond_params);
     L3STER_PROFILE_REGION_BEGIN("Initialize");
     preconditioner->initialize();
@@ -174,7 +172,7 @@ int main(int argc, char* argv[])
     L3STER_PROFILE_REGION_BEGIN("Compute");
     preconditioner->compute();
     L3STER_PROFILE_REGION_END("Compute");
-    L3STER_PROFILE_REGION_END("Set up Ifpack2::ILUT preconditioner");
+    L3STER_PROFILE_REGION_END("Set up Ifpack2 Chebyshev preconditioner");
 
     L3STER_PROFILE_REGION_BEGIN("Set up Belos::LinearProblem");
     auto algebraic_problem = makeTeuchosRCP< Belos::LinearProblem< val_t, tpetra_multivector_t, tpetra_operator_t > >(
@@ -188,8 +186,9 @@ int main(int argc, char* argv[])
     auto solver_params = makeTeuchosRCP< Teuchos::ParameterList >();
     solver_params->set("Block Size", 1);
     solver_params->set("Maximum Iterations", 10'000);
-    solver_params->set("Convergence Tolerance", 1.e-5);
-    solver_params->set("Verbosity", Belos::Warnings + Belos::IterationDetails + Belos::FinalSummary);
+    solver_params->set("Convergence Tolerance", 1.e-6);
+    solver_params->set("Verbosity",
+                       Belos::Warnings + Belos::IterationDetails + Belos::FinalSummary + Belos::TimingDetails);
     solver_params->set("Output Frequency", 100);
     Belos::SolverFactory< val_t, tpetra_multivector_t, tpetra_operator_t > solver_factory;
     auto solver = solver_factory.create("Block CG", solver_params);
