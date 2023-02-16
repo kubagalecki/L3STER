@@ -14,9 +14,18 @@ int main(int argc, char* argv[])
     L3sterScopeGuard scope_guard{argc, argv};
     const MpiComm    comm;
 
-    constexpr auto        mesh_order   = L3STER_ELEMENT_ORDERS;
-    constexpr d_id_t      domain_id    = 0;
-    static constexpr auto boundary_ids = makeIotaArray< d_id_t, 6 >(1);
+    constexpr d_id_t      domain_id           = 0;
+    static constexpr auto boundary_ids        = makeIotaArray< d_id_t, 6 >(1);
+    constexpr auto        problem_def         = std::array{Pair{domain_id, std::array{true, true, true, true}}};
+    constexpr auto        dirichlet_def       = std::invoke([] {
+        std::array< Pair< d_id_t, std::array< bool, 4 > >, boundary_ids.size() > retval{};
+        std::ranges::transform(boundary_ids, retval.begin(), [](auto d) {
+            return Pair{d, std::array{true, false, false, false}};
+        });
+        return retval;
+    });
+    constexpr auto        probdef_ctwrpr      = ConstexprValue< problem_def >{};
+    constexpr auto        dirichletdef_ctwrpr = ConstexprValue< dirichlet_def >{};
 
     constexpr auto node_dist = std::invoke([] {
         constexpr size_t                   edge_divs = 12;
@@ -30,15 +39,16 @@ int main(int argc, char* argv[])
         return retval;
     });
 
-    Mesh mesh;
+    constexpr auto mesh_order = L3STER_ELEMENT_ORDERS;
+    Mesh           mesh;
     if (comm.getRank() == 0)
     {
         mesh = makeCubeMesh(node_dist);
-        mesh.getPartitions()[0].initDualGraph();
-        mesh.getPartitions()[0] = convertMeshToOrder< mesh_order >(mesh.getPartitions()[0]);
+        mesh.getPartitions().front().initDualGraph();
+        mesh.getPartitions().front() = convertMeshToOrder< mesh_order >(mesh.getPartitions().front());
     }
     const auto my_partition =
-        distributeMesh(comm, mesh, std::vector< d_id_t >(boundary_ids.begin(), boundary_ids.end()));
+        distributeMesh(comm, mesh, std::vector< d_id_t >(boundary_ids.begin(), boundary_ids.end()), probdef_ctwrpr);
     const auto boundary_view = my_partition.getBoundaryView(boundary_ids);
 
     {
@@ -48,17 +58,6 @@ int main(int argc, char* argv[])
                 << "\n\tNumber of ghost nodes: " << my_partition.getGhostNodes().size() << '\n';
         std::cout << log_msg.view();
     }
-
-    constexpr auto problem_def         = std::array{Pair{domain_id, std::array{true, true, true, true}}};
-    constexpr auto dirichlet_def       = std::invoke([] {
-        std::array< Pair< d_id_t, std::array< bool, 4 > >, boundary_ids.size() > retval{};
-        std::ranges::transform(boundary_ids, retval.begin(), [](auto d) {
-            return Pair{d, std::array{true, false, false, false}};
-        });
-        return retval;
-    });
-    constexpr auto probdef_ctwrpr      = ConstexprValue< problem_def >{};
-    constexpr auto dirichletdef_ctwrpr = ConstexprValue< dirichlet_def >{};
 
     constexpr auto n_fields    = detail::deduceNFields(problem_def);
     constexpr auto field_inds  = makeIotaArray< size_t, n_fields >();

@@ -1,43 +1,15 @@
 #ifndef L3STER_ASSEMBLY_DOFINTERVALS_HPP
 #define L3STER_ASSEMBLY_DOFINTERVALS_HPP
 
+#include "l3ster/assembly/ProblemDefinition.hpp"
 #include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
-#include "l3ster/util/BitsetManip.hpp"
 #include "l3ster/util/Caliper.hpp"
 
 namespace lstr
 {
 namespace detail
 {
-template < size_t n_fields, size_t n_domains >
-using problem_def_t = std::array< Pair< d_id_t, std::array< bool, n_fields > >, n_domains >;
-
-template < typename T >
-inline constexpr bool is_problem_def = false;
-template < size_t n_fields, size_t n_domains >
-inline constexpr bool is_problem_def< problem_def_t< n_fields, n_domains > > = true;
-template < typename T >
-concept ProblemDef_c = is_problem_def< T >;
-
-template < size_t n_fields, size_t n_domains >
-consteval size_t deduceNFields(const problem_def_t< n_fields, n_domains >&)
-{
-    return n_fields;
-}
-
-template < size_t n_fields, size_t n_domains >
-consteval size_t deduceNDomains(const problem_def_t< n_fields, n_domains >&)
-{
-    return n_domains;
-}
-
-template < size_t n_fields, size_t n_domains >
-constexpr size_t getFieldUllongSize(const problem_def_t< n_fields, n_domains >&)
-{
-    return bitsetNUllongs< n_fields >();
-}
-
 template < size_t n_fields, size_t n_domains >
 constexpr size_t getSerialDofIntervalSize(const problem_def_t< n_fields, n_domains >& problem_def)
 {

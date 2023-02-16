@@ -4,23 +4,20 @@
 #include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/defs/Typedefs.h"
 
-#include <thread>
+#include "oneapi/tbb.h"
 
 namespace lstr
 {
 inline std::vector< val_t > gatherNodeThroughputs(const MpiComm& comm)
 {
-    const auto     n_nodes       = comm.getSize();
-    constexpr int  root          = 0;
-    const unsigned my_throughput = std::thread::hardware_concurrency(); // TODO: scale this by clock frequency
+    const auto    n_nodes       = comm.getSize();
+    constexpr int root          = 0;
+    const size_t  my_throughput = oneapi::tbb::this_task_arena::max_concurrency(); // TODO: scale by clock frequency
     if (comm.getRank() == root)
     {
-        std::vector< unsigned > throughputs(n_nodes);
+        std::vector< size_t > throughputs(n_nodes);
         comm.gather(&my_throughput, throughputs.data(), 1, root);
-        const auto throughput_sum = std::reduce(begin(throughputs), end(throughputs));
-        if (throughput_sum == 0u)
-            throw std::runtime_error{"Throughput computation failed on all nodes"};
-
+        const auto           throughput_sum = std::reduce(begin(throughputs), end(throughputs));
         std::vector< val_t > retval{};
         retval.reserve(throughputs.size());
         std::ranges::transform(throughputs, std::back_inserter(retval), [&](auto tp) {
@@ -30,7 +27,7 @@ inline std::vector< val_t > gatherNodeThroughputs(const MpiComm& comm)
     }
     else
     {
-        comm.gather(&my_throughput, static_cast< unsigned* >(nullptr), 1, root);
+        comm.gather(&my_throughput, static_cast< size_t* >(nullptr), 1, root);
         return {};
     }
 }
