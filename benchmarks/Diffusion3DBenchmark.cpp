@@ -53,7 +53,8 @@ int main(int argc, char* argv[])
 
     {
         std::stringstream log_msg;
-        log_msg << "Rank " << comm.getRank() << "\n\tNumber of elements: " << my_partition.getNElements()
+        log_msg << "Rank " << comm.getRank()
+                << "\n\tNumber of domain elements: " << my_partition.getDomain(domain_id).getNElements()
                 << "\n\tNumber of owned nodes: " << my_partition.getOwnedNodes().size()
                 << "\n\tNumber of ghost nodes: " << my_partition.getGhostNodes().size() << '\n';
         std::cout << log_msg.view();

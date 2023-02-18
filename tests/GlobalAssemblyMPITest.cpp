@@ -17,24 +17,25 @@ int main(int argc, char* argv[])
     using namespace lstr;
     L3sterScopeGuard scope_guard{argc, argv};
 
+    constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
+    constexpr auto   problem_def         = std::array{Pair{domain_id, std::array{true, true, true}}};
+    constexpr auto   probdef_ctwrpr      = ConstexprValue< problem_def >{};
+    constexpr auto   dirichlet_def       = std::array{Pair{left_boundary, std::array{true, false, false}},
+                                              Pair{right_boundary, std::array{true, false, false}}};
+    constexpr auto   dirichletdef_ctwrpr = ConstexprValue< dirichlet_def >{};
+
     const MpiComm    comm;
     const std::array node_dist{0., 1., 2., 3., 4., 5., 6.};
     constexpr auto   mesh_order = 2;
     auto             mesh       = makeSquareMesh(node_dist);
-    mesh.getPartitions()[0].initDualGraph();
-    mesh.getPartitions()[0]    = convertMeshToOrder< mesh_order >(mesh.getPartitions()[0]);
-    constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
-    const auto my_partition = distributeMesh(comm, mesh, {bot_boundary, top_boundary, left_boundary, right_boundary});
+    mesh.getPartitions().front().initDualGraph();
+    mesh.getPartitions().front() = convertMeshToOrder< mesh_order >(mesh.getPartitions().front());
+    const auto my_partition =
+        distributeMesh(comm, mesh, {bot_boundary, top_boundary, left_boundary, right_boundary}, probdef_ctwrpr);
     const auto adiabatic_boundary_ids = std::array{bot_boundary, top_boundary};
     const auto whole_boundary_ids     = std::array{top_boundary, bot_boundary, left_boundary, right_boundary};
     const auto adiabatic_bound_view   = my_partition.getBoundaryView(adiabatic_boundary_ids);
     const auto whole_bound_view       = my_partition.getBoundaryView(whole_boundary_ids);
-
-    constexpr auto problem_def         = std::array{Pair{domain_id, std::array{true, true, true}}};
-    constexpr auto dirichlet_def       = std::array{Pair{left_boundary, std::array{true, false, false}},
-                                              Pair{right_boundary, std::array{true, false, false}}};
-    constexpr auto probdef_ctwrpr      = ConstexprValue< problem_def >{};
-    constexpr auto dirichletdef_ctwrpr = ConstexprValue< dirichlet_def >{};
 
     constexpr auto n_fields       = detail::deduceNFields(problem_def);
     auto           system_manager = makeAlgebraicSystemManager(comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr);
