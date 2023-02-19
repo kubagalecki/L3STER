@@ -116,12 +116,12 @@ public:
         MPI_File m_file = MPI_FILE_NULL;
     };
 
-    MpiComm(MPI_Comm comm = MPI_COMM_WORLD, bool is_owning = false) : m_comm{comm}, m_is_owning{is_owning} {}
+    MpiComm(MPI_Comm comm = MPI_COMM_WORLD, bool is_owning = false) : m_comm{comm} {}
     MpiComm(const MpiComm&)            = delete;
     MpiComm(MpiComm&&)                 = delete;
     MpiComm& operator=(const MpiComm&) = delete;
     MpiComm& operator=(MpiComm&&)      = delete;
-    inline ~MpiComm();
+    ~MpiComm()                         = default;
 
     // send
     template < detail::MpiBuf_c T >
@@ -172,7 +172,6 @@ public:
 
 private:
     MPI_Comm m_comm;
-    bool     m_is_owning;
 };
 
 MpiComm::Request::Request(MpiComm::Request&& other) noexcept : m_request(other.m_request)
@@ -370,12 +369,6 @@ int MpiComm::getSize() const
     int size{};
     detail::handleMPIError(MPI_Comm_size(m_comm, &size), "MPI m_comm size query failed");
     return size;
-}
-
-MpiComm::~MpiComm()
-{
-    if (m_is_owning)
-        MPI_Comm_free(&m_comm);
 }
 } // namespace lstr
 #endif // L3STER_COMM_MPICOMM_HPP

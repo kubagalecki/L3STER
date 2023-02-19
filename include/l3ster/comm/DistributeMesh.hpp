@@ -115,12 +115,19 @@ auto computeOptimalRankPermutation(const MpiComm&                comm,
     }
 }
 
+inline auto computeDefaultRankPermutation(const MpiComm& comm)
+{
+    std::vector< int > retval(comm.getSize());
+    std::iota(begin(retval), end(retval), 0);
+    return retval;
+}
+
 template < el_o_t order, MeshFormat mesh_format >
 Mesh readAndConvertMesh(std::string_view mesh_file, MeshFormatTag< mesh_format > format_tag)
 {
     auto mesh = readMesh(mesh_file, format_tag);
     mesh.getPartitions().front().initDualGraph();
-    mesh.getPartitions().front() = convertMeshToOrder< order >(mesh.getPartitions()[0]);
+    mesh.getPartitions().front() = convertMeshToOrder< order >(mesh.getPartitions().front());
     return mesh;
 }
 } // namespace detail::dist_mesh
@@ -136,10 +143,13 @@ MeshPartition distributeMesh(const MpiComm&                comm,
         return mesh.getPartitions().front();
 
     const auto node_throughputs = gatherNodeThroughputs(comm);
+    Mesh       mesh_parted      = comm.getRank() == 0
+                                    ? partitionMesh(mesh, comm.getSize(), boundaries, node_throughputs, probdef_ctwrpr)
+                                    : Mesh{};
+    const auto permutation      = detail::dist_mesh::computeDefaultRankPermutation(comm);
+    // const auto permutation = detail::dist_mesh::computeOptimalRankPermutation(comm, mesh_parted, probdef_ctwrpr);
     if (comm.getRank() == 0)
     {
-        auto          mesh_parted = partitionMesh(mesh, comm.getSize(), boundaries, node_throughputs, probdef_ctwrpr);
-        const auto    permutation = detail::dist_mesh::computeOptimalRankPermutation(comm, mesh_parted, probdef_ctwrpr);
         MeshPartition my_partition;
         for (int unpermuted_rank = 0; MeshPartition & part : mesh_parted.getPartitions())
         {
@@ -156,10 +166,7 @@ MeshPartition distributeMesh(const MpiComm&                comm,
         return my_partition;
     }
     else
-    {
-        detail::dist_mesh::computeOptimalRankPermutation(comm, mesh, probdef_ctwrpr);
         return deserializePartition(receivePartition(comm, 0));
-    }
 }
 
 template < el_o_t order, MeshFormat mesh_format, detail::ProblemDef_c auto problem_def = detail::empty_problem_def_t{} >
