@@ -24,7 +24,7 @@ int main(int argc, char* argv[])
                                               Pair{right_boundary, std::array{true, false, false}}};
     constexpr auto   dirichletdef_ctwrpr = ConstexprValue< dirichlet_def >{};
 
-    const MpiComm    comm;
+    const MpiComm    comm{MPI_COMM_WORLD};
     const std::array node_dist{0., 1., 2., 3., 4., 5., 6.};
     constexpr auto   mesh_order = 2;
     auto             mesh       = makeSquareMesh(node_dist);

@@ -122,20 +122,18 @@ auto gatherGlobalDofIntervals(const auto&                   local_intervals,
     constexpr size_t n_fields = deduceNFields(problem_def);
 
     constexpr auto serial_interval_size = getSerialDofIntervalSize(problem_def);
-    constexpr int  reduce_size = 1, reduce_root_rank = 0;
-    const size_t   n_intervals_local = local_intervals.size();
-    const auto     comm_size         = comm.getSize();
-    const auto     my_rank           = comm.getRank();
+    const size_t   n_intervals_local    = local_intervals.size();
+    const auto     comm_size            = comm.getSize();
+    const auto     my_rank              = comm.getRank();
 
     size_t max_n_intervals_global{};
-    comm.reduce(&n_intervals_local, &max_n_intervals_global, reduce_size, reduce_root_rank, MPI_MAX);
-    comm.broadcast(&max_n_intervals_global, reduce_size, reduce_root_rank);
+    comm.allReduce(std::views::single(n_intervals_local), &max_n_intervals_global, MPI_MAX);
     const auto max_msg_size = max_n_intervals_global * serial_interval_size + 1;
 
-    auto serial_local_intervals = std::make_unique_for_overwrite< unsigned long long[] >(max_msg_size); // NOLINT
+    auto serial_local_intervals = ArrayOwner< unsigned long long >(max_msg_size);
     serial_local_intervals[0]   = n_intervals_local;
-    serializeDofIntervals(local_intervals, std::next(serial_local_intervals.get()));
-    const auto local_msg_size = n_intervals_local * serial_interval_size + 1;
+    serializeDofIntervals(local_intervals, std::next(serial_local_intervals.begin()));
+    // const auto local_msg_size = n_intervals_local * serial_interval_size + 1;
 
     node_interval_vector_t< n_fields > intervals;
     std::vector< ptrdiff_t >           interval_inds;
@@ -143,11 +141,12 @@ auto gatherGlobalDofIntervals(const auto&                   local_intervals,
     interval_inds.reserve(comm_size + 1);
     interval_inds.push_back(0);
 
-    auto       proc_buf              = std::make_unique_for_overwrite< unsigned long long[] >(max_msg_size); // NOLINT
-    const auto process_received_data = [&]() {                                                               // NOLINT
+    auto       proc_buf              = ArrayOwner< unsigned long long >(max_msg_size);
+    const auto process_received_data = [&]() {
         const size_t n_int_rcvd = proc_buf[0];
         deserializeDofIntervals< n_fields >(
-            std::views::counted(std::next(proc_buf.get()), static_cast< ptrdiff_t >(n_int_rcvd * serial_interval_size)),
+            std::views::counted(std::next(proc_buf.begin()),
+                                static_cast< ptrdiff_t >(n_int_rcvd * serial_interval_size)),
             std::back_inserter(intervals));
         interval_inds.push_back(n_int_rcvd);
     };
@@ -156,16 +155,15 @@ auto gatherGlobalDofIntervals(const auto&                   local_intervals,
         interval_inds.push_back(n_intervals_local);
     };
 
-    auto msg_buf = my_rank == 0 ? std::move(serial_local_intervals)
-                                : std::make_unique_for_overwrite< unsigned long long[] >(max_msg_size); // NOLINT
-    auto request = comm.broadcastAsync(msg_buf.get(), my_rank == 0 ? local_msg_size : max_msg_size, 0);
+    auto msg_buf = my_rank == 0 ? std::move(serial_local_intervals) : ArrayOwner< unsigned long long >(max_msg_size);
+    auto request = comm.broadcastAsync(msg_buf, 0);
     for (int root_rank = 1; root_rank < comm_size; ++root_rank)
     {
         request.wait();
         std::swap(msg_buf, proc_buf);
         if (my_rank == root_rank)
             msg_buf = std::move(serial_local_intervals);
-        request = comm.broadcastAsync(msg_buf.get(), my_rank == root_rank ? local_msg_size : max_msg_size, root_rank);
+        request = comm.broadcastAsync(msg_buf, root_rank);
         my_rank != root_rank - 1 ? process_received_data() : process_my_data();
     }
     request.wait();

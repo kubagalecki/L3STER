@@ -12,7 +12,7 @@ int main(int argc, char* argv[])
     using namespace std::string_view_literals;
 
     L3sterScopeGuard scope_guard{argc, argv};
-    const MpiComm    comm;
+    const MpiComm    comm{MPI_COMM_WORLD};
 
     constexpr d_id_t      domain_id           = 0;
     static constexpr auto boundary_ids        = makeIotaArray< d_id_t, 6 >(1);

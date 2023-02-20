@@ -16,7 +16,7 @@ inline std::vector< val_t > gatherNodeThroughputs(const MpiComm& comm)
     if (comm.getRank() == root)
     {
         std::vector< size_t > throughputs(n_nodes);
-        comm.gather(&my_throughput, throughputs.data(), 1, root);
+        comm.gather(std::views::single(my_throughput), throughputs.begin(), root);
         const auto           throughput_sum = std::reduce(begin(throughputs), end(throughputs));
         std::vector< val_t > retval{};
         retval.reserve(throughputs.size());
@@ -27,7 +27,7 @@ inline std::vector< val_t > gatherNodeThroughputs(const MpiComm& comm)
     }
     else
     {
-        comm.gather(&my_throughput, static_cast< size_t* >(nullptr), 1, root);
+        comm.gather(std::views::single(my_throughput), static_cast< size_t* >(nullptr), root);
         return {};
     }
 }

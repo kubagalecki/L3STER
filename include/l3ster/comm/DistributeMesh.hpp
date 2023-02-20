@@ -102,15 +102,14 @@ auto computeOptimalRankPermutation(const MpiComm&                comm,
         const auto [sources, degrees, destinations, weights] = makeCommVolumeInfo(mesh, probdef_ctwrapper);
         const int          optimal_rank = comm.distGraphCreate(sources, degrees, destinations, weights, true).getRank();
         std::vector< int > retval(comm.getSize());
-        comm.gather(&optimal_rank, retval.data(), 1, 0);
+        comm.gather(std::views::single(optimal_rank), retval.begin(), 0);
         return retval;
     }
     else
     {
         const auto empty        = std::views::empty< int >;
         const int  optimal_rank = comm.distGraphCreate(empty, empty, empty, empty, true).getRank();
-        int        _{};
-        comm.gather(&optimal_rank, &_, 1, 0);
+        comm.gather(std::views::single(optimal_rank), &std::ignore, 0);
         return {};
     }
 }

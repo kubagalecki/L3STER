@@ -105,7 +105,7 @@ auto AlgebraicSystemManager< n_fields >::makeAlgebraicSystemManager(const MpiCom
     auto       cache_key       = makeCacheKey(mesh, problemdef_ctwrpr, dbcdef_ctwrpr);
     const char local_cache_hit = cache.contains(cache_key);
     char       global_cache_hit{};
-    comm.allReduce(&local_cache_hit, &global_cache_hit, 1, MPI_LAND);
+    comm.allReduce(std::views::single(local_cache_hit), &global_cache_hit, MPI_LAND);
     if (global_cache_hit)
         return cache.get(cache_key);
     else

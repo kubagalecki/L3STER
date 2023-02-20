@@ -10,7 +10,7 @@ int main(int argc, char* argv[])
     using namespace lstr;
     GlobalResource< MpiScopeGuard >::initialize(argc, argv);
     GlobalResource< KokkosScopeGuard >::initialize(argc, argv);
-    MpiComm comm{};
+    MpiComm comm{MPI_COMM_WORLD};
 
     Mesh mesh_full;
     if (comm.getRank() == 0)

@@ -10,7 +10,7 @@ int main(int argc, char* argv[])
 {
     using namespace lstr;
     L3sterScopeGuard scope_guard{argc, argv};
-    lstr::MpiComm    comm{};
+    lstr::MpiComm    comm{MPI_COMM_WORLD};
 
     const auto  read_mesh   = lstr::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::gmsh_tag);
     const auto& read_part   = read_mesh.getPartitions()[0];

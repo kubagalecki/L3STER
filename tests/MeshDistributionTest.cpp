@@ -9,13 +9,13 @@ int main(int argc, char* argv[])
 {
     using namespace lstr;
     L3sterScopeGuard scope_guard{argc, argv};
-    MpiComm          comm{};
+    MpiComm          comm{MPI_COMM_WORLD};
 
     const auto   part = readAndDistributeMesh< 2 >(comm, L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag, {});
     const size_t n_elems = part.getNElements();
 
     size_t sum_elems{};
-    comm.reduce(&n_elems, &sum_elems, 1, 0, MPI_SUM);
+    comm.reduce(std::views::single(n_elems), &sum_elems, 0, MPI_SUM);
 
     if (comm.getRank() == 0)
     {

@@ -14,7 +14,7 @@ int main(int argc, char* argv[])
 {
     using namespace lstr;
     L3sterScopeGuard scope_guard{argc, argv};
-    MpiComm          comm{};
+    MpiComm          comm{MPI_COMM_WORLD};
 
     constexpr auto problem_def = ConstexprValue< std::array{Pair{d_id_t{1}, std::array{false, true, false}},
                                                             Pair{d_id_t{2}, std::array{false, true, true}},
@@ -44,7 +44,7 @@ int main(int argc, char* argv[])
     detail::consolidateDofIntervals(global_intervals);
     const auto            n_int_global = global_intervals.size();
     std::vector< size_t > computed_glob_int_sizes(my_rank == 0 ? n_ranks : 0);
-    comm.gather(&n_int_global, computed_glob_int_sizes.data(), 1, 0);
+    comm.gather(std::views::single(n_int_global), computed_glob_int_sizes.data(), 0);
     if (my_rank == 0)
         REQUIRE(std::ranges::none_of(computed_glob_int_sizes, [&](auto s) { return s != n_int_global; }));
 
@@ -55,7 +55,7 @@ int main(int argc, char* argv[])
     std::ranges::generate(gather_buf, [prng = std::mt19937{std::random_device{}()}]() mutable {
         return std::uniform_int_distribution< unsigned long long >{}(prng);
     });
-    comm.gather(serial_int.data(), gather_buf.data(), serial_int.size(), 0);
+    comm.gather(serial_int, gather_buf.data(), 0);
     if (my_rank == 0)
     {
         for (auto it = gather_buf.begin(); it != gather_buf.end(); std::advance(it, serial_int.size()))

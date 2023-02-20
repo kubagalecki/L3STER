@@ -12,7 +12,7 @@ int main(int argc, char* argv[])
 {
     using namespace lstr;
     L3sterScopeGuard scope_guard{argc, argv};
-    MpiComm          comm{};
+    MpiComm          comm{MPI_COMM_WORLD};
 
     const auto throughputs = gatherNodeThroughputs(comm);
     if (comm.getRank() == 0)
