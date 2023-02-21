@@ -61,9 +61,9 @@ inline auto SolutionManager::makeNodeMaps(const MeshPartition& mesh, const MpiCo
     const auto n_owned_nodes = mesh.getOwnedNodes().size();
     const auto n_ghost_nodes = mesh.getGhostNodes().size();
     const auto n_nodes_total = n_owned_nodes + n_ghost_nodes;
-    const auto nodes         = std::make_unique_for_overwrite< global_dof_t[] >(n_nodes_total);
-    std::ranges::copy(mesh.getAllNodes(), nodes.get()); // n_id_t != global_dof_t
-    const auto all_nodes   = std::span{nodes.get(), n_nodes_total};
+    auto       nodes         = ArrayOwner< global_dof_t >(n_nodes_total);
+    std::ranges::copy(mesh.getAllNodes(), nodes.begin()); // n_id_t != global_dof_t
+    const auto all_nodes   = std::span{nodes.begin(), n_nodes_total};
     const auto owned_nodes = all_nodes.subspan(0, n_owned_nodes);
     const auto make_map    = [teuchos_comm = makeTeuchosRCP< comm_t >(comm.get())](auto dofs) {
         const auto unknown_n_nodes = Teuchos::OrdinalTraits< Tpetra::global_size_t >::invalid();

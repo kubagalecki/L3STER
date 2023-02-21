@@ -17,7 +17,7 @@ extern "C"
 
 namespace lstr
 {
-namespace detail
+namespace detail::mpi
 {
 template < typename T >
 struct MpiType
@@ -59,13 +59,17 @@ concept MpiBuf_c = std::ranges::contiguous_range< T > and std::ranges::sized_ran
 template < typename T >
 concept MpiBorrowedBuf_c = MpiBuf_c< T > and std::ranges::borrowed_range< T >;
 
+template < typename It, typename Buf >
+concept MpiOutputIterator_c =
+    std::output_iterator< It, std::ranges::range_value_t< Buf > > and std::contiguous_iterator< It >;
+
 auto decomposeMpiBuf(MpiBuf_c auto&& buf)
 {
     return std::make_tuple(MpiType< std::ranges::range_value_t< decltype(buf) > >::value(),
                            std::ranges::data(buf),
                            static_cast< int >(std::ranges::ssize(buf)));
 }
-} // namespace detail
+} // namespace detail::mpi
 
 class MpiComm
 {
@@ -81,8 +85,8 @@ public:
         inline Request& operator=(Request&&) noexcept;
         ~Request() { waitIgnoreErr(); }
 
-        void wait() { detail::handleMPIError(MPI_Wait(&m_request, MPI_STATUS_IGNORE), "MPI wait for request failed"); }
-        void cancel() { detail::handleMPIError(MPI_Cancel(&m_request), "MPI request cancellation failed"); }
+        void wait() { detail::mpi::handleMPIError(MPI_Wait(&m_request, MPI_STATUS_IGNORE), "MPI_wait failed"); }
+        void cancel() { detail::mpi::handleMPIError(MPI_Cancel(&m_request), "MPI_Cancel failed"); }
         [[nodiscard]] inline bool test();
 
     private:
@@ -104,8 +108,8 @@ public:
         ~FileHandle() { closeIgnoreErr(); }
 
         inline void preallocate(MPI_Offset size) const;
-        auto        readAtAsync(detail::MpiBorrowedBuf_c auto&& data, MPI_Offset offset) const -> MpiComm::Request;
-        auto        writeAtAsync(detail::MpiBorrowedBuf_c auto&& data, MPI_Offset offset) const -> MpiComm::Request;
+        auto        readAtAsync(detail::mpi::MpiBorrowedBuf_c auto&& data, MPI_Offset offset) const -> MpiComm::Request;
+        auto writeAtAsync(detail::mpi::MpiBorrowedBuf_c auto&& data, MPI_Offset offset) const -> MpiComm::Request;
 
     private:
         FileHandle() = default;
@@ -122,53 +126,25 @@ public:
     ~MpiComm() { freeOwnedComm(); }
 
     // send
-    void               send(detail::MpiBuf_c auto&& send_range, int dest, int tag = 0) const;
-    [[nodiscard]] auto sendAsync(detail::MpiBorrowedBuf_c auto&& data, int dest, int tag = 0) const -> Request;
+    void               send(detail::mpi::MpiBuf_c auto&& send_range, int dest, int tag = 0) const;
+    [[nodiscard]] auto sendAsync(detail::mpi::MpiBorrowedBuf_c auto&& data, int dest, int tag = 0) const -> Request;
 
     // receive
-    void               receive(detail::MpiBuf_c auto&& recv_range, int src, int tag = 0) const;
-    [[nodiscard]] auto receiveAsync(detail::MpiBorrowedBuf_c auto&& data, int src, int tag = 0) const -> Request;
+    void               receive(detail::mpi::MpiBuf_c auto&& recv_range, int src, int tag = 0) const;
+    [[nodiscard]] auto receiveAsync(detail::mpi::MpiBorrowedBuf_c auto&& data, int src, int tag = 0) const -> Request;
 
     // collectives
-    void barrier() const { detail::handleMPIError(MPI_Barrier(m_comm), "MPI_Barrier failed"); }
-    void reduce(detail::MpiBuf_c auto&& data, auto out_it, int root, MPI_Op op) const
-        requires std::output_iterator< decltype(out_it), std::ranges::range_value_t< decltype(data) > > and
-                 std::contiguous_iterator< decltype(out_it) >
-    {
-        const auto [datatype, buf_begin, buf_size] = detail::decomposeMpiBuf(data);
-        detail::handleMPIError(MPI_Reduce(buf_begin, std::addressof(*out_it), buf_size, datatype, op, root, m_comm),
-                               "MPI reduce failed");
-    }
-    void allReduce(detail::MpiBuf_c auto&& data, auto out_it, MPI_Op op) const
-        requires std::output_iterator< decltype(out_it), std::ranges::range_value_t< decltype(data) > > and
-                 std::contiguous_iterator< decltype(out_it) >
-    {
-        const auto [datatype, buf_begin, buf_size] = detail::decomposeMpiBuf(data);
-        detail::handleMPIError(MPI_Allreduce(buf_begin, std::addressof(*out_it), buf_size, datatype, op, m_comm),
-                               "MPI all-reduce failed");
-    }
-    void gather(detail::MpiBuf_c auto&& data, auto out_it, int root) const
-        requires std::output_iterator< decltype(out_it), std::ranges::range_value_t< decltype(data) > > and
-                 std::contiguous_iterator< decltype(out_it) >
-    {
-        const auto [datatype, buf_begin, buf_size] = detail::decomposeMpiBuf(data);
-        detail::handleMPIError(
-            MPI_Gather(buf_begin, buf_size, datatype, std::addressof(*out_it), buf_size, datatype, root, m_comm),
-            "MPI gather failed");
-    }
-    void broadcast(detail::MpiBuf_c auto&& data, int root) const
-    {
-        const auto [datatype, buf_begin, buf_size] = detail::decomposeMpiBuf(data);
-        detail::handleMPIError(MPI_Bcast(buf_begin, buf_size, datatype, root, m_comm), "MPI broadcast failed");
-    }
-    [[nodiscard]] auto broadcastAsync(detail::MpiBorrowedBuf_c auto&& data, int root) const -> Request
-    {
-        const auto [datatype, buf_begin, buf_size] = detail::decomposeMpiBuf(data);
-        Request request{};
-        detail::handleMPIError(MPI_Ibcast(buf_begin, buf_size, datatype, root, m_comm, &request.m_request),
-                               "MPI asynchronous broadcast failed");
-        return request;
-    }
+    void barrier() const { detail::mpi::handleMPIError(MPI_Barrier(m_comm), "MPI_Barrier failed"); }
+    template < detail::mpi::MpiBuf_c Data, detail::mpi::MpiOutputIterator_c< Data > It >
+    void reduce(Data&& data, It out_it, int root, MPI_Op op) const;
+    template < detail::mpi::MpiBuf_c Data, detail::mpi::MpiOutputIterator_c< Data > It >
+    void allReduce(Data&& data, It out_it, MPI_Op op) const;
+    template < detail::mpi::MpiBuf_c Data, detail::mpi::MpiOutputIterator_c< Data > It >
+    void gather(Data&& data, It out_it, int root) const;
+    template < detail::mpi::MpiBuf_c Data >
+    void broadcast(Data&& data, int root) const;
+    template < detail::mpi::MpiBorrowedBuf_c Data >
+    [[nodiscard]] auto broadcastAsync(Data&& data, int root) const -> Request;
 
     // observers
     [[nodiscard]] inline int getRank() const;
@@ -197,94 +173,140 @@ MpiComm::Request::Request(MpiComm::Request&& other) noexcept : m_request(other.m
 {
     other.m_request = MPI_REQUEST_NULL;
 }
+
 MpiComm::Request& MpiComm::Request::operator=(MpiComm::Request&& other) noexcept
 {
     waitIgnoreErr();
     m_request = std::exchange(other.m_request, MPI_REQUEST_NULL);
     return *this;
 }
+
 bool MpiComm::Request::test()
 {
     int flag{};
-    detail::handleMPIError(MPI_Test(&m_request, &flag, MPI_STATUS_IGNORE), "MPI test async request failed");
+    detail::mpi::handleMPIError(MPI_Test(&m_request, &flag, MPI_STATUS_IGNORE), "MPI_Test failed");
     return flag;
 }
 
 MpiComm::FileHandle::FileHandle(MpiComm::FileHandle&& other) noexcept
     : m_file{std::exchange(other.m_file, MPI_FILE_NULL)}
 {}
+
 MpiComm::FileHandle& MpiComm::FileHandle::operator=(MpiComm::FileHandle&& other) noexcept
 {
     closeIgnoreErr();
     m_file = std::exchange(other.m_file, MPI_FILE_NULL);
     return *this;
 }
+
 void MpiComm::FileHandle::preallocate(MPI_Offset size) const
 {
-    detail::handleMPIError(MPI_File_preallocate(m_file, size), "MPI file preallocate failed");
+    detail::mpi::handleMPIError(MPI_File_preallocate(m_file, size), "MPI_File_preallocate failed");
 }
-auto MpiComm::FileHandle::readAtAsync(detail::MpiBorrowedBuf_c auto&& read_range, MPI_Offset offset) const
+
+auto MpiComm::FileHandle::readAtAsync(detail::mpi::MpiBorrowedBuf_c auto&& read_range, MPI_Offset offset) const
     -> MpiComm::Request
 {
-    const auto       datatype = detail::MpiType< std::ranges::range_value_t< decltype(read_range) > >::value();
+    const auto [datatype, buf_begin, buf_size] = detail::mpi::decomposeMpiBuf(read_range);
     MpiComm::Request request;
-    detail::handleMPIError(
-        MPI_File_iread_at(
-            m_file, offset, std::ranges::data(read_range), std::ranges::size(read_range), datatype, &request.m_request),
-        "MPI asynchronous read from file at offset failed");
+    detail::mpi::handleMPIError(MPI_File_iread_at(m_file, offset, buf_begin, buf_size, datatype, &request.m_request),
+                                "MPI_File_iread_at failed");
     return request;
 }
-auto MpiComm::FileHandle::writeAtAsync(detail::MpiBorrowedBuf_c auto&& write_range, MPI_Offset offset) const
+
+auto MpiComm::FileHandle::writeAtAsync(detail::mpi::MpiBorrowedBuf_c auto&& write_range, MPI_Offset offset) const
     -> MpiComm::Request
 {
-    const auto       datatype = detail::MpiType< std::ranges::range_value_t< decltype(write_range) > >::value();
+    const auto       datatype = detail::mpi::MpiType< std::ranges::range_value_t< decltype(write_range) > >::value();
     MpiComm::Request request;
-    detail::handleMPIError(MPI_File_iwrite_at(m_file,
-                                              offset,
-                                              std::ranges::data(write_range),
-                                              std::ranges::size(write_range),
-                                              datatype,
-                                              &request.m_request),
-                           "MPI asynchronous write to file at offset failed");
+    detail::mpi::handleMPIError(MPI_File_iwrite_at(m_file,
+                                                   offset,
+                                                   std::ranges::data(write_range),
+                                                   std::ranges::size(write_range),
+                                                   datatype,
+                                                   &request.m_request),
+                                "MPI_File_iwrite_at failed");
     return request;
 }
+
 MpiComm::FileHandle MpiComm::openFile(const char* file_name, int amode, MPI_Info info) const
 {
     FileHandle fh;
-    detail::handleMPIError(MPI_File_open(m_comm, file_name, amode, info, &fh.m_file),
-                           "MPI could not open the requested file");
+    detail::mpi::handleMPIError(MPI_File_open(m_comm, file_name, amode, info, &fh.m_file), "MPI_File_open failed");
     return fh;
 }
 
-void MpiComm::send(detail::MpiBuf_c auto&& send_range, int dest, int tag) const
+void MpiComm::send(detail::mpi::MpiBuf_c auto&& send_range, int dest, int tag) const
 {
-    const auto [datatype, buf_begin, buf_size] = detail::decomposeMpiBuf(send_range);
-    detail::handleMPIError(MPI_Send(buf_begin, buf_size, datatype, dest, tag, m_comm), "MPI send failed");
+    const auto [datatype, buf_begin, buf_size] = detail::mpi::decomposeMpiBuf(send_range);
+    detail::mpi::handleMPIError(MPI_Send(buf_begin, buf_size, datatype, dest, tag, m_comm), "MPI_Send failed");
 }
 
-auto MpiComm::sendAsync(detail::MpiBorrowedBuf_c auto&& data, int dest, int tag) const -> Request
+auto MpiComm::sendAsync(detail::mpi::MpiBorrowedBuf_c auto&& data, int dest, int tag) const -> Request
 {
-    const auto [datatype, buf_begin, buf_size] = detail::decomposeMpiBuf(data);
+    const auto [datatype, buf_begin, buf_size] = detail::mpi::decomposeMpiBuf(data);
     Request request;
-    detail::handleMPIError(MPI_Isend(buf_begin, buf_size, datatype, dest, tag, m_comm, &request.m_request),
-                           "MPI asynchronous send failed");
+    detail::mpi::handleMPIError(MPI_Isend(buf_begin, buf_size, datatype, dest, tag, m_comm, &request.m_request),
+                                "MPI_Isend failed");
     return request;
 }
 
-void MpiComm::receive(detail::MpiBuf_c auto&& recv_range, int source, int tag) const
+void MpiComm::receive(detail::mpi::MpiBuf_c auto&& recv_range, int source, int tag) const
 {
-    const auto [datatype, buf_begin, buf_size] = detail::decomposeMpiBuf(recv_range);
-    detail::handleMPIError(MPI_Recv(buf_begin, buf_size, datatype, source, tag, m_comm, MPI_STATUS_IGNORE),
-                           "MPI receive failed");
+    const auto [datatype, buf_begin, buf_size] = detail::mpi::decomposeMpiBuf(recv_range);
+    detail::mpi::handleMPIError(MPI_Recv(buf_begin, buf_size, datatype, source, tag, m_comm, MPI_STATUS_IGNORE),
+                                "MPI_Recv failed");
 }
 
-auto MpiComm::receiveAsync(detail::MpiBorrowedBuf_c auto&& data, int src, int tag) const -> Request
+auto MpiComm::receiveAsync(detail::mpi::MpiBorrowedBuf_c auto&& data, int src, int tag) const -> Request
 
 {
-    const auto [datatype, buf_begin, buf_size] = detail::decomposeMpiBuf(data);
+    const auto [datatype, buf_begin, buf_size] = detail::mpi::decomposeMpiBuf(data);
     Request request;
-    detail::handleMPIError(MPI_Irecv(buf_begin, buf_size, datatype, src, tag, m_comm, &request.m_request),
-                           "MPI asynchronous receive failed");
+    detail::mpi::handleMPIError(MPI_Irecv(buf_begin, buf_size, datatype, src, tag, m_comm, &request.m_request),
+                                "MPI_Irecv failed");
+    return request;
+}
+
+template < detail::mpi::MpiBuf_c Data, detail::mpi::MpiOutputIterator_c< Data > It >
+void MpiComm::reduce(Data&& data, It out_it, int root, MPI_Op op) const
+{
+    const auto [datatype, buf_begin, buf_size] = detail::mpi::decomposeMpiBuf(data);
+    detail::mpi::handleMPIError(MPI_Reduce(buf_begin, std::addressof(*out_it), buf_size, datatype, op, root, m_comm),
+                                "MPI_Reduce failed");
+}
+
+template < detail::mpi::MpiBuf_c Data, detail::mpi::MpiOutputIterator_c< Data > It >
+void MpiComm::allReduce(Data&& data, It out_it, MPI_Op op) const
+{
+    const auto [datatype, buf_begin, buf_size] = detail::mpi::decomposeMpiBuf(data);
+    detail::mpi::handleMPIError(MPI_Allreduce(buf_begin, std::addressof(*out_it), buf_size, datatype, op, m_comm),
+                                "MPI_Allreduce failed");
+}
+
+template < detail::mpi::MpiBuf_c Data, detail::mpi::MpiOutputIterator_c< Data > It >
+void MpiComm::gather(Data&& data, It out_it, int root) const
+{
+    const auto [datatype, buf_begin, buf_size] = detail::mpi::decomposeMpiBuf(data);
+    detail::mpi::handleMPIError(
+        MPI_Gather(buf_begin, buf_size, datatype, std::addressof(*out_it), buf_size, datatype, root, m_comm),
+        "MPI_Gather failed");
+}
+
+template < detail::mpi::MpiBuf_c Data >
+void MpiComm::broadcast(Data&& data, int root) const
+{
+    const auto [datatype, buf_begin, buf_size] = detail::mpi::decomposeMpiBuf(data);
+    detail::mpi::handleMPIError(MPI_Bcast(buf_begin, buf_size, datatype, root, m_comm), "MPI_Bcast failed");
+}
+
+template < detail::mpi::MpiBorrowedBuf_c Data >
+auto MpiComm::broadcastAsync(Data&& data, int root) const -> MpiComm::Request
+{
+    const auto [datatype, buf_begin, buf_size] = detail::mpi::decomposeMpiBuf(data);
+    Request request{};
+    detail::mpi::handleMPIError(MPI_Ibcast(buf_begin, buf_size, datatype, root, m_comm, &request.m_request),
+                                "MPI_Ibcast failed");
     return request;
 }
 
@@ -295,30 +317,30 @@ MpiComm MpiComm::distGraphCreate(ContiguousSizedRangeOf< int > auto&& sources,
                                  bool                                 reorder) const
 {
     MpiComm retval;
-    detail::handleMPIError(MPI_Dist_graph_create(m_comm,
-                                                 static_cast< int >(std::ranges::ssize(sources)),
-                                                 std::ranges::data(sources),
-                                                 std::ranges::data(degrees),
-                                                 std::ranges::data(destinations),
-                                                 std::ranges::data(weights),
-                                                 MPI_INFO_NULL,
-                                                 reorder,
-                                                 &retval.m_comm),
-                           "MPI_Dist_graph_create failed");
+    detail::mpi::handleMPIError(MPI_Dist_graph_create(m_comm,
+                                                      static_cast< int >(std::ranges::ssize(sources)),
+                                                      std::ranges::data(sources),
+                                                      std::ranges::data(degrees),
+                                                      std::ranges::data(destinations),
+                                                      std::ranges::data(weights),
+                                                      MPI_INFO_NULL,
+                                                      reorder,
+                                                      &retval.m_comm),
+                                "MPI_Dist_graph_create failed");
     return retval;
 }
 
 int MpiComm::getRank() const
 {
     int rank{};
-    detail::handleMPIError(MPI_Comm_rank(m_comm, &rank), "MPI rank query failed");
+    detail::mpi::handleMPIError(MPI_Comm_rank(m_comm, &rank), "MPI_Comm_rank failed");
     return rank;
 }
 
 int MpiComm::getSize() const
 {
     int size{};
-    detail::handleMPIError(MPI_Comm_size(m_comm, &size), "MPI m_comm size query failed");
+    detail::mpi::handleMPIError(MPI_Comm_size(m_comm, &size), "MPI_Comm_size failed");
     return size;
 }
 
@@ -330,7 +352,7 @@ void MpiComm::freeOwnedComm()
 
 MpiComm::MpiComm(MPI_Comm comm)
 {
-    detail::handleMPIError(MPI_Comm_dup(comm, &m_comm), "MPI_Comm_dup failed");
+    detail::mpi::handleMPIError(MPI_Comm_dup(comm, &m_comm), "MPI_Comm_dup failed");
 }
 
 MpiComm& MpiComm::operator=(MpiComm&& other) noexcept

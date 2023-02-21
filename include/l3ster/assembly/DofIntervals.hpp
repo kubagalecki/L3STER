@@ -119,21 +119,20 @@ auto gatherGlobalDofIntervals(const auto&                   local_intervals,
                               ConstexprValue< problem_def > problemdef_ctwrapper,
                               const MpiComm&                comm)
 {
-    constexpr size_t n_fields = deduceNFields(problem_def);
-
+    using buffer_t                      = ArrayOwner< unsigned long long >;
+    constexpr auto n_fields             = deduceNFields(problem_def);
     constexpr auto serial_interval_size = getSerialDofIntervalSize(problem_def);
-    const size_t   n_intervals_local    = local_intervals.size();
+    const auto     n_intervals_local    = local_intervals.size();
     const auto     comm_size            = comm.getSize();
     const auto     my_rank              = comm.getRank();
 
     size_t max_n_intervals_global{};
     comm.allReduce(std::views::single(n_intervals_local), &max_n_intervals_global, MPI_MAX);
-    const auto max_msg_size = max_n_intervals_global * serial_interval_size + 1;
+    const auto max_msg_size = max_n_intervals_global * serial_interval_size + 1u;
 
-    auto serial_local_intervals = ArrayOwner< unsigned long long >(max_msg_size);
+    auto serial_local_intervals = buffer_t(max_msg_size);
     serial_local_intervals[0]   = n_intervals_local;
     serializeDofIntervals(local_intervals, std::next(serial_local_intervals.begin()));
-    // const auto local_msg_size = n_intervals_local * serial_interval_size + 1;
 
     node_interval_vector_t< n_fields > intervals;
     std::vector< ptrdiff_t >           interval_inds;
@@ -141,12 +140,11 @@ auto gatherGlobalDofIntervals(const auto&                   local_intervals,
     interval_inds.reserve(comm_size + 1);
     interval_inds.push_back(0);
 
-    auto       proc_buf              = ArrayOwner< unsigned long long >(max_msg_size);
+    auto       proc_buf              = buffer_t(max_msg_size);
     const auto process_received_data = [&]() {
         const size_t n_int_rcvd = proc_buf[0];
         deserializeDofIntervals< n_fields >(
-            std::views::counted(std::next(proc_buf.begin()),
-                                static_cast< ptrdiff_t >(n_int_rcvd * serial_interval_size)),
+            std::views::counted(std::next(proc_buf.begin()), n_int_rcvd * serial_interval_size),
             std::back_inserter(intervals));
         interval_inds.push_back(n_int_rcvd);
     };
@@ -155,7 +153,7 @@ auto gatherGlobalDofIntervals(const auto&                   local_intervals,
         interval_inds.push_back(n_intervals_local);
     };
 
-    auto msg_buf = my_rank == 0 ? std::move(serial_local_intervals) : ArrayOwner< unsigned long long >(max_msg_size);
+    auto msg_buf = my_rank == 0 ? std::move(serial_local_intervals) : buffer_t(max_msg_size);
     auto request = comm.broadcastAsync(msg_buf, 0);
     for (int root_rank = 1; root_rank < comm_size; ++root_rank)
     {
@@ -320,9 +318,8 @@ auto computeDofIntervals(const MeshPartition&          mesh,
                          const MpiComm&                comm)
 {
     L3STER_PROFILE_FUNCTION;
-    const auto local_intervals  = detail::computeLocalDofIntervals(mesh, problemdef_ctwrapper);
-    auto       global_data      = detail::gatherGlobalDofIntervals(local_intervals, problemdef_ctwrapper, comm);
-    auto& [_, global_intervals] = global_data;
+    const auto local_intervals = detail::computeLocalDofIntervals(mesh, problemdef_ctwrapper);
+    auto [_, global_intervals] = detail::gatherGlobalDofIntervals(local_intervals, problemdef_ctwrapper, comm);
     detail::consolidateDofIntervals(global_intervals);
     return std::move(global_intervals);
 }
