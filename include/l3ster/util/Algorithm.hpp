@@ -85,13 +85,11 @@ constexpr auto makeTupleIf(T&&... arg)
     return std::tuple_cat(detail::tuplifyIf< TraitsPredicate >(std::forward< T >(arg))...);
 }
 
-template < tuple_like T, tuple_invocable< T > F >
-constexpr decltype(auto) forEachTuple(T& t, F&& f)
+constexpr void forEachTuple(auto&& t, auto&& f)
+    requires tuple_like< std::decay_t< decltype(t) > > and tuple_invocable< decltype(f), std::decay_t< decltype(t) > >
 {
-    [&]< size_t... I >(std::index_sequence< I... >) {
-        (f(std::get< I >(t)), ...);
-    }(std::make_index_sequence< std::tuple_size_v< T > >{});
-    return std::forward< F >(f);
+    std::invoke([&]< size_t... I >(std::index_sequence< I... >) { (std::invoke(f, std::get< I >(t)), ...); },
+                std::make_index_sequence< std::tuple_size_v< std::decay_t< decltype(t) > > >{});
 }
 
 template < std::unsigned_integral T >
