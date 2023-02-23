@@ -115,6 +115,39 @@ inline auto prepMetisInput(const MeshPartition&         part,
     return retval;
 }
 
+inline auto makeNodeCondensationMaps(const MeshPartition& mesh) -> std::array< std::vector< n_id_t >, 2 >
+{
+    std::vector< n_id_t > forward_map(mesh.getAllNodes().size()), reverse_map;
+    mesh.visit(
+        [&forward_map]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
+            for (auto node : ElementTraits< Element< T, O > >::boundary_node_inds |
+                                 std::views::transform([&element](el_locind_t i) { return element.getNodes()[i]; }))
+                std::atomic_ref{forward_map[node]}.store(1, std::memory_order_relaxed);
+        },
+        std::execution::par);
+    reverse_map.reserve(std::ranges::count(forward_map, 1));
+    for (n_id_t node_full = 0, node_cond = 0; auto& forward_map_elem : forward_map)
+    {
+        if (forward_map_elem)
+        {
+            forward_map_elem = node_cond;
+            reverse_map.push_back(node_full);
+            ++node_cond;
+        }
+        ++node_full;
+    }
+    return {std::move(forward_map), std::move(reverse_map)};
+}
+
+inline auto condenseNodeWeights(std::vector< idx_t > node_weights, const std::vector< n_id_t >& reverse_map)
+    -> std::vector< idx_t >
+{
+    if (not node_weights.empty())
+        for (size_t node_cond = 0; auto node_uncond : reverse_map)
+            node_weights[node_cond++] = node_weights[node_uncond];
+    return node_weights;
+}
+
 inline auto makeMetisOptionsForPartitioning()
 {
     std::array< idx_t, METIS_NOPTIONS > opts{};
@@ -127,54 +160,78 @@ inline auto makeMetisOptionsForPartitioning()
     return opts;
 }
 
-inline int invokeMetisPartitioner(idx_t                  n_elements,
-                                  idx_t                  n_nodes,
-                                  std::vector< idx_t >&  epart,
-                                  std::vector< idx_t >&  npart,
-                                  std::vector< idx_t >&  e_ind,
-                                  std::vector< idx_t >&  e_ptr,
-                                  std::vector< idx_t >&  node_weights,
-                                  idx_t                  n_parts,
-                                  std::vector< real_t >& part_weights)
+struct MetisOutput
 {
-    idx_t objval_discarded{};
-    auto  metis_options = makeMetisOptionsForPartitioning();
-    return METIS_PartMeshNodal(&n_elements,
-                               &n_nodes,
-                               e_ptr.data(),
-                               e_ind.data(),
-                               node_weights.empty() ? nullptr : node_weights.data(),
-                               node_weights.empty() ? nullptr : node_weights.data(),
-                               &n_parts,
-                               part_weights.empty() ? nullptr : part_weights.data(),
-                               metis_options.data(),
-                               &objval_discarded,
-                               epart.data(),
-                               npart.data());
+    std::vector< idx_t > epart, npart;
+};
+inline auto invokeMetisPartitioner(idx_t                 n_elements,
+                                   idx_t                 n_nodes,
+                                   MetisInput            metis_input,
+                                   std::vector< idx_t >  node_weights,
+                                   std::vector< real_t > part_weights,
+                                   idx_t                 n_parts) -> MetisOutput
+{
+    auto        metis_options = makeMetisOptionsForPartitioning();
+    idx_t       objval_discarded{};
+    MetisOutput retval;
+    retval.epart.resize(n_elements);
+    retval.npart.resize(n_nodes);
+    const auto error_code = METIS_PartMeshNodal(&n_elements,
+                                                &n_nodes,
+                                                metis_input.e_ptr.data(),
+                                                metis_input.e_ind.data(),
+                                                node_weights.empty() ? nullptr : node_weights.data(),
+                                                node_weights.empty() ? nullptr : node_weights.data(),
+                                                &n_parts,
+                                                part_weights.empty() ? nullptr : part_weights.data(),
+                                                metis_options.data(),
+                                                &objval_discarded,
+                                                retval.epart.data(),
+                                                retval.npart.data());
+    handleMetisErrorCode(error_code);
+    return retval;
 }
 
-inline auto makeNodeCondensationMaps(const MeshPartition& mesh)
+inline auto uncondenseNodes(const std::vector< idx_t >&  epart,
+                            const std::vector< idx_t >&  npart_cond,
+                            const std::vector< n_id_t >& reverse_map,
+                            const MeshPartition&         mesh,
+                            const std::vector< d_id_t >& domain_ids) -> std::vector< idx_t >
 {
-    auto forward_map = std::vector< n_id_t >(mesh.getAllNodes().size());
-    auto reverse_map = robin_hood::unordered_flat_map< n_id_t, n_id_t >{};
-    mesh.visit(
-        [&forward_map]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
-            for (auto node : ElementTraits< Element< T, O > >::boundary_node_inds |
-                                 std::views::transform([&element](el_locind_t i) { return element.getNodes()[i]; }))
-                std::atomic_ref{forward_map[node]}.store(1, std::memory_order_relaxed);
-        },
-        std::execution::par);
-    for (n_id_t node_full = 0, node_cond = 0; auto& forward_map_elem : forward_map)
-    {
-        if (forward_map_elem)
-        {
-            forward_map_elem       = node_cond;
-            reverse_map[node_cond] = node_full;
-            ++node_cond;
-        }
-        ++node_full;
-    }
-    return std::make_pair(std::move(forward_map), std::move(reverse_map));
+    std::vector< idx_t > retval(mesh.getAllNodes().size());
+    for (size_t i = 0; auto node_uncond : reverse_map)
+        retval[node_uncond] = npart_cond[i++];
+    size_t el_ind = 0;
+    for (auto id : domain_ids)
+        mesh.visit(
+            [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
+                const auto el_part = epart[el_ind++];
+                for (auto n : ElementTraits< Element< ET, EO > >::internal_node_inds |
+                                  std::views::transform([&](auto i) { return element.getNodes()[i]; }))
+                    retval[n] = el_part;
+            },
+            id);
+    return retval;
+}
+
+inline auto partitionCondensedMesh(const MeshPartition&         mesh,
+                                   const std::vector< d_id_t >& domain_ids,
+                                   const std::vector< d_id_t >& boundary_ids,
+                                   DomainData                   domain_data,
+                                   idx_t                        n_parts,
+                                   std::vector< real_t >        part_weights,
+                                   std::vector< idx_t >         node_weights) -> MetisOutput
+{
+    const auto [forward_map, reverse_map] = makeNodeCondensationMaps(mesh);
+    node_weights                          = condenseNodeWeights(std::move(node_weights), reverse_map);
+    auto retval                           = invokeMetisPartitioner(domain_data.n_elements,
+                                         exactIntegerCast< idx_t >(reverse_map.size()),
+                                         prepMetisInput(mesh, domain_data, forward_map, domain_ids),
+                                         std::move(node_weights),
+                                         std::move(part_weights),
+                                         n_parts);
+    retval.npart                          = uncondenseNodes(retval.epart, retval.npart, reverse_map, mesh, domain_ids);
+    return retval;
 }
 
 inline auto makeDomainMaps(const MeshPartition&         part,
@@ -316,52 +373,6 @@ makeMeshFromPartitionComponents(std::vector< MeshPartition::domain_map_t >&&    
     for (size_t i = 0; auto& [owned, ghost] : node_vecs)
         new_parts.emplace_back(std::move(dom_maps[i++]), std::move(owned), std::move(ghost));
     return Mesh{std::move(new_parts)};
-}
-
-inline auto uncondenseNodes(const std::vector< idx_t >&                             epart,
-                            const std::vector< idx_t >&                             npart_cond,
-                            const robin_hood::unordered_flat_map< n_id_t, n_id_t >& reverse_map,
-                            const MeshPartition&                                    mesh,
-                            const std::vector< d_id_t >&                            domain_ids) -> std::vector< idx_t >
-{
-    std::vector< idx_t > retval(mesh.getAllNodes().size());
-    for (const auto& [node_cond, node_uncond] : reverse_map)
-        retval[node_uncond] = npart_cond[node_cond];
-    size_t el_ind = 0;
-    for (auto id : domain_ids)
-        mesh.visit(
-            [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
-                const auto el_part = epart[el_ind++];
-                for (auto n : ElementTraits< Element< ET, EO > >::internal_node_inds |
-                                  std::views::transform([&](auto i) { return element.getNodes()[i]; }))
-                    retval[n] = el_part;
-            },
-            id);
-    return retval;
-}
-
-inline auto partitionCondensedMesh(const MeshPartition&         mesh,
-                                   const std::vector< d_id_t >& domain_ids,
-                                   const std::vector< d_id_t >& boundary_ids,
-                                   DomainData                   domain_data,
-                                   idx_t                        n_parts,
-                                   std::vector< real_t >        part_weights,
-                                   std::vector< idx_t >         node_weights) -> std::array< std::vector< idx_t >, 2 >
-{
-    const auto [forward_map, reverse_map] = makeNodeCondensationMaps(mesh);
-    auto [e_ind, e_ptr]                   = prepMetisInput(mesh, domain_data, forward_map, domain_ids);
-    std::vector< idx_t > epart(domain_data.n_elements), npart(reverse_map.size());
-    handleMetisErrorCode(invokeMetisPartitioner(domain_data.n_elements,
-                                                static_cast< idx_t >(reverse_map.size()),
-                                                epart,
-                                                npart,
-                                                e_ind,
-                                                e_ptr,
-                                                node_weights,
-                                                n_parts,
-                                                part_weights));
-    npart = uncondenseNodes(epart, npart, reverse_map, mesh, domain_ids);
-    return {std::move(epart), std::move(npart)};
 }
 
 inline auto partitionMeshImpl(const MeshPartition&         mesh,
