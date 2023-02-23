@@ -27,8 +27,8 @@ public:
                                            ConstexprValue< dirichlet_def > dbcdef_ctwrpr)
         -> std::shared_ptr< AlgebraicSystemManager >;
 
-    [[nodiscard]] const auto& getMatrix() const { return m_matrix; }
-    [[nodiscard]] const auto& getRhs() const { return m_rhs; }
+    [[nodiscard]] auto        getMatrix() const -> Teuchos::RCP< const tpetra_crsmatrix_t > { return m_matrix; }
+    [[nodiscard]] auto        getRhs() const -> Teuchos::RCP< const tpetra_multivector_t > { return m_rhs; }
     [[nodiscard]] const auto& getDofMap() const { return m_node_dof_map; }
     [[nodiscard]] auto        getSolutionVector() const { return m_owned_values->getVector(0); }
     [[nodiscard]] auto        getSolutionVector() { return m_owned_values->getVectorNonConst(0); }
@@ -105,7 +105,7 @@ auto AlgebraicSystemManager< n_fields >::makeAlgebraicSystemManager(const MpiCom
     auto       cache_key       = makeCacheKey(mesh, problemdef_ctwrpr, dbcdef_ctwrpr);
     const char local_cache_hit = cache.contains(cache_key);
     char       global_cache_hit{};
-    comm.allReduce(&local_cache_hit, &global_cache_hit, 1, MPI_LAND);
+    comm.allReduce(std::views::single(local_cache_hit), &global_cache_hit, MPI_LAND);
     if (global_cache_hit)
         return cache.get(cache_key);
     else
@@ -130,23 +130,27 @@ AlgebraicSystemManager< n_fields >::AlgebraicSystemManager(const MpiComm&       
     : m_state{State::OpenForAssembly}
 {
     const auto dof_intervals       = computeDofIntervals(mesh, problemdef_ctwrpr, comm);
-    const auto node_global_dof_map = NodeToGlobalDofMap< n_fields >{mesh, dof_intervals};
+    const auto node_global_dof_map = NodeToGlobalDofMap{mesh, dof_intervals};
+    const auto sparsity_graph      = detail::makeSparsityGraph(mesh, node_global_dof_map, problemdef_ctwrpr, comm);
 
-    const auto sparsity_graph = detail::makeSparsityGraph(mesh, problemdef_ctwrpr, dof_intervals, comm);
-    m_matrix                  = makeTeuchosRCP< tpetra_fecrsmatrix_t >(sparsity_graph);
-    m_rhs = makeTeuchosRCP< tpetra_femultivector_t >(sparsity_graph->getRowMap(), sparsity_graph->getImporter(), 1u);
+    L3STER_PROFILE_REGION_BEGIN("Create Tpetra objects");
+    m_matrix = makeTeuchosRCP< tpetra_fecrsmatrix_t >(sparsity_graph);
+    m_rhs    = makeTeuchosRCP< tpetra_femultivector_t >(sparsity_graph->getRowMap(), sparsity_graph->getImporter(), 1u);
     m_matrix->beginAssembly();
     m_rhs->beginAssembly();
     m_rhs_view = Kokkos::subview(m_rhs->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
+    L3STER_PROFILE_REGION_END("Create Tpetra objects");
 
     m_node_dof_map =
         NodeToLocalDofMap{mesh, node_global_dof_map, *m_matrix->getRowMap(), *m_matrix->getColMap(), *m_rhs->getMap()};
 
     if constexpr (dirichlet_def.size() != 0)
     {
+        L3STER_PROFILE_REGION_BEGIN("Dirichlet BCs");
         auto [owned_bcdofs, shared_bcdofs] =
             detail::getDirichletDofs(mesh, sparsity_graph, node_global_dof_map, problemdef_ctwrpr, dbcdef_ctwrpr);
         m_dirichlet_bcs.emplace(sparsity_graph, std::move(owned_bcdofs), std::move(shared_bcdofs));
+        L3STER_PROFILE_REGION_END("Dirichlet BCs");
     }
     m_owned_values =
         makeTeuchosRCP< tpetra_multivector_t >(sparsity_graph->getRowMap(), m_dirichlet_bcs.has_value() ? 2u : 1u);
@@ -155,6 +159,7 @@ AlgebraicSystemManager< n_fields >::AlgebraicSystemManager(const MpiComm&       
 template < size_t n_fields >
 void AlgebraicSystemManager< n_fields >::beginAssembly()
 {
+    L3STER_PROFILE_FUNCTION;
     assertState(~State::OpenForModify,
                 "Initiation of assembly was attempted while the algebraic system was in the \"open for modification\" "
                 "state. Finalize the modification first before calling \"beginAssembly\".");
@@ -171,6 +176,7 @@ void AlgebraicSystemManager< n_fields >::beginAssembly()
 template < size_t n_fields >
 void AlgebraicSystemManager< n_fields >::endAssembly()
 {
+    L3STER_PROFILE_FUNCTION;
     assertState(~State::OpenForModify,
                 "Finilization of assembly was attempted while the algebraic system was in the \"open for "
                 "modification\" state.");
@@ -178,14 +184,19 @@ void AlgebraicSystemManager< n_fields >::endAssembly()
         return;
 
     m_rhs_view = {};
+    L3STER_PROFILE_REGION_BEGIN("RHS");
     m_rhs->endAssembly();
+    L3STER_PROFILE_REGION_END("RHS");
+    L3STER_PROFILE_REGION_BEGIN("Matrix");
     m_matrix->endAssembly();
+    L3STER_PROFILE_REGION_END("Matrix");
     m_state = State::Closed;
 }
 
 template < size_t n_fields >
 void AlgebraicSystemManager< n_fields >::beginModify()
 {
+    L3STER_PROFILE_FUNCTION;
     assertState(~State::OpenForAssembly,
                 "Initiation of modification was attempted while the algebraic system was in the \"open for assembly\" "
                 "state. Finalize the asembly first before calling \"beginModify\".");
@@ -201,6 +212,7 @@ void AlgebraicSystemManager< n_fields >::beginModify()
 template < size_t n_fields >
 void AlgebraicSystemManager< n_fields >::endModify()
 {
+    L3STER_PROFILE_FUNCTION;
     assertState(~State::OpenForAssembly,
                 "Finilization of modification was attempted while the algebraic system was in the \"open for "
                 "assembly\" state.");
@@ -228,6 +240,7 @@ void AlgebraicSystemManager< n_fields >::assembleDomainProblem(auto&&           
                                                                detail::FieldValGetter_c auto&& fval_getter,
                                                                val_t                           time)
 {
+    L3STER_PROFILE_FUNCTION;
     assertState(~State::Closed, "Assemble was called while the algebraic system was in a closed state.");
     assembleGlobalSystem< BT, QT, QO, field_inds >(std::forward< decltype(kernel) >(kernel),
                                                    mesh,
@@ -246,6 +259,7 @@ void AlgebraicSystemManager< n_fields >::assembleBoundaryProblem(auto&&         
                                                                  detail::FieldValGetter_c auto&& fval_getter,
                                                                  val_t                           time)
 {
+    L3STER_PROFILE_FUNCTION;
     assertState(~State::Closed, "Assemble was called while the algebraic system was in a closed state.");
     assembleGlobalBoundarySystem< BT, QT, QO, field_inds >(std::forward< decltype(kernel) >(kernel),
                                                            boundary,
@@ -259,6 +273,7 @@ void AlgebraicSystemManager< n_fields >::assembleBoundaryProblem(auto&&         
 template < size_t n_fields >
 void AlgebraicSystemManager< n_fields >::applyDirichletBCs()
 {
+    L3STER_PROFILE_FUNCTION;
     if (not m_dirichlet_bcs)
         throw std::runtime_error{"Application of Dirichlet BCs was attempted, but no Dirichlet BCs were defined."};
     assertState(
@@ -290,6 +305,7 @@ auto makeAlgebraicSystemManager(const MpiComm&                  comm,
                                 ConstexprValue< dirichlet_def > dbcdef_ctwrpr = {})
     -> std::shared_ptr< AlgebraicSystemManager< detail::deduceNFields(problem_def) > >
 {
+    L3STER_PROFILE_FUNCTION;
     constexpr auto n_fields = detail::deduceNFields(problem_def);
     return AlgebraicSystemManager< n_fields >::makeAlgebraicSystemManager(comm, mesh, problemdef_ctwrpr, dbcdef_ctwrpr);
 }

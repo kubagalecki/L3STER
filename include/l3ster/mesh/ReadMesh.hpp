@@ -1,8 +1,8 @@
 #ifndef L3STER_MESH_READMESH_HPP
 #define L3STER_MESH_READMESH_HPP
 
-#include "Element.hpp"
-#include "Mesh.hpp"
+#include "l3ster/mesh/Mesh.hpp"
+#include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/Meta.hpp"
 
 #include <algorithm>
@@ -56,6 +56,7 @@ void reorderNodes(auto& nodes)
 
 inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh >)
 {
+    L3STER_PROFILE_FUNCTION;
     const auto throw_error = [&file_path](std::string_view message) {
         std::stringstream error_msg;
         error_msg << "Error: " << message << "\nWhile trying to read: " << file_path;

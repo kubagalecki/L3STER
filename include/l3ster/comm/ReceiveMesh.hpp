@@ -9,9 +9,21 @@ inline SerializedPartition receivePartition(const MpiComm& comm, int source)
 {
     int msg_tag = 0;
 
-    const auto n_doms  = comm.template receive< size_t >(source, msg_tag++);
-    const auto dom_ids = comm.template receive< d_id_t >(n_doms, source, msg_tag++);
-    const auto sizes   = comm.template receive< size_t >(detail::getSizeMsgLength(n_doms), source, msg_tag++);
+    const auto n_doms  = std::invoke([&] {
+        std::ranges::single_view< size_t > retval{};
+        comm.receive(retval, source, msg_tag++);
+        return retval.front();
+    });
+    const auto dom_ids = std::invoke([&] {
+        std::vector< d_id_t > retval(n_doms);
+        comm.receive(retval, source, msg_tag++);
+        return retval;
+    });
+    const auto sizes   = std::invoke([&] {
+        std::vector< size_t > retval(detail::getSizeMsgLength(n_doms));
+        comm.receive(retval, source, msg_tag++);
+        return retval;
+    });
     auto       size_it = cbegin(sizes);
 
     SerializedPartition             retval{};

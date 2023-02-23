@@ -444,7 +444,7 @@ TEST_CASE("Index map", "[util]")
     std::array< size_t, size > vals;
     std::ranges::generate(vals, [base = base]() mutable { return base++; });
     const auto map = IndexMap{vals};
-    for (ptrdiff_t i : std::views::iota(base, base + size))
+    for (size_t i : std::views::iota(base, base + size))
         CHECK(map(i) == i - 10);
 }
 

@@ -27,14 +27,15 @@ using global_dof_t = Tpetra::Map<>::global_ordinal_type; // global DOF type
 using local_dof_t  = Tpetra::Map<>::local_ordinal_type;  // local DOF type
 
 // For now use defaults, this may change in the future
-using tpetra_map_t           = Tpetra::Map<>;
-using tpetra_import_t        = Tpetra::Import<>;
-using tpetra_vector_t        = Tpetra::Vector<>;
-using tpetra_multivector_t   = Tpetra::MultiVector<>;
-using tpetra_femultivector_t = Tpetra::FEMultiVector<>;
 using tpetra_crsgraph_t      = Tpetra::CrsGraph<>;
-using tpetra_fecrsgraph_t    = Tpetra::FECrsGraph<>;
 using tpetra_crsmatrix_t     = Tpetra::CrsMatrix<>;
+using tpetra_fecrsgraph_t    = Tpetra::FECrsGraph<>;
 using tpetra_fecrsmatrix_t   = Tpetra::FECrsMatrix<>;
+using tpetra_femultivector_t = Tpetra::FEMultiVector<>;
+using tpetra_import_t        = Tpetra::Import<>;
+using tpetra_map_t           = Tpetra::Map<>;
+using tpetra_multivector_t   = Tpetra::MultiVector<>;
+using tpetra_operator_t      = Tpetra::Operator<>;
+using tpetra_vector_t        = Tpetra::Vector<>;
 } // namespace lstr
 #endif // L3STER_DEFS_TYPEDEFS_H

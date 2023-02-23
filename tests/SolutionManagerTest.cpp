@@ -11,7 +11,7 @@ int main(int argc, char* argv[])
 {
     using namespace lstr;
     L3sterScopeGuard scope_guard{argc, argv};
-    const MpiComm    comm;
+    const MpiComm    comm{MPI_COMM_WORLD};
 
     const std::array node_dist{0., 1., 2., 3., 4., 5., 6.};
     constexpr auto   mesh_order = 2;

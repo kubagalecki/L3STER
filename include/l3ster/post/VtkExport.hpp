@@ -263,12 +263,12 @@ inline std::array< size_t, 2 > getLocalTopoSize(const MeshPartition& mesh)
     constexpr auto get_el_entries = []< ElementTypes ET, el_o_t EO >(const Element< ET, EO >&) {
         return std::array{numSubels< ET, EO >(), numSerialTopoEntries< ET, EO >()};
     };
-    return mesh.reduce(
+    return mesh.transformReduce(
         std::array< size_t, 2 >{},
-        get_el_entries,
         [](const std::array< size_t, 2 > a1, std::array< size_t, 2 > a2) {
             return std::array< size_t, 2 >{a1[0] + a2[0], a1[1] + a2[1]};
         },
+        get_el_entries,
         mesh.getDomainIds());
 }
 
@@ -450,13 +450,9 @@ auto encodeSolution(const SolutionManager&                                      
 {
     auto   retval         = std::vector< ArrayOwner< char > >(std::ranges::size(field_components));
     auto&& grouping_range = std::forward< decltype(field_components) >(field_components) | std::views::common;
-    std::transform(std::execution::par,
-                   std::ranges::begin(grouping_range),
-                   std::ranges::end(grouping_range),
-                   begin(retval),
-                   [&](std::span< const size_t > component_inds) {
-                       return detail::vtk::encodeField(solution_manager, component_inds);
-                   });
+    util::tbb::parallelTransform(grouping_range, begin(retval), [&](std::span< const size_t > component_inds) {
+        return detail::vtk::encodeField(solution_manager, component_inds);
+    });
     return retval;
 }
 
@@ -495,6 +491,7 @@ inline auto openVtuFile(std::string_view name, const MpiComm& comm)
 PvtuExporter::PvtuExporter(const MeshPartition& mesh, const tpetra_map_t& local_global_map)
     : m_n_nodes{mesh.getAllNodes().size()}
 {
+    L3STER_PROFILE_FUNCTION;
     updateNodeCoords(mesh);
     initTopo(mesh);
 }
@@ -505,6 +502,7 @@ void PvtuExporter::exportSolution(std::string_view                              
                                   SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
                                   SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds)
 {
+    L3STER_PROFILE_FUNCTION;
     if (std::ranges::size(field_names) != std::ranges::size(field_component_inds))
         throw std::runtime_error{"exportSolution: field names and groupings must have the same size"};
 

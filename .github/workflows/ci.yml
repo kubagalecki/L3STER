@@ -86,15 +86,18 @@ jobs:
       - name: Build and run tests
         run: scripts/ci/build-and-run-tests.sh
       - name: Gather coverage results via gcovr
-        run: gcovr -x --exclude-unreachable-branches --exclude-throw-branches -r "$GITHUB_WORKSPACE" -e "$GITHUB_WORKSPACE/tests" -o coverage_report.xml build/tests
+        run: |
+          gcovr --verbose --xml --print-summary --exclude-unreachable-branches --exclude-throw-branches \
+          --gcov-executable gcov-12 \
+          --root "$GITHUB_WORKSPACE" \
+          --exclude "$GITHUB_WORKSPACE/tests/" \
+          --output "$GITHUB_WORKSPACE/coverage_report.xml" \
+          "$GITHUB_WORKSPACE/build/tests/"
       - name: Cleanup
         if: always()
         run: rm -rf build/
-      - uses: codecov/codecov-action@v3
+      - uses: codecov/codecov-action@v3.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
           verbose: true
-      - name: Delete coverage data
-        if: always()
-        run: rm -f coverage_report.xml

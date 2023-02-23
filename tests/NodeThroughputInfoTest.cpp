@@ -1,6 +1,8 @@
 #include "l3ster/comm/GatherNodeThroughputs.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
+#include "Common.hpp"
+
 #include <cmath>
 #include <iostream>
 
@@ -10,35 +12,17 @@ int main(int argc, char* argv[])
 {
     using namespace lstr;
     L3sterScopeGuard scope_guard{argc, argv};
-    MpiComm          comm{};
+    MpiComm          comm{MPI_COMM_WORLD};
 
-    try
+    const auto throughputs = gatherNodeThroughputs(comm);
+    if (comm.getRank() == 0)
     {
-        const auto throughputs = gatherNodeThroughputs(comm);
-
-        if (comm.getRank() == 0)
-        {
-            if (throughputs.size() != static_cast< size_t >(comm.getSize()))
-                throw std::logic_error{"Node throughputs should be calculated for every rank"};
-
-            if (std::fabs(std::accumulate(begin(throughputs), end(throughputs), 0.) - 1.0) > 1e-15)
-                throw std::logic_error{"Node throughputs should be normalized"};
-
-            const auto zero_tp = std::ranges::find_if(throughputs, [](val_t tp) { return std::fabs(tp) < 1e-15; });
-            if (zero_tp != end(throughputs))
-                throw std::logic_error{"Node throughput calculation failed for at least one rank"};
-        }
-        else
-        {
-            if (!throughputs.empty())
-                throw std::logic_error{"Node throughputs should only be gathered at rank 0"};
-        }
-
-        return EXIT_SUCCESS;
+        REQUIRE(throughputs.size() == static_cast< size_t >(comm.getSize()));
+        REQUIRE(std::ranges::count_if(throughputs, [](val_t tp) { return std::fabs(tp) < 1e-15; }) == 0);
+        REQUIRE(std::fabs(std::reduce(begin(throughputs), end(throughputs)) - 1.0) < 1e-15);
     }
-    catch (const std::exception& e)
-    {
-        std::cerr << "Test failed: " << e.what();
-        return EXIT_FAILURE;
-    }
+    else
+        REQUIRE(throughputs.empty());
+
+    return EXIT_SUCCESS;
 }

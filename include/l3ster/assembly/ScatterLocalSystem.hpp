@@ -22,6 +22,7 @@ void scatterLocalSystem(const EigenRowMajorSquareMatrix< val_t, local_size >& lo
                         std::span< const local_dof_t, size_t{local_size} >    col_dofs,
                         std::span< const local_dof_t, size_t{local_size} >    rhs_dofs)
 {
+    L3STER_PROFILE_FUNCTION;
     for (ptrdiff_t loc_row = 0; loc_row < local_size; ++loc_row)
     {
         const auto row_vals = std::span{std::next(local_matrix.data(), loc_row * local_size), local_size};

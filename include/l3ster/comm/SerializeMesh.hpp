@@ -69,7 +69,7 @@ struct SerializedDomain
 SerializedDomain::SerializedDomain(const Domain& domain)
 {
     size_t       node_size{0u}, data_size{0u}, id_size{0u};
-    const size_t offset_size{domain.element_vectors.size()};
+    const size_t offset_size{domain.m_element_vectors.size()};
     type_order_offsets.reserve(offset_size);
     types.reserve(offset_size);
     orders.reserve(offset_size);
@@ -88,7 +88,7 @@ SerializedDomain::SerializedDomain(const Domain& domain)
         orders.push_back(O);
     };
 
-    for (const auto& el_v : domain.element_vectors)
+    for (const auto& el_v : domain.m_element_vectors)
         std::visit(update_sizes, el_v);
 
     element_nodes.resize(node_size);

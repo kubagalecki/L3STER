@@ -87,6 +87,7 @@ void assembleGlobalSystem(auto&&                                       kernel,
                           val_t                                        time = 0.)
     requires detail::PotentiallyValidKernel_c< decltype(kernel), detail::deduce_n_fields< decltype(field_val_getter) > >
 {
+    L3STER_PROFILE_FUNCTION;
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
         constexpr auto el_dim   = Element< ET, EO >::native_dim;
         constexpr auto n_fields = detail::deduce_n_fields< decltype(field_val_getter) >;
@@ -94,8 +95,7 @@ void assembleGlobalSystem(auto&&                                       kernel,
         {
             const auto  field_vals                    = field_val_getter(element.getNodes());
             const auto& qbv                           = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
-            const auto  local_system                  = assembleLocalSystem(kernel, element, field_vals, qbv, time);
-            const auto& [loc_mat, loc_vec]            = *local_system;
+            const auto& [loc_mat, loc_vec]            = assembleLocalSystem(kernel, element, field_vals, qbv, time);
             const auto [row_dofs, col_dofs, rhs_dofs] = detail::getUnsortedElementDofs< field_inds >(element, dof_map);
             detail::scatterLocalSystem(loc_mat, loc_vec, global_matrix, global_vector, row_dofs, col_dofs, rhs_dofs);
         }
@@ -122,15 +122,15 @@ void assembleGlobalBoundarySystem(auto&&                                       k
     requires detail::PotentiallyValidBoundaryKernel_c< decltype(kernel),
                                                        detail::deduce_n_fields< decltype(field_val_getter) > >
 {
+    L3STER_PROFILE_FUNCTION;
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
         constexpr auto el_dim   = Element< ET, EO >::native_dim;
         constexpr auto n_fields = detail::deduce_n_fields< decltype(field_val_getter) >;
         if constexpr (detail::BoundaryKernel_c< decltype(kernel), el_dim, n_fields >)
         {
-            const auto  field_vals   = field_val_getter(el_view->getNodes());
-            const auto& qbv          = getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
-            const auto  local_system = assembleLocalBoundarySystem(kernel, el_view, field_vals, qbv, time);
-            const auto& [loc_mat, loc_vec]            = *local_system;
+            const auto  field_vals = field_val_getter(el_view->getNodes());
+            const auto& qbv        = getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
+            const auto& [loc_mat, loc_vec] = assembleLocalBoundarySystem(kernel, el_view, field_vals, qbv, time);
             const auto [row_dofs, col_dofs, rhs_dofs] = detail::getUnsortedElementDofs< field_inds >(*el_view, dof_map);
             detail::scatterLocalSystem(loc_mat, loc_vec, global_matrix, global_vector, row_dofs, col_dofs, rhs_dofs);
         }

@@ -178,11 +178,11 @@ auto evalLocalIntegral(auto&&                  kernel,
             std::terminate();
         }
     };
-    return mesh.reduce(integral_t{integral_t::Zero()},
-                       reduce_element,
-                       std::plus<>{},
-                       std::forward< decltype(domain_ids) >(domain_ids),
-                       std::execution::par);
+    return mesh.transformReduce(integral_t{integral_t::Zero()},
+                                std::plus<>{},
+                                reduce_element,
+                                std::forward< decltype(domain_ids) >(domain_ids),
+                                std::execution::par);
 }
 
 template < BasisTypes BT, QuadratureTypes QT, q_o_t QO >
@@ -233,7 +233,8 @@ auto evalIntegral(const MpiComm&                  comm,
                                                 time);
     using integral_t = std::remove_const_t< decltype(local_integral) >;
     integral_t global_integral;
-    comm.allReduce(local_integral.data(), global_integral.data(), integral_t::RowsAtCompileTime, MPI_SUM);
+    comm.allReduce(
+        std::views::counted(local_integral.data(), integral_t::RowsAtCompileTime), global_integral.data(), MPI_SUM);
     return global_integral;
 }
 
@@ -251,7 +252,8 @@ auto evalBoundaryIntegral(const MpiComm&                  comm,
                                                         time);
     using integral_t = std::remove_const_t< decltype(local_integral) >;
     integral_t global_integral;
-    comm.allReduce(local_integral.data(), global_integral.data(), integral_t::RowsAtCompileTime, MPI_SUM);
+    comm.allReduce(
+        std::views::counted(local_integral.data(), integral_t::RowsAtCompileTime), global_integral.data(), MPI_SUM);
     return global_integral;
 }
 } // namespace lstr

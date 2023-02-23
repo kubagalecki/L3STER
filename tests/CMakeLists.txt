@@ -28,7 +28,6 @@ include( Catch )
 
 add_executable( L3STER_tests TestsMain.cpp
                 DofTests.cpp
-                GlobalAssemblyTests.cpp
                 HwlocTests.cpp
                 LocalAssemblyTests.cpp
                 MappingTests.cpp
@@ -37,7 +36,6 @@ add_executable( L3STER_tests TestsMain.cpp
                 MeshTests.cpp
                 NodeAllocationTests.cpp
                 QuadratureTests.cpp
-                SimDefTests.cpp
                 UtilTests.cpp
                 )
 target_include_directories( L3STER_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR} )
@@ -66,7 +64,7 @@ function( add_mpi_test source name nprocs )
         set( args ${ARGV4} )
     endif ()
     foreach ( np ${nprocs} )
-        set( test_params "--map-by;socket;-n;${np};$<TARGET_FILE:${test_target}>;${args}" )
+        set( test_params "--map-by;socket;-n;${np};--oversubscribe;$<TARGET_FILE:${test_target}>;${args}" )
         set( test_name ${name}_np_${np} )
         set( test_dir ${CMAKE_CURRENT_BINARY_DIR}/${test_name} )
         file( MAKE_DIRECTORY ${test_dir} )

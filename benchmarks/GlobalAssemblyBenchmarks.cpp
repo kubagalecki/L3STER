@@ -1,24 +1,63 @@
 #include "Common.hpp"
 #include "DataPath.h"
 
-static void BM_SparsityPatternAssembly(benchmark::State& state)
+static void BM_LocalDofIntervalComputation(benchmark::State& state)
 {
+    GlobalResource< KokkosScopeGuard >::getMaybeUninitialized();
+
     auto  read_mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     auto& part      = read_mesh.getPartitions()[0];
     part.initDualGraph();
     const auto mesh = convertMeshToOrder< 2 >(part);
 
-    constexpr auto problem_def = ConstexprValue< std::array{Pair{d_id_t{1}, std::array{true, false}},
-                                                            Pair{d_id_t{2}, std::array{false, true}}} >{};
-
-    const auto dof_intervals          = detail::computeLocalDofIntervals(mesh, problem_def);
-    const auto owned_plus_shared_dofs = detail::getNodeDofs(mesh.getOwnedNodes(), dof_intervals);
+    constexpr auto problemdef_ctwrapper = ConstexprValue< std::array{Pair{d_id_t{1}, std::array{true, false}},
+                                                                     Pair{d_id_t{2}, std::array{false, true}}} >{};
 
     for (auto _ : state)
-    {
-        const auto entries = detail::calculateCrsData(mesh, problem_def, dof_intervals, owned_plus_shared_dofs);
-        benchmark::DoNotOptimize(entries);
-    }
+        benchmark::DoNotOptimize(detail::computeLocalDofIntervals(mesh, problemdef_ctwrapper));
+}
+BENCHMARK(BM_LocalDofIntervalComputation)
+    ->Name("Compute local DOF intervals")
+    ->UseRealTime()
+    ->Unit(benchmark::kMillisecond);
+
+static void BM_GlobalDofMapComputation(benchmark::State& state)
+{
+    GlobalResource< KokkosScopeGuard >::getMaybeUninitialized();
+
+    auto  read_mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
+    auto& part      = read_mesh.getPartitions()[0];
+    part.initDualGraph();
+    const auto mesh = convertMeshToOrder< 2 >(part);
+
+    constexpr auto problemdef_ctwrapper = ConstexprValue< std::array{Pair{d_id_t{1}, std::array{true, false}},
+                                                                     Pair{d_id_t{2}, std::array{false, true}}} >{};
+
+    const auto dof_intervals = detail::computeLocalDofIntervals(mesh, problemdef_ctwrapper);
+    for (auto _ : state)
+        benchmark::DoNotOptimize(NodeToGlobalDofMap{mesh, dof_intervals});
+}
+BENCHMARK(BM_GlobalDofMapComputation)->Name("Compute global DOF map")->UseRealTime()->Unit(benchmark::kMillisecond);
+
+static void BM_SparsityPatternAssembly(benchmark::State& state)
+{
+    GlobalResource< KokkosScopeGuard >::getMaybeUninitialized();
+
+    auto  read_mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
+    auto& part      = read_mesh.getPartitions()[0];
+    part.initDualGraph();
+    const auto mesh = convertMeshToOrder< 2 >(part);
+
+    constexpr auto problemdef_ctwrapper = ConstexprValue< std::array{Pair{d_id_t{1}, std::array{true, false}},
+                                                                     Pair{d_id_t{2}, std::array{false, true}}} >{};
+
+    const auto dof_intervals          = detail::computeLocalDofIntervals(mesh, problemdef_ctwrapper);
+    const auto owned_plus_shared_dofs = detail::getNodeDofs(mesh.getAllNodes(), dof_intervals);
+    const auto global_dof_map         = NodeToGlobalDofMap{mesh, dof_intervals};
+
+    for (auto _ : state)
+        benchmark::DoNotOptimize(
+            detail::computeDofGraph(mesh, global_dof_map, owned_plus_shared_dofs, problemdef_ctwrapper));
 }
 BENCHMARK(BM_SparsityPatternAssembly)->Name("Sparsity pattern assembly")->UseRealTime()->Unit(benchmark::kMillisecond);
 
@@ -26,10 +65,10 @@ static void BM_OwnerOrSharedNodeDeterminationNotGhost(benchmark::State& state)
 {
     auto       mesh            = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     auto&      part            = mesh.getPartitions()[0];
-    const auto n_nodes_visited = part.reduce(
+    const auto n_nodes_visited = part.transformReduce(
         0ul,
-        [](const auto& element) { return element.getNodes().size(); },
         std::plus<>{},
+        [](const auto& element) { return element.getNodes().size(); },
         std::views::single(1),
         std::execution::par);
 
@@ -61,10 +100,10 @@ static void BM_OwnerOrSharedNodeDeterminationShared(benchmark::State& state)
 {
     auto       mesh            = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     auto&      part            = mesh.getPartitions()[0];
-    const auto n_nodes_visited = part.reduce(
+    const auto n_nodes_visited = part.transformReduce(
         0ul,
-        [](const auto& element) { return element.getNodes().size(); },
         std::plus<>{},
+        [](const auto& element) { return element.getNodes().size(); },
         std::views::single(1),
         std::execution::par);
 

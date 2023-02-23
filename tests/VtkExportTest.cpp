@@ -17,7 +17,7 @@ using namespace std::string_view_literals;
 
 void vtkExportTest2D()
 {
-    const MpiComm comm;
+    const MpiComm comm{MPI_COMM_WORLD};
 
     const auto node_distx = [] {
         std::array< double, 11 > retval;
@@ -98,7 +98,7 @@ void vtkExportTest2D()
 
 void vtkExportTest3D()
 {
-    const MpiComm comm;
+    const MpiComm comm{MPI_COMM_WORLD};
 
     const auto node_dist = [] {
         std::array< double, 7 > retval;

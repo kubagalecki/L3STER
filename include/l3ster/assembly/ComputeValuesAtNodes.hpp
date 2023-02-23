@@ -128,6 +128,7 @@ void computeValuesAtNodes(const MeshPartition&                                  
                           std::span< val_t >                                      values_out)
     requires(std::ranges::all_of(dof_inds, [](size_t dof) { return dof < max_dofs_per_node; }))
 {
+    L3STER_PROFILE_FUNCTION;
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
         const auto& el_nodes     = element.getNodes();
         const auto  process_node = [&](size_t node_ind) {
@@ -155,6 +156,7 @@ void computeValuesAtNodes(auto&&                                                
                                                     std::ranges::size(dof_inds) > and
              (std::ranges::all_of(dof_inds, [](size_t dof) { return dof < max_dofs_per_node; }))
 {
+    L3STER_PROFILE_FUNCTION;
     const auto num_parents =
         detail::initValsAndParents(mesh, domain_ids, map, dofinds_ctwrpr, field_val_getter, values);
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
@@ -214,6 +216,7 @@ void computeValuesAtBoundaryNodes(auto&&                                        
                                                             std::ranges::size(dof_inds) > and
              (std::ranges::all_of(dof_inds, [](size_t dof) { return dof < max_dofs_per_node; }))
 {
+    L3STER_PROFILE_FUNCTION;
     const auto num_parents     = detail::initValsAndParents(boundary, map, dofinds_ctwrpr, field_val_getter, values);
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(BoundaryElementView< ET, EO > el_view) {
         if constexpr (detail::ValueAtNodeBoundaryKernel_c< decltype(kernel),

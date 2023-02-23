@@ -1,42 +1,15 @@
 #ifndef L3STER_ASSEMBLY_DOFINTERVALS_HPP
 #define L3STER_ASSEMBLY_DOFINTERVALS_HPP
 
+#include "l3ster/assembly/ProblemDefinition.hpp"
 #include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
-#include "l3ster/util/BitsetManip.hpp"
+#include "l3ster/util/Caliper.hpp"
 
 namespace lstr
 {
 namespace detail
 {
-template < size_t n_fields, size_t n_domains >
-using problem_def_t = std::array< Pair< d_id_t, std::array< bool, n_fields > >, n_domains >;
-
-template < typename T >
-inline constexpr bool is_problem_def = false;
-template < size_t n_fields, size_t n_domains >
-inline constexpr bool is_problem_def< problem_def_t< n_fields, n_domains > > = true;
-template < typename T >
-concept ProblemDef_c = is_problem_def< T >;
-
-template < size_t n_fields, size_t n_domains >
-consteval size_t deduceNFields(const problem_def_t< n_fields, n_domains >&)
-{
-    return n_fields;
-}
-
-template < size_t n_fields, size_t n_domains >
-consteval size_t deduceNDomains(const problem_def_t< n_fields, n_domains >&)
-{
-    return n_domains;
-}
-
-template < size_t n_fields, size_t n_domains >
-constexpr size_t getFieldUllongSize(const problem_def_t< n_fields, n_domains >&)
-{
-    return bitsetNUllongs< n_fields >();
-}
-
 template < size_t n_fields, size_t n_domains >
 constexpr size_t getSerialDofIntervalSize(const problem_def_t< n_fields, n_domains >& problem_def)
 {
@@ -146,23 +119,20 @@ auto gatherGlobalDofIntervals(const auto&                   local_intervals,
                               ConstexprValue< problem_def > problemdef_ctwrapper,
                               const MpiComm&                comm)
 {
-    constexpr size_t n_fields = deduceNFields(problem_def);
-
+    using buffer_t                      = ArrayOwner< unsigned long long >;
+    constexpr auto n_fields             = deduceNFields(problem_def);
     constexpr auto serial_interval_size = getSerialDofIntervalSize(problem_def);
-    constexpr int  reduce_size = 1, reduce_root_rank = 0;
-    const size_t   n_intervals_local = local_intervals.size();
-    const auto     comm_size         = comm.getSize();
-    const auto     my_rank           = comm.getRank();
+    const auto     n_intervals_local    = local_intervals.size();
+    const auto     comm_size            = comm.getSize();
+    const auto     my_rank              = comm.getRank();
 
     size_t max_n_intervals_global{};
-    comm.reduce(&n_intervals_local, &max_n_intervals_global, reduce_size, reduce_root_rank, MPI_MAX);
-    comm.broadcast(&max_n_intervals_global, reduce_size, reduce_root_rank);
-    const auto max_msg_size = max_n_intervals_global * serial_interval_size + 1;
+    comm.allReduce(std::views::single(n_intervals_local), &max_n_intervals_global, MPI_MAX);
+    const auto max_msg_size = max_n_intervals_global * serial_interval_size + 1u;
 
-    auto serial_local_intervals = std::make_unique_for_overwrite< unsigned long long[] >(max_msg_size); // NOLINT
+    auto serial_local_intervals = buffer_t(max_msg_size);
     serial_local_intervals[0]   = n_intervals_local;
-    serializeDofIntervals(local_intervals, std::next(serial_local_intervals.get()));
-    const auto local_msg_size = n_intervals_local * serial_interval_size + 1;
+    serializeDofIntervals(local_intervals, std::next(serial_local_intervals.begin()));
 
     node_interval_vector_t< n_fields > intervals;
     std::vector< ptrdiff_t >           interval_inds;
@@ -170,11 +140,11 @@ auto gatherGlobalDofIntervals(const auto&                   local_intervals,
     interval_inds.reserve(comm_size + 1);
     interval_inds.push_back(0);
 
-    auto       proc_buf              = std::make_unique_for_overwrite< unsigned long long[] >(max_msg_size); // NOLINT
-    const auto process_received_data = [&]() {                                                               // NOLINT
+    auto       proc_buf              = buffer_t(max_msg_size);
+    const auto process_received_data = [&]() {
         const size_t n_int_rcvd = proc_buf[0];
         deserializeDofIntervals< n_fields >(
-            std::views::counted(std::next(proc_buf.get()), static_cast< ptrdiff_t >(n_int_rcvd * serial_interval_size)),
+            std::views::counted(std::next(proc_buf.begin()), n_int_rcvd * serial_interval_size),
             std::back_inserter(intervals));
         interval_inds.push_back(n_int_rcvd);
     };
@@ -183,16 +153,15 @@ auto gatherGlobalDofIntervals(const auto&                   local_intervals,
         interval_inds.push_back(n_intervals_local);
     };
 
-    auto msg_buf = my_rank == 0 ? std::move(serial_local_intervals)
-                                : std::make_unique_for_overwrite< unsigned long long[] >(max_msg_size); // NOLINT
-    auto request = comm.broadcastAsync(msg_buf.get(), my_rank == 0 ? local_msg_size : max_msg_size, 0);
+    auto msg_buf = my_rank == 0 ? std::move(serial_local_intervals) : buffer_t(max_msg_size);
+    auto request = comm.broadcastAsync(msg_buf, 0);
     for (int root_rank = 1; root_rank < comm_size; ++root_rank)
     {
         request.wait();
         std::swap(msg_buf, proc_buf);
         if (my_rank == root_rank)
             msg_buf = std::move(serial_local_intervals);
-        request = comm.broadcastAsync(msg_buf.get(), my_rank == root_rank ? local_msg_size : max_msg_size, root_rank);
+        request = comm.broadcastAsync(msg_buf, root_rank);
         my_rank != root_rank - 1 ? process_received_data() : process_my_data();
     }
     request.wait();
@@ -339,11 +308,7 @@ auto computeIntervalStarts(const node_interval_vector_t< n_fields >& intervals)
 template < std::input_iterator I, std::sentinel_for< I > S >
 I findNodeInterval(I begin, S end, n_id_t node)
 {
-    return std::ranges::find_if(
-        begin,
-        end,
-        [node = node](n_id_t hi) { return hi >= node; },
-        [](const auto& interval) { return interval.first[1]; });
+    return std::ranges::lower_bound(begin, end, node, {}, [](const auto& interval) { return interval.first.back(); });
 }
 } // namespace detail
 
@@ -352,9 +317,9 @@ auto computeDofIntervals(const MeshPartition&          mesh,
                          ConstexprValue< problem_def > problemdef_ctwrapper,
                          const MpiComm&                comm)
 {
-    const auto local_intervals  = detail::computeLocalDofIntervals(mesh, problemdef_ctwrapper);
-    auto       global_data      = detail::gatherGlobalDofIntervals(local_intervals, problemdef_ctwrapper, comm);
-    auto& [_, global_intervals] = global_data;
+    L3STER_PROFILE_FUNCTION;
+    const auto local_intervals = detail::computeLocalDofIntervals(mesh, problemdef_ctwrapper);
+    auto [_, global_intervals] = detail::gatherGlobalDofIntervals(local_intervals, problemdef_ctwrapper, comm);
     detail::consolidateDofIntervals(global_intervals);
     return std::move(global_intervals);
 }

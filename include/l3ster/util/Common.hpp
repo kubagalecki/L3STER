@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <concepts>
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <span>
@@ -62,7 +63,29 @@ template < typename... T >
 constexpr bool exactlyOneOf(T... args)
     requires(std::convertible_to< T, bool > and ...)
 {
-    return (static_cast< size_t >(static_cast< bool >(args)) + ...) == 1u;
+    return (static_cast< std::size_t >(static_cast< bool >(args)) + ...) == std::size_t{1};
+}
+
+template < std::integral To, std::integral From >
+To exactIntegerCast(From from)
+    requires std::convertible_to< From, To >
+{
+    constexpr auto max_from = static_cast< std::uintmax_t >(std::numeric_limits< From >::max());
+    constexpr auto min_from = static_cast< std::intmax_t >(std::numeric_limits< From >::min());
+    constexpr auto max_to   = static_cast< std::uintmax_t >(std::numeric_limits< To >::max());
+    constexpr auto min_to   = static_cast< std::intmax_t >(std::numeric_limits< To >::min());
+
+    if constexpr (max_from > max_to)
+        if (static_cast< std::uintmax_t >(from) > max_to)
+            throw std::runtime_error{
+                "The value being converted is greater then the maximum value representable by the target type"};
+
+    if constexpr (min_from < min_to)
+        if (static_cast< std::intmax_t >(from) < min_to)
+            throw std::runtime_error{
+                "The value being converted is less than the minimum value representable by the target type"};
+
+    return static_cast< To >(from);
 }
 
 // If std::unique_ptr<T[]> was a range...
@@ -71,7 +94,7 @@ class ArrayOwner
 {
 public:
     ArrayOwner() = default;
-    explicit ArrayOwner(std::integral auto size) : m_data{std::make_unique_for_overwrite< T[] >(size)}, m_size{size} {}
+    explicit ArrayOwner(std::size_t size) : m_data{std::make_unique_for_overwrite< T[] >(size)}, m_size{size} {}
 
     T*          begin() { return m_data.get(); }
     const T*    begin() const { return m_data.get(); }
@@ -81,6 +104,10 @@ public:
     const T*    data() const { return m_data.get(); }
     T&          operator[](std::size_t i) { return m_data[i]; }
     const T&    operator[](std::size_t i) const { return m_data[i]; }
+    T&          front() { return m_data[0]; }
+    const T&    front() const { return m_data[0]; }
+    T&          back() { return m_data[m_size - 1]; }
+    const T&    back() const { return m_data[m_size - 1]; }
     std::size_t size() const { return m_size; }
 
 private:
@@ -134,11 +161,32 @@ std::array< T, std::ranges::size(inds) > getValuesAtInds(const std::array< T, N 
     return retval;
 }
 
+template < std::default_initializable T >
+T& getThreadLocal()
+{
+    thread_local T value;
+    return value;
+}
+
+template < std::integral T >
+constexpr T intDivRoundUp(T enumerator, T denominator)
+{
+    const auto rem  = enumerator % denominator;
+    const auto quot = enumerator / denominator;
+    return rem == 0 ? quot : quot + 1;
+}
+
 enum struct Space
 {
     X,
     Y,
     Z
+};
+
+enum struct Access
+{
+    ReadOnly,
+    ReadWrite
 };
 } // namespace lstr
 #endif // L3STER_UTIL_COMMON_HPP
