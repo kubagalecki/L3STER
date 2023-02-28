@@ -1,8 +1,8 @@
 #ifndef L3STER_MESH_BOUNDARYVIEW_HPP
 #define L3STER_MESH_BOUNDARYVIEW_HPP
 
-#include "l3ster/mesh/Aliases.hpp"
 #include "l3ster/mesh/BoundaryElementView.hpp"
+#include "l3ster/mesh/ElementMeta.hpp"
 
 #include <utility>
 

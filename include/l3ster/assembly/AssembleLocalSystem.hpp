@@ -10,6 +10,7 @@
 #include "l3ster/mapping/MapReferenceToPhysical.hpp"
 #include "l3ster/mesh/BoundaryElementView.hpp"
 #include "l3ster/util/Caliper.hpp"
+#include "l3ster/util/SetStackSize.hpp"
 
 namespace lstr
 {
@@ -105,10 +106,17 @@ auto computeFieldDers(const EigenRowMajorMatrix< val_t, dim, n_nodes >&      bas
 template < size_t problem_size, size_t update_size >
 class LocalSystemManager
 {
+    static constexpr size_t target_update_size = 128;
+    static constexpr size_t updates_per_batch  = intDivRoundUp(target_update_size, update_size);
+    static constexpr size_t batch_update_size  = update_size * updates_per_batch;
+    using batch_update_matrix_t = Eigen::Matrix< val_t, problem_size, batch_update_size, Eigen::ColMajor >;
+
 public:
     using matrix_t = EigenRowMajorSquareMatrix< val_t, problem_size >;
     using vector_t = Eigen::Vector< val_t, problem_size >;
     using system_t = std::pair< matrix_t, vector_t >;
+
+    static constexpr size_t required_stack_size = 2 * problem_size * batch_update_size * sizeof(val_t);
 
     inline void            setZero();
     inline const system_t& getSystem();
@@ -121,11 +129,6 @@ public:
                 val_t                                                                         weight);
 
 private:
-    static constexpr size_t target_update_size = 128;
-    static constexpr size_t updates_per_batch  = intDivRoundUp(target_update_size, update_size);
-    static constexpr size_t batch_update_size  = update_size * updates_per_batch;
-    using batch_update_matrix_t = Eigen::Matrix< val_t, problem_size, batch_update_size, Eigen::ColMajor >;
-
     template < int n_unknowns, int n_bases, int dim >
     static auto
     makeBasisBlock(const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dim + 1 >& kernel_result,

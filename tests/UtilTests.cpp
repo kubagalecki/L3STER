@@ -111,29 +111,29 @@ TEST_CASE("Stack size manipulation", "[util]")
 {
     SECTION("Increase stack size by 1")
     {
-        const auto& [initial, max] = getStackSize();
+        const auto [initial, max] = util::detail::getStackSize();
         CHECK(initial <= max);
-        setMinStackSize(initial + 1);
-        const auto& [current, ignore] = getStackSize();
+        util::detail::setMinStackSize(initial + 1);
+        const auto& [current, ignore] = util::detail::getStackSize();
         CHECK(initial + 1 == current);
     }
 
     SECTION("Increse beyond limit")
     {
-        const auto& [initial, max] = getStackSize();
+        const auto [initial, max] = util::detail::getStackSize();
         if (max < std::numeric_limits< std::decay_t< decltype(max) > >::max())
         {
-            CHECK_THROWS(setMinStackSize(max + 1ul));
-            const auto& [current, ignore] = getStackSize();
+            CHECK_THROWS(util::detail::setMinStackSize(max + 1ul));
+            const auto [current, ignore] = util::detail::getStackSize();
             CHECK(initial == current);
         }
     }
 
     SECTION("Decreasing is a noop")
     {
-        const auto& [initial, max] = getStackSize();
-        setMinStackSize(initial - 1);
-        const auto& [current, ignore] = getStackSize();
+        const auto& [initial, max] = util::detail::getStackSize();
+        util::detail::setMinStackSize(initial - 1);
+        const auto& [current, ignore] = util::detail::getStackSize();
         CHECK(initial == current);
     }
 }
