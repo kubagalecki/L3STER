@@ -40,5 +40,19 @@ private:
     element_data_t data;
     el_id_t        id;
 };
+
+template < ElementTypes T, el_o_t O >
+constexpr auto getInternalNodes(const Element< T, O >& element)
+{
+    return ElementTraits< Element< T, O > >::internal_node_inds |
+           std::views::transform([&](size_t i) { return element.getNodes()[i]; });
+}
+
+template < ElementTypes T, el_o_t O >
+constexpr auto getBoundaryNodes(const Element< T, O >& element)
+{
+    return ElementTraits< Element< T, O > >::boundary_node_inds |
+           std::views::transform([&](size_t i) { return element.getNodes()[i]; });
+}
 } // namespace lstr
 #endif // L3STER_MESH_ELEMENT_HPP

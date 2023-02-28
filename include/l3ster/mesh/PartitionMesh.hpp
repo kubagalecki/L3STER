@@ -105,9 +105,8 @@ inline auto prepMetisInput(const MeshPartition&         part,
     e_ptr.push_back(0);
     part.visit(
         [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
-            const auto condensed_view = ElementTraits< Element< ET, EO > >::boundary_node_inds |
-                                        std::views::transform([&](auto i) { return element.getNodes()[i]; }) |
-                                        std::views::transform([&](auto n) { return cond_map[n]; });
+            const auto condensed_view =
+                getBoundaryNodes(element) | std::views::transform([&](auto n) { return cond_map[n]; });
             std::ranges::copy(condensed_view, std::back_inserter(e_ind));
             e_ptr.push_back(e_ptr.back() + std::ranges::size(condensed_view));
         },
@@ -120,8 +119,7 @@ inline auto makeNodeCondensationMaps(const MeshPartition& mesh) -> std::array< s
     std::vector< n_id_t > forward_map(mesh.getAllNodes().size()), reverse_map;
     mesh.visit(
         [&forward_map]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
-            for (auto node : ElementTraits< Element< T, O > >::boundary_node_inds |
-                                 std::views::transform([&element](el_locind_t i) { return element.getNodes()[i]; }))
+            for (auto node : getBoundaryNodes(element))
                 std::atomic_ref{forward_map[node]}.store(1, std::memory_order_relaxed);
         },
         std::execution::par);
@@ -206,8 +204,7 @@ inline auto uncondenseNodes(const std::vector< idx_t >&  epart,
         mesh.visit(
             [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
                 const auto el_part = epart[el_ind++];
-                for (auto n : ElementTraits< Element< ET, EO > >::internal_node_inds |
-                                  std::views::transform([&](auto i) { return element.getNodes()[i]; }))
+                for (auto n : getInternalNodes(element))
                     retval[n] = el_part;
             },
             id);
@@ -216,7 +213,6 @@ inline auto uncondenseNodes(const std::vector< idx_t >&  epart,
 
 inline auto partitionCondensedMesh(const MeshPartition&         mesh,
                                    const std::vector< d_id_t >& domain_ids,
-                                   const std::vector< d_id_t >& boundary_ids,
                                    DomainData                   domain_data,
                                    idx_t                        n_parts,
                                    std::vector< real_t >        part_weights,
@@ -384,7 +380,7 @@ inline auto partitionMeshImpl(const MeshPartition&         mesh,
     const auto domain_ids  = getDomainIds(mesh, boundary_ids);
     const auto domain_data = getDomainData(mesh, domain_ids);
     auto [epart, npart]    = partitionCondensedMesh(
-        mesh, domain_ids, boundary_ids, domain_data, n_parts, std::move(part_weights), std::move(node_weights));
+        mesh, domain_ids, domain_data, n_parts, std::move(part_weights), std::move(node_weights));
     auto new_domain_maps = makeDomainMaps(mesh, n_parts, epart, domain_ids);
     assignBoundaryElements(mesh, epart, new_domain_maps, domain_ids, boundary_ids, domain_data.n_elements);
     auto node_vecs = assignNodes(n_parts, npart, new_domain_maps);
