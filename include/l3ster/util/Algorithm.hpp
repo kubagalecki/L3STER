@@ -223,5 +223,17 @@ constexpr auto makeIotaArray(const T& first = T{})
     std::iota(begin(retval), end(retval), first);
     return retval;
 }
+
+namespace util
+{
+template < typename T >
+void sortRemoveDup(std::vector< T >& vec)
+{
+    std::ranges::sort(vec);
+    const auto erase_range = std::ranges::unique(vec);
+    vec.erase(erase_range.begin(), erase_range.end());
+    vec.shrink_to_fit();
+}
+} // namespace util
 } // namespace lstr
 #endif // L3STER_UTIL_ALGORITHM_HPP

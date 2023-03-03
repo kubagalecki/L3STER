@@ -17,12 +17,11 @@ constexpr std::size_t bitsetNUllongs()
 template < std::size_t N >
 auto serializeBitset(const std::bitset< N >& bits)
 {
-    using ull                    = unsigned long long;
-    constexpr auto ull_bits      = sizeof(ull) * 8u;
+    constexpr auto ull_bits      = sizeof(unsigned long long) * 8u;
     constexpr auto required_ulls = bitsetNUllongs< N >();
-    const auto     mask          = std::bitset< N >{std::numeric_limits< ull >::max()}; // 0xffffffffffffffff
+    const auto     mask = std::bitset< N >{std::numeric_limits< unsigned long long >::max()}; // 0xffffffffffffffff
 
-    std::array< ull, required_ulls > retval;
+    std::array< unsigned long long, required_ulls > retval;
     std::generate_n(
         rbegin(retval), required_ulls, [&, i = 0ul]() mutable { return (bits >> i++ * ull_bits & mask).to_ullong(); });
     return retval;
