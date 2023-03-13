@@ -292,12 +292,13 @@ I findNodeInterval(I begin, S end, n_id_t node)
 } // namespace detail
 
 template < detail::ProblemDef_c auto problem_def >
-auto computeDofIntervals(const MeshPartition&          mesh,
-                         ConstexprValue< problem_def > problemdef_ctwrapper,
-                         const MpiComm& comm) -> detail::node_interval_vector_t< detail::deduceNFields(problem_def) >
+auto computeDofIntervals(const MpiComm&                     comm,
+                         const MeshPartition&               mesh,
+                         const detail::NodeCondensationMap& cond_map,
+                         ConstexprValue< problem_def >      problemdef_ctwrapper)
+    -> detail::node_interval_vector_t< detail::deduceNFields(problem_def) >
 {
     L3STER_PROFILE_FUNCTION;
-    const auto cond_map        = detail::NodeCondensationMap{comm, mesh, problemdef_ctwrapper};
     const auto local_intervals = detail::computeLocalDofIntervals(mesh, cond_map, problemdef_ctwrapper);
     auto       retval          = detail::gatherGlobalDofIntervals(comm, local_intervals);
     detail::consolidateDofIntervals(retval);

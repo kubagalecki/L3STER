@@ -34,7 +34,9 @@ int main(int argc, char* argv[])
     });
     const auto mesh_parted = std::invoke([&] { return distributeMesh(comm, mesh_full, {}, problemdef_ctwrpr); });
 
-    const auto            global_intervals = computeDofIntervals(mesh_parted, problemdef_ctwrpr, comm);
+    const auto cond_map =
+        detail::NodeCondensationMap::makeBoundaryNodeCondensationMap(comm, mesh_parted, problemdef_ctwrpr);
+    const auto            global_intervals = computeDofIntervals(comm, mesh_parted, cond_map, problemdef_ctwrpr);
     const auto            n_int_global     = global_intervals.size();
     std::vector< size_t > computed_glob_int_sizes(comm.getRank() == 0 ? comm.getSize() : 0);
     comm.gather(std::views::single(n_int_global), computed_glob_int_sizes.begin(), 0);
@@ -54,10 +56,11 @@ int main(int argc, char* argv[])
         for (auto it = gather_buf.begin(); it != gather_buf.end(); std::advance(it, serial_int.size()))
             REQUIRE(std::ranges::equal(std::views::counted(it, serial_int.size()), serial_int));
 
-        const auto  comm_self          = MpiComm{MPI_COMM_SELF};
-        const auto& full_part          = mesh_full.getPartitions().front();
-        const auto  cond_map_self      = detail::NodeCondensationMap{comm_self, full_part, problemdef_ctwrpr};
-        const auto  intervals_expected = detail::computeLocalDofIntervals(full_part, cond_map_self, problemdef_ctwrpr);
+        const auto  comm_self = MpiComm{MPI_COMM_SELF};
+        const auto& full_part = mesh_full.getPartitions().front();
+        const auto  cond_map_self =
+            detail::NodeCondensationMap::makeBoundaryNodeCondensationMap(comm_self, full_part, problemdef_ctwrpr);
+        const auto intervals_expected = detail::computeLocalDofIntervals(full_part, cond_map_self, problemdef_ctwrpr);
         REQUIRE(intervals_expected == global_intervals);
     }
 }

@@ -30,7 +30,8 @@ int main(int argc, char* argv[])
                                      boundaries,
                                      problemdef_ctwrpr);
 
-    const auto condensation_map         = detail::NodeCondensationMap{comm, mesh, problemdef_ctwrpr};
+    const auto condensation_map =
+        detail::NodeCondensationMap::makeBoundaryNodeCondensationMap(comm, mesh, problemdef_ctwrpr);
     const auto global_nodes_to_condense = detail::getElementBoundaryNodes(mesh, problemdef_ctwrpr);
     REQUIRE(condensation_map.size() == global_nodes_to_condense.size());
     for (auto n : global_nodes_to_condense)

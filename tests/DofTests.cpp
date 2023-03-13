@@ -11,15 +11,25 @@
 
 using namespace lstr;
 
+template < detail::ProblemDef_c auto problem_def >
+static auto makeLocalCondensationMap(const MeshPartition& mesh, ConstexprValue< problem_def > probdef_ctwrpr)
+{
+    const auto element_boundary_nodes = detail::getElementBoundaryNodes(mesh, probdef_ctwrpr);
+    auto       condensed_nodes        = std::vector< n_id_t >(element_boundary_nodes);
+    std::iota(condensed_nodes.begin(), condensed_nodes.end(), 0);
+    return detail::NodeCondensationMap{element_boundary_nodes, std::move(condensed_nodes)};
+}
+
 TEST_CASE("Local node DOF interval calculation", "[dof]")
 {
-    constexpr std::array  node_dist   = {0., 1., 2.};
-    const auto            mesh        = makeCubeMesh(node_dist);
-    const auto&           part        = mesh.getPartitions()[0];
-    constexpr std::size_t n_fields    = 2;
-    constexpr auto        problem_def = ConstexprValue< std::array{Pair{d_id_t{0}, std::array{true, false}},
-                                                            Pair{d_id_t{1}, std::array{false, true}}} >{};
-    const auto            result      = detail::computeLocalDofIntervals(part, problem_def);
+    constexpr std::array  node_dist      = {0., 1., 2.};
+    const auto            mesh           = makeCubeMesh(node_dist);
+    const auto&           part           = mesh.getPartitions().front();
+    constexpr std::size_t n_fields       = 2;
+    constexpr auto        probdef_ctwrpr = ConstexprValue< std::array{Pair{d_id_t{0}, std::array{true, false}},
+                                                               Pair{d_id_t{1}, std::array{false, true}}} >{};
+    const auto            cond_map       = makeLocalCondensationMap(part, probdef_ctwrpr);
+    const auto            result         = detail::computeLocalDofIntervals(part, cond_map, probdef_ctwrpr);
     REQUIRE(result.size() == 2);
     CHECK(result[0].first[0] == 0);
     CHECK(result[0].first[1] == 8);
@@ -31,7 +41,7 @@ TEST_CASE("Local node DOF interval calculation", "[dof]")
 
 TEST_CASE("Node DOF intervals of parts sum up to whole", "[dof]")
 {
-    constexpr auto problem_def = ConstexprValue< std::array{Pair{d_id_t{1}, std::array{false, false, false}},
+    constexpr auto problem_def   = ConstexprValue< std::array{Pair{d_id_t{1}, std::array{false, false, false}},
                                                             Pair{d_id_t{2}, std::array{false, false, true}},
                                                             Pair{d_id_t{3}, std::array{false, true, false}},
                                                             Pair{d_id_t{4}, std::array{false, true, true}},
@@ -39,19 +49,26 @@ TEST_CASE("Node DOF intervals of parts sum up to whole", "[dof]")
                                                             Pair{d_id_t{6}, std::array{true, false, true}},
                                                             Pair{d_id_t{7}, std::array{true, true, false}},
                                                             Pair{d_id_t{8}, std::array{true, true, true}}} >{};
-    auto           mesh        = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube_multidom.msh), gmsh_tag);
-    auto&          full_part   = mesh.getPartitions()[0];
-    const auto     unpartitioned_intervals = detail::computeLocalDofIntervals(full_part, problem_def);
+    auto           mesh          = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube_multidom.msh), gmsh_tag);
+    auto&          full_part     = mesh.getPartitions().front();
+    const auto     cond_map_full = makeLocalCondensationMap(full_part, problem_def);
+    const auto     unpartitioned_intervals = detail::computeLocalDofIntervals(full_part, cond_map_full, problem_def);
 
     std::vector< d_id_t > boundaries(24);
     std::iota(boundaries.begin(), boundaries.end(), 9);
-    mesh = partitionMesh(mesh, 2, boundaries);
-    typename std::remove_const_t< decltype(unpartitioned_intervals) > partitioned_intervals;
-    partitioned_intervals.reserve(unpartitioned_intervals.size());
+    mesh                       = partitionMesh(mesh, 2, boundaries);
+    auto partitioned_intervals = unpartitioned_intervals;
+    partitioned_intervals.clear();
     for (const auto& part : mesh.getPartitions())
     {
-        const auto cur_ints = detail::computeLocalDofIntervals(part, problem_def);
-        partitioned_intervals.insert(partitioned_intervals.end(), cur_ints.begin(), cur_ints.end());
+        // All nodes are boundary nodes since mesh is of the 1st order
+        // Condensation map without interal nodes is the identity mapping
+        auto cond_ids = std::vector< n_id_t >{};
+        std::ranges::copy(part.getAllNodes(), std::back_inserter(cond_ids));
+        std::ranges::sort(cond_ids);
+        const auto cond_map  = detail::NodeCondensationMap{cond_ids, cond_ids};
+        const auto intervals = detail::computeLocalDofIntervals(part, cond_map, problem_def);
+        std::ranges::copy(intervals, std::back_inserter(partitioned_intervals));
     }
     detail::consolidateDofIntervals(partitioned_intervals);
     CHECK(partitioned_intervals == unpartitioned_intervals);
@@ -59,19 +76,17 @@ TEST_CASE("Node DOF intervals of parts sum up to whole", "[dof]")
 
 TEMPLATE_TEST_CASE("Node DOF interval (de-)serialization", "[dof]", ConstexprValue< 10 >, ConstexprValue< 100 >)
 {
-    constexpr std::size_t n_fields = TestType::value;
-    constexpr auto        dummy_problem_def =
-        ConstexprValue< std::array< Pair< d_id_t, std::array< bool, n_fields > >, 1 >{} >{};
-    constexpr size_t test_size = 1u << 12;
-    auto             original_intervals =
-        decltype(detail::computeLocalDofIntervals(std::declval< MeshPartition >(), dummy_problem_def)){};
+    constexpr std::size_t n_fields           = TestType::value;
+    constexpr size_t      test_size          = 1u << 12;
+    auto                  original_intervals = detail::node_interval_vector_t< n_fields >{};
     original_intervals.reserve(test_size);
-    std::generate_n(begin(original_intervals), test_size, [prng = std::mt19937{std::random_device{}()}]() mutable {
-        std::uniform_int_distribution< n_id_t >             delim_dist{};
-        std::uniform_int_distribution< unsigned long long > field_dist{};
-        return std::make_pair(std::array< n_id_t, 2 >{delim_dist(prng), delim_dist(prng)},
-                              std::bitset< n_fields >{field_dist(prng)});
-    });
+    std::generate_n(
+        std::back_inserter(original_intervals), test_size, [prng = std::mt19937{std::random_device{}()}]() mutable {
+            std::uniform_int_distribution< n_id_t >             delim_dist{};
+            std::uniform_int_distribution< unsigned long long > field_dist{};
+            return std::make_pair(std::array< n_id_t, 2 >{delim_dist(prng), delim_dist(prng)},
+                                  std::bitset< n_fields >{field_dist(prng)});
+        });
 
     auto deserialized_intervals = original_intervals;
     deserialized_intervals.clear();

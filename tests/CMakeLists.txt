@@ -27,7 +27,7 @@ include( Catch )
 ### Define the Catch2-based target ###
 
 add_executable( L3STER_tests TestsMain.cpp
-#                DofTests.cpp
+                DofTests.cpp
                 HwlocTests.cpp
                 LocalAssemblyTests.cpp
                 MappingTests.cpp
