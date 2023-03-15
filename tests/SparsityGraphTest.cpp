@@ -14,21 +14,23 @@ int main(int argc, char* argv[])
     L3sterScopeGuard scope_guard{argc, argv};
     const MpiComm    comm{MPI_COMM_WORLD};
 
-    const std::array node_dist{0., 1., 2., 3., 4., 5.};
-    const auto       mesh         = makeCubeMesh(node_dist);
-    const auto       my_partition = distributeMesh(comm, mesh, {});
-    const auto&      full_mesh    = mesh.getPartitions().front();
+    constexpr std::array node_dist{0., 1., 2., 3., 4., 5.};
+    const auto           mesh         = makeCubeMesh(node_dist);
+    const auto           my_partition = distributeMesh(comm, mesh, {});
+    const auto&          full_mesh    = mesh.getPartitions().front();
 
-    constexpr auto problem_def           = std::array{Pair{d_id_t{0}, std::array{false, true}},
+    constexpr auto problem_def    = std::array{Pair{d_id_t{0}, std::array{false, true}},
                                             Pair{d_id_t{1}, std::array{true, false}},
                                             Pair{d_id_t{3}, std::array{true, true}}};
-    constexpr auto problem_def_ctwrapper = ConstexprValue< problem_def >{};
-    const auto     dof_intervals         = computeDofIntervals(my_partition, problem_def_ctwrapper, comm);
-    const auto     global_dof_map        = NodeToGlobalDofMap{my_partition, dof_intervals};
-    const auto sparsity_graph = detail::makeSparsityGraph(my_partition, global_dof_map, problem_def_ctwrapper, comm);
+    constexpr auto probdef_ctwrpr = ConstexprValue< problem_def >{};
+    const auto     cond_map =
+        detail::NodeCondensationMap::makeBoundaryNodeCondensationMap(comm, my_partition, probdef_ctwrpr);
+    const auto dof_intervals  = computeDofIntervals(comm, my_partition, cond_map, probdef_ctwrpr);
+    const auto global_dof_map = NodeToGlobalDofMap{my_partition, dof_intervals};
+    const auto sparsity_graph = detail::makeSparsityGraph(my_partition, global_dof_map, probdef_ctwrpr, comm);
 
     const auto all_dofs    = detail::getNodeDofs(full_mesh.getAllNodes(), dof_intervals);
-    const auto dense_graph = DenseGraph{full_mesh, problem_def_ctwrapper, dof_intervals, all_dofs.size()};
+    const auto dense_graph = DenseGraph{full_mesh, probdef_ctwrpr, dof_intervals, all_dofs.size()};
 
     REQUIRE(sparsity_graph->getGlobalNumRows() == all_dofs.size());
     REQUIRE(sparsity_graph->getGlobalNumCols() == all_dofs.size());

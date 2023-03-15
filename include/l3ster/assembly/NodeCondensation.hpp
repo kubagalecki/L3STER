@@ -81,11 +81,14 @@ public:
     NodeCondensationMap(const std::vector< n_id_t >& nodes_to_condense, std::vector< n_id_t > condensed_ids)
         : m_condensed_ids{std::move(condensed_ids)}
     {
-        m_cond_map.reserve(m_condensed_ids.size());
+        m_forward_map.reserve(m_condensed_ids.size());
+        m_inverse_map.reserve(m_condensed_ids.size());
         for (size_t local_id = 0; auto uncond_node : nodes_to_condense)
         {
-            const auto map_entry = std::array{static_cast< n_id_t >(local_id), m_condensed_ids[local_id]};
-            m_cond_map.emplace(uncond_node, map_entry);
+            const auto condensed_id = m_condensed_ids[local_id];
+            const auto map_entry    = std::array{static_cast< n_id_t >(local_id), condensed_id};
+            m_forward_map.emplace(uncond_node, map_entry);
+            m_inverse_map.emplace(condensed_id, uncond_node);
             ++local_id;
         }
     }
@@ -99,14 +102,22 @@ public:
         return NodeCondensationMap{boundary_nodes, condensed_boundary_nodes};
     }
 
-    [[nodiscard]] auto mapToLocal(n_id_t id) const -> n_id_t { return m_cond_map.at(id).front(); }
-    [[nodiscard]] auto mapToGlobal(n_id_t id) const -> n_id_t { return m_cond_map.at(id).back(); }
-    [[nodiscard]] auto size() const -> size_t { return m_cond_map.size(); }
-    [[nodiscard]] auto getGlobalNodes() const -> const std::vector< n_id_t >& { return m_condensed_ids; }
+    [[nodiscard]] auto mapToLocal(n_id_t id) const -> n_id_t { return m_forward_map.at(id).front(); }
+    [[nodiscard]] auto mapToGlobal(n_id_t id) const -> n_id_t { return m_forward_map.at(id).back(); }
+    [[nodiscard]] auto mapInverse(n_id_t id) const -> n_id_t { return m_inverse_map.at(id); }
+    [[nodiscard]] auto size() const -> size_t { return m_forward_map.size(); }
+    [[nodiscard]] auto getCondensedIds() const -> const std::vector< n_id_t >& { return m_condensed_ids; }
 
 private:
     std::vector< n_id_t >                                             m_condensed_ids;
-    robin_hood::unordered_flat_map< n_id_t, std::array< n_id_t, 2 > > m_cond_map;
+    robin_hood::unordered_flat_map< n_id_t, std::array< n_id_t, 2 > > m_forward_map;
+    robin_hood::unordered_flat_map< n_id_t, n_id_t >                  m_inverse_map;
 };
+
+inline auto getCondensedOwnedNodesView(const MeshPartition& mesh, const NodeCondensationMap& cond_map)
+{
+    return cond_map.getCondensedIds() |
+           std::views::filter([&](n_id_t node) { return mesh.isOwnedNode(cond_map.mapInverse(node)); });
+}
 } // namespace lstr::detail
 #endif // L3STER_NODECONDENSATION_HPP

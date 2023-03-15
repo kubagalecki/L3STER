@@ -70,7 +70,7 @@ auto computeLocalDofIntervals(const MeshPartition&          mesh,
     -> node_interval_vector_t< deduceNFields(problem_def) >
 {
     const auto field_coverage = makeFieldCoverageVector(mesh, cond_map, problemdef_ctwrapper);
-    return computeDofIntervalsFromNodeData(cond_map.getGlobalNodes(), field_coverage);
+    return computeDofIntervalsFromNodeData(cond_map.getCondensedIds(), field_coverage);
 }
 
 template < size_t n_fields >

@@ -8,14 +8,14 @@ namespace lstr
 {
 namespace detail
 {
-template < size_t n_fields, std::weakly_incrementable Iter >
-Iter writeNodeDofs(std::span< const n_id_t >                         sorted_nodes,
+template < size_t n_fields >
+auto writeNodeDofs(RangeOfConvertibleTo_c< n_id_t > auto&&           sorted_nodes,
                    const detail::node_interval_vector_t< n_fields >& dof_intervals,
-                   Iter                                              out_iter)
+                   std::weakly_incrementable auto                    out_iter) -> decltype(out_iter)
     requires requires(global_dof_t dof) { *out_iter++ = dof; }
 {
     const auto interval_dof_starts = computeIntervalStarts(dof_intervals);
-    for (auto search_it = begin(dof_intervals); auto node : sorted_nodes)
+    for (auto search_it = begin(dof_intervals); n_id_t node : sorted_nodes)
     {
         search_it                = findNodeInterval(search_it, end(dof_intervals), node);
         const auto interval_ind  = std::distance(begin(dof_intervals), search_it);
@@ -28,12 +28,13 @@ Iter writeNodeDofs(std::span< const n_id_t >                         sorted_node
 }
 
 template < size_t n_fields >
-std::vector< global_dof_t > getNodeDofs(std::span< const n_id_t >                         sorted_nodes,
+std::vector< global_dof_t > getNodeDofs(RangeOfConvertibleTo_c< n_id_t > auto&&           sorted_nodes,
                                         const detail::node_interval_vector_t< n_fields >& dof_intervals)
 {
     std::vector< global_dof_t > retval;
-    retval.reserve(n_fields * sorted_nodes.size());
-    writeNodeDofs(sorted_nodes, dof_intervals, std::back_inserter(retval));
+    if constexpr (std::ranges::sized_range< decltype(sorted_nodes) >)
+        retval.reserve(std::ranges::size(sorted_nodes) * n_fields);
+    writeNodeDofs(std::forward< decltype(sorted_nodes) >(sorted_nodes), dof_intervals, std::back_inserter(retval));
     retval.shrink_to_fit();
     return retval;
 }
@@ -49,20 +50,19 @@ inline Tpetra::global_size_t getInvalidSize()
 }
 } // namespace detail
 
-template < size_t n_fields >
-Teuchos::RCP< const tpetra_map_t > makeTpetraMap(std::span< const n_id_t >                         nodes,
-                                                 const detail::node_interval_vector_t< n_fields >& dof_intervals,
-                                                 const MpiComm&                                    comm)
-{
-    const auto dofs         = detail::getNodeDofs(nodes, dof_intervals);
-    auto       teuchos_comm = detail::makeTeuchosMpiComm(comm);
-    return makeTeuchosRCP< const tpetra_map_t >(detail::getInvalidSize(), dofs, 0, teuchos_comm);
-}
-
 inline Teuchos::RCP< const tpetra_map_t > makeTpetraMap(std::span< const global_dof_t > dofs, const MpiComm& comm)
 {
     auto teuchos_comm = detail::makeTeuchosMpiComm(comm);
     return makeTeuchosRCP< const tpetra_map_t >(detail::getInvalidSize(), asTeuchosView(dofs), 0, teuchos_comm);
+}
+
+template < size_t n_fields >
+Teuchos::RCP< const tpetra_map_t > makeTpetraMap(RangeOfConvertibleTo_c< n_id_t > auto&&           nodes,
+                                                 const detail::node_interval_vector_t< n_fields >& dof_intervals,
+                                                 const MpiComm&                                    comm)
+{
+    const auto dofs = detail::getNodeDofs(std::forward< decltype(nodes) >(nodes), dof_intervals);
+    return makeTpetraMap(dofs, comm);
 }
 } // namespace lstr
 #endif // L3STER_ASSEMBLY_MAKETPETRAMAP_HPP
