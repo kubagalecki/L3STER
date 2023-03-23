@@ -5,11 +5,12 @@
 
 #include "Common.hpp"
 
-int main(int argc, char* argv[])
+using namespace lstr;
+
+template < CondensationPolicy CP >
+void test(CondensationPolicyTag< CP > = {})
 {
-    using namespace lstr;
-    L3sterScopeGuard scope_guard{argc, argv};
-    MpiComm          comm{MPI_COMM_WORLD};
+    MpiComm comm{MPI_COMM_WORLD};
 
     constexpr auto problem_def       = std::array{Pair{d_id_t{0}, std::array{true}}};
     constexpr auto problemdef_ctwrpr = ConstexprValue< problem_def >{};
@@ -18,34 +19,35 @@ int main(int argc, char* argv[])
     constexpr std::array  node_dist{0., 1., 2.};
     std::vector< d_id_t > boundaries(6);
     std::iota(boundaries.begin(), boundaries.end(), 1);
-    const auto mesh = distributeMesh(comm,
-                                     comm.getRank() == 0 ? std::invoke([&] {
-                                         auto retval = makeCubeMesh(node_dist);
-                                         retval.getPartitions().front().initDualGraph();
-                                         retval.getPartitions().front() =
-                                             convertMeshToOrder< mesh_order >(retval.getPartitions().front());
-                                         return retval;
-                                     })
-                                                         : Mesh{},
-                                     boundaries,
-                                     problemdef_ctwrpr);
+    const auto dist_mesh = comm.getRank() == 0 ? std::invoke([&] {
+        auto retval = makeCubeMesh(node_dist);
+        retval.getPartitions().front().initDualGraph();
+        retval.getPartitions().front() = convertMeshToOrder< mesh_order >(retval.getPartitions().front());
+        return retval;
+    })
+                                               : Mesh{};
+    const auto mesh      = distributeMesh(comm, dist_mesh, boundaries, problemdef_ctwrpr);
 
-    const auto condensation_map =
-        detail::NodeCondensationMap::makeBoundaryNodeCondensationMap(comm, mesh, problemdef_ctwrpr);
-    const auto global_nodes_to_condense = detail::getElementBoundaryNodes(mesh, problemdef_ctwrpr);
+    const auto  condensation_map         = detail::makeCondensationMap< CP >(comm, mesh, problemdef_ctwrpr);
+    const auto& global_nodes_to_condense = std::invoke([&] {
+        if constexpr (CP == CondensationPolicy::None)
+            return mesh.getAllNodes();
+        else if constexpr (CP == CondensationPolicy::ElementBoundary)
+            return detail::getElementBoundaryNodes(mesh, problemdef_ctwrpr);
+    });
     REQUIRE(condensation_map.size() == global_nodes_to_condense.size());
     for (auto n : global_nodes_to_condense)
-        REQUIRE(condensation_map.mapToLocal(n) < global_nodes_to_condense.size());
+        REQUIRE(detail::getLocalCondensedId(mesh, condensation_map, n) < global_nodes_to_condense.size());
     std::vector< n_id_t > uncondensed_owned, condensed_ghost, condensed_owned;
     for (auto n : global_nodes_to_condense)
     {
         if (mesh.isOwnedNode(n))
         {
             uncondensed_owned.push_back(n);
-            condensed_owned.push_back(condensation_map.mapToGlobal(n));
+            condensed_owned.push_back(condensation_map.getCondensedId(n));
         }
         else
-            condensed_ghost.push_back(condensation_map.mapToGlobal(n));
+            condensed_ghost.push_back(condensation_map.getCondensedId(n));
     }
 
     const auto gather = [&](std::vector< n_id_t > nodes) {
@@ -73,8 +75,16 @@ int main(int argc, char* argv[])
         const auto internal_nodes_per_elem = (mesh_order - 1) * (mesh_order - 1) * (mesh_order - 1);
         const auto n_internal_nodes        = internal_nodes_per_elem * n_elems;
         const auto nodes_per_edge          = elems_per_edge * mesh_order + 1;
-        const auto n_all_nodes             = nodes_per_edge * nodes_per_edge * nodes_per_edge;
-        REQUIRE(nodes.size() == n_all_nodes - n_internal_nodes);
+        const auto n_primary_nodes         = std::invoke([&] {
+            if constexpr (CP == CondensationPolicy::None)
+                return nodes_per_edge * nodes_per_edge * nodes_per_edge;
+            else if constexpr (CP == CondensationPolicy::ElementBoundary)
+            {
+                const auto n_all_nodes = nodes_per_edge * nodes_per_edge * nodes_per_edge;
+                return n_all_nodes - n_internal_nodes;
+            }
+        });
+        REQUIRE(nodes.size() == n_primary_nodes);
         REQUIRE(std::ranges::equal(nodes, std::views::iota(0u, nodes.size())));
     }
 
@@ -98,4 +108,11 @@ int main(int argc, char* argv[])
             REQUIRE(gathered_ghost_condensed[i++] == gathered_owned_condensed[owned_ind]);
         }
     }
+}
+
+int main(int argc, char* argv[])
+{
+    L3sterScopeGuard scope_guard{argc, argv};
+    test< CondensationPolicy::None >();
+    test< CondensationPolicy::ElementBoundary >();
 }

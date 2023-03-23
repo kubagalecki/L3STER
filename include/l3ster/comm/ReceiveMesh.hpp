@@ -5,7 +5,7 @@
 
 namespace lstr
 {
-inline SerializedPartition receivePartition(const MpiComm& comm, int source)
+inline auto receivePartition(const MpiComm& comm, int source) -> SerializedPartition
 {
     int msg_tag = 0;
 

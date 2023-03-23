@@ -9,9 +9,9 @@ namespace lstr
 namespace detail
 {
 template < size_t n_fields >
-auto writeNodeDofs(RangeOfConvertibleTo_c< n_id_t > auto&&           sorted_nodes,
-                   const detail::node_interval_vector_t< n_fields >& dof_intervals,
-                   std::weakly_incrementable auto                    out_iter) -> decltype(out_iter)
+auto writeNodeDofs(RangeOfConvertibleTo_c< n_id_t > auto&&   sorted_nodes,
+                   const node_interval_vector_t< n_fields >& dof_intervals,
+                   std::weakly_incrementable auto            out_iter) -> decltype(out_iter)
     requires requires(global_dof_t dof) { *out_iter++ = dof; }
 {
     const auto interval_dof_starts = computeIntervalStarts(dof_intervals);
@@ -28,8 +28,8 @@ auto writeNodeDofs(RangeOfConvertibleTo_c< n_id_t > auto&&           sorted_node
 }
 
 template < size_t n_fields >
-std::vector< global_dof_t > getNodeDofs(RangeOfConvertibleTo_c< n_id_t > auto&&           sorted_nodes,
-                                        const detail::node_interval_vector_t< n_fields >& dof_intervals)
+auto getNodeDofs(RangeOfConvertibleTo_c< n_id_t > auto&&   sorted_nodes,
+                 const node_interval_vector_t< n_fields >& dof_intervals) -> std::vector< global_dof_t >
 {
     std::vector< global_dof_t > retval;
     if constexpr (std::ranges::sized_range< decltype(sorted_nodes) >)
@@ -53,7 +53,8 @@ inline Tpetra::global_size_t getInvalidSize()
 inline Teuchos::RCP< const tpetra_map_t > makeTpetraMap(std::span< const global_dof_t > dofs, const MpiComm& comm)
 {
     auto teuchos_comm = detail::makeTeuchosMpiComm(comm);
-    return makeTeuchosRCP< const tpetra_map_t >(detail::getInvalidSize(), asTeuchosView(dofs), 0, teuchos_comm);
+    return makeTeuchosRCP< const tpetra_map_t >(
+        detail::getInvalidSize(), asTeuchosView(dofs), 0, std::move(teuchos_comm));
 }
 
 template < size_t n_fields >

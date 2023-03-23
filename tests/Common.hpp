@@ -11,7 +11,7 @@
 inline void logErrorAndTerminate(std::string_view err_msg, std::source_location sl = std::source_location::current())
 {
     std::stringstream err_msg_str;
-    err_msg_str << sl.file_name() << '(' << sl.line() << ", " << sl.column() << ')' << " in function "
+    err_msg_str << sl.file_name() << ':' << sl.line() << ':' << sl.column() << ':' << "\nIn function "
                 << sl.function_name() << ": " << err_msg << '\n';
     std::cerr << err_msg_str.view();
     std::terminate();

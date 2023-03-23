@@ -10,11 +10,12 @@
 #include <algorithm>
 #include <random>
 
-int main(int argc, char* argv[])
+using namespace lstr;
+
+template < CondensationPolicy CP >
+void test(CondensationPolicyTag< CP > = {})
 {
-    using namespace lstr;
-    L3sterScopeGuard scope_guard{argc, argv};
-    MpiComm          comm{MPI_COMM_WORLD};
+    MpiComm comm{MPI_COMM_WORLD};
 
     constexpr auto problem_def       = std::array{Pair{d_id_t{1}, std::array{false, true, false}},
                                             Pair{d_id_t{2}, std::array{false, true, true}},
@@ -34,11 +35,10 @@ int main(int argc, char* argv[])
     });
     const auto mesh_parted = std::invoke([&] { return distributeMesh(comm, mesh_full, {}, problemdef_ctwrpr); });
 
-    const auto cond_map =
-        detail::NodeCondensationMap::makeBoundaryNodeCondensationMap(comm, mesh_parted, problemdef_ctwrpr);
-    const auto            global_intervals = computeDofIntervals(comm, mesh_parted, cond_map, problemdef_ctwrpr);
-    const auto            n_int_global     = global_intervals.size();
-    std::vector< size_t > computed_glob_int_sizes(comm.getRank() == 0 ? comm.getSize() : 0);
+    const auto cond_map                = detail::makeCondensationMap< CP >(comm, mesh_parted, problemdef_ctwrpr);
+    const auto global_intervals        = computeDofIntervals(comm, mesh_parted, cond_map, problemdef_ctwrpr);
+    const auto n_int_global            = global_intervals.size();
+    auto       computed_glob_int_sizes = std::vector< size_t >(comm.getRank() == 0 ? comm.getSize() : 0);
     comm.gather(std::views::single(n_int_global), computed_glob_int_sizes.begin(), 0);
     if (comm.getRank() == 0)
         REQUIRE(std::ranges::all_of(computed_glob_int_sizes, [&](auto sz) { return sz == n_int_global; }));
@@ -56,11 +56,17 @@ int main(int argc, char* argv[])
         for (auto it = gather_buf.begin(); it != gather_buf.end(); std::advance(it, serial_int.size()))
             REQUIRE(std::ranges::equal(std::views::counted(it, serial_int.size()), serial_int));
 
-        const auto  comm_self = MpiComm{MPI_COMM_SELF};
-        const auto& full_part = mesh_full.getPartitions().front();
-        const auto  cond_map_self =
-            detail::NodeCondensationMap::makeBoundaryNodeCondensationMap(comm_self, full_part, problemdef_ctwrpr);
-        const auto intervals_expected = detail::computeLocalDofIntervals(full_part, cond_map_self, problemdef_ctwrpr);
+        const auto  comm_self          = MpiComm{MPI_COMM_SELF};
+        const auto& full_part          = mesh_full.getPartitions().front();
+        const auto  cond_map_self      = detail::makeCondensationMap< CP >(comm_self, full_part, problemdef_ctwrpr);
+        const auto  intervals_expected = detail::computeLocalDofIntervals(full_part, cond_map_self, problemdef_ctwrpr);
         REQUIRE(intervals_expected == global_intervals);
     }
+}
+
+int main(int argc, char* argv[])
+{
+    L3sterScopeGuard scope_guard{argc, argv};
+    test< CondensationPolicy::None >();
+    test< CondensationPolicy::ElementBoundary >();
 }

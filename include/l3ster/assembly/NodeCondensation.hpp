@@ -6,8 +6,48 @@
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/util/RobinHoodHashTables.hpp"
 
-namespace lstr::detail
+namespace lstr
 {
+enum struct CondensationPolicy
+{
+    None,
+    ElementBoundary
+};
+
+template < CondensationPolicy cond_policy >
+struct CondensationPolicyTag
+{
+    static constexpr auto value = cond_policy;
+};
+
+inline constexpr auto no_condensation  = CondensationPolicyTag< CondensationPolicy::None >{};
+inline constexpr auto element_boundary = CondensationPolicyTag< CondensationPolicy::ElementBoundary >{};
+
+namespace detail
+{
+template < typename T >
+struct IsCondensationPolicyTag : std::false_type
+{};
+template < CondensationPolicy CP >
+struct IsCondensationPolicyTag< CondensationPolicyTag< CP > > : std::true_type
+{};
+template < typename T >
+concept CondensationPolicyTag_c = IsCondensationPolicyTag< T >::value;
+
+template < CondensationPolicy CP, ElementTypes ET, el_o_t EO >
+constexpr decltype(auto) getPrimaryNodes(const Element< ET, EO >& element, CondensationPolicyTag< CP > = {})
+{
+    if constexpr (CP == CondensationPolicy::None)
+        return element.getNodes();
+    else if constexpr (CP == CondensationPolicy::ElementBoundary)
+        return getBoundaryNodes(element);
+}
+template < CondensationPolicy CP, ElementTypes ET, el_o_t EO >
+consteval auto getNumPrimaryNodes(ValuePack< CP, ET, EO > = {}) -> size_t
+{
+    return std::tuple_size_v< std::decay_t< decltype(getPrimaryNodes< CP >(std::declval< Element< ET, EO > >())) > >;
+};
+
 template < ProblemDef_c auto problem_def >
 auto getElementBoundaryNodes(const MeshPartition& mesh, ConstexprValue< problem_def >) -> std::vector< n_id_t >
 {
@@ -75,49 +115,101 @@ inline auto computeCondensedElementBoundaryNodeIds(const MpiComm&               
     return retval;
 }
 
-class NodeCondensationMap
+template < CondensationPolicy >
+class NodeCondensationMap;
+
+template <>
+class NodeCondensationMap< CondensationPolicy::None >
 {
 public:
-    NodeCondensationMap(const std::vector< n_id_t >& nodes_to_condense, std::vector< n_id_t > condensed_ids)
+    NodeCondensationMap(std::vector< n_id_t > active_nodes) : m_condensed_ids{std::move(active_nodes)} {}
+
+    [[nodiscard]] auto getCondensedId(n_id_t id) const -> n_id_t { return id; }
+    [[nodiscard]] auto getUncondensedId(n_id_t id) const -> n_id_t { return id; }
+    [[nodiscard]] auto size() const -> size_t { return m_condensed_ids.size(); }
+    [[nodiscard]] auto getCondensedIds() const -> std::span< const n_id_t > { return m_condensed_ids; }
+
+private:
+    std::vector< n_id_t > m_condensed_ids;
+};
+
+template <>
+class NodeCondensationMap< CondensationPolicy::ElementBoundary >
+{
+public:
+    NodeCondensationMap(RangeOfConvertibleTo_c< n_id_t > auto&& nodes_to_condense, std::vector< n_id_t > condensed_ids)
         : m_condensed_ids{std::move(condensed_ids)}
     {
         m_forward_map.reserve(m_condensed_ids.size());
         m_inverse_map.reserve(m_condensed_ids.size());
-        for (size_t local_id = 0; auto uncond_node : nodes_to_condense)
+        for (size_t local_id = 0; n_id_t uncond_node : nodes_to_condense)
         {
             const auto condensed_id = m_condensed_ids[local_id];
-            const auto map_entry    = std::array{static_cast< n_id_t >(local_id), condensed_id};
-            m_forward_map.emplace(uncond_node, map_entry);
+            m_forward_map.emplace(uncond_node, condensed_id);
             m_inverse_map.emplace(condensed_id, uncond_node);
             ++local_id;
         }
     }
-    template < ProblemDef_c auto problem_def >
-    static auto makeBoundaryNodeCondensationMap(const MpiComm&                comm,
-                                                const MeshPartition&          mesh,
-                                                ConstexprValue< problem_def > probdef_ctwrpr)
+
+    [[nodiscard]] auto getCondensedId(n_id_t id) const -> n_id_t { return m_forward_map.at(id); }
+    [[nodiscard]] auto getUncondensedId(n_id_t id) const -> n_id_t { return m_inverse_map.at(id); }
+    [[nodiscard]] auto size() const -> size_t { return m_forward_map.size(); }
+    [[nodiscard]] auto getCondensedIds() const -> std::span< const n_id_t > { return m_condensed_ids; }
+
+private:
+    std::vector< n_id_t >                            m_condensed_ids;
+    robin_hood::unordered_flat_map< n_id_t, n_id_t > m_forward_map, m_inverse_map;
+};
+
+template < ProblemDef_c auto problem_def >
+auto makeCondMapImplCPNone(const MeshPartition& mesh, ConstexprValue< problem_def > probdef_ctwrpr)
+    -> NodeCondensationMap< CondensationPolicy::None >
+{
+    robin_hood::unordered_flat_set< n_id_t > active_nodes_set;
+    mesh.visit(
+        [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
+            for (auto n : element.getNodes())
+                active_nodes_set.insert(n);
+        },
+        problem_def | std::views::transform([](const auto& pair) { return pair.first; }));
+    std::vector< n_id_t > active_nodes_vec;
+    active_nodes_vec.reserve(active_nodes_set.size());
+    std::ranges::copy(active_nodes_set, std::back_inserter(active_nodes_vec));
+    std::ranges::sort(active_nodes_vec);
+    return {std::move(active_nodes_vec)};
+}
+
+template < CondensationPolicy CP, ProblemDef_c auto problem_def >
+auto makeCondensationMap(const MpiComm&                comm,
+                         const MeshPartition&          mesh,
+                         ConstexprValue< problem_def > probdef_ctwrpr,
+                         CondensationPolicyTag< CP > = {}) -> NodeCondensationMap< CP >
+{
+    if constexpr (CP == CondensationPolicy::None)
+        return makeCondMapImplCPNone(mesh, probdef_ctwrpr);
+    else if constexpr (CP == CondensationPolicy::ElementBoundary)
     {
         const auto boundary_nodes           = getElementBoundaryNodes(mesh, probdef_ctwrpr);
         auto       condensed_boundary_nodes = computeCondensedElementBoundaryNodeIds(comm, mesh, boundary_nodes);
-        return NodeCondensationMap{boundary_nodes, condensed_boundary_nodes};
+        return {boundary_nodes, condensed_boundary_nodes};
     }
+}
 
-    [[nodiscard]] auto mapToLocal(n_id_t id) const -> n_id_t { return m_forward_map.at(id).front(); }
-    [[nodiscard]] auto mapToGlobal(n_id_t id) const -> n_id_t { return m_forward_map.at(id).back(); }
-    [[nodiscard]] auto mapInverse(n_id_t id) const -> n_id_t { return m_inverse_map.at(id); }
-    [[nodiscard]] auto size() const -> size_t { return m_forward_map.size(); }
-    [[nodiscard]] auto getCondensedIds() const -> const std::vector< n_id_t >& { return m_condensed_ids; }
+template < CondensationPolicy CP >
+inline auto getLocalCondensedId(const MeshPartition& mesh, const NodeCondensationMap< CP >& cond_map, n_id_t node)
+    -> n_id_t
+{
+    return static_cast< n_id_t >(
+        std::distance(cond_map.getCondensedIds().begin(),
+                      std::ranges::lower_bound(cond_map.getCondensedIds(), cond_map.getCondensedId(node))));
+}
 
-private:
-    std::vector< n_id_t >                                             m_condensed_ids;
-    robin_hood::unordered_flat_map< n_id_t, std::array< n_id_t, 2 > > m_forward_map;
-    robin_hood::unordered_flat_map< n_id_t, n_id_t >                  m_inverse_map;
-};
-
-inline auto getCondensedOwnedNodesView(const MeshPartition& mesh, const NodeCondensationMap& cond_map)
+template < CondensationPolicy CP >
+auto getCondensedOwnedNodesView(const MeshPartition& mesh, const NodeCondensationMap< CP >& cond_map)
 {
     return cond_map.getCondensedIds() |
-           std::views::filter([&](n_id_t node) { return mesh.isOwnedNode(cond_map.mapInverse(node)); });
+           std::views::filter([&](n_id_t node) { return mesh.isOwnedNode(cond_map.getUncondensedId(node)); });
 }
-} // namespace lstr::detail
+} // namespace detail
+} // namespace lstr
 #endif // L3STER_NODECONDENSATION_HPP

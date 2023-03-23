@@ -13,16 +13,14 @@ using node_interval_t = std::pair< std::array< n_id_t, 2 >, std::bitset< n_field
 template < size_t n_fields >
 using node_interval_vector_t = std::vector< node_interval_t< n_fields > >;
 
-template < size_t n_fields >
-auto computeDofIntervalsFromNodeData(const std::vector< n_id_t >&                  nodes,
+template < CondensationPolicy CP, size_t n_fields >
+auto computeDofIntervalsFromNodeData(const NodeCondensationMap< CP >&              cond_map,
                                      const std::vector< std::bitset< n_fields > >& field_cov)
     -> node_interval_vector_t< n_fields >
 {
-    node_interval_vector_t< n_fields > retval;
-    constexpr size_t                   reserve_heuristic = 16;
-    retval.reserve(nodes.size() / reserve_heuristic);
-
-    auto node_it = begin(nodes);
+    const auto nodes   = cond_map.getCondensedIds();
+    auto       retval  = node_interval_vector_t< n_fields >{};
+    auto       node_it = begin(nodes);
     while (node_it != end(nodes))
     {
         auto cov_it = std::next(begin(field_cov), std::distance(begin(nodes), node_it));
@@ -41,9 +39,9 @@ auto computeDofIntervalsFromNodeData(const std::vector< n_id_t >&               
     return retval;
 }
 
-template < ProblemDef_c auto problem_def >
-auto makeFieldCoverageVector(const MeshPartition&       mesh,
-                             const NodeCondensationMap& cond_map,
+template < CondensationPolicy CP, ProblemDef_c auto problem_def >
+auto makeFieldCoverageVector(const MeshPartition&             mesh,
+                             const NodeCondensationMap< CP >& cond_map,
                              ConstexprValue< problem_def >) -> std::vector< std::bitset< deduceNFields(problem_def) > >
 {
     auto retval = std::vector< std::bitset< deduceNFields(problem_def) > >(cond_map.size());
@@ -54,7 +52,7 @@ auto makeFieldCoverageVector(const MeshPartition&       mesh,
             [&](const auto& element) {
                 for (auto node : getBoundaryNodes(element))
                 {
-                    const auto local_node_id = cond_map.mapToLocal(node);
+                    const auto local_node_id = getLocalCondensedId(mesh, cond_map, node);
                     retval[local_node_id] |= fields;
                 }
             },
@@ -63,14 +61,14 @@ auto makeFieldCoverageVector(const MeshPartition&       mesh,
     return retval;
 }
 
-template < ProblemDef_c auto problem_def >
-auto computeLocalDofIntervals(const MeshPartition&          mesh,
-                              const NodeCondensationMap&    cond_map,
-                              ConstexprValue< problem_def > problemdef_ctwrapper)
+template < CondensationPolicy CP, ProblemDef_c auto problem_def >
+auto computeLocalDofIntervals(const MeshPartition&             mesh,
+                              const NodeCondensationMap< CP >& cond_map,
+                              ConstexprValue< problem_def >    problemdef_ctwrapper)
     -> node_interval_vector_t< deduceNFields(problem_def) >
 {
     const auto field_coverage = makeFieldCoverageVector(mesh, cond_map, problemdef_ctwrapper);
-    return computeDofIntervalsFromNodeData(cond_map.getCondensedIds(), field_coverage);
+    return computeDofIntervalsFromNodeData(cond_map, field_coverage);
 }
 
 template < size_t n_fields >
@@ -178,7 +176,8 @@ void consolidateDofIntervals(node_interval_vector_t< n_fields >& intervals)
             const auto& [lo2, hi2] = i2.first;
             return std::make_pair(std::array{lo1, std::max(hi1, hi2)}, i1.second);
         };
-        intervals.erase(begin(reduceConsecutive(intervals, same_dof_overlapping, consolidate)), intervals.end());
+        const auto erase_range = reduceConsecutive(intervals, same_dof_overlapping, consolidate);
+        intervals.erase(erase_range.begin(), erase_range.end());
     };
     const auto consolidate_same_delim = [&intervals] {
         constexpr auto same_interval_delim = [](const auto& i1, const auto& i2) {
@@ -269,6 +268,7 @@ void consolidateDofIntervals(node_interval_vector_t< n_fields >& intervals)
     consolidate_same_delim();
     resolve_overlapping();
     consolidate_samedof_overlappingdelim();
+    intervals.shrink_to_fit();
 }
 
 template < size_t n_fields >
@@ -291,11 +291,11 @@ I findNodeInterval(I begin, S end, n_id_t node)
 }
 } // namespace detail
 
-template < detail::ProblemDef_c auto problem_def >
-auto computeDofIntervals(const MpiComm&                     comm,
-                         const MeshPartition&               mesh,
-                         const detail::NodeCondensationMap& cond_map,
-                         ConstexprValue< problem_def >      problemdef_ctwrapper)
+template < CondensationPolicy CP, detail::ProblemDef_c auto problem_def >
+auto computeDofIntervals(const MpiComm&                           comm,
+                         const MeshPartition&                     mesh,
+                         const detail::NodeCondensationMap< CP >& cond_map,
+                         ConstexprValue< problem_def >            problemdef_ctwrapper)
     -> detail::node_interval_vector_t< detail::deduceNFields(problem_def) >
 {
     L3STER_PROFILE_FUNCTION;

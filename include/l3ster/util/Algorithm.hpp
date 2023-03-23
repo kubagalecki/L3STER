@@ -130,9 +130,9 @@ matchingPermutation(R1&& r_pattern, R2&& r_match, O out, Pred pred = {}, Proj1 p
                                                                                    Proj1,
                                                                                    Proj2 >
 {
-    O out_initial = out;
+    auto out_initial = out;
     std::ranges::for_each(r_match, [&](auto&& match_el) {
-        *(out++) = std::distance(begin(r_pattern),
+        *(out++) = std::distance(std::ranges::begin(r_pattern),
                                  std::ranges::find_if(
                                      r_pattern, [&](auto&& el) { return pred(el, proj2(match_el)); }, proj1));
     });
@@ -206,9 +206,9 @@ reduceConsecutive(R&& range, Cmp&& comparator = {}, Red&& reduction = {})
         if (adj_range_begin == std::ranges::end(range))
             break;
         auto next_adjacent = std::next(adj_range_begin);
-        *write_pos         = reduction(*adj_range_begin, *next_adjacent);
+        *write_pos         = std::invoke(reduction, std::as_const(*adj_range_begin), std::as_const(*next_adjacent));
         while (std::next(next_adjacent) != std::ranges::end(range) and
-               comparator(*next_adjacent, *std::next(next_adjacent)))
+               std::invoke(comparator, std::as_const(*next_adjacent), std::as_const(*std::next(next_adjacent))))
             *write_pos = reduction(*write_pos, *++next_adjacent);
         ++write_pos;
         it = ++next_adjacent;

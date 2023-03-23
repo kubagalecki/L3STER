@@ -11,25 +11,48 @@
 
 using namespace lstr;
 
-template < detail::ProblemDef_c auto problem_def >
-static auto makeLocalCondensationMap(const MeshPartition& mesh, ConstexprValue< problem_def > probdef_ctwrpr)
+template < detail::ProblemDef_c auto problem_def, CondensationPolicy CP >
+static auto makeLocalCondensationMap(const MeshPartition&          mesh,
+                                     ConstexprValue< problem_def > probdef_ctwrpr,
+                                     CondensationPolicyTag< CP >) -> detail::NodeCondensationMap< CP >
 {
-    const auto element_boundary_nodes = detail::getElementBoundaryNodes(mesh, probdef_ctwrpr);
-    auto       condensed_nodes        = std::vector< n_id_t >(element_boundary_nodes);
-    std::iota(condensed_nodes.begin(), condensed_nodes.end(), 0);
-    return detail::NodeCondensationMap{element_boundary_nodes, std::move(condensed_nodes)};
+    if constexpr (CP == CondensationPolicy::None)
+    {
+        robin_hood::unordered_flat_set< n_id_t > active_nodes_set;
+        mesh.visit(
+            [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
+                for (auto n : element.getNodes())
+                    active_nodes_set.insert(n);
+            },
+            problem_def | std::views::transform([](auto pair) { return pair.first; }));
+        std::vector< n_id_t > active_nodes_vec;
+        active_nodes_vec.reserve(active_nodes_set.size());
+        std::ranges::copy(active_nodes_set, std::back_inserter(active_nodes_vec));
+        std::ranges::sort(active_nodes_vec);
+        return {std::move(active_nodes_vec)};
+    }
+    else
+    {
+        const auto element_boundary_nodes = detail::getElementBoundaryNodes(mesh, probdef_ctwrpr);
+        auto       condensed_nodes        = std::vector< n_id_t >(element_boundary_nodes);
+        std::iota(condensed_nodes.begin(), condensed_nodes.end(), 0);
+        return {element_boundary_nodes, std::move(condensed_nodes)};
+    }
 }
 
-TEST_CASE("Local node DOF interval calculation", "[dof]")
+TEMPLATE_TEST_CASE("Local node DOF interval calculation",
+                   "[dof]",
+                   CondensationPolicyTag< CondensationPolicy::None >,
+                   CondensationPolicyTag< CondensationPolicy::ElementBoundary >)
 {
-    constexpr std::array  node_dist      = {0., 1., 2.};
-    const auto            mesh           = makeCubeMesh(node_dist);
-    const auto&           part           = mesh.getPartitions().front();
-    constexpr std::size_t n_fields       = 2;
-    constexpr auto        probdef_ctwrpr = ConstexprValue< std::array{Pair{d_id_t{0}, std::array{true, false}},
+    constexpr auto   node_dist      = std::array{0., 1., 2.};
+    const auto       mesh           = makeCubeMesh(node_dist);
+    const auto&      part           = mesh.getPartitions().front();
+    constexpr size_t n_fields       = 2;
+    constexpr auto   probdef_ctwrpr = ConstexprValue< std::array{Pair{d_id_t{0}, std::array{true, false}},
                                                                Pair{d_id_t{1}, std::array{false, true}}} >{};
-    const auto            cond_map       = makeLocalCondensationMap(part, probdef_ctwrpr);
-    const auto            result         = detail::computeLocalDofIntervals(part, cond_map, probdef_ctwrpr);
+    const auto       cond_map       = makeLocalCondensationMap(part, probdef_ctwrpr, TestType{});
+    const auto       result         = detail::computeLocalDofIntervals(part, cond_map, probdef_ctwrpr);
     REQUIRE(result.size() == 2);
     CHECK(result[0].first[0] == 0);
     CHECK(result[0].first[1] == 8);
@@ -39,7 +62,10 @@ TEST_CASE("Local node DOF interval calculation", "[dof]")
     CHECK(result[1].second == std::bitset< n_fields >{0b01});
 }
 
-TEST_CASE("Node DOF intervals of parts sum up to whole", "[dof]")
+TEMPLATE_TEST_CASE("Node DOF intervals of parts sum up to whole",
+                   "[dof]",
+                   CondensationPolicyTag< CondensationPolicy::None >,
+                   CondensationPolicyTag< CondensationPolicy::ElementBoundary >)
 {
     constexpr auto problem_def   = ConstexprValue< std::array{Pair{d_id_t{1}, std::array{false, false, false}},
                                                             Pair{d_id_t{2}, std::array{false, false, true}},
@@ -51,7 +77,7 @@ TEST_CASE("Node DOF intervals of parts sum up to whole", "[dof]")
                                                             Pair{d_id_t{8}, std::array{true, true, true}}} >{};
     auto           mesh          = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube_multidom.msh), gmsh_tag);
     auto&          full_part     = mesh.getPartitions().front();
-    const auto     cond_map_full = makeLocalCondensationMap(full_part, problem_def);
+    const auto     cond_map_full = makeLocalCondensationMap(full_part, problem_def, TestType{});
     const auto     unpartitioned_intervals = detail::computeLocalDofIntervals(full_part, cond_map_full, problem_def);
 
     std::vector< d_id_t > boundaries(24);
@@ -61,12 +87,19 @@ TEST_CASE("Node DOF intervals of parts sum up to whole", "[dof]")
     partitioned_intervals.clear();
     for (const auto& part : mesh.getPartitions())
     {
-        // All nodes are boundary nodes since mesh is of the 1st order
-        // Condensation map without interal nodes is the identity mapping
-        auto cond_ids = std::vector< n_id_t >{};
-        std::ranges::copy(part.getAllNodes(), std::back_inserter(cond_ids));
-        std::ranges::sort(cond_ids);
-        const auto cond_map  = detail::NodeCondensationMap{cond_ids, cond_ids};
+        const auto cond_map  = std::invoke([&] {
+            if constexpr (TestType::value == CondensationPolicy::None)
+                return detail::makeCondMapImplCPNone(part, problem_def);
+            else if constexpr (TestType::value == CondensationPolicy::ElementBoundary)
+            {
+                // All nodes are boundary nodes since mesh is of the 1st order
+                // Condensation map without interal nodes is the identity mapping
+                auto cond_ids = std::vector< n_id_t >{};
+                std::ranges::copy(part.getAllNodes(), std::back_inserter(cond_ids));
+                std::ranges::sort(cond_ids);
+                return detail::NodeCondensationMap< CondensationPolicy::ElementBoundary >{cond_ids, cond_ids};
+            }
+        });
         const auto intervals = detail::computeLocalDofIntervals(part, cond_map, problem_def);
         std::ranges::copy(intervals, std::back_inserter(partitioned_intervals));
     }
@@ -164,19 +197,25 @@ TEMPLATE_TEST_CASE("Node DOF interval consolidation", "[dof]", ConstexprValue< 1
     }
 }
 
-TEST_CASE("Node to DOF", "[dof]")
+TEMPLATE_TEST_CASE("Node to DOF",
+                   "[dof]",
+                   CondensationPolicyTag< CondensationPolicy::None >,
+                   CondensationPolicyTag< CondensationPolicy::ElementBoundary >)
 {
     constexpr std::array node_dist = {0., 1., 2., 3., 4.};
     constexpr size_t     n_parts   = 4;
     auto                 mesh      = makeCubeMesh(node_dist);
-    auto&                p0        = mesh.getPartitions()[0];
+    auto&                partition = mesh.getPartitions().front();
     constexpr size_t     n_fields  = 3;
+
+    constexpr auto probdef_domain = ConstexprValue< std::array{Pair{d_id_t{0}, std::array{true}}} >{};
+    const auto     cond_map       = makeLocalCondensationMap(partition, probdef_domain, TestType{});
 
     SECTION("Non-contiguous DOF distribution")
     {
         detail::node_interval_vector_t< n_fields > dof_intervals;
         n_id_t i1_begin = 0, i1_end = node_dist.size() * node_dist.size() - 1, i2_begin = i1_end + 1,
-               i2_end = p0.getOwnedNodes().size() - 1;
+               i2_end = partition.getOwnedNodes().size() - 1;
         std::bitset< n_fields > i1_cov{0b110ull}, i2_cov{0b101ull};
         dof_intervals.emplace_back(std::array{i1_begin, i1_end}, i1_cov);
         dof_intervals.emplace_back(std::array{i2_begin, i2_end}, i2_cov);
@@ -202,9 +241,9 @@ TEST_CASE("Node to DOF", "[dof]")
 
         SECTION("Unpartitioned")
         {
-            const auto map = NodeToGlobalDofMap{p0, dof_intervals};
+            const auto map = NodeToGlobalDofMap{partition, dof_intervals, cond_map};
             CHECK_FALSE(map.isContiguous());
-            check_dofs(p0.getOwnedNodes(), map);
+            check_dofs(partition.getOwnedNodes(), map);
         }
 
         SECTION("Partitioned")
@@ -213,7 +252,7 @@ TEST_CASE("Node to DOF", "[dof]")
             bool not_contiguous = false;
             for (const auto& part : mesh.getPartitions())
             {
-                const auto map = NodeToGlobalDofMap{part, dof_intervals};
+                const auto map = NodeToGlobalDofMap{part, dof_intervals, cond_map};
                 not_contiguous |= not map.isContiguous();
                 check_dofs(part.getOwnedNodes(), map);
                 check_dofs(part.getGhostNodes(), map);
@@ -240,9 +279,12 @@ TEST_CASE("Node to DOF", "[dof]")
 
         SECTION("Unpartitioned")
         {
-            const auto map = NodeToGlobalDofMap{p0, dof_intervals};
-            CHECK(map.isContiguous());
-            check_dofs(p0.getOwnedNodes(), map);
+            const auto map = NodeToGlobalDofMap{partition, dof_intervals, cond_map};
+            if constexpr (TestType::value == CondensationPolicy::None)
+                CHECK(map.isContiguous());
+            else
+                CHECK_FALSE(map.isContiguous());
+            check_dofs(partition.getOwnedNodes(), map);
         }
 
         SECTION("Partitioned")
@@ -250,8 +292,11 @@ TEST_CASE("Node to DOF", "[dof]")
             mesh = partitionMesh(mesh, n_parts, {});
             for (const auto& part : mesh.getPartitions())
             {
-                const auto map = NodeToGlobalDofMap{part, dof_intervals};
-                CHECK(map.isContiguous());
+                const auto map = NodeToGlobalDofMap{part, dof_intervals, cond_map};
+                if constexpr (TestType::value == CondensationPolicy::None)
+                    CHECK(map.isContiguous());
+                else
+                    CHECK_FALSE(map.isContiguous());
                 check_dofs(part.getOwnedNodes(), map);
                 check_dofs(part.getGhostNodes(), map);
             }
