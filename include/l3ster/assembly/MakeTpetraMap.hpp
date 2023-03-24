@@ -52,9 +52,10 @@ inline Tpetra::global_size_t getInvalidSize()
 
 inline Teuchos::RCP< const tpetra_map_t > makeTpetraMap(std::span< const global_dof_t > dofs, const MpiComm& comm)
 {
-    auto teuchos_comm = detail::makeTeuchosMpiComm(comm);
-    return makeTeuchosRCP< const tpetra_map_t >(
-        detail::getInvalidSize(), asTeuchosView(dofs), 0, std::move(teuchos_comm));
+    auto       teuchos_comm      = detail::makeTeuchosMpiComm(comm);
+    const auto compute_size      = detail::getInvalidSize();
+    const auto dofs_teuchos_view = asTeuchosView(dofs);
+    return makeTeuchosRCP< const tpetra_map_t >(compute_size, dofs_teuchos_view, 0, std::move(teuchos_comm));
 }
 
 template < size_t n_fields >

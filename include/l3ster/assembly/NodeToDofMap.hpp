@@ -28,8 +28,7 @@ public:
 
     NodeToGlobalDofMap() = default;
     template < CondensationPolicy CP >
-    NodeToGlobalDofMap(const MeshPartition&                                   mesh,
-                       const detail::node_interval_vector_t< dofs_per_node >& dof_intervals,
+    NodeToGlobalDofMap(const detail::node_interval_vector_t< dofs_per_node >& dof_intervals,
                        const detail::NodeCondensationMap< CP >&               cond_map);
 
     [[nodiscard]] inline payload_t operator()(n_id_t node) const noexcept;
@@ -40,12 +39,10 @@ public:
 
 private:
     template < CondensationPolicy CP >
-    bool tryInitAsContiguous(const MeshPartition&                                   msh,
-                             const detail::node_interval_vector_t< dofs_per_node >& dof_ints,
+    bool tryInitAsContiguous(const detail::node_interval_vector_t< dofs_per_node >& dof_ints,
                              const detail::NodeCondensationMap< CP >&               cond_map);
     template < CondensationPolicy CP >
-    void initNonContiguous(const MeshPartition&                                   mesh,
-                           const detail::node_interval_vector_t< dofs_per_node >& dof_intervals,
+    void initNonContiguous(const detail::node_interval_vector_t< dofs_per_node >& dof_intervals,
                            const detail::NodeCondensationMap< CP >&               cond_map);
 
     std::variant< map_t, ContiguousCaseInfo > m_data;
@@ -62,7 +59,8 @@ public:
     using dof_t                              = local_dof_t;
 
     NodeToLocalDofMap() = default;
-    NodeToLocalDofMap(const MeshPartition&                       nodes,
+    template < CondensationPolicy CP >
+    NodeToLocalDofMap(const detail::NodeCondensationMap< CP >&   cond_map,
                       const NodeToGlobalDofMap< dofs_per_node >& global_map,
                       const std::same_as< tpetra_map_t > auto&... local_global_maps)
         requires(sizeof...(local_global_maps) == num_maps);
@@ -72,8 +70,8 @@ private:
     map_t m_map;
 };
 
-template < size_t dofs_per_node >
-NodeToLocalDofMap(const MeshPartition&                       nodes,
+template < CondensationPolicy CP, size_t dofs_per_node >
+NodeToLocalDofMap(const detail::NodeCondensationMap< CP >&   cond_map,
                   const NodeToGlobalDofMap< dofs_per_node >& global_map,
                   const std::same_as< tpetra_map_t > auto&... local_global_maps)
     -> NodeToLocalDofMap< dofs_per_node, sizeof...(local_global_maps) >;
@@ -94,13 +92,14 @@ concept NodeToDofMap_c = detail::is_node_map< T >;
 template < size_t dofs_per_node >
 template < CondensationPolicy CP >
 NodeToGlobalDofMap< dofs_per_node >::NodeToGlobalDofMap(
-    const MeshPartition&                                   mesh,
     const detail::node_interval_vector_t< dofs_per_node >& dof_intervals,
     const detail::NodeCondensationMap< CP >&               cond_map)
 {
     L3STER_PROFILE_FUNCTION;
-    if (not tryInitAsContiguous(mesh, dof_intervals, cond_map))
-        initNonContiguous(mesh, dof_intervals, cond_map);
+    if (cond_map.getCondensedIds().empty())
+        return;
+    if (not tryInitAsContiguous(dof_intervals, cond_map))
+        initNonContiguous(dof_intervals, cond_map);
 }
 
 template < size_t dofs_per_node >
@@ -126,85 +125,68 @@ NodeToGlobalDofMap< dofs_per_node >::operator()(n_id_t node) const noexcept
 template < size_t dofs_per_node >
 template < CondensationPolicy CP >
 bool NodeToGlobalDofMap< dofs_per_node >::tryInitAsContiguous(
-    const MeshPartition&                                   mesh,
     const detail::node_interval_vector_t< dofs_per_node >& dof_intervals,
     const detail::NodeCondensationMap< CP >&               cond_map)
 {
-    if constexpr (CP == CondensationPolicy::ElementBoundary)
-        return false;
-    else if constexpr (CP == CondensationPolicy::None)
+    const auto min_node_in_partition = cond_map.getCondensedIds().front();
+    const auto max_node_in_partition = cond_map.getCondensedIds().back();
+    auto       base_dof              = global_dof_t{};
+    for (const auto& interval : dof_intervals)
     {
-        const auto min_node_in_partition = std::min(
-            mesh.getOwnedNodes().empty() ? std::numeric_limits< n_id_t >::max() : mesh.getOwnedNodes().front(),
-            mesh.getGhostNodes().empty() ? std::numeric_limits< n_id_t >::max() : mesh.getGhostNodes().front());
-        const auto max_node_in_partition =
-            std::max(mesh.getOwnedNodes().empty() ? std::numeric_limits< n_id_t >::min() : mesh.getOwnedNodes().back(),
-                     mesh.getGhostNodes().empty() ? std::numeric_limits< n_id_t >::min() : mesh.getGhostNodes().back());
-        global_dof_t base_dof{};
-        for (const auto& interval : dof_intervals)
+        const auto& [delim, coverage]     = interval;
+        const auto& [int_first, int_last] = delim;
+        if (min_node_in_partition >= int_first and max_node_in_partition <= int_last)
         {
-            const auto& [delim, coverage]     = interval;
-            const auto& [int_first, int_last] = delim;
-            if (min_node_in_partition >= int_first and max_node_in_partition <= int_last)
-            {
-                std::array< std::uint8_t, dofs_per_node > dof_inds{};
-                auto                                      write_it = begin(dof_inds);
-                for (size_t i = 0; i < dofs_per_node; ++i)
-                    if (coverage.test(i))
-                        *write_it++ = static_cast< std::uint8_t >(i);
-                m_data =
-                    ContiguousCaseInfo{int_first, base_dof, dof_inds, static_cast< std::uint8_t >(coverage.count())};
-                return true;
-            }
-            base_dof += (int_last - int_first + 1) * coverage.count();
+            auto dof_inds = std::array< std::uint8_t, dofs_per_node >{};
+            auto write_it = begin(dof_inds);
+            for (size_t i = 0; i < dofs_per_node; ++i)
+                if (coverage.test(i))
+                    *write_it++ = static_cast< std::uint8_t >(i);
+            m_data = ContiguousCaseInfo{int_first, base_dof, dof_inds, static_cast< std::uint8_t >(coverage.count())};
+            return true;
         }
-        return false;
+        base_dof += (int_last - int_first + 1) * coverage.count();
     }
+    return false;
 }
 
 template < size_t dofs_per_node >
 template < CondensationPolicy CP >
 void NodeToGlobalDofMap< dofs_per_node >::initNonContiguous(
-    const MeshPartition&                                   mesh,
     const detail::node_interval_vector_t< dofs_per_node >& dof_intervals,
     const detail::NodeCondensationMap< CP >&               cond_map)
 {
     auto&      map                 = m_data.template emplace< map_t >();
     const auto dof_interval_starts = detail::computeIntervalStarts(dof_intervals);
-    const auto add_entries         = [&](std::span< const n_id_t > nodes) {
-        const auto compute_node_dofs = [&](n_id_t node_id, ptrdiff_t interval_ind) {
-            const auto dof_int_start = dof_interval_starts[interval_ind];
-            const auto& [delim, cov] = dof_intervals[interval_ind];
-            const auto& [lo, hi]     = delim;
-
-            std::array< global_dof_t, dofs_per_node > retval;
-            retval.fill(invalid_dof);
-            global_dof_t node_dof = dof_int_start + (node_id - lo) * cov.count();
-            for (ptrdiff_t i = 0; auto& dof : retval)
-                if (cov.test(i++))
-                    dof = node_dof++;
-            return retval;
-        };
-
-        for (auto search_it = begin(dof_intervals); auto n : nodes)
-        {
-            search_it               = detail::findNodeInterval(search_it, end(dof_intervals), n);
-            const auto interval_ind = std::distance(begin(dof_intervals), search_it);
-            const auto node_dofs    = compute_node_dofs(n, interval_ind);
-            map.emplace(n, node_dofs);
-        }
+    const auto compute_node_dofs   = [&](n_id_t node_id, ptrdiff_t interval_ind) {
+        const auto dof_int_start = dof_interval_starts[interval_ind];
+        const auto& [delim, cov] = dof_intervals[interval_ind];
+        const auto& [lo, hi]     = delim;
+        auto retval              = std::array< global_dof_t, dofs_per_node >{};
+        retval.fill(invalid_dof);
+        global_dof_t node_dof = dof_int_start + (node_id - lo) * cov.count();
+        for (ptrdiff_t i = 0; auto& dof : retval)
+            if (cov.test(i++))
+                dof = node_dof++;
+        return retval;
     };
-    add_entries(mesh.getOwnedNodes());
-    add_entries(mesh.getGhostNodes());
+    for (auto search_it = begin(dof_intervals); auto n : cond_map.getCondensedIds())
+    {
+        search_it               = detail::findNodeInterval(search_it, end(dof_intervals), n);
+        const auto interval_ind = std::distance(begin(dof_intervals), search_it);
+        const auto node_dofs    = compute_node_dofs(n, interval_ind);
+        map.emplace(n, node_dofs);
+    }
 }
 
 template < size_t dofs_per_node, size_t num_maps >
+template < CondensationPolicy CP >
 NodeToLocalDofMap< dofs_per_node, num_maps >::NodeToLocalDofMap(
-    const MeshPartition&                       mesh,
+    const detail::NodeCondensationMap< CP >&   cond_map,
     const NodeToGlobalDofMap< dofs_per_node >& global_map,
     const std::same_as< tpetra_map_t > auto&... local_global_maps)
     requires(sizeof...(local_global_maps) == num_maps)
-    : m_map(mesh.getAllNodes().size())
+    : m_map(cond_map.getCondensedIds().size())
 {
     L3STER_PROFILE_FUNCTION;
     const auto get_node_dofs = [&](n_id_t node, const tpetra_map_t& map) {
@@ -214,8 +196,8 @@ NodeToLocalDofMap< dofs_per_node, num_maps >::NodeToLocalDofMap(
         });
         return retval;
     };
-    for (n_id_t node : mesh.getAllNodes())
-        m_map[node] = payload_t{get_node_dofs(node, local_global_maps)...};
+    for (n_id_t cond_node : cond_map.getCondensedIds())
+        m_map[cond_map.getUncondensedId(cond_node)] = payload_t{get_node_dofs(cond_node, local_global_maps)...};
 }
 } // namespace lstr
 #endif // L3STER_ASSEMBLY_NODETODOFMAP_HPP

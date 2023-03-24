@@ -44,15 +44,15 @@ auto makeFieldCoverageVector(const MeshPartition&             mesh,
                              const NodeCondensationMap< CP >& cond_map,
                              ConstexprValue< problem_def >) -> std::vector< std::bitset< deduceNFields(problem_def) > >
 {
-    auto retval = std::vector< std::bitset< deduceNFields(problem_def) > >(cond_map.size());
+    auto retval = std::vector< std::bitset< deduceNFields(problem_def) > >(cond_map.getCondensedIds().size());
     for (const auto& [dom_id, field_array] : problem_def)
     {
         const auto fields = toBitset(field_array);
         mesh.visit(
             [&](const auto& element) {
-                for (auto node : getBoundaryNodes(element))
+                for (auto node : getPrimaryNodes< CP >(element))
                 {
-                    const auto local_node_id = getLocalCondensedId(mesh, cond_map, node);
+                    const auto local_node_id = getLocalCondensedId(cond_map, node);
                     retval[local_node_id] |= fields;
                 }
             },

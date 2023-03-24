@@ -19,7 +19,7 @@ void test()
         constexpr auto       order = 2;
         mesh_full                  = makeCubeMesh(dist);
         mesh_full.getPartitions().front().initDualGraph();
-        mesh_full.getPartitions().front() = convertMeshToOrder< order >(mesh_full.getPartitions()[0]);
+        mesh_full.getPartitions().front() = convertMeshToOrder< order >(mesh_full.getPartitions().front());
     }
     const auto     mesh            = distributeMesh(comm, mesh_full, {});
     constexpr auto probdef_ctwrpr  = ConstexprValue< std::array{Pair{d_id_t{0}, std::array{false, true}}} >{};
