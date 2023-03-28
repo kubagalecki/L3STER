@@ -12,21 +12,32 @@ using namespace lstr;
 class DenseGraph
 {
 public:
-    template < auto problem_def >
+    template < auto problem_def, CondensationPolicy CP >
     DenseGraph(const MeshPartition&                                                        mesh,
                ConstexprValue< problem_def >                                               problemdef_ctwrpr,
                const detail::node_interval_vector_t< detail::deduceNFields(problem_def) >& dof_intervals,
-               const detail::NodeCondensationMap&                                          cond_map)
-        : m_dim{cond_map.size()}, m_entries{m_dim * m_dim}
+               const detail::NodeCondensationMap< CP >&                                    cond_map)
     {
-        const auto node_to_dof_map = NodeToGlobalDofMap{mesh, dof_intervals, cond_map};
-        const auto process_domain  = [&]< auto dom_def >(ConstexprValue< dom_def >) {
-            constexpr auto domain_id        = dom_def.first;
-            constexpr auto coverage         = dom_def.second;
-            constexpr auto covered_dof_inds = getTrueInds< coverage >();
+        const auto node_to_dof_map = NodeToGlobalDofMap{dof_intervals, cond_map};
+        m_dim =
+            std::ranges::max(node_to_dof_map(cond_map.getCondensedIds().back()) | std::views::filter([](auto dof) {
+                                 return dof != NodeToGlobalDofMap< detail::deduceNFields(problem_def) >::invalid_dof;
+                             })) +
+            1;
+        m_entries = DynamicBitset{m_dim * m_dim};
+
+        const auto process_domain = [&]< auto dom_def >(ConstexprValue< dom_def >) {
+            constexpr auto  domain_id        = dom_def.first;
+            constexpr auto& coverage         = dom_def.second;
+            constexpr auto  covered_dof_inds = getTrueInds< coverage >();
 
             const auto process_element = [&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
-                const auto element_dofs = detail::getSortedElementDofs< covered_dof_inds >(element, node_to_dof_map);
+                const auto element_dofs = std::invoke([&] {
+                    if constexpr (CP == CondensationPolicy::None)
+                        return detail::getUnsortedElementDofs< covered_dof_inds >(element, node_to_dof_map, cond_map);
+                    else if constexpr ((CP == CondensationPolicy::ElementBoundary))
+                        return detail::getUnsortedElementDofs(element, node_to_dof_map, cond_map);
+                });
                 for (auto row : element_dofs)
                     for (auto col : element_dofs)
                         getRow(row).set(col);
@@ -57,61 +68,66 @@ private:
     DynamicBitset m_entries;
 };
 
-int main(int argc, char* argv[])
+template < CondensationPolicy CP >
+void test()
 {
-    L3sterScopeGuard scope_guard{argc, argv};
-    const MpiComm    comm{MPI_COMM_WORLD};
-
+    const MpiComm comm{MPI_COMM_WORLD};
     Mesh          mesh;
     MeshPartition full_mesh;
     if (comm.getRank() == 0)
     {
-        constexpr std::array node_dist{0., 1., 2., 3., 4.};
-        mesh = makeCubeMesh(node_dist);
+        constexpr auto node_dist = std::array{0., 1., 2., 3., 4.};
+        mesh                     = makeCubeMesh(node_dist);
         mesh.getPartitions().front().initDualGraph();
         full_mesh                   = convertMeshToOrder< 2 >(mesh.getPartitions().front());
         const auto full_mesh_serial = SerializedPartition{full_mesh};
         for (int dest_rank = 1; dest_rank < comm.getSize(); ++dest_rank)
             sendPartition(comm, full_mesh_serial, dest_rank);
+        mesh.getPartitions().front() = full_mesh;
     }
     else
     {
         const auto full_mesh_serial = receivePartition(comm, 0);
         full_mesh                   = deserializePartition(full_mesh_serial);
     }
-    const auto my_partition = distributeMesh(comm, mesh, {});
+    const auto my_partition = distributeMesh(comm, mesh, {1, 3});
 
     constexpr auto problem_def    = std::array{Pair{d_id_t{0}, std::array{false, true}},
                                             Pair{d_id_t{1}, std::array{true, false}},
                                             Pair{d_id_t{3}, std::array{true, true}}};
     constexpr auto probdef_ctwrpr = ConstexprValue< problem_def >{};
-    const auto     cond_map =
-        detail::NodeCondensationMap::makeBoundaryNodeCondensationMap(comm, my_partition, probdef_ctwrpr);
+
+    const auto cond_map       = detail::makeCondensationMap< CP >(comm, my_partition, probdef_ctwrpr);
+    const auto cond_map_full  = detail::makeCondensationMap< CP >(MpiComm{MPI_COMM_SELF}, full_mesh, probdef_ctwrpr);
     const auto dof_intervals  = computeDofIntervals(comm, my_partition, cond_map, probdef_ctwrpr);
-    const auto global_dof_map = NodeToGlobalDofMap{my_partition, dof_intervals, cond_map};
-    const auto sparsity_graph = detail::makeSparsityGraph(my_partition, global_dof_map, probdef_ctwrpr, comm);
+    const auto node_dof_map   = NodeToGlobalDofMap{dof_intervals, cond_map};
+    const auto sparsity_graph = detail::makeSparsityGraph(comm, my_partition, node_dof_map, cond_map, probdef_ctwrpr);
 
-    const auto all_dofs    = detail::getNodeDofs(full_mesh.getAllNodes(), dof_intervals);
-    const auto dense_graph = DenseGraph{full_mesh, probdef_ctwrpr, dof_intervals, all_dofs.size()};
+    const auto num_all_dofs = detail::getNodeDofs(cond_map_full.getCondensedIds(), dof_intervals).size();
+    const auto dense_graph  = DenseGraph{full_mesh, probdef_ctwrpr, dof_intervals, cond_map_full};
 
-    REQUIRE(sparsity_graph->getGlobalNumRows() == all_dofs.size());
-    REQUIRE(sparsity_graph->getGlobalNumCols() == all_dofs.size());
+    REQUIRE(sparsity_graph->getGlobalNumRows() == num_all_dofs);
+    REQUIRE(sparsity_graph->getGlobalNumCols() == num_all_dofs);
 
-    const auto n_my_rows = sparsity_graph->getLocalNumRows();
-    auto       view =
+    auto view =
         tpetra_crsgraph_t::nonconst_global_inds_host_view_type("Global cols", sparsity_graph->getGlobalNumCols());
-    size_t row_size = 0;
-
+    size_t     row_size              = 0;
     const auto check_row_global_cols = [&](const auto& dense_row) {
         REQUIRE(row_size == dense_row.count());
         REQUIRE(std::ranges::all_of(std::views::counted(view.data(), row_size),
                                     [&](global_dof_t col_ind) { return dense_row.test(col_ind); }));
     };
-
-    for (size_t local_row = 0; local_row < n_my_rows; ++local_row)
+    for (size_t local_row = 0; local_row < sparsity_graph->getLocalNumRows(); ++local_row)
     {
         const auto global_row_ind = sparsity_graph->getRowMap()->getGlobalElement(local_row);
         sparsity_graph->getGlobalRowCopy(global_row_ind, view, row_size);
         check_row_global_cols(dense_graph.getRow(global_row_ind));
     }
+}
+
+int main(int argc, char* argv[])
+{
+    L3sterScopeGuard scope_guard{argc, argv};
+    test< CondensationPolicy::None >();
+    test< CondensationPolicy::ElementBoundary >();
 }

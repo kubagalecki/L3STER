@@ -137,6 +137,8 @@ public:
     void barrier() const { detail::mpi::handleMPIError(MPI_Barrier(m_comm), "MPI_Barrier failed"); }
     template < detail::mpi::MpiBuf_c Data, detail::mpi::MpiOutputIterator_c< Data > It >
     void reduce(Data&& data, It out_it, int root, MPI_Op op) const;
+    template < detail::mpi::MpiBuf_c Data >
+    void reduceInPlace(Data&& data, int root, MPI_Op op) const;
     template < detail::mpi::MpiBuf_c Data, detail::mpi::MpiOutputIterator_c< Data > It >
     void allReduce(Data&& data, It out_it, MPI_Op op) const;
     template < detail::mpi::MpiBuf_c Data, detail::mpi::MpiOutputIterator_c< Data > It >
@@ -273,6 +275,16 @@ void MpiComm::reduce(Data&& data, It out_it, int root, MPI_Op op) const
 {
     const auto [datatype, buf_begin, buf_size] = detail::mpi::decomposeMpiBuf(data);
     detail::mpi::handleMPIError(MPI_Reduce(buf_begin, std::addressof(*out_it), buf_size, datatype, op, root, m_comm),
+                                "MPI_Reduce failed");
+}
+
+template < detail::mpi::MpiBuf_c Data >
+void MpiComm::reduceInPlace(Data&& data, int root, MPI_Op op) const
+{
+    const auto [datatype, buf_begin, buf_size] = detail::mpi::decomposeMpiBuf(data);
+    detail::mpi::handleMPIError(getRank() == root
+                                    ? MPI_Reduce(MPI_IN_PLACE, buf_begin, buf_size, datatype, op, root, m_comm)
+                                    : MPI_Reduce(buf_begin, nullptr, buf_size, datatype, op, root, m_comm),
                                 "MPI_Reduce failed");
 }
 

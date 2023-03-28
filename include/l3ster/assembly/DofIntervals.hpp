@@ -18,9 +18,9 @@ auto computeDofIntervalsFromNodeData(const NodeCondensationMap< CP >&           
                                      const std::vector< std::bitset< n_fields > >& field_cov)
     -> node_interval_vector_t< n_fields >
 {
-    const auto nodes   = cond_map.getCondensedIds();
-    auto       retval  = node_interval_vector_t< n_fields >{};
-    auto       node_it = begin(nodes);
+    const auto& nodes   = cond_map.getCondensedIds();
+    auto        retval  = node_interval_vector_t< n_fields >{};
+    auto        node_it = begin(nodes);
     while (node_it != end(nodes))
     {
         auto cov_it = std::next(begin(field_cov), std::distance(begin(nodes), node_it));
@@ -50,7 +50,7 @@ auto makeFieldCoverageVector(const MeshPartition&             mesh,
         const auto fields = toBitset(field_array);
         mesh.visit(
             [&](const auto& element) {
-                for (auto node : getPrimaryNodes< CP >(element))
+                for (auto node : getPrimaryNodesView< CP >(element))
                 {
                     const auto local_node_id = getLocalCondensedId(cond_map, node);
                     retval[local_node_id] |= fields;
