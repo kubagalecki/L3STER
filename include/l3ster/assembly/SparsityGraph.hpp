@@ -38,15 +38,15 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                      
     return retval;
 }
 
-/*
-template < IndexRange_c auto dof_inds, size_t n_nodes, size_t dofs_per_node, size_t num_maps >
+template < IndexRange_c auto dof_inds, size_t n_nodes, size_t dofs_per_node, size_t num_maps, CondensationPolicy CP >
 auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                nodes,
                       const NodeToLocalDofMap< dofs_per_node, num_maps >& node_dof_map,
-                      ConstexprValue< dof_inds >                          dofinds_ctwrpr = {})
+                      const NodeCondensationMap< CP >&                    cond_map,
+                      const ConstexprValue< dof_inds >                    dofinds_ctwrpr = {})
 {
     using dof_array_t = std::array< local_dof_t, std::ranges::size(dof_inds) * n_nodes >;
-    std::array< dof_array_t, num_maps >                    retval;
-    std::array< typename dof_array_t::iterator, num_maps > iters;
+    auto retval       = std::array< dof_array_t, num_maps >{};
+    auto iters        = std::array< typename dof_array_t::iterator, num_maps >{};
     std::ranges::transform(retval, begin(iters), [](auto& arr) { return arr.begin(); });
     for (auto node : nodes)
     {
@@ -59,7 +59,6 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                nodes,
     }
     return retval;
 }
- */
 
 template < IndexRange_c auto dof_inds, ElementTypes T, el_o_t O >
 auto getSortedElementDofs(const Element< T, O >&                                 element,
@@ -72,14 +71,13 @@ auto getSortedElementDofs(const Element< T, O >&                                
     return getDofsFromNodes(primary_nodes, node_dof_map, cond_map, dofinds_ctwrpr);
 }
 
-template < IndexRange_c auto dof_inds, ElementTypes T, el_o_t O >
-auto getUnsortedElementDofs(const Element< T, O >&                                 element,
-                            const NodeToDofMap_c auto&                             node_dof_map,
-                            const NodeCondensationMap< CondensationPolicy::None >& cond_map,
-                            ConstexprValue< dof_inds >                             dofinds_ctwrpr = {})
+template < IndexRange_c auto dof_inds, ElementTypes T, el_o_t O, CondensationPolicy CP >
+auto getUnsortedElementDofs(const Element< T, O >&           element,
+                            const NodeToDofMap_c auto&       node_dof_map,
+                            const NodeCondensationMap< CP >& cond_map,
+                            ConstexprValue< dof_inds >       dofinds_ctwrpr = {})
 {
-    return getDofsFromNodes(
-        getPrimaryNodesArray< CondensationPolicy::None >(element), node_dof_map, cond_map, dofinds_ctwrpr);
+    return getDofsFromNodes(getPrimaryNodesArray< CP >(element), node_dof_map, cond_map, dofinds_ctwrpr);
 }
 
 template < ElementTypes T, el_o_t O, CondensationPolicy CP >

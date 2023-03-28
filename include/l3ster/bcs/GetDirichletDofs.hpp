@@ -5,24 +5,30 @@
 
 namespace lstr::detail
 {
-template < detail::ProblemDef_c auto problem_def, detail::ProblemDef_c auto dirichlet_def >
+template < CondensationPolicy CP, ProblemDef_c auto problem_def, ProblemDef_c auto dirichlet_def >
 auto getDirichletDofs(const MeshPartition&                                            mesh,
                       const Teuchos::RCP< const tpetra_fecrsgraph_t >&                sparsity_graph,
-                      const NodeToGlobalDofMap< detail::deduceNFields(problem_def) >& dof_map,
+                      const NodeToGlobalDofMap< detail::deduceNFields(problem_def) >& node_to_dof_map,
+                      const NodeCondensationMap< CP >&                                cond_map,
                       ConstexprValue< problem_def >                                   probdef_ctwrpr,
                       ConstexprValue< dirichlet_def >                                 dirichletdef_ctwrpr)
 {
     const auto mark_owned_dirichlet_dofs = [&] {
-        const auto dirichlet_dofs = makeTeuchosRCP< tpetra_femultivector_t >(
-            sparsity_graph->getColMap(), sparsity_graph->getImporter(), size_t{1});
+        const auto dirichlet_dofs =
+            makeTeuchosRCP< tpetra_femultivector_t >(sparsity_graph->getColMap(), sparsity_graph->getImporter(), 1u);
         dirichlet_dofs->beginAssembly();
         const auto process_domain = [&]< auto domain_def >(ConstexprValue< domain_def >) {
             constexpr auto  domain_id        = domain_def.first;
             constexpr auto& coverage         = domain_def.second;
             constexpr auto  covered_dof_inds = getTrueInds< coverage >();
             const auto      process_element  = [&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
-                const auto el_dirichlet_dofs = getUnsortedElementDofs< covered_dof_inds >(element, dof_map);
-                for (auto dof : el_dirichlet_dofs)
+                const auto element_dirichlet_dofs = std::invoke([&] {
+                    if constexpr (CP == CondensationPolicy::None)
+                        return detail::getUnsortedElementDofs< covered_dof_inds >(element, node_to_dof_map, cond_map);
+                    else if constexpr ((CP == CondensationPolicy::ElementBoundary))
+                        return detail::getUnsortedElementDofs(element, node_to_dof_map, cond_map);
+                });
+                for (auto dof : element_dirichlet_dofs)
                     dirichlet_dofs->replaceGlobalValue(dof, 0, 1.);
             };
             mesh.visit(process_element, domain_id);
@@ -41,11 +47,11 @@ auto getDirichletDofs(const MeshPartition&                                      
         constexpr auto is_marked = [](val_t v) {
             return v > .5;
         };
-        const auto&                 marked_dofs_map = *marked_dofs->getMap();
-        const auto                  entries         = marked_dofs->getLocalViewHost(Tpetra::Access::ReadOnly);
-        const auto                  entries_span    = asSpan(Kokkos::subview(entries, Kokkos::ALL, 0));
-        const auto                  n_ones          = std::ranges::count_if(entries_span, is_marked);
-        std::vector< global_dof_t > retval;
+        const auto& marked_dofs_map = *marked_dofs->getMap();
+        const auto  entries         = marked_dofs->getLocalViewHost(Tpetra::Access::ReadOnly);
+        const auto  entries_span    = asSpan(Kokkos::subview(entries, Kokkos::ALL, 0));
+        const auto  n_ones          = std::ranges::count_if(entries_span, is_marked);
+        auto        retval          = std::vector< global_dof_t >{};
         retval.reserve(n_ones);
         for (local_dof_t local_dof = 0; auto v : entries_span)
         {
@@ -54,6 +60,7 @@ auto getDirichletDofs(const MeshPartition&                                      
             ++local_dof;
         }
         std::ranges::sort(retval);
+        retval.shrink_to_fit();
         return retval;
     };
 
