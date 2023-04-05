@@ -2,6 +2,7 @@
 #define L3STER_ASSEMBLY_ALGEBRAICSYSTEMMANAGER_HPP
 
 #include "l3ster/assembly/AssembleGlobalSystem.hpp"
+#include "l3ster/assembly/StaticCondensationManager.hpp"
 #include "l3ster/bcs/DirichletBC.hpp"
 #include "l3ster/bcs/GetDirichletDofs.hpp"
 #include "l3ster/util/GlobalResource.hpp"
@@ -10,7 +11,7 @@
 
 namespace lstr
 {
-template < size_t n_fields >
+template < size_t n_fields, CondensationPolicy CP >
 class AlgebraicSystemManager
 {
     template < detail::ProblemDef_c auto problem_def, detail::ProblemDef_c auto dirichlet_def >
@@ -56,22 +57,25 @@ public:
 private:
     inline void setToZero();
 
-    struct State
+    enum struct State
     {
-        static constexpr std::bitset< 3 > OpenForAssembly{0b001ull}, OpenForModify{0b010ull}, Closed{0b100ull};
+        OpenForAssembly = 0b001,
+        OpenForModify   = 0b010,
+        Closed          = 0b100
     };
-    inline void assertState(std::bitset< 3 > expected, const char* err_msg);
+    inline void assertState(State expected, const char* err_msg);
 
     using rhs_view_t = decltype(Kokkos::subview(
         std::declval< const tpetra_multivector_t::dual_view_type::t_host& >(), Kokkos::ALL, 0));
 
-    std::bitset< 3 >                            m_state;
+    State                                       m_state;
     Teuchos::RCP< tpetra_fecrsmatrix_t >        m_matrix;
-    Teuchos::RCP< tpetra_multivector_t >        m_owned_values; // solution + Dirichlet BC vals (if defined)
+    Teuchos::RCP< tpetra_multivector_t >        m_owned_values;  // solution + Dirichlet BC vals (if defined)
     Teuchos::RCP< tpetra_femultivector_t >      m_rhs;
     rhs_view_t                                  m_rhs_view;      // Thread-safe view
     std::optional< const DirichletBCAlgebraic > m_dirichlet_bcs; // May be null
     NodeToLocalDofMap< n_fields, 3 >            m_node_dof_map;
+    detail::StaticCondensationManager< CP >     m_condensation_manager;
 
     // Caching mechanism to enable the reuse of the system allocation. For example, an adjoint problem will have the
     // same structure as the primal problem. We can therefore reuse the assembly data structures from the primal.
@@ -94,12 +98,12 @@ private:
     }
 };
 
-template < size_t n_fields >
+template < size_t n_fields, CondensationPolicy CP >
 template < detail::ProblemDef_c auto problem_def, detail::ProblemDef_c auto dirichlet_def >
-auto AlgebraicSystemManager< n_fields >::makeAlgebraicSystemManager(const MpiComm&                  comm,
-                                                                    const MeshPartition&            mesh,
-                                                                    ConstexprValue< problem_def >   problemdef_ctwrpr,
-                                                                    ConstexprValue< dirichlet_def > dbcdef_ctwrpr)
+auto AlgebraicSystemManager< n_fields, CP >::makeAlgebraicSystemManager(const MpiComm&                comm,
+                                                                        const MeshPartition&          mesh,
+                                                                        ConstexprValue< problem_def > problemdef_ctwrpr,
+                                                                        ConstexprValue< dirichlet_def > dbcdef_ctwrpr)
     -> std::shared_ptr< AlgebraicSystemManager >
 {
     auto       cache_key       = makeCacheKey(mesh, problemdef_ctwrpr, dbcdef_ctwrpr);
@@ -112,26 +116,28 @@ auto AlgebraicSystemManager< n_fields >::makeAlgebraicSystemManager(const MpiCom
         return cache.emplace(cache_key, AlgebraicSystemManager{comm, mesh, problemdef_ctwrpr, dbcdef_ctwrpr});
 }
 
-template < detail::ProblemDef_c auto problem_def >
-AlgebraicSystemManager(const MpiComm&, const MeshPartition&, ConstexprValue< problem_def >)
-    -> AlgebraicSystemManager< detail::deduceNFields(problem_def) >;
-template < detail::ProblemDef_c auto problem_def, detail::ProblemDef_c auto dirichlet_def >
+template < detail::ProblemDef_c auto problem_def, CondensationPolicy CP >
+AlgebraicSystemManager(const MpiComm&, const MeshPartition&, ConstexprValue< problem_def >, CondensationPolicyTag< CP >)
+    -> AlgebraicSystemManager< detail::deduceNFields(problem_def), CP >;
+template < detail::ProblemDef_c auto problem_def, detail::ProblemDef_c auto dirichlet_def, CondensationPolicy CP >
 AlgebraicSystemManager(const MpiComm&,
                        const MeshPartition&,
                        ConstexprValue< problem_def >,
-                       ConstexprValue< dirichlet_def >) -> AlgebraicSystemManager< detail::deduceNFields(problem_def) >;
+                       ConstexprValue< dirichlet_def >,
+                       CondensationPolicyTag< CP >) -> AlgebraicSystemManager< detail::deduceNFields(problem_def), CP >;
 
-template < size_t n_fields >
+template < size_t n_fields, CondensationPolicy CP >
 template < detail::ProblemDef_c auto problem_def, detail::ProblemDef_c auto dirichlet_def >
-AlgebraicSystemManager< n_fields >::AlgebraicSystemManager(const MpiComm&                  comm,
-                                                           const MeshPartition&            mesh,
-                                                           ConstexprValue< problem_def >   problemdef_ctwrpr,
-                                                           ConstexprValue< dirichlet_def > dbcdef_ctwrpr)
+AlgebraicSystemManager< n_fields, CP >::AlgebraicSystemManager(const MpiComm&                  comm,
+                                                               const MeshPartition&            mesh,
+                                                               ConstexprValue< problem_def >   problemdef_ctwrpr,
+                                                               ConstexprValue< dirichlet_def > dbcdef_ctwrpr)
     : m_state{State::OpenForAssembly}
 {
-    const auto dof_intervals       = computeDofIntervals(mesh, problemdef_ctwrpr, comm);
-    const auto node_global_dof_map = NodeToGlobalDofMap{mesh, dof_intervals};
-    const auto sparsity_graph      = detail::makeSparsityGraph(mesh, node_global_dof_map, problemdef_ctwrpr, comm);
+    const auto cond_map            = detail::makeCondensationMap< CP >(comm, mesh, problemdef_ctwrpr);
+    const auto dof_intervals       = computeDofIntervals(comm, mesh, cond_map, problemdef_ctwrpr);
+    const auto node_global_dof_map = NodeToGlobalDofMap{dof_intervals, cond_map};
+    const auto sparsity_graph = detail::makeSparsityGraph(comm, mesh, node_global_dof_map, cond_map, problemdef_ctwrpr);
 
     L3STER_PROFILE_REGION_BEGIN("Create Tpetra objects");
     m_matrix = makeTeuchosRCP< tpetra_fecrsmatrix_t >(sparsity_graph);
@@ -141,8 +147,8 @@ AlgebraicSystemManager< n_fields >::AlgebraicSystemManager(const MpiComm&       
     m_rhs_view = Kokkos::subview(m_rhs->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
     L3STER_PROFILE_REGION_END("Create Tpetra objects");
 
-    m_node_dof_map =
-        NodeToLocalDofMap{mesh, node_global_dof_map, *m_matrix->getRowMap(), *m_matrix->getColMap(), *m_rhs->getMap()};
+    m_node_dof_map = NodeToLocalDofMap{
+        cond_map, node_global_dof_map, *m_matrix->getRowMap(), *m_matrix->getColMap(), *m_rhs->getMap()};
 
     if constexpr (dirichlet_def.size() != 0)
     {
@@ -156,8 +162,8 @@ AlgebraicSystemManager< n_fields >::AlgebraicSystemManager(const MpiComm&       
         makeTeuchosRCP< tpetra_multivector_t >(sparsity_graph->getRowMap(), m_dirichlet_bcs.has_value() ? 2u : 1u);
 }
 
-template < size_t n_fields >
-void AlgebraicSystemManager< n_fields >::beginAssembly()
+template < size_t n_fields, CondensationPolicy CP >
+void AlgebraicSystemManager< n_fields, CP >::beginAssembly()
 {
     L3STER_PROFILE_FUNCTION;
     assertState(~State::OpenForModify,
@@ -173,8 +179,8 @@ void AlgebraicSystemManager< n_fields >::beginAssembly()
     setToZero();
 }
 
-template < size_t n_fields >
-void AlgebraicSystemManager< n_fields >::endAssembly()
+template < size_t n_fields, CondensationPolicy CP >
+void AlgebraicSystemManager< n_fields, CP >::endAssembly()
 {
     L3STER_PROFILE_FUNCTION;
     assertState(~State::OpenForModify,
@@ -193,8 +199,8 @@ void AlgebraicSystemManager< n_fields >::endAssembly()
     m_state = State::Closed;
 }
 
-template < size_t n_fields >
-void AlgebraicSystemManager< n_fields >::beginModify()
+template < size_t n_fields, CondensationPolicy CP >
+void AlgebraicSystemManager< n_fields, CP >::beginModify()
 {
     L3STER_PROFILE_FUNCTION;
     assertState(~State::OpenForAssembly,
@@ -209,8 +215,8 @@ void AlgebraicSystemManager< n_fields >::beginModify()
     m_state    = State::OpenForModify;
 }
 
-template < size_t n_fields >
-void AlgebraicSystemManager< n_fields >::endModify()
+template < size_t n_fields, CondensationPolicy CP >
+void AlgebraicSystemManager< n_fields, CP >::endModify()
 {
     L3STER_PROFILE_FUNCTION;
     assertState(~State::OpenForAssembly,
@@ -225,20 +231,20 @@ void AlgebraicSystemManager< n_fields >::endModify()
     m_state = State::Closed;
 }
 
-template < size_t n_fields >
-void AlgebraicSystemManager< n_fields >::setToZero()
+template < size_t n_fields, CondensationPolicy CP >
+void AlgebraicSystemManager< n_fields, CP >::setToZero()
 {
     m_matrix->setAllToScalar(0.);
     m_rhs->putScalar(0.);
 }
 
-template < size_t n_fields >
+template < size_t n_fields, CondensationPolicy CP >
 template < BasisTypes BT, QuadratureTypes QT, q_o_t QO, ArrayOf_c< size_t > auto field_inds >
-void AlgebraicSystemManager< n_fields >::assembleDomainProblem(auto&&                          kernel,
-                                                               const MeshPartition&            mesh,
-                                                               detail::DomainIdRange_c auto&&  domain_ids,
-                                                               detail::FieldValGetter_c auto&& fval_getter,
-                                                               val_t                           time)
+void AlgebraicSystemManager< n_fields, CP >::assembleDomainProblem(auto&&                          kernel,
+                                                                   const MeshPartition&            mesh,
+                                                                   detail::DomainIdRange_c auto&&  domain_ids,
+                                                                   detail::FieldValGetter_c auto&& fval_getter,
+                                                                   val_t                           time)
 {
     L3STER_PROFILE_FUNCTION;
     assertState(~State::Closed, "Assemble was called while the algebraic system was in a closed state.");
@@ -252,12 +258,12 @@ void AlgebraicSystemManager< n_fields >::assembleDomainProblem(auto&&           
                                                    time);
 }
 
-template < size_t n_fields >
+template < size_t n_fields, CondensationPolicy CP >
 template < BasisTypes BT, QuadratureTypes QT, q_o_t QO, ArrayOf_c< size_t > auto field_inds >
-void AlgebraicSystemManager< n_fields >::assembleBoundaryProblem(auto&&                          kernel,
-                                                                 const BoundaryView&             boundary,
-                                                                 detail::FieldValGetter_c auto&& fval_getter,
-                                                                 val_t                           time)
+void AlgebraicSystemManager< n_fields, CP >::assembleBoundaryProblem(auto&&                          kernel,
+                                                                     const BoundaryView&             boundary,
+                                                                     detail::FieldValGetter_c auto&& fval_getter,
+                                                                     val_t                           time)
 {
     L3STER_PROFILE_FUNCTION;
     assertState(~State::Closed, "Assemble was called while the algebraic system was in a closed state.");
@@ -270,8 +276,8 @@ void AlgebraicSystemManager< n_fields >::assembleBoundaryProblem(auto&&         
                                                            time);
 }
 
-template < size_t n_fields >
-void AlgebraicSystemManager< n_fields >::applyDirichletBCs()
+template < size_t n_fields, CondensationPolicy CP >
+void AlgebraicSystemManager< n_fields, CP >::applyDirichletBCs()
 {
     L3STER_PROFILE_FUNCTION;
     if (not m_dirichlet_bcs)
@@ -282,10 +288,10 @@ void AlgebraicSystemManager< n_fields >::applyDirichletBCs()
     m_dirichlet_bcs->apply(*std::as_const(*this).getDirichletBCValueVector(), *m_matrix, *m_rhs->getVectorNonConst(0));
 }
 
-template < size_t n_fields >
-void AlgebraicSystemManager< n_fields >::assertState(std::bitset< 3 > expected, const char* err_msg)
+template < size_t n_fields, CondensationPolicy CP >
+void AlgebraicSystemManager< n_fields, CP >::assertState(State expected, const char* err_msg)
 {
-    if ((m_state & expected).none())
+    if (not(m_state & expected))
         throw std::runtime_error{err_msg};
 }
 
@@ -297,17 +303,20 @@ consteval auto makeEmptyDirichletBCDef(const detail::ProblemDef_c auto& problem_
 }
 } // namespace detail
 
-template < detail::ProblemDef_c auto problem_def,
+template < CondensationPolicy        CP,
+           detail::ProblemDef_c auto problem_def,
            detail::ProblemDef_c auto dirichlet_def = detail::makeEmptyDirichletBCDef(problem_def) >
-auto makeAlgebraicSystemManager(const MpiComm&                  comm,
-                                const MeshPartition&            mesh,
+auto makeAlgebraicSystemManager(const MpiComm&       comm,
+                                const MeshPartition& mesh,
+                                CondensationPolicyTag< CP >,
                                 ConstexprValue< problem_def >   problemdef_ctwrpr,
                                 ConstexprValue< dirichlet_def > dbcdef_ctwrpr = {})
-    -> std::shared_ptr< AlgebraicSystemManager< detail::deduceNFields(problem_def) > >
+    -> std::shared_ptr< AlgebraicSystemManager< detail::deduceNFields(problem_def), CP > >
 {
     L3STER_PROFILE_FUNCTION;
     constexpr auto n_fields = detail::deduceNFields(problem_def);
-    return AlgebraicSystemManager< n_fields >::makeAlgebraicSystemManager(comm, mesh, problemdef_ctwrpr, dbcdef_ctwrpr);
+    return AlgebraicSystemManager< n_fields, CP >::makeAlgebraicSystemManager(
+        comm, mesh, problemdef_ctwrpr, dbcdef_ctwrpr);
 }
 } // namespace lstr
 #endif // L3STER_ASSEMBLY_ALGEBRAICSYSTEMMANAGER_HPP

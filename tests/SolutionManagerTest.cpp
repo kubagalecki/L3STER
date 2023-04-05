@@ -7,11 +7,13 @@
 
 #include "Common.hpp"
 
-int main(int argc, char* argv[])
+using namespace lstr;
+
+template < CondensationPolicy CP >
+void test()
 {
-    using namespace lstr;
-    L3sterScopeGuard scope_guard{argc, argv};
-    const MpiComm    comm{MPI_COMM_WORLD};
+    const MpiComm  comm{MPI_COMM_WORLD};
+    constexpr auto cp_tag = CondensationPolicyTag< CP >{};
 
     const std::array node_dist{0., 1., 2., 3., 4., 5., 6.};
     constexpr auto   mesh_order = 2;
@@ -27,13 +29,13 @@ int main(int argc, char* argv[])
     constexpr auto problem_def_ctwrpr1 = ConstexprValue< problem_def1 >{};
     constexpr auto n_fields1           = detail::deduceNFields(problem_def1);
     constexpr auto field_inds1         = std::array< size_t, n_fields1 >{0, 2};
-    auto           system_manager1     = makeAlgebraicSystemManager(comm, my_partition, problem_def_ctwrpr1);
+    auto           system_manager1     = makeAlgebraicSystemManager(comm, my_partition, cp_tag, problem_def_ctwrpr1);
 
     constexpr auto problem_def2        = std::array{Pair{d_id_t{domain_id}, std::array{true}}};
     constexpr auto problem_def_ctwrpr2 = ConstexprValue< problem_def2 >{};
     constexpr auto n_fields2           = detail::deduceNFields(problem_def2);
     constexpr auto field_inds2         = std::array< size_t, n_fields2 >{1};
-    auto           system_manager2     = makeAlgebraicSystemManager(comm, my_partition, problem_def_ctwrpr2);
+    auto           system_manager2     = makeAlgebraicSystemManager(comm, my_partition, cp_tag, problem_def_ctwrpr2);
 
     auto solution_manager = SolutionManager{my_partition, comm, n_fields1 + n_fields2};
 
@@ -93,7 +95,7 @@ int main(int argc, char* argv[])
                 << ": the nodal solution multivector has a different number of rows than the number of nodes in the "
                    "mesh partition\nNumber of nodes in the partition: "
                 << n_nodes << "\nNumber of rows: " << n_rows << '\n';
-            std::cerr << err_msg.str();
+            std::cerr << err_msg.view();
             success = false;
         }
         if (const auto non_ones = std::ranges::count_if(field0_vals, [](auto v) { return v != 1.; }); non_ones != 0)
@@ -101,7 +103,7 @@ int main(int argc, char* argv[])
             std::stringstream err_msg;
             err_msg << "Error on rank " << comm.getRank() << ": Field 0 had " << non_ones << " incorrect value"
                     << (non_ones == 1 ? "" : "s") << " (!= 1.)\n ";
-            std::cerr << err_msg.str();
+            std::cerr << err_msg.view();
             success = false;
         }
 
@@ -139,7 +141,7 @@ int main(int argc, char* argv[])
             for (auto n : bad_nodes)
                 log_bad_node(n);
             err_msg << '\n';
-            std::cerr << err_msg.str();
+            std::cerr << err_msg.view();
             success = false;
         }
     }
@@ -151,12 +153,16 @@ int main(int argc, char* argv[])
             std::stringstream err_msg;
             err_msg << "Error on rank " << comm.getRank() << ": Field 1 had " << non_threes << " incorrect value"
                     << (non_threes == 1 ? "" : "s") << " (!= 3.)\n ";
-            std::cerr << err_msg.str();
+            std::cerr << err_msg.view();
             success = false;
         }
     }
-    if (success)
-        return EXIT_SUCCESS;
-    else
-        return EXIT_FAILURE;
+    REQUIRE(success);
+}
+
+int main(int argc, char* argv[])
+{
+    L3sterScopeGuard scope_guard{argc, argv};
+    test< CondensationPolicy::None >();
+    // test< CondensationPolicy::ElementBoundary >();
 }

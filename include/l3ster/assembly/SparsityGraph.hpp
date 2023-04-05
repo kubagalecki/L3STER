@@ -41,7 +41,7 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                      
 template < IndexRange_c auto dof_inds, size_t n_nodes, size_t dofs_per_node, size_t num_maps, CondensationPolicy CP >
 auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                nodes,
                       const NodeToLocalDofMap< dofs_per_node, num_maps >& node_dof_map,
-                      const NodeCondensationMap< CP >&                    cond_map,
+                      [[maybe_unused]] const NodeCondensationMap< CP >&   cond_map,
                       const ConstexprValue< dof_inds >                    dofinds_ctwrpr = {})
 {
     using dof_array_t = std::array< local_dof_t, std::ranges::size(dof_inds) * n_nodes >;
