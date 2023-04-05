@@ -2,6 +2,7 @@
 #define L3STER_ASSEMBLY_ALGEBRAICSYSTEMMANAGER_HPP
 
 #include "l3ster/assembly/AssembleGlobalSystem.hpp"
+#include "l3ster/assembly/SolutionManager.hpp"
 #include "l3ster/assembly/StaticCondensationManager.hpp"
 #include "l3ster/bcs/DirichletBC.hpp"
 #include "l3ster/bcs/GetDirichletDofs.hpp"
@@ -31,13 +32,13 @@ public:
     [[nodiscard]] auto        getMatrix() const -> Teuchos::RCP< const tpetra_crsmatrix_t > { return m_matrix; }
     [[nodiscard]] auto        getRhs() const -> Teuchos::RCP< const tpetra_multivector_t > { return m_rhs; }
     [[nodiscard]] const auto& getDofMap() const { return m_node_dof_map; }
-    [[nodiscard]] auto        getSolutionVector() const { return m_owned_values->getVector(0); }
-    [[nodiscard]] auto        getSolutionVector() { return m_owned_values->getVectorNonConst(0); }
-    [[nodiscard]] auto        getDirichletBCValueVector() const { return m_owned_values->getVector(1); }
-    [[nodiscard]] auto        getDirichletBCValueVector() { return m_owned_values->getVectorNonConst(1); }
+    [[nodiscard]] auto        getDirichletBCValueVector() const { return m_dirichlet_values->getVector(0); }
+    [[nodiscard]] auto        getDirichletBCValueVector() { return m_dirichlet_values->getVectorNonConst(0); }
+
+    [[nodiscard]] auto makeSolutionVector() const -> Teuchos::RCP< tpetra_femultivector_t >;
 
     inline void beginAssembly();
-    inline void endAssembly();
+    inline void endAssembly(const MeshPartition& mesh);
     inline void beginModify();
     inline void endModify();
 
@@ -65,15 +66,12 @@ private:
     };
     inline void assertState(State expected, const char* err_msg);
 
-    using rhs_view_t = decltype(Kokkos::subview(
-        std::declval< const tpetra_multivector_t::dual_view_type::t_host& >(), Kokkos::ALL, 0));
-
     State                                       m_state;
     Teuchos::RCP< tpetra_fecrsmatrix_t >        m_matrix;
-    Teuchos::RCP< tpetra_multivector_t >        m_owned_values;  // solution + Dirichlet BC vals (if defined)
     Teuchos::RCP< tpetra_femultivector_t >      m_rhs;
-    rhs_view_t                                  m_rhs_view;      // Thread-safe view
-    std::optional< const DirichletBCAlgebraic > m_dirichlet_bcs; // May be null
+    Teuchos::RCP< const tpetra_fecrsgraph_t >   m_sparsity_graph;
+    std::optional< const DirichletBCAlgebraic > m_dirichlet_bcs;
+    Teuchos::RCP< tpetra_multivector_t >        m_dirichlet_values;
     NodeToLocalDofMap< n_fields, 3 >            m_node_dof_map;
     detail::StaticCondensationManager< CP >     m_condensation_manager;
 
@@ -88,8 +86,7 @@ private:
     using cache_key_hash_t = decltype([](const cache_key_t& key) { // hash quality is irrelevant here
         return std::hash< const void* >{}(key.first) ^ std::hash< size_t >{}(key.second);
     });
-    using cache_t          = WeakCache< cache_key_t, AlgebraicSystemManager, cache_key_hash_t >;
-    static inline cache_t cache{};
+    static inline WeakCache< cache_key_t, AlgebraicSystemManager, cache_key_hash_t > cache{};
     template < detail::ProblemDef_c auto problem_def, detail::ProblemDef_c auto dirichlet_def >
     static auto makeCacheKey(const MeshPartition& mesh, ConstexprValue< problem_def >, ConstexprValue< dirichlet_def >)
         -> cache_key_t
@@ -97,6 +94,12 @@ private:
         return std::make_pair(type_id_value< ValuePack< problem_def, dirichlet_def > >, mesh.computeTopoHash());
     }
 };
+
+template < size_t n_fields, CondensationPolicy CP >
+auto AlgebraicSystemManager< n_fields, CP >::makeSolutionVector() const -> Teuchos::RCP< tpetra_femultivector_t >
+{
+    return makeTeuchosRCP< tpetra_femultivector_t >(m_sparsity_graph->getRowMap(), m_sparsity_graph->getImporter(), 1u);
+}
 
 template < size_t n_fields, CondensationPolicy CP >
 template < detail::ProblemDef_c auto problem_def, detail::ProblemDef_c auto dirichlet_def >
@@ -137,14 +140,13 @@ AlgebraicSystemManager< n_fields, CP >::AlgebraicSystemManager(const MpiComm&   
     const auto cond_map            = detail::makeCondensationMap< CP >(comm, mesh, problemdef_ctwrpr);
     const auto dof_intervals       = computeDofIntervals(comm, mesh, cond_map, problemdef_ctwrpr);
     const auto node_global_dof_map = NodeToGlobalDofMap{dof_intervals, cond_map};
-    const auto sparsity_graph = detail::makeSparsityGraph(comm, mesh, node_global_dof_map, cond_map, problemdef_ctwrpr);
+    m_sparsity_graph = detail::makeSparsityGraph(comm, mesh, node_global_dof_map, cond_map, problemdef_ctwrpr);
 
     L3STER_PROFILE_REGION_BEGIN("Create Tpetra objects");
-    m_matrix = makeTeuchosRCP< tpetra_fecrsmatrix_t >(sparsity_graph);
-    m_rhs    = makeTeuchosRCP< tpetra_femultivector_t >(sparsity_graph->getRowMap(), sparsity_graph->getImporter(), 1u);
+    m_matrix = makeTeuchosRCP< tpetra_fecrsmatrix_t >(m_sparsity_graph);
+    m_rhs    = makeSolutionVector();
     m_matrix->beginAssembly();
     m_rhs->beginAssembly();
-    m_rhs_view = Kokkos::subview(m_rhs->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
     L3STER_PROFILE_REGION_END("Create Tpetra objects");
 
     m_node_dof_map = NodeToLocalDofMap{
@@ -154,12 +156,12 @@ AlgebraicSystemManager< n_fields, CP >::AlgebraicSystemManager(const MpiComm&   
     {
         L3STER_PROFILE_REGION_BEGIN("Dirichlet BCs");
         auto [owned_bcdofs, shared_bcdofs] =
-            detail::getDirichletDofs(mesh, sparsity_graph, node_global_dof_map, problemdef_ctwrpr, dbcdef_ctwrpr);
-        m_dirichlet_bcs.emplace(sparsity_graph, std::move(owned_bcdofs), std::move(shared_bcdofs));
+            detail::getDirichletDofs(mesh, m_sparsity_graph, node_global_dof_map, problemdef_ctwrpr, dbcdef_ctwrpr);
+        m_dirichlet_bcs.emplace(m_sparsity_graph, std::move(owned_bcdofs), std::move(shared_bcdofs));
         L3STER_PROFILE_REGION_END("Dirichlet BCs");
     }
-    m_owned_values =
-        makeTeuchosRCP< tpetra_multivector_t >(sparsity_graph->getRowMap(), m_dirichlet_bcs.has_value() ? 2u : 1u);
+    if (m_dirichlet_bcs.has_value())
+        m_dirichlet_values = makeTeuchosRCP< tpetra_multivector_t >(m_sparsity_graph->getRowMap(), 1u);
 }
 
 template < size_t n_fields, CondensationPolicy CP >
@@ -175,12 +177,12 @@ void AlgebraicSystemManager< n_fields, CP >::beginAssembly()
     m_state = State::OpenForAssembly;
     m_matrix->beginAssembly();
     m_rhs->beginAssembly();
-    m_rhs_view = Kokkos::subview(m_rhs->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
+    m_condensation_manager.beginAssembly();
     setToZero();
 }
 
 template < size_t n_fields, CondensationPolicy CP >
-void AlgebraicSystemManager< n_fields, CP >::endAssembly()
+void AlgebraicSystemManager< n_fields, CP >::endAssembly(const MeshPartition& mesh)
 {
     L3STER_PROFILE_FUNCTION;
     assertState(~State::OpenForModify,
@@ -189,7 +191,9 @@ void AlgebraicSystemManager< n_fields, CP >::endAssembly()
     if (m_state == State::Closed)
         return;
 
-    m_rhs_view = {};
+    L3STER_PROFILE_REGION_BEGIN("Static condensation");
+    m_condensation_manager->endAssembly(mesh, m_node_dof_map);
+    L3STER_PROFILE_REGION_END("Static condensation");
     L3STER_PROFILE_REGION_BEGIN("RHS");
     m_rhs->endAssembly();
     L3STER_PROFILE_REGION_END("RHS");
@@ -211,8 +215,7 @@ void AlgebraicSystemManager< n_fields, CP >::beginModify()
 
     m_matrix->beginModify();
     m_rhs->beginModify();
-    m_rhs_view = Kokkos::subview(m_rhs->getLocalViewHost(Tpetra::Access::ReadWrite), Kokkos::ALL, 0);
-    m_state    = State::OpenForModify;
+    m_state = State::OpenForModify;
 }
 
 template < size_t n_fields, CondensationPolicy CP >
@@ -225,7 +228,6 @@ void AlgebraicSystemManager< n_fields, CP >::endModify()
     if (m_state == State::Closed)
         return;
 
-    m_rhs_view = {};
     m_rhs->endModify();
     m_matrix->endModify();
     m_state = State::Closed;
@@ -248,12 +250,13 @@ void AlgebraicSystemManager< n_fields, CP >::assembleDomainProblem(auto&&       
 {
     L3STER_PROFILE_FUNCTION;
     assertState(~State::Closed, "Assemble was called while the algebraic system was in a closed state.");
+    const auto rhs_view = Kokkos::subview(m_rhs->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
     assembleGlobalSystem< BT, QT, QO, field_inds >(std::forward< decltype(kernel) >(kernel),
                                                    mesh,
                                                    std::forward< decltype(domain_ids) >(domain_ids),
                                                    std::forward< decltype(fval_getter) >(fval_getter),
                                                    *m_matrix,
-                                                   asSpan(m_rhs_view),
+                                                   asSpan(rhs_view),
                                                    getDofMap(),
                                                    time);
 }
@@ -267,11 +270,12 @@ void AlgebraicSystemManager< n_fields, CP >::assembleBoundaryProblem(auto&&     
 {
     L3STER_PROFILE_FUNCTION;
     assertState(~State::Closed, "Assemble was called while the algebraic system was in a closed state.");
+    const auto rhs_view = Kokkos::subview(m_rhs->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
     assembleGlobalBoundarySystem< BT, QT, QO, field_inds >(std::forward< decltype(kernel) >(kernel),
                                                            boundary,
                                                            std::forward< decltype(fval_getter) >(fval_getter),
                                                            *m_matrix,
-                                                           asSpan(m_rhs_view),
+                                                           asSpan(rhs_view),
                                                            getDofMap(),
                                                            time);
 }
