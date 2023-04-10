@@ -1,4 +1,4 @@
-#include "l3ster/assembly/AlgebraicSystemManager.hpp"
+#include "l3ster/assembly/AlgebraicSystem.hpp"
 #include "l3ster/assembly/ComputeValuesAtNodes.hpp"
 #include "l3ster/assembly/GatherGlobalValues.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"

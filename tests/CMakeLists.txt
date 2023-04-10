@@ -36,6 +36,7 @@ add_executable( L3STER_tests TestsMain.cpp
                 MeshTests.cpp
                 NodeAllocationTests.cpp
                 QuadratureTests.cpp
+                SolutionManagerTest.cpp
                 UtilTests.cpp
                 )
 target_include_directories( L3STER_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR} )
@@ -89,7 +90,6 @@ add_mpi_test( NodeThroughputInfoTest.cpp Node_throughput_calculation "1;2;4" )
 add_mpi_test( TpetraMapCreationTest.cpp Tpetra_Map_Creation "1;2;4" )
 add_mpi_test( SparsityGraphTest.cpp Sparsity_Graph "1;2;4" )
 add_mpi_test( DirichletBCTest.cpp Dirichlet_BC_application_test "1;2;4" )
-add_mpi_test( SolutionManagerTest.cpp SolutionManager_test "1;2;4" )
 #add_mpi_test( GlobalAssemblyMPITest.cpp Solve_2D_diffusion_problem "1;2;4" )
 #add_mpi_test( VtkExportTest.cpp Export_results_to_VTK "1;2;4" )
 

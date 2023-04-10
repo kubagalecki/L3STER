@@ -66,6 +66,10 @@ public:
         requires(sizeof...(local_global_maps) == num_maps);
     [[nodiscard]] const payload_t& operator()(n_id_t node) const noexcept { return m_map.find(node)->second; }
 
+    [[nodiscard]] auto size() const -> size_t { return m_map.size(); }
+    [[nodiscard]] auto begin() const { return m_map.cbegin(); }
+    [[nodiscard]] auto end() const { return m_map.cend(); }
+
 private:
     map_t m_map;
 };
@@ -190,8 +194,8 @@ NodeToLocalDofMap< dofs_per_node, num_maps >::NodeToLocalDofMap(
 {
     L3STER_PROFILE_FUNCTION;
     const auto get_node_dofs = [&](n_id_t node, const tpetra_map_t& map) {
-        std::array< local_dof_t, dofs_per_node > retval;
-        std::ranges::transform(global_map(node), begin(retval), [&](global_dof_t dof) {
+        auto retval = std::array< local_dof_t, dofs_per_node >{};
+        std::ranges::transform(global_map(node), retval.begin(), [&](global_dof_t dof) {
             return dof == NodeToGlobalDofMap< dofs_per_node >::invalid_dof ? invalid_dof : map.getLocalElement(dof);
         });
         return retval;
