@@ -3,17 +3,17 @@
 
 #include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
+#include "l3ster/util/SourceLocation.hpp"
 
 #include <iostream>
-#include <source_location>
-#include <sstream>
 
-inline void logErrorAndTerminate(std::string_view err_msg, std::source_location sl = std::source_location::current())
+inline void logErrorAndTerminate(std::string_view err_msg)
 {
-    std::stringstream err_msg_str;
-    err_msg_str << sl.file_name() << ':' << sl.line() << ':' << sl.column() << ':' << "\nIn function "
-                << sl.function_name() << ": " << err_msg << '\n';
-    std::cerr << err_msg_str.view();
+    auto err_src_loc = lstr::util::parseSourceLocation(std::source_location::current());
+    err_src_loc.reserve(err_src_loc.size() + err_msg.size() + 1);
+    std::ranges::copy(err_msg, std::back_inserter(err_src_loc));
+    err_src_loc.push_back('\n');
+    std::cerr << err_msg;
     std::terminate();
 }
 

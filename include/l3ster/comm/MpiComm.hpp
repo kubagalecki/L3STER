@@ -2,6 +2,7 @@
 #define L3STER_COMM_MPICOMM_HPP
 
 #include "l3ster/util/Concepts.hpp"
+#include "l3ster/util/SourceLocation.hpp"
 
 extern "C"
 {
@@ -45,10 +46,11 @@ L3STER_MPI_TYPE_MAPPING_STRUCT(float, MPI_FLOAT)                           // NO
 L3STER_MPI_TYPE_MAPPING_STRUCT(double, MPI_DOUBLE)                         // NOLINT
 L3STER_MPI_TYPE_MAPPING_STRUCT(long double, MPI_LONG_DOUBLE)               // NOLINT
 
-inline void handleMPIError(int error, const char* message)
+inline void
+handleMPIError(int error, std::string_view err_msg, std::source_location src_loc = std::source_location::current())
 {
-    if (error) [[unlikely]]
-        throw std::runtime_error{message};
+    if (error)
+        util::runtimeError(err_msg, src_loc);
 }
 
 template < typename T >

@@ -7,6 +7,7 @@
 #include "l3ster/bcs/DirichletBC.hpp"
 #include "l3ster/bcs/GetDirichletDofs.hpp"
 #include "l3ster/util/GlobalResource.hpp"
+#include "l3ster/util/SourceLocation.hpp"
 #include "l3ster/util/TypeID.hpp"
 #include "l3ster/util/WeakCache.hpp"
 
@@ -82,7 +83,9 @@ private:
         OpenForAssembly,
         Closed
     };
-    inline void assertState(State expected, const char* err_msg);
+    inline void assertState(State                expected,
+                            std::string_view     err_msg,
+                            std::source_location src_loc = std::source_location::current());
 
     Teuchos::RCP< tpetra_fecrsmatrix_t >        m_matrix;
     Teuchos::RCP< tpetra_femultivector_t >      m_rhs;
@@ -121,11 +124,11 @@ void AlgebraicSystem< n_fields, CP >::updateSolution(const MeshPartition&       
                                                      IndexRange_c auto&&                                 sol_inds)
 {
     if (std::ranges::distance(sol_man_inds) != std::ranges::distance(sol_inds))
-        throw std::runtime_error{"AlgebraicSystem::updateSolution(): source and destination indices length must match"};
+        util::runtimeError("Source and destination indices length must match");
     if (std::ranges::any_of(sol_inds, [&](size_t i) { return i >= n_fields; }))
-        throw std::runtime_error{"AlgebraicSystem::updateSolution(): source index out of bounds"};
+        util::runtimeError("Source index out of bounds");
     if (std::ranges::any_of(sol_man_inds, [&](size_t i) { return i >= sol_man.nFields(); }))
-        throw std::runtime_error{"AlgebraicSystem::updateSolution(): destination index out of bounds"};
+        util::runtimeError("Destination index out of bounds");
 
     const auto solution_view  = Kokkos::subview(solution->getLocalViewHost(Tpetra::Access::ReadOnly), Kokkos::ALL, 0);
     const auto dest_col_views = std::invoke([&] {
@@ -197,14 +200,14 @@ void AlgebraicSystem< n_fields, CP >::setDirichletBCValues(auto&&               
 template < size_t n_fields, CondensationPolicy CP >
 auto AlgebraicSystem< n_fields, CP >::getMatrix() const -> Teuchos::RCP< const tpetra_crsmatrix_t >
 {
-    assertState(State::Closed, "AlgebraicSystem::getMatrix() was called before AlgebraicSystem::endAssembly()");
+    assertState(State::Closed, "`getMatrix()` was called before `endAssembly()`");
     return m_matrix;
 }
 
 template < size_t n_fields, CondensationPolicy CP >
 auto AlgebraicSystem< n_fields, CP >::getRhs() const -> Teuchos::RCP< const tpetra_multivector_t >
 {
-    assertState(State::Closed, "AlgebraicSystem::getRhs() was called before AlgebraicSystem::endAssembly()");
+    assertState(State::Closed, "`getRhs()` was called before `endAssembly()`");
     return m_rhs;
 }
 
@@ -295,7 +298,7 @@ template < size_t n_fields, CondensationPolicy CP >
 void AlgebraicSystem< n_fields, CP >::endAssembly(const MeshPartition& mesh)
 {
     L3STER_PROFILE_FUNCTION;
-    assertState(State::OpenForAssembly, "AlgebraicSystem::endAssembly() was called more than once");
+    assertState(State::OpenForAssembly, "`endAssembly()` was called more than once");
 
     L3STER_PROFILE_REGION_BEGIN("Static condensation");
     m_condensation_manager->endAssembly(mesh, m_node_dof_map);
@@ -327,8 +330,7 @@ void AlgebraicSystem< n_fields, CP >::assembleDomainProblem(auto&&              
                                                             val_t                           time)
 {
     L3STER_PROFILE_FUNCTION;
-    assertState(State::OpenForAssembly,
-                "AlgebraicSystem::assembleDomainProblem() was called before AlgebraicSystem::beginAssembly()");
+    assertState(State::OpenForAssembly, "`assembleDomainProblem()` was called before `beginAssembly()`");
     const auto rhs_view = Kokkos::subview(m_rhs->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
     assembleGlobalSystem(std::forward< decltype(kernel) >(kernel),
                          mesh,
@@ -352,8 +354,7 @@ void AlgebraicSystem< n_fields, CP >::assembleBoundaryProblem(auto&&            
                                                               val_t                           time)
 {
     L3STER_PROFILE_FUNCTION;
-    assertState(State::OpenForAssembly,
-                "AlgebraicSystem::assembleBoundaryProblem() was called before AlgebraicSystem::beginAssembly()");
+    assertState(State::OpenForAssembly, "`assembleBoundaryProblem()` was called before `beginAssembly()`");
     const auto rhs_view = Kokkos::subview(m_rhs->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
     assembleGlobalBoundarySystem(std::forward< decltype(kernel) >(kernel),
                                  boundary,
@@ -371,8 +372,8 @@ void AlgebraicSystem< n_fields, CP >::applyDirichletBCs()
 {
     L3STER_PROFILE_FUNCTION;
     if (not m_dirichlet_bcs)
-        throw std::runtime_error{"AlgebraicSystem::applyDirichletBCs() was called, but no Dirichlet BCs were defined."};
-    assertState(State::Closed, "AlgebraicSystem::applyDirichletBCs() was called before AlgebraicSystem::endAssembly()");
+        util::runtimeError("`applyDirichletBCs()` was called, but no Dirichlet BCs were defined");
+    assertState(State::Closed, "`applyDirichletBCs()` was called before `endAssembly()`");
     m_matrix->beginModify();
     m_rhs->beginModify();
     m_dirichlet_bcs->apply(*std::as_const(*this).getDirichletBCValueVector(), *m_matrix, *m_rhs->getVectorNonConst(0));
@@ -381,10 +382,12 @@ void AlgebraicSystem< n_fields, CP >::applyDirichletBCs()
 }
 
 template < size_t n_fields, CondensationPolicy CP >
-void AlgebraicSystem< n_fields, CP >::assertState(State expected, const char* err_msg)
+void AlgebraicSystem< n_fields, CP >::assertState(State                expected,
+                                                  std::string_view     err_msg,
+                                                  std::source_location src_loc)
 {
     if (not(m_state & expected))
-        throw std::runtime_error{err_msg};
+        util::runtimeError(err_msg, src_loc);
 }
 
 namespace detail

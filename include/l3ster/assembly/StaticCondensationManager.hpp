@@ -14,18 +14,18 @@ public:
         static_cast< Derived* >(this)->endAssemblyImpl(mesh, node_dof_map);
     }
     template < ElementTypes ET, el_o_t EO, int system_size >
-    auto getCondensedSystem(const EigenRowMajorSquareMatrix< val_t, system_size >& local_matrix,
-                            const Eigen::Vector< val_t, system_size >&             local_vector,
-                            const Element< ET, EO >&                               element)
+    auto makeCondensedSystem(const EigenRowMajorSquareMatrix< val_t, system_size >& local_matrix,
+                             const Eigen::Vector< val_t, system_size >&             local_vector,
+                             const Element< ET, EO >&                               element)
     {
-        return static_cast< Derived* >(this)->getCondensedSystemImpl(local_matrix, local_vector, element);
+        return static_cast< Derived* >(this)->makeCondensedSystemImpl(local_matrix, local_vector, element);
     }
     template < size_t max_dofs_per_node, ElementTypes ET, el_o_t EO >
-    auto recoverUncondensedSolution(const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
-                                    const Element< ET, EO >&                         element,
-                                    std::span< const val_t >                         condensed_solution)
+    auto recoverCondensedSolutionComponents(const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
+                                            const Element< ET, EO >&                         element,
+                                            std::span< const val_t >                         condensed_solution)
     {
-        return static_cast< Derived* >(this)->recoverUncondensedSolutionImpl(node_dof_map);
+        return static_cast< Derived* >(this)->recoverCondensedSolutionComponentsImpl(node_dof_map);
     }
 };
 
@@ -42,18 +42,18 @@ public:
     void endAssemblyImpl(const MeshPartition& mesh, const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map)
     {}
     template < ElementTypes ET, el_o_t EO, int system_size >
-    auto getCondensedSystemImpl(const EigenRowMajorSquareMatrix< val_t, system_size >& local_matrix,
-                                const Eigen::Vector< val_t, system_size >&             local_vector,
-                                const Element< ET, EO >&                               element)
+    auto makeCondensedSystemImpl(const EigenRowMajorSquareMatrix< val_t, system_size >& local_matrix,
+                                 const Eigen::Vector< val_t, system_size >&             local_vector,
+                                 const Element< ET, EO >&                               element)
         -> std::pair< const EigenRowMajorSquareMatrix< val_t, system_size >&,
                       const Eigen::Vector< val_t, system_size >& >
     {
         return std::tie(local_matrix, local_vector);
     }
     template < size_t max_dofs_per_node, ElementTypes ET, el_o_t EO >
-    auto recoverUncondensedSolutionImpl(const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
-                                        const Element< ET, EO >&                         element,
-                                        std::span< const val_t >                         condensed_solution)
+    auto recoverCondensedSolutionComponentsImpl(const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
+                                                const Element< ET, EO >&                         element,
+                                                std::span< const val_t >                         condensed_solution)
         -> std::array< std::array< val_t, max_dofs_per_node >, 0 >
     {
         return {};
