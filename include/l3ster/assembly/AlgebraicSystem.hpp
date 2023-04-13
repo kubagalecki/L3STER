@@ -6,6 +6,7 @@
 #include "l3ster/assembly/StaticCondensationManager.hpp"
 #include "l3ster/bcs/DirichletBC.hpp"
 #include "l3ster/bcs/GetDirichletDofs.hpp"
+#include "l3ster/solve/SolverInterface.hpp"
 #include "l3ster/util/GlobalResource.hpp"
 #include "l3ster/util/SourceLocation.hpp"
 #include "l3ster/util/TypeID.hpp"
@@ -75,6 +76,8 @@ public:
                               detail::FieldValGetter_c auto&& field_val_getter,
                               val_t                           time = 0.);
 
+    void solve(Solver_c auto& solver, const Teuchos::RCP< tpetra_femultivector_t >& solution) const;
+
 private:
     inline void setToZero();
 
@@ -85,7 +88,7 @@ private:
     };
     inline void assertState(State                expected,
                             std::string_view     err_msg,
-                            std::source_location src_loc = std::source_location::current());
+                            std::source_location src_loc = std::source_location::current()) const;
 
     Teuchos::RCP< tpetra_fecrsmatrix_t >        m_matrix;
     Teuchos::RCP< tpetra_femultivector_t >      m_rhs;
@@ -117,18 +120,28 @@ private:
 };
 
 template < size_t n_fields, CondensationPolicy CP >
+void AlgebraicSystem< n_fields, CP >::solve(Solver_c auto&                                solver,
+                                            const Teuchos::RCP< tpetra_femultivector_t >& solution) const
+{
+    solution->switchActiveMultiVector();
+    solver.solve(m_matrix, m_rhs, solution);
+    solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);
+    solution->switchActiveMultiVector();
+}
+
+template < size_t n_fields, CondensationPolicy CP >
 void AlgebraicSystem< n_fields, CP >::updateSolution(const MeshPartition&                                mesh,
                                                      SolutionManager&                                    sol_man,
                                                      IndexRange_c auto&&                                 sol_man_inds,
                                                      const Teuchos::RCP< const tpetra_femultivector_t >& solution,
                                                      IndexRange_c auto&&                                 sol_inds)
 {
-    if (std::ranges::distance(sol_man_inds) != std::ranges::distance(sol_inds))
-        util::runtimeError("Source and destination indices length must match");
-    if (std::ranges::any_of(sol_inds, [&](size_t i) { return i >= n_fields; }))
-        util::runtimeError("Source index out of bounds");
-    if (std::ranges::any_of(sol_man_inds, [&](size_t i) { return i >= sol_man.nFields(); }))
-        util::runtimeError("Destination index out of bounds");
+    util::throwingAssert(std::ranges::distance(sol_man_inds) == std::ranges::distance(sol_inds),
+                         "Source and destination indices length must match");
+    util::throwingAssert(std::ranges::none_of(sol_inds, [&](size_t i) { return i >= n_fields; }),
+                         "Source index out of bounds");
+    util::throwingAssert(std::ranges::none_of(sol_man_inds, [&](size_t i) { return i >= sol_man.nFields(); }),
+                         "Destination index out of bounds");
 
     const auto solution_view  = Kokkos::subview(solution->getLocalViewHost(Tpetra::Access::ReadOnly), Kokkos::ALL, 0);
     const auto dest_col_views = std::invoke([&] {
@@ -271,8 +284,8 @@ AlgebraicSystem< n_fields, CP >::AlgebraicSystem(const MpiComm&                 
     if constexpr (dirichlet_def.size() != 0)
     {
         L3STER_PROFILE_REGION_BEGIN("Dirichlet BCs");
-        auto [owned_bcdofs, shared_bcdofs] =
-            detail::getDirichletDofs(mesh, m_sparsity_graph, node_global_dof_map, problemdef_ctwrpr, dbcdef_ctwrpr);
+        auto [owned_bcdofs, shared_bcdofs] = detail::getDirichletDofs(
+            mesh, m_sparsity_graph, node_global_dof_map, cond_map, problemdef_ctwrpr, dbcdef_ctwrpr);
         m_dirichlet_bcs.emplace(m_sparsity_graph, std::move(owned_bcdofs), std::move(shared_bcdofs));
         L3STER_PROFILE_REGION_END("Dirichlet BCs");
     }
@@ -301,7 +314,8 @@ void AlgebraicSystem< n_fields, CP >::endAssembly(const MeshPartition& mesh)
     assertState(State::OpenForAssembly, "`endAssembly()` was called more than once");
 
     L3STER_PROFILE_REGION_BEGIN("Static condensation");
-    m_condensation_manager->endAssembly(mesh, m_node_dof_map);
+    const auto rhs_view = Kokkos::subview(m_rhs->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
+    m_condensation_manager.endAssembly(mesh, m_node_dof_map, *m_matrix, asSpan(rhs_view));
     L3STER_PROFILE_REGION_END("Static condensation");
     L3STER_PROFILE_REGION_BEGIN("RHS");
     m_rhs->endAssembly();
@@ -339,6 +353,7 @@ void AlgebraicSystem< n_fields, CP >::assembleDomainProblem(auto&&              
                          *m_matrix,
                          asSpan(rhs_view),
                          getDofMap(),
+                         m_condensation_manager,
                          field_inds_ctwrpr,
                          assembly_options,
                          time);
@@ -362,6 +377,7 @@ void AlgebraicSystem< n_fields, CP >::assembleBoundaryProblem(auto&&            
                                  *m_matrix,
                                  asSpan(rhs_view),
                                  getDofMap(),
+                                 m_condensation_manager,
                                  field_inds_ctwrpr,
                                  assembly_options,
                                  time);
@@ -371,12 +387,12 @@ template < size_t n_fields, CondensationPolicy CP >
 void AlgebraicSystem< n_fields, CP >::applyDirichletBCs()
 {
     L3STER_PROFILE_FUNCTION;
-    if (not m_dirichlet_bcs)
-        util::runtimeError("`applyDirichletBCs()` was called, but no Dirichlet BCs were defined");
+    util::throwingAssert(m_dirichlet_bcs.has_value(),
+                         "`applyDirichletBCs()` was called, but no Dirichlet BCs were defined");
     assertState(State::Closed, "`applyDirichletBCs()` was called before `endAssembly()`");
     m_matrix->beginModify();
     m_rhs->beginModify();
-    m_dirichlet_bcs->apply(*std::as_const(*this).getDirichletBCValueVector(), *m_matrix, *m_rhs->getVectorNonConst(0));
+    m_dirichlet_bcs->apply(*m_dirichlet_values->getVector(0), *m_matrix, *m_rhs->getVectorNonConst(0));
     m_rhs->endModify();
     m_matrix->endModify();
 }
@@ -384,10 +400,9 @@ void AlgebraicSystem< n_fields, CP >::applyDirichletBCs()
 template < size_t n_fields, CondensationPolicy CP >
 void AlgebraicSystem< n_fields, CP >::assertState(State                expected,
                                                   std::string_view     err_msg,
-                                                  std::source_location src_loc)
+                                                  std::source_location src_loc) const
 {
-    if (not(m_state & expected))
-        util::runtimeError(err_msg, src_loc);
+    util::throwingAssert(m_state == expected, err_msg, src_loc);
 }
 
 namespace detail
@@ -401,11 +416,11 @@ consteval auto makeEmptyDirichletBCDef(const detail::ProblemDef_c auto& problem_
 template < CondensationPolicy        CP,
            detail::ProblemDef_c auto problem_def,
            detail::ProblemDef_c auto dirichlet_def = detail::makeEmptyDirichletBCDef(problem_def) >
-auto makeAlgebraicSystemManager(const MpiComm&       comm,
-                                const MeshPartition& mesh,
-                                CondensationPolicyTag< CP >,
-                                ConstexprValue< problem_def >   problemdef_ctwrpr,
-                                ConstexprValue< dirichlet_def > dbcdef_ctwrpr = {})
+auto makeAlgebraicSystem(const MpiComm&       comm,
+                         const MeshPartition& mesh,
+                         CondensationPolicyTag< CP >,
+                         ConstexprValue< problem_def >   problemdef_ctwrpr,
+                         ConstexprValue< dirichlet_def > dbcdef_ctwrpr = {})
     -> std::shared_ptr< AlgebraicSystem< detail::deduceNFields(problem_def), CP > >
 {
     L3STER_PROFILE_FUNCTION;

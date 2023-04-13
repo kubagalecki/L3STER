@@ -34,9 +34,9 @@ public:
             const auto process_element = [&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
                 const auto element_dofs = std::invoke([&] {
                     if constexpr (CP == CondensationPolicy::None)
-                        return detail::getUnsortedElementDofs< covered_dof_inds >(element, node_to_dof_map, cond_map);
+                        return detail::getUnsortedPrimaryDofs< covered_dof_inds >(element, node_to_dof_map, cond_map);
                     else if constexpr ((CP == CondensationPolicy::ElementBoundary))
-                        return detail::getUnsortedElementDofs(element, node_to_dof_map, cond_map);
+                        return detail::getUnsortedPrimaryDofs(element, node_to_dof_map, cond_map);
                 });
                 for (auto row : element_dofs)
                     for (auto col : element_dofs)

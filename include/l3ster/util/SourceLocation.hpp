@@ -53,5 +53,12 @@ inline auto runtimeError(std::string_view err_messge, std::source_location src_l
     std::ranges::copy(err_messge, std::back_inserter(err_msg_src_located));
     throw std::runtime_error{err_msg_src_located.c_str()};
 }
+
+inline auto
+throwingAssert(bool condition, std::string_view err_msg, std::source_location src_loc = std::source_location::current())
+{
+    if (not condition)
+        runtimeError(err_msg, src_loc);
+}
 } // namespace lstr::util
 #endif // L3STER_SOURCELOCATION_HPP

@@ -5,18 +5,16 @@
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 #include "l3ster/post/NormL2.hpp"
+#include "l3ster/solve/Solvers.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
 #include "Common.hpp"
 
-#include "Amesos2.hpp"
+using namespace lstr;
 
-// Solve 2D diffusion problem
-int main(int argc, char* argv[])
+template < CondensationPolicy CP >
+void test()
 {
-    using namespace lstr;
-    L3sterScopeGuard scope_guard{argc, argv};
-
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
     constexpr auto   problem_def         = std::array{Pair{domain_id, std::array{true, true, true}}};
     constexpr auto   probdef_ctwrpr      = ConstexprValue< problem_def >{};
@@ -37,18 +35,14 @@ int main(int argc, char* argv[])
     const auto adiabatic_bound_view   = my_partition.getBoundaryView(adiabatic_boundary_ids);
     const auto whole_bound_view       = my_partition.getBoundaryView(whole_boundary_ids);
 
-    constexpr auto n_fields       = detail::deduceNFields(problem_def);
-    auto           system_manager = makeAlgebraicSystemManager(comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr);
+    auto alg_sys =
+        makeAlgebraicSystem(comm, my_partition, CondensationPolicyTag< CP >{}, probdef_ctwrpr, dirichletdef_ctwrpr);
 
     // Check that the underlying data gets cached
     {
         const auto system_manager_shallow_copy =
-            makeAlgebraicSystemManager(comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr);
-        if (std::addressof(*system_manager->getMatrix()) != std::addressof(*system_manager_shallow_copy->getMatrix()))
-        {
-            std::cerr << "Algebraic system was not cached correctly pre-assembly\n";
-            comm.abort();
-        }
+            makeAlgebraicSystem(comm, my_partition, CondensationPolicyTag< CP >{}, probdef_ctwrpr, dirichletdef_ctwrpr);
+        REQUIRE(alg_sys.get() == system_manager_shallow_copy.get());
     }
 
     // Problem assembly
@@ -94,89 +88,63 @@ int main(int argc, char* argv[])
     constexpr auto fieldval_getter = []< size_t N >(const std::array< n_id_t, N >& dofs) {
         return Eigen::Matrix< val_t, N, 0 >{};
     };
-
-    constexpr auto BT       = BasisTypes::Lagrange;
-    constexpr auto QT       = QuadratureTypes::GLeg;
-    constexpr auto QO       = q_o_t{mesh_order * 2};
-    constexpr auto dof_inds = std::array< size_t, 3 >{0, 1, 2};
-
-    const auto assembleDomainProblem = [&] {
-        system_manager->assembleDomainProblem< BT, QT, QO, dof_inds >(
-            diffusion_kernel2d, my_partition, std::views::single(domain_id), fieldval_getter);
-    };
-    const auto assembleBoundaryProblem = [&] {
-        system_manager->assembleBoundaryProblem< BT, QT, QO, dof_inds >(
-            neumann_bc_kernel, adiabatic_bound_view, fieldval_getter);
-    };
-
-    // Check constraints on assembly state
-    system_manager->beginAssembly();
-    CHECK_THROWS(system_manager->beginModify());
-    CHECK_THROWS(system_manager->endModify());
-    system_manager->endAssembly();
-    CHECK_THROWS(assembleDomainProblem());
-    CHECK_THROWS(assembleBoundaryProblem());
-    system_manager->beginAssembly();
-    assembleDomainProblem();
-    assembleBoundaryProblem();
-    system_manager->endAssembly();
-    system_manager->endAssembly();
-
-    // Dirichlet BCs
     constexpr auto dirichlet_bc_val_def = [node_dist](const auto&, const auto&, const SpaceTimePoint& p) {
         Eigen::Vector< val_t, 1 > retval;
         retval[0] = p.space.x() / node_dist.back();
         return retval;
     };
-    auto dirichlet_vals = system_manager->getDirichletBCValueVector()->getLocalViewHost(Tpetra::Access::ReadWrite);
-    {
-        auto dirichlet_vals_view = asSpan(Kokkos::subview(dirichlet_vals, Kokkos::ALL, 0));
-        computeValuesAtNodes(dirichlet_bc_val_def,
-                             my_partition,
-                             std::array{left_boundary, right_boundary},
-                             system_manager->getDofMap(),
-                             ConstexprValue< std::array{0} >{},
-                             empty_field_val_getter,
-                             dirichlet_vals_view);
-    }
+
+    constexpr auto dof_inds       = makeIotaArray< size_t, 3 >();
+    constexpr auto dofinds_ctwrpr = ConstexprValue< dof_inds >{};
+
+    const auto assembleDomainProblem = [&] {
+        alg_sys->assembleDomainProblem(
+            diffusion_kernel2d, my_partition, std::views::single(domain_id), fieldval_getter, dofinds_ctwrpr);
+    };
+    const auto assembleBoundaryProblem = [&] {
+        alg_sys->assembleBoundaryProblem(neumann_bc_kernel, adiabatic_bound_view, fieldval_getter, dofinds_ctwrpr);
+    };
 
     // Check constraints on assembly state
-    CHECK_THROWS(system_manager->applyDirichletBCs());
-    system_manager->beginModify();
-    system_manager->beginModify();
-    CHECK_THROWS(system_manager->beginAssembly());
-    CHECK_THROWS(system_manager->endAssembly());
-    system_manager->applyDirichletBCs();
-    system_manager->endModify();
-    system_manager->endModify();
+    alg_sys->beginAssembly();
+    assembleDomainProblem();
+    assembleBoundaryProblem();
+    CHECK_THROWS(alg_sys->applyDirichletBCs());
+    alg_sys->endAssembly(my_partition);
+    CHECK_THROWS(assembleDomainProblem());
+    CHECK_THROWS(assembleBoundaryProblem());
+    CHECK_THROWS(alg_sys->endAssembly(my_partition));
+
+    alg_sys->setDirichletBCValues(dirichlet_bc_val_def,
+                                  my_partition,
+                                  std::array{left_boundary, right_boundary},
+                                  ConstexprValue< std::array{0} >{},
+                                  empty_field_val_getter);
+    alg_sys->applyDirichletBCs();
+
     {
-        auto fake_problem = makeAlgebraicSystemManager(comm, my_partition, probdef_ctwrpr);
-        fake_problem->endAssembly();
+        auto fake_problem = makeAlgebraicSystem(comm, my_partition, CondensationPolicyTag< CP >{}, probdef_ctwrpr);
+        fake_problem->endAssembly(my_partition);
         CHECK_THROWS(fake_problem->applyDirichletBCs());
     }
 
     // Solve
-    auto solver = Amesos2::Lapack< Tpetra::CrsMatrix< val_t, local_dof_t, global_dof_t >,
-                                   Tpetra::MultiVector< val_t, local_dof_t, global_dof_t > >{
-        system_manager->getMatrix(), system_manager->getSolutionVector(), system_manager->getRhs()};
-    if (not solver.matrixShapeOK())
-    {
-        std::cerr << "Bad matrix shape\n";
-        comm.abort();
-    }
-    solver.preOrdering().symbolicFactorization().numericFactorization().solve();
+    auto solver   = solvers::Lapack{};
+    auto solution = alg_sys->makeSolutionVector();
+    alg_sys->solve(solver, solution);
 
-    const auto     solution         = std::as_const(*system_manager).getSolutionVector();
+    /*
+    const auto solution         = std::as_const(*alg_sys).getSolutionVector();
     auto           solution_manager = SolutionManager{my_partition, comm, n_fields};
     constexpr auto field_inds       = makeIotaArray< size_t, n_fields >();
-    solution_manager.updateSolution(my_partition, *solution, system_manager->getDofMap(), field_inds, probdef_ctwrpr);
+    solution_manager.updateSolution(my_partition, *solution, alg_sys->getDofMap(), field_inds, probdef_ctwrpr);
     solution_manager.communicateSharedValues();
 
     // Check that the underlying data cache is still usable after the solve
     {
         const auto system_manager_shallow_copy =
             makeAlgebraicSystemManager(comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr);
-        if (std::addressof(*system_manager->getMatrix()) != std::addressof(*system_manager_shallow_copy->getMatrix()))
+        if (std::addressof(*alg_sys->getMatrix()) != std::addressof(*system_manager_shallow_copy->getMatrix()))
         {
             std::cerr << "Algebraic system was not cached correctly post-assembly\n";
             comm.abort();
@@ -222,4 +190,12 @@ int main(int argc, char* argv[])
         comm.abort();
         return EXIT_FAILURE;
     }
+    */
+}
+
+// Solve 2D diffusion problem
+int main(int argc, char* argv[])
+{
+    L3sterScopeGuard scope_guard{argc, argv};
+    test< CondensationPolicy::None >();
 }

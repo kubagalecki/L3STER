@@ -49,8 +49,7 @@ L3STER_MPI_TYPE_MAPPING_STRUCT(long double, MPI_LONG_DOUBLE)               // NO
 inline void
 handleMPIError(int error, std::string_view err_msg, std::source_location src_loc = std::source_location::current())
 {
-    if (error)
-        util::runtimeError(err_msg, src_loc);
+    util::throwingAssert(not error, err_msg, src_loc);
 }
 
 template < typename T >

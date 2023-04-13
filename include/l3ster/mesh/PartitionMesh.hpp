@@ -4,6 +4,7 @@
 #include "l3ster/assembly/ProblemDefinition.hpp"
 #include "l3ster/mesh/Mesh.hpp"
 #include "l3ster/util/Algorithm.hpp"
+#include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/MetisUtils.hpp"
 #include "l3ster/util/RobinHoodHashTables.hpp"

@@ -65,7 +65,7 @@ void test()
 
                     constexpr auto dof_inds_wrpr = ConstexprValue< std::array{size_t{0}} >{};
                     const auto [row_dofs, col_dofs, rhs_dofs] =
-                        detail::getUnsortedElementDofs(element, dof_map, cond_map, dof_inds_wrpr);
+                        detail::getUnsortedPrimaryDofs(element, dof_map, CondensationPolicyTag< CP >{}, dof_inds_wrpr);
                     detail::scatterLocalSystem(local_mat, local_vec, *matrix, rhs_view, row_dofs, col_dofs, rhs_dofs);
                 }
             },

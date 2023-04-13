@@ -1,8 +1,8 @@
 #ifndef L3STER_SOLUTIONMANAGER_HPP
 #define L3STER_SOLUTIONMANAGER_HPP
 
-#include "l3ster/assembly/NodeToDofMap.hpp"
-#include "l3ster/util/TrilinosUtils.hpp"
+#include "l3ster/mesh/MeshPartition.hpp"
+#include "l3ster/util/RobinHoodHashTables.hpp"
 
 #include <memory>
 

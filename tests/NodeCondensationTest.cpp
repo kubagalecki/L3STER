@@ -16,7 +16,7 @@ void test(CondensationPolicyTag< CP > = {})
     constexpr auto problemdef_ctwrpr = ConstexprValue< problem_def >{};
 
     constexpr auto        mesh_order = 2;
-    constexpr std::array  node_dist{0., 1., 2.};
+    constexpr std::array  node_dist{0., 1., 2., 3., 4.};
     std::vector< d_id_t > boundaries(6);
     std::iota(boundaries.begin(), boundaries.end(), 1);
     const auto dist_mesh = comm.getRank() == 0 ? std::invoke([&] {

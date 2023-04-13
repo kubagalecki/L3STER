@@ -1,7 +1,7 @@
 #ifndef L3STER_ASSEMBLY_ASSEMBLEGLOBALSYSTEM_HPP
 #define L3STER_ASSEMBLY_ASSEMBLEGLOBALSYSTEM_HPP
 
-#include "l3ster/assembly/ScatterLocalSystem.hpp"
+#include "l3ster/assembly/StaticCondensationManager.hpp"
 #include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 
 #include <iostream>
@@ -135,14 +135,18 @@ inline constexpr auto empty_field_val_getter =
     return {};
 };
 
-template < ArrayOf_c< size_t > auto field_inds, size_t dofs_per_node, AssemblyOptions asm_opts = AssemblyOptions{} >
+template < ArrayOf_c< size_t > auto field_inds,
+           size_t                   dofs_per_node,
+           CondensationPolicy       CP,
+           AssemblyOptions          asm_opts = AssemblyOptions{} >
 void assembleGlobalSystem(auto&&                                       kernel,
                           const MeshPartition&                         mesh,
                           detail::DomainIdRange_c auto&&               domain_ids,
                           detail::FieldValGetter_c auto&&              fval_getter,
-                          tpetra_crsmatrix_t&                          global_matrix,
-                          std::span< val_t >                           global_vector,
+                          tpetra_crsmatrix_t&                          global_mat,
+                          std::span< val_t >                           global_rhs,
                           const NodeToLocalDofMap< dofs_per_node, 3 >& dof_map,
+                          detail::StaticCondensationManager< CP >&     condensation_manager,
                           ConstexprValue< field_inds >                 field_inds_ctwrpr,
                           ConstexprValue< asm_opts >                   assembly_options = {},
                           val_t                                        time             = 0.)
@@ -159,16 +163,16 @@ void assembleGlobalSystem(auto&&                                       kernel,
             constexpr q_o_t QO             = 2 * (asm_opts.value_order * EO + asm_opts.derivative_order * (EO - 1));
             const auto      field_vals     = fval_getter(element.getNodes());
             const auto&     qbv            = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
-            const auto& [loc_mat, loc_vec] = assembleLocalSystem(kernel, element, field_vals, qbv, time);
-            const auto [row_dofs, col_dofs, rhs_dofs] = detail::getUnsortedElementDofs< field_inds >(element, dof_map);
-            detail::scatterLocalSystem(loc_mat, loc_vec, global_matrix, global_vector, row_dofs, col_dofs, rhs_dofs);
+            const auto& [loc_mat, loc_rhs] = assembleLocalSystem(kernel, element, field_vals, qbv, time);
+            condensation_manager.condenseSystem(
+                dof_map, global_mat, global_rhs, loc_mat, loc_rhs, element, field_inds_ctwrpr);
         }
         else
         {
-            std::cerr << "Attempting to assemble local system for which the passed kernel is invalid. Please check the "
-                         "kernel was defined correctly, and that you are assembling the problem in the correct domain "
-                         "(e.g. that you're not trying to assemble a 2D problem in a 3D domain). This process will now "
-                         "terminate.\n";
+            std::cerr << "Attempting to assemble local system for which the passed kernel is invalid. Please check "
+                         "that the kernel was defined correctly, and that you are assembling the problem in the "
+                         "correct domain (e.g. that you're not trying to assemble a 2D problem in a 3D domain). This "
+                         "process will now terminate.\n";
             std::terminate(); // Throwing in a parallel context would terminate regardless
         }
     };
@@ -177,13 +181,17 @@ void assembleGlobalSystem(auto&&                                       kernel,
     mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
 }
 
-template < ArrayOf_c< size_t > auto field_inds, size_t dofs_per_node, AssemblyOptions asm_opts = AssemblyOptions{} >
+template < ArrayOf_c< size_t > auto field_inds,
+           size_t                   dofs_per_node,
+           CondensationPolicy       CP,
+           AssemblyOptions          asm_opts = AssemblyOptions{} >
 void assembleGlobalBoundarySystem(auto&&                                       kernel,
                                   const BoundaryView&                          boundary,
                                   detail::FieldValGetter_c auto&&              fval_getter,
-                                  tpetra_crsmatrix_t&                          global_matrix,
-                                  std::span< val_t >                           global_vector,
+                                  tpetra_crsmatrix_t&                          global_mat,
+                                  std::span< val_t >                           global_rhs,
                                   const NodeToLocalDofMap< dofs_per_node, 3 >& dof_map,
+                                  detail::StaticCondensationManager< CP >&     condensation_manager,
                                   ConstexprValue< field_inds >                 field_inds_ctwrpr,
                                   ConstexprValue< asm_opts >                   assembly_options = {},
                                   val_t                                        time             = 0.)
@@ -201,14 +209,14 @@ void assembleGlobalBoundarySystem(auto&&                                       k
             constexpr q_o_t QO         = 2 * (asm_opts.value_order * EO + asm_opts.derivative_order * (EO - 1));
             const auto      field_vals = fval_getter(el_view->getNodes());
             const auto&     qbv        = getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
-            const auto& [loc_mat, loc_vec] = assembleLocalBoundarySystem(kernel, el_view, field_vals, qbv, time);
-            const auto [row_dofs, col_dofs, rhs_dofs] = detail::getUnsortedElementDofs< field_inds >(*el_view, dof_map);
-            detail::scatterLocalSystem(loc_mat, loc_vec, global_matrix, global_vector, row_dofs, col_dofs, rhs_dofs);
+            const auto& [loc_mat, loc_rhs] = assembleLocalBoundarySystem(kernel, el_view, field_vals, qbv, time);
+            condensation_manager.condenseSystem(
+                dof_map, global_mat, global_rhs, loc_mat, loc_rhs, *el_view, field_inds_ctwrpr);
         }
         else
         {
             std::cerr << "Attempting to assemble local boundary system for which the passed kernel is invalid. Please "
-                         "check the kernel was defined correctly, and that you are assembling the problem in the "
+                         "check that the kernel was defined correctly, and that you are assembling the problem in the "
                          "correct domain (e.g. that you're not trying to assemble a 2D problem in a 3D domain). This "
                          "process will now terminate.\n";
             std::terminate(); // Throwing in a parallel context would terminate regardless
