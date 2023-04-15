@@ -17,10 +17,10 @@ namespace detail
 {
 template < typename T >
 concept DomainPredicate_c = requires(T op, const DomainView dv) {
-                                {
-                                    std::invoke(op, dv)
-                                } -> std::convertible_to< bool >;
-                            };
+    {
+        std::invoke(op, dv)
+    } -> std::convertible_to< bool >;
+};
 template < typename T >
 concept DomainIdRange_c = SizedRangeOfConvertibleTo_c< T, d_id_t >;
 } // namespace detail
@@ -107,12 +107,11 @@ public:
                          auto&&                         transform,
                          detail::DomainIdRange_c auto&& domain_ids,
                          ExecPolicy&&                   policy = {}) const -> std::decay_t< decltype(zero) >
-        requires invocable_on_const_elements_r< decltype(transform), std::decay_t< decltype(zero) > > and
-                 requires {
-                     {
-                         std::invoke(reduction, zero, zero)
-                     } -> std::convertible_to< std::decay_t< decltype(zero) > >;
-                 };
+        requires invocable_on_const_elements_r< decltype(transform), std::decay_t< decltype(zero) > > and requires {
+            {
+                std::invoke(reduction, zero, zero)
+            } -> std::convertible_to< std::decay_t< decltype(zero) > >;
+        };
 
     // find
     // Note: if the predicate returns true for multiple elements, the reference to any one of them may be returned
@@ -388,12 +387,11 @@ auto MeshPartition::transformReduce(const auto&                    zero,
                                     auto&&                         transform,
                                     detail::DomainIdRange_c auto&& domain_ids,
                                     ExecPolicy&&                   policy) const -> std::decay_t< decltype(zero) >
-    requires invocable_on_const_elements_r< decltype(transform), std::decay_t< decltype(zero) > > and
-             requires {
-                 {
-                     std::invoke(reduction, zero, zero)
-                 } -> std::convertible_to< std::decay_t< decltype(zero) > >;
-             }
+    requires invocable_on_const_elements_r< decltype(transform), std::decay_t< decltype(zero) > > and requires {
+        {
+            std::invoke(reduction, zero, zero)
+        } -> std::convertible_to< std::decay_t< decltype(zero) > >;
+    }
 {
     const auto reduce_domain = [&](d_id_t id) {
         return m_domains.at(id).transformReduce(zero, reduction, transform, policy);
@@ -547,7 +545,7 @@ BoundaryView MeshPartition::getBoundaryView(detail::DomainIdRange_c auto&& bound
     for (d_id_t id : boundary_ids)
     {
         const auto insert_boundary_element_view = [&](const auto& boundary_element) {
-            const auto& [domain_element_variant_opt, side_index] = getElementBoundaryView(boundary_element, id);
+            const auto [domain_element_variant_opt, side_index] = getElementBoundaryView(boundary_element, id);
             if (not domain_element_variant_opt)
             {
                 error_flag.store(true);

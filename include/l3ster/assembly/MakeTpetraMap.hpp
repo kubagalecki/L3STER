@@ -20,7 +20,7 @@ auto writeNodeDofs(RangeOfConvertibleTo_c< n_id_t > auto&&   sorted_nodes,
         search_it                = findNodeInterval(search_it, end(dof_intervals), node);
         const auto interval_ind  = std::distance(begin(dof_intervals), search_it);
         const auto& [delim, cov] = *search_it;
-        const auto& [lo, hi]     = delim;
+        const auto [lo, hi]      = delim;
         const auto my_dof_base   = interval_dof_starts[interval_ind] + (node - lo) * cov.count();
         out_iter = std::ranges::copy(std::views::iota(my_dof_base, my_dof_base + cov.count()), out_iter).out;
     }

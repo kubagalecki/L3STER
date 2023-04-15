@@ -64,9 +64,8 @@ TEST_CASE("Constexpr vector", "[util]")
 {
     SECTION("Size & capcity")
     {
-        constexpr int  size = 3, cap = 8;
-        constexpr auto vec_params             = getConstexprVecParams(size, cap);
-        const auto& [size_result, cap_result] = vec_params;
+        constexpr int size = 3, cap = 8;
+        const auto [size_result, cap_result] = getConstexprVecParams(size, cap);
         CHECK(size_result == size);
         CHECK(cap_result >= cap);
     }
@@ -79,9 +78,8 @@ TEST_CASE("Constexpr vector", "[util]")
 
     SECTION("Reserve capacity")
     {
-        constexpr int  cap                    = 10;
-        constexpr auto vec_params             = checkConstexprVectorReserve(cap);
-        const auto& [size_result, cap_result] = vec_params;
+        constexpr int cap                    = 10;
+        const auto [size_result, cap_result] = checkConstexprVectorReserve(cap);
         CHECK(size_result == 0);
         CHECK(cap_result == cap);
     }
@@ -114,7 +112,7 @@ TEST_CASE("Stack size manipulation", "[util]")
         const auto [initial, max] = util::detail::getStackSize();
         CHECK(initial <= max);
         util::detail::setMinStackSize(initial + 1);
-        const auto& [current, ignore] = util::detail::getStackSize();
+        const auto [current, ignore] = util::detail::getStackSize();
         CHECK(initial + 1 == current);
     }
 
@@ -131,9 +129,9 @@ TEST_CASE("Stack size manipulation", "[util]")
 
     SECTION("Decreasing is a noop")
     {
-        const auto& [initial, max] = util::detail::getStackSize();
+        const auto [initial, max] = util::detail::getStackSize();
         util::detail::setMinStackSize(initial - 1);
-        const auto& [current, ignore] = util::detail::getStackSize();
+        const auto [current, ignore] = util::detail::getStackSize();
         CHECK(initial == current);
     }
 }
@@ -146,9 +144,9 @@ TEMPLATE_TEST_CASE("Bitset (de-)serialization",
                    ConstexprValue< 128u >,
                    ConstexprValue< 257u >)
 {
-    constexpr auto size               = TestType::value;
-    constexpr auto n_runs             = 1 << 8;
-    constexpr auto make_random_bitset = [] {
+    constexpr static auto size               = TestType::value;
+    constexpr auto        n_runs             = 1 << 8;
+    constexpr auto        make_random_bitset = [] {
         std::bitset< size >                    retval;
         std::uniform_int_distribution< short > dist{0, 1};
         std::mt19937                           prng{std::random_device{}()};

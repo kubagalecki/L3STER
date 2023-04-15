@@ -40,7 +40,7 @@ const auto& getReferenceQuadrature()
         constexpr auto c = [](size_t x) {
             return static_cast< val_t >(x - 1u) / static_cast< val_t >(x);
         };
-        const auto& [qp, w] = computeGaussRule(a, b, c, std::integral_constant< size_t, size >{});
+        const auto [qp, w] = computeGaussRule(a, b, c, std::integral_constant< size_t, size >{});
 
         typename quadrature_t::q_points_t q_points;
         typename quadrature_t::weights_t  weights;

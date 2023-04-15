@@ -167,13 +167,13 @@ void consolidateDofIntervals(node_interval_vector_t< n_fields >& intervals)
     };
     const auto consolidate_samedof_overlappingdelim = [&intervals] {
         constexpr auto same_dof_overlapping = [](const auto& i1, const auto& i2) {
-            const auto& [lo1, hi1] = i1.first;
-            const auto& [lo2, hi2] = i2.first;
+            const auto [lo1, hi1] = i1.first;
+            const auto [lo2, hi2] = i2.first;
             return hi1 >= lo2 - 1u and i1.second == i2.second;
         };
         constexpr auto consolidate = [](const auto& i1, const auto& i2) {
-            const auto& [lo1, hi1] = i1.first;
-            const auto& [lo2, hi2] = i2.first;
+            const auto [lo1, hi1] = i1.first;
+            const auto [lo2, hi2] = i2.first;
             return std::make_pair(std::array{lo1, std::max(hi1, hi2)}, i1.second);
         };
         const auto erase_range = reduceConsecutive(intervals, same_dof_overlapping, consolidate);
@@ -201,7 +201,7 @@ void consolidateDofIntervals(node_interval_vector_t< n_fields >& intervals)
                 std::next(overlap_begin),
                 intervals.end(),
                 [&overlap_max_node](const auto& delim) {
-                    const auto& [lo, hi]       = delim;
+                    const auto [lo, hi]        = delim;
                     const bool outside_overlap = lo > overlap_max_node;
                     if (not outside_overlap)
                         overlap_max_node = std::max(overlap_max_node, hi);
@@ -223,7 +223,7 @@ void consolidateDofIntervals(node_interval_vector_t< n_fields >& intervals)
             {
                 const auto                       hi = std::invoke([&] {
                     auto retval = std::numeric_limits< n_id_t >::max();
-                    for (const auto& [int_lo, int_hi] : overlap_range | std::views::keys)
+                    for (const auto [int_lo, int_hi] : overlap_range | std::views::keys)
                     {
                         if (int_lo == int_hi and int_lo == lo)
                             return lo;
@@ -239,7 +239,7 @@ void consolidateDofIntervals(node_interval_vector_t< n_fields >& intervals)
                 typename interval_t::second_type field_cov;
                 for (const auto& [delims, cov] : overlap_range)
                 {
-                    const auto& [int_lo, int_hi] = delims;
+                    const auto [int_lo, int_hi] = delims;
                     if (int_lo <= lo and int_hi >= hi)
                         field_cov |= cov;
                     if (int_lo > hi)
@@ -278,7 +278,7 @@ auto computeIntervalStarts(const node_interval_vector_t< n_fields >& intervals) 
     std::transform_exclusive_scan(
         begin(intervals), end(intervals), begin(retval), 0, std::plus< size_t >{}, [](const auto& interval) -> size_t {
             const auto& [delim, cov] = interval;
-            const auto& [lo, hi]     = delim;
+            const auto [lo, hi]      = delim;
             return (hi - lo + 1u) * cov.count();
         });
     return retval;

@@ -137,8 +137,8 @@ bool NodeToGlobalDofMap< dofs_per_node >::tryInitAsContiguous(
     auto       base_dof              = global_dof_t{};
     for (const auto& interval : dof_intervals)
     {
-        const auto& [delim, coverage]     = interval;
-        const auto& [int_first, int_last] = delim;
+        const auto& [delim, coverage]    = interval;
+        const auto [int_first, int_last] = delim;
         if (min_node_in_partition >= int_first and max_node_in_partition <= int_last)
         {
             auto dof_inds = std::array< std::uint8_t, dofs_per_node >{};
@@ -165,7 +165,7 @@ void NodeToGlobalDofMap< dofs_per_node >::initNonContiguous(
     const auto compute_node_dofs   = [&](n_id_t node_id, ptrdiff_t interval_ind) {
         const auto dof_int_start = dof_interval_starts[interval_ind];
         const auto& [delim, cov] = dof_intervals[interval_ind];
-        const auto& [lo, hi]     = delim;
+        const auto [lo, hi]      = delim;
         auto retval              = std::array< global_dof_t, dofs_per_node >{};
         retval.fill(invalid_dof);
         global_dof_t node_dof = dof_int_start + (node_id - lo) * cov.count();

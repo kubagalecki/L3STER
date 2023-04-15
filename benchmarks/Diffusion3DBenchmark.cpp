@@ -115,7 +115,7 @@ int main(int argc, char* argv[])
     constexpr auto error_kernel =
         []< typename DerT >(const auto& vals, const std::array< DerT, 3 >& ders, const SpaceTimePoint& point) noexcept {
             Eigen::Matrix< val_t, 4, 1 > error;
-            const auto& [T, qx, qy, qz]          = vals;
+            const auto [T, qx, qy, qz]           = vals;
             const auto& [x_ders, y_ders, z_ders] = ders;
 
             const auto& q_xx = x_ders[1];

@@ -141,7 +141,7 @@ TEMPLATE_TEST_CASE("Node DOF interval consolidation", "[dof]", ConstexprValue< 1
         intervals.reserve(n_intervals);
         std::generate_n(std::back_inserter(intervals), n_intervals, [&] {
             const auto interval = make_random_interval(0, n_nodes - 1);
-            for (const auto& [lo, hi] = interval.first; auto node : std::views::iota(lo, hi + 1))
+            for (const auto [lo, hi] = interval.first; auto node : std::views::iota(lo, hi + 1))
                 node_covs[node] |= interval.second;
             return interval;
         });
@@ -161,13 +161,13 @@ TEMPLATE_TEST_CASE("Node DOF interval consolidation", "[dof]", ConstexprValue< 1
         const bool intervals_are_disjoint =
             std::ranges::all_of(intervals | std::views::drop(1) | std::views::keys,
                                 [prev = intervals[0].first[1]](const delim_t& delim) mutable {
-                                    const auto& [lo, hi] = delim;
+                                    const auto [lo, hi] = delim;
                                     return lo > std::exchange(prev, hi);
                                 });
         CHECK(intervals_are_disjoint);
         const bool intervals_are_correct = std::ranges::all_of(intervals, [&](const auto& interval) {
             const auto& [delims, cov] = interval;
-            const auto& [lo, hi]      = delims;
+            const auto [lo, hi]       = delims;
             return std::ranges::all_of(std::views::iota(lo, hi + 1), [&](auto node) { return node_covs[node] == cov; });
         });
         CHECK(intervals_are_correct);

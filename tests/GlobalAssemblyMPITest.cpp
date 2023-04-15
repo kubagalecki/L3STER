@@ -1,8 +1,5 @@
 #include "l3ster/assembly/AlgebraicSystem.hpp"
-#include "l3ster/assembly/ComputeValuesAtNodes.hpp"
-#include "l3ster/assembly/GatherGlobalValues.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
-#include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 #include "l3ster/post/NormL2.hpp"
 #include "l3ster/solve/Solvers.hpp"
@@ -15,6 +12,8 @@ using namespace lstr;
 template < CondensationPolicy CP >
 void test()
 {
+    const auto comm = MpiComm{MPI_COMM_WORLD};
+
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
     constexpr auto   problem_def         = std::array{Pair{domain_id, std::array{true, true, true}}};
     constexpr auto   probdef_ctwrpr      = ConstexprValue< problem_def >{};
@@ -22,30 +21,33 @@ void test()
                                               Pair{right_boundary, std::array{true, false, false}}};
     constexpr auto   dirichletdef_ctwrpr = ConstexprValue< dirichlet_def >{};
 
-    const MpiComm    comm{MPI_COMM_WORLD};
-    const std::array node_dist{0., 1., 2., 3., 4., 5., 6.};
-    constexpr auto   mesh_order = 2;
-    auto             mesh       = makeSquareMesh(node_dist);
-    mesh.getPartitions().front().initDualGraph();
-    mesh.getPartitions().front() = convertMeshToOrder< mesh_order >(mesh.getPartitions().front());
-    const auto my_partition =
-        distributeMesh(comm, mesh, {bot_boundary, top_boundary, left_boundary, right_boundary}, probdef_ctwrpr);
-    const auto adiabatic_boundary_ids = std::array{bot_boundary, top_boundary};
-    const auto whole_boundary_ids     = std::array{top_boundary, bot_boundary, left_boundary, right_boundary};
-    const auto adiabatic_bound_view   = my_partition.getBoundaryView(adiabatic_boundary_ids);
-    const auto whole_bound_view       = my_partition.getBoundaryView(whole_boundary_ids);
+    constexpr auto node_dist            = std::array{0., 1., 2., 3., 4., 5., 6.};
+    constexpr auto mesh_order           = 2;
+    const auto     mesh                 = std::invoke([&] {
+        if (comm.getRank() == 0)
+        {
+            auto full_mesh = makeSquareMesh(node_dist);
+            full_mesh.getPartitions().front().initDualGraph();
+            full_mesh.getPartitions().front() = convertMeshToOrder< mesh_order >(full_mesh.getPartitions().front());
+            return distributeMesh(
+                comm, full_mesh, {bot_boundary, top_boundary, left_boundary, right_boundary}, probdef_ctwrpr);
+        }
+        else
+            return distributeMesh(comm, {}, {}, probdef_ctwrpr);
+    });
+    const auto     adiabatic_bound_view = mesh.getBoundaryView(std::array{bot_boundary, top_boundary});
+    const auto     whole_bound_view =
+        mesh.getBoundaryView(std::array{top_boundary, bot_boundary, left_boundary, right_boundary});
 
-    auto alg_sys =
-        makeAlgebraicSystem(comm, my_partition, CondensationPolicyTag< CP >{}, probdef_ctwrpr, dirichletdef_ctwrpr);
+    auto alg_sys = makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr, dirichletdef_ctwrpr);
 
     // Check that the underlying data gets cached
     {
         const auto system_manager_shallow_copy =
-            makeAlgebraicSystem(comm, my_partition, CondensationPolicyTag< CP >{}, probdef_ctwrpr, dirichletdef_ctwrpr);
+            makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr, dirichletdef_ctwrpr);
         REQUIRE(alg_sys.get() == system_manager_shallow_copy.get());
     }
 
-    // Problem assembly
     constexpr auto diffusion_kernel2d =
         [](const auto&, const std::array< std::array< val_t, 0 >, 2 >&, const SpaceTimePoint&) noexcept {
             using mat_t = Eigen::Matrix< val_t, 4, 3 >;
@@ -85,24 +87,17 @@ void test()
             A0(0, 2) = normal[1];
             return retval;
         };
-    constexpr auto fieldval_getter = []< size_t N >(const std::array< n_id_t, N >& dofs) {
-        return Eigen::Matrix< val_t, N, 0 >{};
-    };
     constexpr auto dirichlet_bc_val_def = [node_dist](const auto&, const auto&, const SpaceTimePoint& p) {
         Eigen::Vector< val_t, 1 > retval;
         retval[0] = p.space.x() / node_dist.back();
         return retval;
     };
 
-    constexpr auto dof_inds       = makeIotaArray< size_t, 3 >();
-    constexpr auto dofinds_ctwrpr = ConstexprValue< dof_inds >{};
-
     const auto assembleDomainProblem = [&] {
-        alg_sys->assembleDomainProblem(
-            diffusion_kernel2d, my_partition, std::views::single(domain_id), fieldval_getter, dofinds_ctwrpr);
+        alg_sys->assembleDomainProblem(diffusion_kernel2d, mesh, std::views::single(domain_id));
     };
     const auto assembleBoundaryProblem = [&] {
-        alg_sys->assembleBoundaryProblem(neumann_bc_kernel, adiabatic_bound_view, fieldval_getter, dofinds_ctwrpr);
+        alg_sys->assembleBoundaryProblem(neumann_bc_kernel, adiabatic_bound_view);
     };
 
     // Check constraints on assembly state
@@ -110,45 +105,34 @@ void test()
     assembleDomainProblem();
     assembleBoundaryProblem();
     CHECK_THROWS(alg_sys->applyDirichletBCs());
-    alg_sys->endAssembly(my_partition);
+    alg_sys->endAssembly(mesh);
     CHECK_THROWS(assembleDomainProblem());
     CHECK_THROWS(assembleBoundaryProblem());
-    CHECK_THROWS(alg_sys->endAssembly(my_partition));
+    CHECK_THROWS(alg_sys->endAssembly(mesh));
 
-    alg_sys->setDirichletBCValues(dirichlet_bc_val_def,
-                                  my_partition,
-                                  std::array{left_boundary, right_boundary},
-                                  ConstexprValue< std::array{0} >{},
-                                  empty_field_val_getter);
+    alg_sys->setDirichletBCValues(
+        dirichlet_bc_val_def, mesh, std::array{left_boundary, right_boundary}, ConstexprValue< std::array{0} >{});
     alg_sys->applyDirichletBCs();
 
     {
-        auto fake_problem = makeAlgebraicSystem(comm, my_partition, CondensationPolicyTag< CP >{}, probdef_ctwrpr);
-        fake_problem->endAssembly(my_partition);
+        auto fake_problem = makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr);
+        fake_problem->endAssembly(mesh);
         CHECK_THROWS(fake_problem->applyDirichletBCs());
     }
 
-    // Solve
+    constexpr auto dof_inds = makeIotaArray< size_t, 3 >();
+
     auto solver   = solvers::Lapack{};
     auto solution = alg_sys->makeSolutionVector();
     alg_sys->solve(solver, solution);
-
-    /*
-    const auto solution         = std::as_const(*alg_sys).getSolutionVector();
-    auto           solution_manager = SolutionManager{my_partition, comm, n_fields};
-    constexpr auto field_inds       = makeIotaArray< size_t, n_fields >();
-    solution_manager.updateSolution(my_partition, *solution, alg_sys->getDofMap(), field_inds, probdef_ctwrpr);
-    solution_manager.communicateSharedValues();
+    auto solution_manager = SolutionManager{mesh, detail::deduceNFields(problem_def)};
+    alg_sys->updateSolution(mesh, solution, dof_inds, solution_manager, dof_inds);
 
     // Check that the underlying data cache is still usable after the solve
     {
         const auto system_manager_shallow_copy =
-            makeAlgebraicSystemManager(comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr);
-        if (std::addressof(*alg_sys->getMatrix()) != std::addressof(*system_manager_shallow_copy->getMatrix()))
-        {
-            std::cerr << "Algebraic system was not cached correctly post-assembly\n";
-            comm.abort();
-        }
+            makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr, dirichletdef_ctwrpr);
+        REQUIRE(alg_sys.get() == system_manager_shallow_copy.get());
     }
 
     // Check results
@@ -167,11 +151,9 @@ void test()
         [compute_error](const auto& vals, const auto& ders, const SpaceTimePoint& point, const auto&) noexcept {
             return compute_error(vals, ders, point);
         };
-    const auto fval_getter = [&](const auto& nodes) {
-        return gatherGlobalValues< field_inds >(nodes, solution_manager);
-    };
-    const auto error =
-        computeNormL2< BT, QT, QO >(comm, compute_error, my_partition, std::views::single(domain_id), fval_getter);
+    const auto fval_getter = solution_manager.makeFieldValueGetter(dof_inds);
+
+    const auto error = computeNormL2(comm, compute_error, mesh, std::views::single(domain_id), fval_getter);
     if (comm.getRank() == 0 and error.norm() > 1e-10)
     {
         std::stringstream error_msg;
@@ -179,18 +161,14 @@ void test()
                   << "\nx derivative:\t" << error[1] << "\ny derivative:\t" << error[2] << '\n';
         std::cerr << error_msg.view();
         comm.abort();
-        return EXIT_FAILURE;
     }
-    const auto boundary_error =
-        computeBoundaryNormL2< BT, QT, QO >(comm, compute_boundary_error, whole_bound_view, fval_getter);
+    const auto boundary_error = computeBoundaryNormL2(comm, compute_boundary_error, whole_bound_view, fval_getter);
     if (comm.getRank() == 0 and boundary_error.norm() > 1e-10)
     {
         std::cerr << "The error on the boundary exceeded the allowed tolerance. Since the error in the domain did not, "
                      "this is in all likelyhood an error in the computation of the norm on the boundary";
         comm.abort();
-        return EXIT_FAILURE;
     }
-    */
 }
 
 // Solve 2D diffusion problem

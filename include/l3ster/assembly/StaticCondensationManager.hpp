@@ -58,7 +58,7 @@ void updateSolutionPrimaryDofs(const NodeToLocalDofMap< max_dofs_per_node, 3 >& 
             const auto local_node_ind = sol_man.getNodeMap().at(node);
             for (size_t i = 0; size_t sol_ind : sol_inds)
             {
-                const auto dof = dofs[sol_ind];
+                const auto dof = dofs.back()[sol_ind];
                 if (dof != NodeToLocalDofMap< max_dofs_per_node, 3 >::invalid_dof)
                     dest_col_views[i][local_node_ind] = condensed_solution[dof];
                 ++i;
@@ -104,7 +104,7 @@ public:
         static_cast< Derived* >(this)->condenseSystemImpl(
             node_dof_map, global_mat, global_rhs, local_matrix, local_vector, element, field_inds_ctwrpr);
     }
-    template < size_t max_dofs_per_node, ElementTypes ET, el_o_t EO >
+    template < size_t max_dofs_per_node >
     void recoverSolution(const MeshPartition&                             mesh,
                          const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
                          std::span< const val_t >                         condensed_solution,
@@ -149,7 +149,7 @@ public:
             detail::getUnsortedPrimaryDofs(element, node_dof_map, no_condensation, field_inds_ctwrpr);
         detail::scatterLocalSystem(local_mat, local_vec, global_mat, global_rhs, row_dofs, col_dofs, rhs_dofs);
     }
-    template < size_t max_dofs_per_node, ElementTypes ET, el_o_t EO >
+    template < size_t max_dofs_per_node >
     void recoverSolutionImpl(const MeshPartition&,
                              const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
                              std::span< const val_t >                         condensed_solution,
@@ -164,6 +164,32 @@ public:
 template <>
 class StaticCondensationManager< CondensationPolicy::ElementBoundary > :
     public StaticCondensationManagerCRTPBase< StaticCondensationManager< CondensationPolicy::ElementBoundary > >
-{};
+{
+public:
+    void beginAssemblyImpl() {}
+    template < size_t max_dofs_per_node >
+    void endAssemblyImpl(const MeshPartition&,
+                         const NodeToLocalDofMap< max_dofs_per_node, 3 >&,
+                         tpetra_crsmatrix_t&,
+                         std::span< val_t >)
+    {}
+    template < ElementTypes ET, el_o_t EO, int system_size, size_t max_dofs_per_node, IndexRange_c auto field_inds >
+    void condenseSystemImpl(const NodeToLocalDofMap< max_dofs_per_node, 3 >&       node_dof_map,
+                            tpetra_crsmatrix_t&                                    global_mat,
+                            std::span< val_t >                                     global_rhs,
+                            const EigenRowMajorSquareMatrix< val_t, system_size >& local_mat,
+                            const Eigen::Vector< val_t, system_size >&             local_vec,
+                            const Element< ET, EO >&                               element,
+                            ConstexprValue< field_inds >                           field_inds_ctwrpr)
+    {}
+    template < size_t max_dofs_per_node >
+    void recoverSolutionImpl(const MeshPartition&,
+                             const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
+                             std::span< const val_t >                         condensed_solution,
+                             IndexRange_c auto&&                              sol_inds,
+                             SolutionManager&                                 sol_man,
+                             IndexRange_c auto&&                              sol_man_inds) const
+    {}
+};
 } // namespace lstr::detail
 #endif // L3STER_ASSEMBLY_STATICCONDENSATIONMANAGER_HPP

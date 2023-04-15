@@ -524,14 +524,14 @@ void PvtuExporter::updateNodeCoords(const MeshPartition& mesh)
 
 void PvtuExporter::initTopo(const MeshPartition& mesh)
 {
-    auto topo_serialization                                        = detail::vtk::serializeTopology(mesh);
-    auto& [sizes, data]                                            = topo_serialization;
-    const auto& [num_cells, topo_sec_sz, offs_sec_sz, type_sec_sz] = sizes;
-    m_n_cells                                                      = num_cells;
-    m_section_sizes.topology                                       = topo_sec_sz;
-    m_section_sizes.offsets                                        = offs_sec_sz;
-    m_section_sizes.cell_types                                     = type_sec_sz;
-    m_encoded_topo                                                 = std::move(data);
+    auto topo_serialization                                       = detail::vtk::serializeTopology(mesh);
+    auto& [sizes, data]                                           = topo_serialization;
+    const auto [num_cells, topo_sec_sz, offs_sec_sz, type_sec_sz] = sizes;
+    m_n_cells                                                     = num_cells;
+    m_section_sizes.topology                                      = topo_sec_sz;
+    m_section_sizes.offsets                                       = offs_sec_sz;
+    m_section_sizes.cell_types                                    = type_sec_sz;
+    m_encoded_topo                                                = std::move(data);
 }
 
 void PvtuExporter::enqueuePvtuFileWrite(

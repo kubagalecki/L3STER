@@ -14,10 +14,10 @@ namespace lstr
 template < std::random_access_iterator It, typename F >
 std::vector< size_t > sortingPermutation(It first, It last, F&& compare)
     requires requires(It i, F f) {
-                 {
-                     f(*i, *i)
-                 } -> std::convertible_to< bool >;
-             }
+        {
+            f(*i, *i)
+        } -> std::convertible_to< bool >;
+    }
 {
     std::vector< size_t > indices(std::distance(first, last));
     std::iota(begin(indices), end(indices), 0u);
@@ -36,10 +36,10 @@ template < std::random_access_iterator                                It_in,
            std::output_iterator< decltype(*std::declval< It_in >()) > It_out >
 void copyPermuted(It_in first_in, It_in last_in, It_perm first_perm, It_out first_out)
     requires requires(It_perm it) {
-                 {
-                     *it
-                 } -> std::convertible_to< std::ptrdiff_t >;
-             }
+        {
+            *it
+        } -> std::convertible_to< std::ptrdiff_t >;
+    }
 {
     for (auto i = std::distance(first_in, last_in); i > 0; --i)
         *first_out++ = first_in[*first_perm++];
