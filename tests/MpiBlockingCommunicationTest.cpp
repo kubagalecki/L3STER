@@ -3,38 +3,31 @@
 
 #include <iostream>
 
+#include "Common.hpp"
+
 int main(int argc, char* argv[])
 {
     using namespace lstr;
     L3sterScopeGuard scope_guard{argc, argv};
-    MpiComm          comm{MPI_COMM_WORLD};
-    try
-    {
-        const auto size = comm.getSize();
-        const auto rank = comm.getRank();
+    MpiComm          comm{MPI_COMM_WORLD, MPI_ERRORS_RETURN};
 
-        if (size < 2)
-            return 0;
+    const auto size = comm.getSize();
+    const auto rank = comm.getRank();
 
-        const std::vector expected{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-
-        if (rank != 0)
-        {
-            auto received = expected;
-            comm.receive(received, rank - 1);
-            if (received != expected)
-                throw std::runtime_error{"message corrupted in transit"};
-        }
-
-        if (rank != size - 1)
-            comm.send(expected, rank + 1);
-
+    if (size < 2)
         return EXIT_SUCCESS;
-    }
-    catch (const std::exception& e)
+
+    const std::vector expected{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+    if (rank != 0)
     {
-        std::cerr << e.what();
-        comm.abort();
-        return EXIT_FAILURE;
+        auto received = expected;
+        comm.receive(received, rank - 1);
+        REQUIRE(received == expected);
     }
+
+    if (rank != size - 1)
+        comm.send(expected, rank + 1);
+
+    CHECK_THROWS(comm.send(std::views::single(0), size));
 }

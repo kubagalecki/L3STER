@@ -554,7 +554,7 @@ TEST_CASE("Boundary integration", "[mapping]")
         [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element, el_side_t side, val_t expected_area) {
             const auto el_view    = BoundaryElementView{element, side};
             const auto basis_vals = getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(side);
-            const auto node_vals  = EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, 0 >{};
+            const auto node_vals  = eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, 0 >{};
             const auto area = detail::evalElementBoundaryIntegral(integrand, el_view, node_vals, basis_vals, 0.)[0];
             CHECK(area == Approx(expected_area).margin(1e-15));
         };

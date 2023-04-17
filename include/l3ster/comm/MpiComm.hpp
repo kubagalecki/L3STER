@@ -119,7 +119,7 @@ public:
         MPI_File m_file = MPI_FILE_NULL;
     };
 
-    inline MpiComm(MPI_Comm comm);
+    inline MpiComm(MPI_Comm comm, MPI_Errhandler err_handler = MPI_ERRORS_ARE_FATAL);
     MpiComm(const MpiComm&)            = delete;
     MpiComm& operator=(const MpiComm&) = delete;
     MpiComm(MpiComm&& other) noexcept : m_comm{std::exchange(other.m_comm, MPI_COMM_NULL)} {}
@@ -363,9 +363,10 @@ void MpiComm::freeOwnedComm()
         MPI_Comm_free(&m_comm);
 }
 
-MpiComm::MpiComm(MPI_Comm comm)
+MpiComm::MpiComm(MPI_Comm comm, MPI_Errhandler err_handler)
 {
     detail::mpi::handleMPIError(MPI_Comm_dup(comm, &m_comm), "MPI_Comm_dup failed");
+    detail::mpi::handleMPIError(MPI_Comm_set_errhandler(m_comm, err_handler), "MPI_Comm_set_errhandler failed");
 }
 
 MpiComm& MpiComm::operator=(MpiComm&& other) noexcept

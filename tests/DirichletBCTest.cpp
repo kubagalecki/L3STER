@@ -57,7 +57,7 @@ void test()
                 if constexpr (T == ElementTypes::Hex and O == 1)
                 {
                     constexpr int n_dofs    = detail::getNumPrimaryNodes< CP, T, O >() * /* dofs per node */ 1;
-                    auto          local_mat = EigenRowMajorSquareMatrix< val_t, n_dofs >{};
+                    auto          local_mat = eigen::RowMajorSquareMatrix< val_t, n_dofs >{};
                     auto          local_vec = Eigen::Vector< val_t, n_dofs >{};
                     local_mat.setRandom();
                     local_mat = local_mat.template selfadjointView< Eigen::Lower >();

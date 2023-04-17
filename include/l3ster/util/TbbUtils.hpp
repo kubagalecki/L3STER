@@ -108,17 +108,16 @@ auto parallelTransformReduce(SizedRandomAccessRange_c auto&&     range,
                              std::copy_constructible auto&&      transform = std::identity{})
     -> std::decay_t< decltype(zero) >
     requires requires(decltype(*std::ranges::cbegin(range)) range_element) {
-                 {
-                     std::invoke(transform, range_element)
-                 } -> std::convertible_to< decltype(zero) >;
-                 {
-                     std::invoke(reduction, zero, zero)
-                 } -> std::convertible_to< decltype(zero) >;
-                 {
-                     std::transform_reduce(
-                         std::ranges::cbegin(range), std::ranges::cend(range), zero, reduction, transform)
-                 } -> std::convertible_to< decltype(zero) >;
-             }
+        {
+            std::invoke(transform, range_element)
+        } -> std::convertible_to< decltype(zero) >;
+        {
+            std::invoke(reduction, zero, zero)
+        } -> std::convertible_to< decltype(zero) >;
+        {
+            std::transform_reduce(std::ranges::cbegin(range), std::ranges::cend(range), zero, reduction, transform)
+        } -> std::convertible_to< decltype(zero) >;
+    }
 {
     const auto iter_space = detail::makeBlockedIterSpace(range);
     auto       helper     = detail::TransformReduceHelper{std::ranges::cbegin(range),

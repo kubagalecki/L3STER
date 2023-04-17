@@ -2,7 +2,7 @@
 #define L3STER_MESH_POINT_HPP
 
 #include "l3ster/defs/Typedefs.h"
-#include "l3ster/util/IncludeEigen.hpp"
+#include "l3ster/util/EigenUtils.hpp"
 
 #include <concepts>
 

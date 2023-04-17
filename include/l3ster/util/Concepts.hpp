@@ -64,12 +64,12 @@ namespace detail
 {
 template < typename T, std::size_t I >
 concept tuple_gettable = requires(T t) {
-                             typename std::tuple_element< I, T >;
-                             typename std::tuple_element_t< I, T >;
-                             {
-                                 std::get< I >(t)
-                             } -> std::same_as< std::tuple_element_t< I, T > >;
-                         };
+    typename std::tuple_element< I, T >;
+    typename std::tuple_element_t< I, T >;
+    {
+        std::get< I >(t)
+    } -> std::same_as< std::tuple_element_t< I, T > >;
+};
 
 template < typename, typename >
 struct fold_tuple_gettable;
@@ -82,13 +82,13 @@ struct fold_tuple_gettable< T, std::index_sequence< I... > >
 
 template < typename T >
 concept tuple_like = requires {
-                         std::tuple_size< T >::value;
-                         std::tuple_size_v< T >;
-                         {
-                             std::tuple_size_v< T >
-                         } -> std::convertible_to< std::size_t >;
-                         typename detail::fold_tuple_gettable< T, std::make_index_sequence< std::tuple_size_v< T > > >;
-                     };
+    std::tuple_size< T >::value;
+    std::tuple_size_v< T >;
+    {
+        std::tuple_size_v< T >
+    } -> std::convertible_to< std::size_t >;
+    typename detail::fold_tuple_gettable< T, std::make_index_sequence< std::tuple_size_v< T > > >;
+};
 
 namespace detail
 {
@@ -131,17 +131,17 @@ concept tuple_r_invocable = detail::is_tuple_r_invocable< R, T, tuple_t >::value
 
 template < typename T, typename Domain, typename Range >
 concept Mapping_c = requires(T f, Domain x) {
-                        {
-                            f(x)
-                        } -> std::convertible_to< Range >;
-                    };
+    {
+        f(x)
+    } -> std::convertible_to< Range >;
+};
 
 template < typename T, template < typename > typename Predicate >
 concept predicate_trait_specialized = requires {
-                                          {
-                                              Predicate< std::decay_t< T > >::value
-                                          } -> std::convertible_to< bool >;
-                                      };
+    {
+        Predicate< std::decay_t< T > >::value
+    } -> std::convertible_to< bool >;
+};
 
 // Execution policy concepts
 template < typename T >

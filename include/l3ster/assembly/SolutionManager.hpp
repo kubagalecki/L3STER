@@ -2,7 +2,7 @@
 #define L3STER_SOLUTIONMANAGER_HPP
 
 #include "l3ster/mesh/MeshPartition.hpp"
-#include "l3ster/util/IncludeEigen.hpp"
+#include "l3ster/util/EigenUtils.hpp"
 #include "l3ster/util/RobinHoodHashTables.hpp"
 
 #include <memory>
@@ -40,7 +40,7 @@ public:
     public:
         template < size_t n_nodes >
         auto operator()(const std::array< n_id_t, n_nodes >& nodes) const
-            -> EigenRowMajorMatrix< val_t, n_nodes, n_fields >;
+            -> eigen::RowMajorMatrix< val_t, n_nodes, n_fields >;
 
     private:
         const SolutionManager*         m_parent;
@@ -61,7 +61,7 @@ class SolutionManager::FieldValueGetter< 0 >
 {
 public:
     template < size_t n_nodes >
-    auto operator()(const std::array< n_id_t, n_nodes >&) const -> EigenRowMajorMatrix< val_t, n_nodes, 0 >
+    auto operator()(const std::array< n_id_t, n_nodes >&) const -> eigen::RowMajorMatrix< val_t, n_nodes, 0 >
     {
         return {};
     }
@@ -71,9 +71,9 @@ inline constexpr auto empty_field_val_getter = SolutionManager::FieldValueGetter
 template < size_t n_fields >
 template < size_t n_nodes >
 auto SolutionManager::FieldValueGetter< n_fields >::operator()(const std::array< n_id_t, n_nodes >& nodes) const
-    -> EigenRowMajorMatrix< val_t, n_nodes, n_fields >
+    -> eigen::RowMajorMatrix< val_t, n_nodes, n_fields >
 {
-    EigenRowMajorMatrix< val_t, n_nodes, n_fields > retval;
+    eigen::RowMajorMatrix< val_t, n_nodes, n_fields > retval;
     for (size_t node_ind = 0; auto node : nodes)
     {
         const auto node_vals = m_parent->getNodeValues(node, std::span{m_field_inds});

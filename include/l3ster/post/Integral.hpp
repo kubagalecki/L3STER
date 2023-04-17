@@ -15,7 +15,7 @@ concept IntegralKernel_c = requires(T                                           
                                     SpaceTimePoint                                   point) {
     {
         std::invoke(int_kernel, node_vals, node_ders, point)
-    } noexcept -> EigenVector_c;
+    } noexcept -> eigen::Vector_c;
 };
 
 template < typename T, dim_t dim, size_t n_fields >
@@ -26,7 +26,7 @@ concept BoundaryIntegralKernel_c = requires(T                                   
                                             Eigen::Vector< val_t, dim >                      normal) {
     {
         std::invoke(int_kernel, node_vals, node_ders, point, normal)
-    } noexcept -> EigenVector_c;
+    } noexcept -> eigen::Vector_c;
 };
 
 template < typename IntKernel, dim_t dim, size_t n_fields >
@@ -107,11 +107,11 @@ concept PotentiallyValidBoundaryIntegralKernel_c =
     PotentiallyValidIntegralKernelDeductionHelper< Kernel, n_fields >::boundary;
 
 template < ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
-auto evalElementIntegral(auto&&                                                                    kernel,
-                         const Element< ET, EO >&                                                  element,
-                         const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
-                         const ReferenceBasisAtQuadrature< ET, EO, QL >&                           basis_at_qps,
-                         val_t                                                                     time)
+auto evalElementIntegral(auto&&                                                                      kernel,
+                         const Element< ET, EO >&                                                    element,
+                         const eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
+                         const ReferenceBasisAtQuadrature< ET, EO, QL >&                             basis_at_qps,
+                         val_t                                                                       time)
     requires IntegralKernel_c< decltype(kernel), Element< ET, EO >::native_dim, n_fields >
 {
     const auto jacobi_mat_generator = getNatJacobiMatGenerator(element);
@@ -128,11 +128,11 @@ auto evalElementIntegral(auto&&                                                 
 }
 
 template < ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
-auto evalElementBoundaryIntegral(auto&&                                                                    kernel,
-                                 const BoundaryElementView< ET, EO >&                                      el_view,
-                                 const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
-                                 const ReferenceBasisAtQuadrature< ET, EO, QL >&                           basis_at_qps,
-                                 val_t                                                                     time)
+auto evalElementBoundaryIntegral(auto&&                                                                      kernel,
+                                 const BoundaryElementView< ET, EO >&                                        el_view,
+                                 const eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
+                                 const ReferenceBasisAtQuadrature< ET, EO, QL >& basis_at_qps,
+                                 val_t                                           time)
     requires BoundaryIntegralKernel_c< decltype(kernel), Element< ET, EO >::native_dim, n_fields >
 {
     const auto jacobi_mat_generator = getNatJacobiMatGenerator(*el_view);
@@ -232,7 +232,7 @@ auto evalIntegral(const MpiComm&                                       comm,
                   ConstexprValue< opts >                               opts_ctwrpr      = {},
                   val_t                                                time             = 0.)
 {
-    const EigenVector_c auto local_integral =
+    const eigen::Vector_c auto local_integral =
         detail::evalLocalIntegral(std::forward< decltype(kernel) >(kernel),
                                   mesh,
                                   std::forward< decltype(domain_ids) >(domain_ids),
@@ -254,7 +254,7 @@ auto evalBoundaryIntegral(const MpiComm&                                       c
                           ConstexprValue< opts >                               opts_ctwrpr      = {},
                           val_t                                                time             = 0.)
 {
-    const EigenVector_c auto local_integral = detail::evalLocalBoundaryIntegral(
+    const eigen::Vector_c auto local_integral = detail::evalLocalBoundaryIntegral(
         std::forward< decltype(kernel) >(kernel), boundary, field_val_getter, opts_ctwrpr, time);
     using integral_t = std::remove_const_t< decltype(local_integral) >;
     integral_t global_integral;

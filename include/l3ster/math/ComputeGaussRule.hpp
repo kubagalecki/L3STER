@@ -4,7 +4,7 @@
 #include "l3ster/defs/Typedefs.h"
 #include "l3ster/util/Concepts.hpp"
 
-#include "l3ster/util/IncludeEigen.hpp"
+#include "l3ster/util/EigenUtils.hpp"
 
 #include <cmath>
 #include <utility>

@@ -12,30 +12,23 @@ template < ElementTypes T, el_o_t O >
 std::vector< Element< T, O > >
 deserializeElementVector(const n_id_t*& nodes, const val_t*& data, const el_id_t*& ids, size_t size)
 {
-    using node_array_t = Element< T, O >::node_array_t;
-    using data_array_t = Element< T, O >::element_data_t;
-
+    using node_array_t             = Element< T, O >::node_array_t;
+    using data_array_t             = Element< T, O >::element_data_t;
     constexpr auto node_chunk_size = Element< T, O >::n_nodes;
-
-    std::vector< Element< T, O > > retval;
+    auto           retval          = std::vector< Element< T, O > >{};
     retval.reserve(size);
-
     for (size_t el_i = 0; el_i < size; ++el_i)
     {
         node_array_t node_array;
         std::copy_n(nodes, node_chunk_size, begin(node_array));
         std::advance(nodes, node_chunk_size);
-
         data_array_t data_array;
         for (ptrdiff_t vert_i = 0; vert_i < static_cast< ptrdiff_t >(ElementData< T, O >::n_verts); ++vert_i)
             for (ptrdiff_t dim_i = 0; dim_i < 3; ++dim_i)
-                data_array.vertices[vert_i][dim_i] = *data++; // NOLINT
-
-        const auto el_id = *ids++; // NOLINT
-
+                data_array.vertices[vert_i][dim_i] = *data++;
+        const auto el_id = *ids++;
         retval.emplace_back(node_array, data_array, el_id);
     }
-
     return retval;
 }
 
