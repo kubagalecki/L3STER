@@ -29,7 +29,7 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                      
                       const NodeToGlobalDofMap< dofs_per_node >&                        node_dof_map,
                       const NodeCondensationMap< CondensationPolicy::ElementBoundary >& cond_map)
 {
-    StaticVector< global_dof_t, dofs_per_node * n_nodes > retval;
+    util::StaticVector< global_dof_t, dofs_per_node * n_nodes > retval;
     std::ranges::copy(
         nodes | std::views::transform([&](n_id_t node) { return node_dof_map(cond_map.getCondensedId(node)); }) |
             std::views::join |

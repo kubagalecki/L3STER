@@ -33,99 +33,37 @@ void parallelFor(SizedRandomAccessRange_c auto&&                                
                               });
 }
 
-void parallelTransform(SizedRandomAccessRange_c auto&& input_range, auto output_iter, auto&& kernel)
-    requires std::random_access_iterator< decltype(output_iter) > and
-             requires(decltype(*std::ranges::cbegin(input_range)) input_element) {
-                 *output_iter = std::invoke(kernel, input_element);
-             }
-{
-    const auto iter_space = detail::makeBlockedIterSpace(input_range);
-    using iter_space_t    = decltype(iter_space);
-    oneapi::tbb::parallel_for(iter_space,
-                              [&, range_begin = std::ranges::cbegin(input_range)](const iter_space_t& subrange) {
-                                  for (auto i : std::views::iota(subrange.begin(), subrange.end()))
-                                      output_iter[i] = std::invoke(kernel, range_begin[i]);
-                              });
-} // namespace lstr::util::tbb
-
-namespace detail
-{
-template < typename Iter, typename Reduced, typename Reduction, typename Transform >
-class TransformReduceHelper
-{
-public:
-    using range_diff_t = std::iterator_traits< Iter >::difference_type;
-
-    TransformReduceHelper(Iter                           range_begin,
-                          const Reduced&                 zero,
-                          DecaysTo_c< Reduction > auto&& reduction,
-                          DecaysTo_c< Transform > auto&& transform)
-        : m_range_begin{range_begin},
-          m_reduced_current{zero},
-          m_zero_ptr{std::addressof(zero)},
-          m_reduction{std::forward< decltype(reduction) >(reduction)},
-          m_transform{std::forward< decltype(transform) >(transform)}
-    {}
-    TransformReduceHelper(const TransformReduceHelper& other, oneapi::tbb::split)
-        : m_range_begin{other.m_range_begin},
-          m_reduced_current{*other.m_zero_ptr},
-          m_zero_ptr{other.m_zero_ptr},
-          m_reduction{other.m_reduction},
-          m_transform{other.m_transform}
-    {}
-
-    void join(const TransformReduceHelper& other)
-    {
-        m_reduced_current = std::invoke(m_reduction, m_reduced_current, other.m_reduced_current);
-    }
-    void operator()(const oneapi::tbb::blocked_range< range_diff_t >& subrange)
-    {
-        m_reduced_current = std::transform_reduce(std::execution::unseq,
-                                                  std::next(m_range_begin, subrange.begin()),
-                                                  std::next(m_range_begin, subrange.end()),
-                                                  m_reduced_current,
-                                                  m_reduction,
-                                                  m_transform);
-    }
-
-    auto getReducedValue() const { return m_reduced_current; }
-
-private:
-    Iter           m_range_begin;
-    Reduced        m_reduced_current;
-    const Reduced* m_zero_ptr;
-    Reduction      m_reduction;
-    Transform      m_transform;
-};
-template < typename Iter, typename Reduced, typename Reduction, typename Transform >
-TransformReduceHelper(Iter, const Reduced&, Reduction&&, Transform&&)
-    -> TransformReduceHelper< Iter, std::decay_t< Reduced >, std::decay_t< Reduction >, std::decay_t< Transform > >;
-} // namespace detail
-
-auto parallelTransformReduce(SizedRandomAccessRange_c auto&&     range,
-                             const std::copy_constructible auto& zero,
-                             std::copy_constructible auto&&      reduction,
-                             std::copy_constructible auto&&      transform = std::identity{})
-    -> std::decay_t< decltype(zero) >
-    requires requires(decltype(*std::ranges::cbegin(range)) range_element) {
+template < typename Reduction = std::plus<>, typename Transform = std::identity >
+auto parallelTransformReduce(SizedRandomAccessRange_c auto&& range,
+                             const auto&                     identity,
+                             Reduction&&                     reduction = {},
+                             Transform&&                     transform = {}) -> std::decay_t< decltype(identity) >
+    requires requires(std::add_lvalue_reference_t< std::add_const_t< std::ranges::range_value_t< decltype(range) > > >
+                          range_element) {
         {
             std::invoke(transform, range_element)
-        } -> std::convertible_to< decltype(zero) >;
+        } -> std::convertible_to< decltype(identity) >;
         {
-            std::invoke(reduction, zero, zero)
-        } -> std::convertible_to< decltype(zero) >;
+            std::invoke(reduction, identity, identity)
+        } -> std::convertible_to< decltype(identity) >;
         {
-            std::transform_reduce(std::ranges::cbegin(range), std::ranges::cend(range), zero, reduction, transform)
-        } -> std::convertible_to< decltype(zero) >;
+            std::transform_reduce(std::ranges::cbegin(range), std::ranges::cend(range), identity, reduction, transform)
+        } -> std::convertible_to< decltype(identity) >;
     }
 {
     const auto iter_space = detail::makeBlockedIterSpace(range);
-    auto       helper     = detail::TransformReduceHelper{std::ranges::cbegin(range),
-                                                zero,
-                                                std::forward< decltype(reduction) >(reduction),
-                                                std::forward< decltype(transform) >(transform)};
-    oneapi::tbb::parallel_reduce(iter_space, helper);
-    return helper.getReducedValue();
+    return oneapi::tbb::parallel_reduce(
+        iter_space,
+        identity,
+        [&](const auto& iter_range, const auto& value) {
+            return std::transform_reduce(std::execution::unseq,
+                                         std::next(range.begin(), iter_range.begin()),
+                                         std::next(range.begin(), iter_range.end()),
+                                         value,
+                                         reduction,
+                                         transform);
+        },
+        reduction);
 }
 } // namespace lstr::util::tbb
 #endif // L3STER_UTIL_TBBUTILS_HPP

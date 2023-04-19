@@ -8,6 +8,7 @@
 #include "l3ster/util/Meta.hpp"
 #include "l3ster/util/MetisUtils.hpp"
 #include "l3ster/util/SetStackSize.hpp"
+#include "l3ster/util/StaticVector.hpp"
 
 #include "MakeRandomVector.hpp"
 
@@ -547,11 +548,13 @@ TEST_CASE("Base64 encoding", "[util]")
     test(text_sv | std::views::drop(3) | std::views::take(2), std::string_view{"ZW0="});
 
     // Test whether sequential and parallel implementations yield identical results
-    auto             prng           = std::mt19937{std::random_device{}()};
-    auto             dist           = std::uniform_int_distribution< char >{};
     constexpr size_t long_text_size = 1ul << 25;
     std::string      long_text(long_text_size, '\0');
-    std::generate(long_text.begin(), long_text.end(), [&] { return dist(prng); });
+    std::ranges::generate(
+        long_text,
+        [prng = std::mt19937{std::random_device{}()}, dist = std::uniform_int_distribution< int >{0, 255}]() mutable {
+            return static_cast< char >(dist(prng));
+        });
     std::string long_text_b64_par(long_text_size * 4 / 3 + 4, '\0');
     std::string long_text_b64_seq(long_text_size * 4 / 3 + 4, '\0');
     encodeAsBase64(long_text, long_text_b64_par.begin());
@@ -560,4 +563,33 @@ TEST_CASE("Base64 encoding", "[util]")
     const auto lp             = detail::b64::encB64SerialImpl(long_byte_span, seq_ptr);
     detail::b64::encB64Remainder(long_byte_span.subspan(lp), seq_ptr);
     CHECK(long_text_b64_seq == long_text_b64_par);
+}
+
+TEST_CASE("StaticVector", "[util]")
+{
+    auto vec = util::StaticVector< int, 100 >{};
+    CHECK(vec.size() == 0);
+    std::generate_n(std::back_inserter(vec),
+                    100,
+                    [prng = std::mt19937{std::random_device{}()},
+                     dist = std::uniform_int_distribution< int >{}]() mutable { return dist(prng); });
+    REQUIRE(vec.size() == 100);
+    vec.resize(50);
+    REQUIRE(vec.size() == 50);
+    std::ranges::sort(vec);
+    CHECK(vec.front() <= vec.back());
+    CHECK(std::ranges::is_sorted(vec));
+    vec.erase(std::next(vec.begin(), 10), std::prev(vec.end(), 10));
+    REQUIRE(vec.size() == 20);
+    vec.resize(10);
+    CHECK(std::ranges::is_sorted(vec));
+    vec.pop_back();
+    REQUIRE(vec.size() == 9);
+    const auto vec_copy = vec;
+    vec.erase(vec.end(), vec.end());
+    REQUIRE(vec.size() == 9);
+    CHECK(std::ranges::equal(vec, vec_copy));
+    vec.resize(10, 42);
+    REQUIRE(vec.size() == 10);
+    CHECK(std::ranges::equal(vec | std::views::drop(9), std::views::single(42)));
 }
