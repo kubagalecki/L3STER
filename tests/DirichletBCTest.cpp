@@ -3,12 +3,10 @@
 #include "l3ster/bcs/GetDirichletDofs.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
+#include "l3ster/solve/Solvers.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
 #include "Common.hpp"
-
-#include "Amesos2.hpp"
-#include "Tpetra_MultiVector.hpp"
 
 using namespace lstr;
 

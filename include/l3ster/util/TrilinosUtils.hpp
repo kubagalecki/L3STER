@@ -1,9 +1,7 @@
 #ifndef L3STER_UTILS_TRILINOSUTILS_HPP
 #define L3STER_UTILS_TRILINOSUTILS_HPP
 
-#include "l3ster/defs/Typedefs.h"
-
-#include "Tpetra_CrsMatrix.hpp"
+#include "l3ster/defs/TrilinosTypedefs.h"
 
 #include <concepts>
 #include <ranges>

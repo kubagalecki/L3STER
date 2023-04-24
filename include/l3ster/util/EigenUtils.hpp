@@ -21,7 +21,7 @@ inline constexpr bool is_eigen_matrix_v< Eigen::Matrix< P1, P2, P3, P4, P5, P6 >
 // need to conditionally use the ColMajor flag.
 int consteval eigenRowMajorIfNotVector(int size)
 {
-    return size > 1 ? Eigen::RowMajor : Eigen::ColMajor;
+    return (size > 1 or size == Eigen::Dynamic) ? Eigen::RowMajor : Eigen::ColMajor;
 }
 
 template < typename T >

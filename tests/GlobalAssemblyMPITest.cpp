@@ -137,7 +137,7 @@ void test()
 
     // Check results
     constexpr auto compute_error =
-        [node_dist](const auto& vals, const auto& ders, const SpaceTimePoint& point) noexcept {
+        [node_dist](const auto& vals, [[maybe_unused]] const auto& ders, const SpaceTimePoint& point) noexcept {
             Eigen::Matrix< val_t, 3, 1 > error;
             const auto                   T     = vals[0];
             const auto                   dT_dx = vals[1];
@@ -176,4 +176,5 @@ int main(int argc, char* argv[])
 {
     L3sterScopeGuard scope_guard{argc, argv};
     test< CondensationPolicy::None >();
+    test< CondensationPolicy::ElementBoundary >();
 }

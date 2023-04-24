@@ -82,7 +82,7 @@ inline auto getDomainData(const MeshPartition& mesh, const std::vector< d_id_t >
 {
     size_t n_elements = 0, topology_size = 0;
     mesh.visit(
-        [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& el) {
+        [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >&) {
             ++n_elements;
             topology_size += ElementTraits< Element< ET, EO > >::boundary_node_inds.size();
         },
@@ -109,7 +109,7 @@ inline auto prepMetisInput(const MeshPartition&         part,
             const auto condensed_view =
                 getBoundaryNodes(element) | std::views::transform([&](auto n) { return cond_map[n]; });
             std::ranges::copy(condensed_view, std::back_inserter(e_ind));
-            e_ptr.push_back(e_ptr.back() + std::ranges::size(condensed_view));
+            e_ptr.push_back(static_cast< idx_t >(e_ptr.back() + std::ranges::ssize(condensed_view)));
         },
         domain_ids);
     return retval;
@@ -293,7 +293,7 @@ inline void assignBoundaryElements(const MeshPartition&                        p
 inline void reassignDisjointNodes(std::vector< std::pair< std::vector< n_id_t >, std::vector< n_id_t > > >& part_nodes,
                                   std::vector< idx_t >& disjoint_nodes)
 {
-    const auto claim_nodes = [&](idx_t part, std::pair< std::vector< n_id_t >, std::vector< n_id_t > >& nodes) {
+    const auto claim_nodes = [&](std::pair< std::vector< n_id_t >, std::vector< n_id_t > >& nodes) {
         std::vector< n_id_t > claimed;
         auto& [owned_nodes, ghost_nodes] = nodes;
         const auto try_claim             = [&](idx_t node) {
@@ -312,8 +312,8 @@ inline void reassignDisjointNodes(std::vector< std::pair< std::vector< n_id_t >,
         std::ranges::copy(claimed, insert_pos);
         std::ranges::inplace_merge(owned_nodes, insert_pos);
     };
-    for (idx_t part = 0; auto& nodes : part_nodes)
-        claim_nodes(part++, nodes);
+    for (auto& nodes : part_nodes)
+        claim_nodes(nodes);
     if (not disjoint_nodes.empty())
         throw std::logic_error{"At least one node in the mesh does not belong to any element"};
 }
@@ -334,9 +334,9 @@ inline auto assignNodes(idx_t                                             n_part
                 [&](const auto& element) {
                     for (auto node : element.getNodes())
                         if (npart[node] == part_ind)
-                            owned_nodes.insert(node);
+                            owned_nodes.insert(static_cast< idx_t >(node));
                         else
-                            ghost_nodes.insert(node);
+                            ghost_nodes.insert(static_cast< idx_t >(node));
                 },
                 std::execution::seq);
         }

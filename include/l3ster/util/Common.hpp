@@ -143,7 +143,7 @@ std::vector< T > concatVectors(std::vector< T > v1, const std::vector< T >& v2)
 }
 
 template < IndexRange_c auto inds, typename T, size_t N, std::indirectly_writable< T > Iter >
-Iter copyValuesAtInds(const std::array< T, N >& array, Iter out_iter, ConstexprValue< inds > inds_ctwrpr = {})
+Iter copyValuesAtInds(const std::array< T, N >& array, Iter out_iter, ConstexprValue< inds > = {})
     requires(std::ranges::all_of(inds, [](size_t i) { return i < N; }))
 {
     for (auto i : inds)

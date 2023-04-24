@@ -74,8 +74,8 @@ auto initValsAndParents(const MeshPartition&                                    
                         detail::DomainIdRange_c auto&&                          domain_ids,
                         const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                         ConstexprValue< dof_inds >                              dofinds_ctwrpr,
-                        const SolutionManager::FieldValueGetter< n_fields >&    field_val_getter,
-                        std::span< val_t >                                      values) -> std::vector< std::uint8_t >
+                        const SolutionManager::FieldValueGetter< n_fields >&,
+                        std::span< val_t > values) -> std::vector< std::uint8_t >
 {
     if constexpr (n_fields != 0)
     {
@@ -100,8 +100,8 @@ template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps
 auto initValsAndParents(const BoundaryView&                                     boundary,
                         const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                         ConstexprValue< dof_inds >                              dofinds_ctwrpr,
-                        const SolutionManager::FieldValueGetter< n_fields >&    field_val_getter,
-                        std::span< val_t >                                      values) -> std::vector< std::uint8_t >
+                        const SolutionManager::FieldValueGetter< n_fields >&,
+                        std::span< val_t > values) -> std::vector< std::uint8_t >
 {
     std::vector< std::uint8_t > retval(values.size(), 0);
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {

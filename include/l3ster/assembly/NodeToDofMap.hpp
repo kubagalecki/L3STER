@@ -2,9 +2,8 @@
 #define L3STER_ASSEMBLY_NODETODOFMAP_HPP
 
 #include "l3ster/assembly/DofIntervals.hpp"
+#include "l3ster/defs/TrilinosTypedefs.h"
 #include "l3ster/util/RobinHoodHashTables.hpp"
-
-#include "Tpetra_CrsGraph.hpp"
 
 namespace lstr
 {

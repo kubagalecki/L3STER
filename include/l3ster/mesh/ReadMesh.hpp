@@ -208,7 +208,7 @@ inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
             std::set< d_id_t > unique_physical_ids;
             for (const auto& map : entity_data)
                 for (const auto& [dim, entity] : map)
-                    unique_physical_ids.insert(dim);
+                    unique_physical_ids.insert(static_cast< d_id_t >(dim));
             return unique_physical_ids.size();
         });
 

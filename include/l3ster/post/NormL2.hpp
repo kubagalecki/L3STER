@@ -8,7 +8,7 @@ namespace lstr
 namespace detail
 {
 template < AssemblyOptions opts >
-consteval auto doubleQuadratureOrder(ConstexprValue< opts > opts_ctwrpr)
+consteval auto doubleQuadratureOrder(ConstexprValue< opts >)
 {
     return ConstexprValue< std::invoke([] {
         auto retval = opts;

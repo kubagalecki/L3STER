@@ -1,6 +1,7 @@
 #ifndef L3STER_UTIL_BITSETMANIP_HPP
 #define L3STER_UTIL_BITSETMANIP_HPP
 
+#include <algorithm>
 #include <array>
 #include <bitset>
 #include <limits>

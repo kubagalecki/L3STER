@@ -60,6 +60,26 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                nodes,
     return retval;
 }
 
+template < size_t n_nodes, size_t dofs_per_node, size_t num_maps >
+auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                nodes,
+                      const NodeToLocalDofMap< dofs_per_node, num_maps >& node_dof_map)
+{
+    using dof_vec_t = util::StaticVector< local_dof_t, dofs_per_node * n_nodes >;
+    std::array< dof_vec_t, num_maps > retval;
+    for (auto node : nodes)
+    {
+        const auto& all_dof_arrays = node_dof_map(node);
+        for (size_t i = 0; const auto& all_dofs : all_dof_arrays)
+        {
+            std::ranges::copy_if(all_dofs, std::back_inserter(retval[i]), [](local_dof_t dof) {
+                return dof != NodeToLocalDofMap< dofs_per_node, num_maps >::invalid_dof;
+            });
+            ++i;
+        }
+    }
+    return retval;
+}
+
 template < IndexRange_c auto dof_inds, ElementTypes T, el_o_t O >
 auto getSortedPrimaryDofs(const Element< T, O >&                                 element,
                           const NodeToDofMap_c auto&                             node_dof_map,
@@ -100,6 +120,14 @@ auto getUnsortedPrimaryDofs(const Element< T, O >&                         eleme
                             const NodeCondensationMap< CP >&               cond_map)
 {
     return getDofsFromNodes(getPrimaryNodesArray< CP >(element), node_dof_map, cond_map);
+}
+
+template < ElementTypes ET, el_o_t EO, size_t max_dofs_per_node, size_t num_maps, CondensationPolicy CP >
+auto getUnsortedPrimaryDofs(const Element< ET, EO >&                                element,
+                            const NodeToLocalDofMap< max_dofs_per_node, num_maps >& node_dof_map,
+                            CondensationPolicyTag< CP >)
+{
+    return getDofsFromNodes(getPrimaryNodesArray< CP >(element), node_dof_map);
 }
 
 struct NodeDofs

@@ -348,7 +348,6 @@ Domain Domain::getConversionAlloc() const
 class DomainView
 {
 public:
-    DomainView() = default;
     DomainView(const Domain& domain_, d_id_t id_) : domain{std::addressof(domain_)}, id{id_} {}
 
     [[nodiscard]] d_id_t getID() const { return id; }
@@ -356,8 +355,8 @@ public:
     [[nodiscard]] size_t getNElements() const { return domain->getNElements(); }
 
 private:
-    const Domain* domain = nullptr;
-    d_id_t        id;
+    const Domain* domain{};
+    d_id_t        id{};
 };
 } // namespace lstr
 #endif // L3STER_MESH_DOMAIN_HPP

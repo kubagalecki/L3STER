@@ -436,7 +436,9 @@ MeshPartition::find_result_t MeshPartition::find(invocable_on_const_elements_r< 
     find_result_t result;
     std::mutex    mut;
     (void)std::find_if(policy, begin(m_domains), end(m_domains), [&](auto& map_entry) {
-        auto& [id, domain]     = map_entry;
+        auto& [id, domain] = map_entry;
+        if (not std::invoke(domain_predicate, DomainView{domain, id}))
+            return false;
         const auto find_result = domain.find(predicate, policy);
         if (find_result)
         {

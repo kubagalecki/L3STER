@@ -18,7 +18,7 @@ struct AssemblyOptions
 
     [[nodiscard]] constexpr q_o_t order(el_o_t elem_order) const
     {
-        return value_order * elem_order + derivative_order * (elem_order - 1);
+        return static_cast< q_o_t >(value_order * elem_order + derivative_order * (elem_order - 1));
     }
 };
 } // namespace lstr

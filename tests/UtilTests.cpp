@@ -166,20 +166,20 @@ TEMPLATE_TEST_CASE("Bitset (de-)serialization",
 TEST_CASE("MetisGraphWrapper", "[util]")
 {
     // Test data is a full graph of size n_nodes
-    constexpr ptrdiff_t n_nodes     = 10;
-    constexpr ptrdiff_t n_node_nbrs = n_nodes - 1;
+    constexpr idx_t n_nodes     = 10;
+    constexpr idx_t n_node_nbrs = n_nodes - 1;
 
     auto node_adjcncy_inds = static_cast< idx_t* >(malloc(sizeof(idx_t) * (n_nodes + 1)));
     auto node_adjcncy      = static_cast< idx_t* >(malloc(sizeof(idx_t) * n_nodes * n_node_nbrs));
 
-    for (ptrdiff_t i = 0; i <= n_nodes; ++i)
+    for (idx_t i = 0; i <= n_nodes; ++i)
         node_adjcncy_inds[i] = i * n_node_nbrs;
-    for (ptrdiff_t i = 0; i < n_nodes; ++i)
+    for (idx_t i = 0; i < n_nodes; ++i)
     {
         auto base = node_adjcncy_inds[i];
-        for (ptrdiff_t j = 0; j < i; ++j)
+        for (idx_t j = 0; j < i; ++j)
             node_adjcncy[base + j] = j;
-        for (ptrdiff_t j = i + 1; j < n_nodes; ++j)
+        for (idx_t j = i + 1; j < n_nodes; ++j)
             node_adjcncy[base + j - 1] = j;
     }
 

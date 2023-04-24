@@ -117,7 +117,7 @@ void test()
         REQUIRE(std::ranges::all_of(std::views::counted(view.data(), row_size),
                                     [&](global_dof_t col_ind) { return dense_row.test(col_ind); }));
     };
-    for (size_t local_row = 0; local_row < sparsity_graph->getLocalNumRows(); ++local_row)
+    for (local_dof_t local_row = 0; static_cast< size_t >(local_row) != sparsity_graph->getLocalNumRows(); ++local_row)
     {
         const auto global_row_ind = sparsity_graph->getRowMap()->getGlobalElement(local_row);
         sparsity_graph->getGlobalRowCopy(global_row_ind, view, row_size);

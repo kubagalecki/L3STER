@@ -19,7 +19,6 @@ constexpr Polynomial< T, N > getLegendrePolynomial()
     }
     else
     {
-        // TODO: refactor the mess below
         coef_array_t P_n1{};
         coef_array_t P_n2{};
         *(P_n1.rbegin() + 1)  = 1.;

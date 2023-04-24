@@ -10,8 +10,8 @@ auto getDirichletDofs(const MeshPartition&                                      
                       const Teuchos::RCP< const tpetra_fecrsgraph_t >&                sparsity_graph,
                       const NodeToGlobalDofMap< detail::deduceNFields(problem_def) >& node_to_dof_map,
                       const NodeCondensationMap< CP >&                                cond_map,
-                      ConstexprValue< problem_def >                                   probdef_ctwrpr,
-                      ConstexprValue< dirichlet_def >                                 dirichletdef_ctwrpr)
+                      ConstexprValue< problem_def >,
+                      ConstexprValue< dirichlet_def > dirichletdef_ctwrpr)
 {
     const auto mark_owned_dirichlet_dofs = [&] {
         const auto dirichlet_dofs =

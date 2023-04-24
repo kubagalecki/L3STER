@@ -2,8 +2,7 @@
 #define L3STER_UTIL_KOKKOSSCOPEGUARD_HPP
 
 #include "l3ster/comm/MpiComm.hpp"
-
-#include "Kokkos_Core.hpp"
+#include "l3ster/defs/TrilinosTypedefs.h"
 
 namespace lstr
 {
