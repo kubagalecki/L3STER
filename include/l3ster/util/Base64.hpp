@@ -83,7 +83,7 @@ inline void encB64Remainder(std::span< const std::byte > data, char*& out)
     }
 }
 
-inline std::size_t encB64SimdImpl(std::span< const std::byte > data, char*& out)
+inline std::size_t encB64SimdImpl([[maybe_unused]] std::span< const std::byte > data, [[maybe_unused]] char*& out)
 {
 #if defined(__AVX2__)
     // Based on: https://doi.org/10.1145/3132709

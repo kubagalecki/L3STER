@@ -80,8 +80,8 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                nodes,
     return retval;
 }
 
-template < IndexRange_c auto dof_inds, ElementTypes T, el_o_t O >
-auto getSortedPrimaryDofs(const Element< T, O >&                                 element,
+template < IndexRange_c auto dof_inds, ElementTypes ET, el_o_t EO >
+auto getSortedPrimaryDofs(const Element< ET, EO >&                               element,
                           const NodeToDofMap_c auto&                             node_dof_map,
                           const NodeCondensationMap< CondensationPolicy::None >& cond_map,
                           ConstexprValue< dof_inds >                             dofinds_ctwrpr = {})
@@ -91,8 +91,8 @@ auto getSortedPrimaryDofs(const Element< T, O >&                                
     return getDofsFromNodes(primary_nodes, node_dof_map, cond_map, dofinds_ctwrpr);
 }
 
-template < IndexRange_c auto dof_inds, ElementTypes T, el_o_t O, size_t max_dofs_per_node, CondensationPolicy CP >
-auto getUnsortedPrimaryDofs(const Element< T, O >&                         element,
+template < IndexRange_c auto dof_inds, ElementTypes ET, el_o_t EO, size_t max_dofs_per_node, CondensationPolicy CP >
+auto getUnsortedPrimaryDofs(const Element< ET, EO >&                       element,
                             const NodeToGlobalDofMap< max_dofs_per_node >& node_dof_map,
                             const NodeCondensationMap< CP >&               cond_map,
                             ConstexprValue< dof_inds >                     dofinds_ctwrpr = {})
@@ -101,12 +101,12 @@ auto getUnsortedPrimaryDofs(const Element< T, O >&                         eleme
 }
 
 template < IndexRange_c auto  dof_inds,
-           ElementTypes       T,
-           el_o_t             O,
+           ElementTypes       ET,
+           el_o_t             EO,
            size_t             max_dofs_per_node,
            size_t             num_maps,
            CondensationPolicy CP >
-auto getUnsortedPrimaryDofs(const Element< T, O >&                                  element,
+auto getUnsortedPrimaryDofs(const Element< ET, EO >&                                element,
                             const NodeToLocalDofMap< max_dofs_per_node, num_maps >& node_dof_map,
                             CondensationPolicyTag< CP >                             cond_policy,
                             ConstexprValue< dof_inds >                              dofinds_ctwrpr = {})
@@ -114,8 +114,8 @@ auto getUnsortedPrimaryDofs(const Element< T, O >&                              
     return getDofsFromNodes(getPrimaryNodesArray< CP >(element), node_dof_map, cond_policy, dofinds_ctwrpr);
 }
 
-template < ElementTypes T, el_o_t O, size_t max_dofs_per_node, CondensationPolicy CP >
-auto getUnsortedPrimaryDofs(const Element< T, O >&                         element,
+template < ElementTypes ET, el_o_t EO, size_t max_dofs_per_node, CondensationPolicy CP >
+auto getUnsortedPrimaryDofs(const Element< ET, EO >&                       element,
                             const NodeToGlobalDofMap< max_dofs_per_node >& node_dof_map,
                             const NodeCondensationMap< CP >&               cond_map)
 {

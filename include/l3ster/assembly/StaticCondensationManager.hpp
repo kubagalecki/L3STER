@@ -210,8 +210,8 @@ private:
         static constexpr size_t condensed_dofs =
             dofs_per_node * ElementTraits< Element< ET, EO > >::internal_node_inds.size();
 
-        util::StaticVector< std::uint32_t, primary_dofs >   primary_src_inds, primary_dest_inds;
-        util::StaticVector< std::uint32_t, condensed_dofs > cond_src_inds, cond_dest_inds;
+        std::array< std::uint32_t, primary_dofs >   primary_src_inds, primary_dest_inds;
+        std::array< std::uint32_t, condensed_dofs > cond_src_inds, cond_dest_inds;
     };
 
     template < ElementTypes ET, el_o_t EO, size_t max_dofs_per_node, ArrayOf_c< size_t > auto field_inds >
@@ -306,14 +306,54 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSo
 
 template < ElementTypes ET, el_o_t EO, int system_size, size_t max_dofs_per_node, IndexRange_c auto field_inds >
 void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseSystemImpl(
-    [[maybe_unused]] const NodeToLocalDofMap< max_dofs_per_node, 3 >&               node_dof_map,
-    [[maybe_unused]] tpetra_crsmatrix_t&                                            global_mat,
-    [[maybe_unused]] std::span< val_t >                                             global_rhs,
-    [[maybe_unused]] const eigen::RowMajorSquareMatrix< lstr::val_t, system_size >& local_mat,
-    [[maybe_unused]] const Eigen::Vector< lstr::val_t, system_size >&               local_vec,
-    [[maybe_unused]] const Element< ET, EO >&                                       element,
-    [[maybe_unused]] ConstexprValue< field_inds >                                   field_inds_ctwrpr)
-{}
+    const NodeToLocalDofMap< max_dofs_per_node, 3 >&               node_dof_map,
+    tpetra_crsmatrix_t&                                            global_mat,
+    std::span< val_t >                                             global_rhs,
+    const eigen::RowMajorSquareMatrix< lstr::val_t, system_size >& local_mat,
+    const Eigen::Vector< lstr::val_t, system_size >&               local_vec,
+    const Element< ET, EO >&                                       element,
+    ConstexprValue< field_inds >                                   field_inds_ctwrpr)
+{
+    auto&      cond_data = m_elem_data_map.at(element.getId());
+    const auto dof_inds  = computeLocalDofInds(element, node_dof_map, cond_data.internal_dof_inds, field_inds_ctwrpr);
+
+    // Primary diagonal block + RHS
+    constexpr int n_primary_dofs  = std::tuple_size_v< decltype(dof_inds.primary_src_inds) >;
+    auto          primary_upd_mat = eigen::RowMajorSquareMatrix< val_t, n_primary_dofs >{};
+    auto          primary_upd_rhs = Eigen::Vector< val_t, n_primary_dofs >{};
+    for (size_t row_ind = 0; auto src_row : dof_inds.primary_src_inds)
+    {
+        for (size_t col_ind = 0; auto src_col : dof_inds.primary_src_inds)
+            primary_upd_mat(row_ind, col_ind++) = local_mat(src_row, src_col);
+        primary_upd_rhs[row_ind++] = local_vec[src_row];
+    }
+    const auto [row_dofs, col_dofs, rhs_dofs] =
+        detail::getUnsortedPrimaryDofs(element, node_dof_map, element_boundary, field_inds_ctwrpr);
+    detail::scatterLocalSystem(primary_upd_mat, primary_upd_rhs, global_mat, global_rhs, row_dofs, col_dofs, rhs_dofs);
+
+    // Condensed diagonal block + RHS
+    for (size_t row_ind = 0; auto src_row : dof_inds.cond_src_inds)
+    {
+        const auto dest_row = dof_inds.cond_dest_inds[row_ind++];
+        for (size_t col_ind = 0; auto src_col : dof_inds.cond_src_inds)
+        {
+            const auto dest_col = dof_inds.cond_dest_inds[col_ind++];
+            cond_data.diag_block(dest_row, dest_col) += local_mat(src_row, src_col);
+        }
+        cond_data.rhs[dest_row] += local_vec[src_row];
+    }
+
+    // Off-diagonal block (upper)
+    for (size_t row_ind = 0; auto src_row : dof_inds.primary_src_inds)
+    {
+        const auto dest_row = dof_inds.primary_dest_inds[row_ind++];
+        for (size_t col_ind = 0; auto src_col : dof_inds.cond_src_inds)
+        {
+            const auto dest_col = dof_inds.cond_dest_inds[col_ind++];
+            cond_data.upper_block(dest_row, dest_col) += local_mat(src_row, src_col);
+        }
+    }
+}
 
 template < size_t max_dofs_per_node >
 void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemblyImpl(
@@ -357,9 +397,10 @@ auto StaticCondensationManager< CondensationPolicy::ElementBoundary >::computeLo
             retval[i] = true;
         return retval;
     };
-    constexpr auto active_inds_bmp  = inds_to_bmp(field_inds);
-    const auto     internal_dof_bmp = inds_to_bmp(internal_dof_inds);
-    auto           retval           = LocalDofInds< ET, EO, field_inds.size() >{};
+    constexpr auto active_inds_bmp   = inds_to_bmp(field_inds);
+    const auto     internal_dof_bmp  = inds_to_bmp(internal_dof_inds);
+    auto           retval            = LocalDofInds< ET, EO, field_inds.size() >{};
+    size_t         primary_write_ind = 0, cond_write_ind = 0;
     std::uint32_t  local_system_ind = 0, primary_ind = 0, cond_ind = 0;
     auto           boundary_ind_iter = ElementTraits< Element< ET, EO > >::boundary_node_inds.cbegin();
     for (el_locind_t node_ind = 0; auto node : element.getNodes())
@@ -372,8 +413,8 @@ auto StaticCondensationManager< CondensationPolicy::ElementBoundary >::computeLo
             {
                 if (active_inds_bmp[i])
                 {
-                    retval.primary_src_inds.push_back(local_system_ind++);
-                    retval.primary_dest_inds.push_back(primary_ind++);
+                    retval.primary_src_inds[primary_write_ind]    = local_system_ind++;
+                    retval.primary_dest_inds[primary_write_ind++] = primary_ind++;
                 }
                 else if (node_dofs[i] != NodeToLocalDofMap< max_dofs_per_node, 3 >::invalid_dof)
                     ++primary_ind;
@@ -385,8 +426,8 @@ auto StaticCondensationManager< CondensationPolicy::ElementBoundary >::computeLo
             {
                 if (active_inds_bmp[i])
                 {
-                    retval.cond_src_inds.push_back(local_system_ind++);
-                    retval.cond_dest_inds.push_back(cond_ind++);
+                    retval.cond_src_inds[cond_write_ind]    = local_system_ind++;
+                    retval.cond_dest_inds[cond_write_ind++] = cond_ind++;
                 }
                 else if (internal_dof_bmp[i])
                     ++cond_ind;
