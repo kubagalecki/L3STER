@@ -5,8 +5,6 @@
 #include "l3ster/assembly/SolutionManager.hpp"
 #include "l3ster/util/TbbUtils.hpp"
 
-#include <shared_mutex>
-
 namespace lstr::detail
 {
 template < typename Derived >
@@ -49,77 +47,19 @@ public:
                                                                  sol_man,
                                                                  std::forward< decltype(sol_man_inds) >(sol_man_inds));
     }
+
+protected:
+    template < size_t max_dofs_per_node >
+    static void validateSolutionUpdateInds(IndexRange_c auto&& sol_inds,
+                                           SolutionManager&    sol_man,
+                                           IndexRange_c auto&& sol_man_inds);
+    template < size_t max_dofs_per_node >
+    static void updateSolutionPrimaryDofs(const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
+                                          std::span< const val_t >                         condensed_solution,
+                                          const IndexRange_c auto&                         sol_inds,
+                                          SolutionManager&                                 sol_man,
+                                          IndexRange_c auto&&                              sol_man_inds);
 };
-
-template < size_t max_dofs_per_node >
-void updateSolutionPrimaryDofs(const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
-                               std::span< const val_t >                         condensed_solution,
-                               const IndexRange_c auto&                         sol_inds,
-                               SolutionManager&                                 sol_man,
-                               IndexRange_c auto&&                              sol_man_inds)
-{
-    util::throwingAssert(std::ranges::distance(sol_man_inds) == std::ranges::distance(sol_inds),
-                         "Source and destination indices length must match");
-    util::throwingAssert(std::ranges::none_of(sol_inds, [&](size_t i) { return i >= max_dofs_per_node; }),
-                         "Source index out of bounds");
-    util::throwingAssert(std::ranges::none_of(sol_man_inds, [&](size_t i) { return i >= sol_man.nFields(); }),
-                         "Destination index out of bounds");
-
-    const auto dest_col_views = std::invoke([&] {
-        std::vector< std::span< val_t > > retval;
-        retval.reserve(std::ranges::distance(sol_man_inds));
-        std::ranges::transform(
-            sol_man_inds, std::back_inserter(retval), [&](size_t i) { return sol_man.getFieldView(i); });
-        return retval;
-    });
-
-    auto iter_cache  = std::map{std::make_pair(size_t{}, node_dof_map.begin()),
-                               std::make_pair(node_dof_map.size(), node_dof_map.end())};
-    auto cache_mutex = std::shared_mutex{};
-
-    const auto compute_begin_from_cache = [&](size_t index) {
-        const auto index_requested = index;
-        auto       it              = decltype(node_dof_map.begin()){};
-        {
-            const auto lock    = std::shared_lock{cache_mutex};
-            const auto closest = std::prev(std::as_const(iter_cache).upper_bound(index));
-            index              = closest->first;
-            it                 = closest->second;
-        }
-        while (index != index_requested)
-        {
-            ++index;
-            ++it;
-        }
-        return it;
-    };
-    const auto process_range = [&](auto begin, size_t range_size) {
-        for (; range_size != 0; --range_size)
-        {
-            const auto [node, dofs]   = *begin++;
-            const auto local_node_ind = sol_man.getNodeMap().at(node);
-            for (size_t i = 0; size_t sol_ind : sol_inds)
-            {
-                const auto dof = dofs.back()[sol_ind];
-                if (dof != NodeToLocalDofMap< max_dofs_per_node, 3 >::invalid_dof)
-                    dest_col_views[i][local_node_ind] = condensed_solution[dof];
-                ++i;
-            }
-        }
-        return begin;
-    };
-    const auto cache_iter = [&](size_t index, auto it) {
-        const auto lock   = std::lock_guard{cache_mutex};
-        iter_cache[index] = it;
-    };
-
-    oneapi::tbb::parallel_for(oneapi::tbb::blocked_range< size_t >{0, node_dof_map.size(), 1 << 12},
-                              [&](const oneapi::tbb::blocked_range< size_t >& index_range) {
-                                  const auto begin = compute_begin_from_cache(index_range.begin());
-                                  const auto end   = process_range(begin, index_range.size());
-                                  cache_iter(index_range.end(), end);
-                              });
-}
 
 template < CondensationPolicy CP >
 class StaticCondensationManager;
@@ -164,6 +104,7 @@ public:
                              SolutionManager&                                 sol_man,
                              IndexRange_c auto&&                              sol_man_inds) const
     {
+        validateSolutionUpdateInds< max_dofs_per_node >(sol_inds, sol_man, sol_man_inds);
         updateSolutionPrimaryDofs(node_dof_map, condensed_solution, sol_inds, sol_man, sol_man_inds);
     }
 };
@@ -205,13 +146,13 @@ private:
     template < ElementTypes ET, el_o_t EO, size_t dofs_per_node >
     struct LocalDofInds
     {
-        static constexpr size_t primary_dofs =
+        static constexpr size_t n_primary_dofs =
             dofs_per_node * ElementTraits< Element< ET, EO > >::boundary_node_inds.size();
-        static constexpr size_t condensed_dofs =
+        static constexpr size_t n_condensed_dofs =
             dofs_per_node * ElementTraits< Element< ET, EO > >::internal_node_inds.size();
 
-        std::array< std::uint32_t, primary_dofs >   primary_src_inds, primary_dest_inds;
-        std::array< std::uint32_t, condensed_dofs > cond_src_inds, cond_dest_inds;
+        std::array< std::uint32_t, n_primary_dofs >   primary_src_inds, primary_dest_inds;
+        std::array< std::uint32_t, n_condensed_dofs > cond_src_inds, cond_dest_inds;
     };
 
     template < ElementTypes ET, el_o_t EO, size_t max_dofs_per_node, ArrayOf_c< size_t > auto field_inds >
@@ -232,6 +173,49 @@ private:
     std::vector< std::uint8_t >                                m_internal_dof_inds;
 };
 
+template < typename Derived >
+template < size_t max_dofs_per_node >
+void StaticCondensationManagerInterface< Derived >::validateSolutionUpdateInds(IndexRange_c auto&& sol_inds,
+                                                                               SolutionManager&    sol_man,
+                                                                               IndexRange_c auto&& sol_man_inds)
+{
+    util::throwingAssert(std::ranges::distance(sol_man_inds) == std::ranges::distance(sol_inds),
+                         "Source and destination indices length must match");
+    util::throwingAssert(std::ranges::none_of(sol_inds, [&](size_t i) { return i >= max_dofs_per_node; }),
+                         "Source index out of bounds");
+    util::throwingAssert(std::ranges::none_of(sol_man_inds, [&](size_t i) { return i >= sol_man.nFields(); }),
+                         "Destination index out of bounds");
+}
+
+template < typename Derived >
+template < size_t max_dofs_per_node >
+void StaticCondensationManagerInterface< Derived >::updateSolutionPrimaryDofs(
+    const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
+    std::span< const val_t >                         condensed_solution,
+    const IndexRange_c auto&                         sol_inds,
+    SolutionManager&                                 sol_man,
+    IndexRange_c auto&&                              sol_man_inds)
+{
+    const auto dest_col_views = std::invoke([&] {
+        std::vector< std::span< val_t > > retval;
+        retval.reserve(std::ranges::distance(sol_man_inds));
+        std::ranges::transform(
+            sol_man_inds, std::back_inserter(retval), [&](size_t i) { return sol_man.getFieldView(i); });
+        return retval;
+    });
+    oneapi::tbb::parallel_for_each(node_dof_map, [&](const auto& map_entry) {
+        const auto& [node, dofs]  = map_entry;
+        const auto local_node_ind = sol_man.getNodeMap().at(node);
+        for (size_t i = 0; size_t sol_ind : sol_inds)
+        {
+            const auto dof = dofs.back()[sol_ind];
+            if (dof != NodeToLocalDofMap< max_dofs_per_node, 3 >::invalid_dof)
+                dest_col_views[i][local_node_ind] = condensed_solution[dof];
+            ++i;
+        }
+    });
+}
+
 template < size_t max_dofs_per_node, ProblemDef_c auto problem_def >
 StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensationManager(
     const MeshPartition& mesh, const NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map, ConstexprValue< problem_def >)
@@ -248,10 +232,7 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
                              std::views::transform([&](const std::array< local_dof_t, max_dofs_per_node >& dofs) {
                                  auto retval = dof_bmp_t{};
                                  for (size_t i = 0; auto dof : dofs)
-                                 {
-                                     retval[i] = dof == NodeToLocalDofMap< max_dofs_per_node, 3 >::invalid_dof;
-                                     ++i;
-                                 }
+                                     retval[i++] = dof == NodeToLocalDofMap< max_dofs_per_node, 3 >::invalid_dof;
                                  return retval;
                              }) |
                              std::views::common;
@@ -260,7 +241,7 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
             std::ranges::cend(dof_bmp_range),
             std::make_pair(size_t{0}, dof_bmp_t{}),
             [](const auto& p1, const auto& p2) { return std::make_pair(p1.first + p2.first, p1.second | p2.second); },
-            [](const dof_bmp_t& dof_bmp) { return std::make_pair(dof_bmp.count(), dof_bmp); });
+            [](const dof_bmp_t& dof_bmp) { return std::make_pair(dof_bmp.size() - dof_bmp.count(), dof_bmp); });
         return std::make_pair(n_boundary_dofs, ~internal_dof_bmp);
     };
     mesh.visit(
@@ -286,23 +267,42 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
 
 void StaticCondensationManager< CondensationPolicy::ElementBoundary >::beginAssemblyImpl()
 {
-    for (auto& [id, payload] : m_elem_data_map)
-    {
+    std::for_each(std::execution::par, m_elem_data_map.begin(), m_elem_data_map.end(), [&](auto& map_entry) {
+        auto& [id, payload] = map_entry;
         payload.diag_block.setZero();
         payload.upper_block.setZero();
         payload.rhs.setZero();
-    }
+    });
 }
 
 template < size_t max_dofs_per_node >
-void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSolutionImpl(
-    [[maybe_unused]] const MeshPartition&                             mesh,
-    [[maybe_unused]] const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
-    [[maybe_unused]] std::span< const val_t >                         condensed_solution,
-    [[maybe_unused]] IndexRange_c auto&&                              sol_inds,
-    [[maybe_unused]] SolutionManager&                                 sol_man,
-    [[maybe_unused]] IndexRange_c auto&&                              sol_man_inds) const
-{}
+void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemblyImpl(
+    const MeshPartition&                             mesh,
+    const NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map,
+    tpetra_crsmatrix_t&                              matrix,
+    std::span< val_t >                               rhs)
+{
+    std::for_each(std::execution::par, m_elem_data_map.begin(), m_elem_data_map.end(), [&](auto& map_entry) {
+        auto& [id, elem_data]          = map_entry;
+        const auto element_ptr_variant = mesh.find(id)->first;
+        std::visit(
+            [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >* element_ptr) {
+                {
+                    eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > diag_inv = elem_data.diag_block.inverse();
+                    elem_data.diag_block                                             = std::move(diag_inv);
+                }
+                const eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > primary_upd_mat =
+                    -(elem_data.upper_block * elem_data.diag_block * elem_data.upper_block.transpose());
+                const Eigen::Vector< val_t, Eigen::Dynamic > primary_upd_rhs =
+                    -(elem_data.upper_block * elem_data.diag_block * elem_data.rhs);
+
+                const auto [row_dofs, col_dofs, rhs_dofs] =
+                    detail::getUnsortedPrimaryDofs(*element_ptr, dof_map, element_boundary);
+                detail::scatterLocalSystem(primary_upd_mat, primary_upd_rhs, matrix, rhs, row_dofs, col_dofs, rhs_dofs);
+            },
+            element_ptr_variant);
+    });
+}
 
 template < ElementTypes ET, el_o_t EO, int system_size, size_t max_dofs_per_node, IndexRange_c auto field_inds >
 void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseSystemImpl(
@@ -316,20 +316,20 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
 {
     auto&      cond_data = m_elem_data_map.at(element.getId());
     const auto dof_inds  = computeLocalDofInds(element, node_dof_map, cond_data.internal_dof_inds, field_inds_ctwrpr);
+    const auto [row_dofs, col_dofs, rhs_dofs] =
+        detail::getUnsortedPrimaryDofs(element, node_dof_map, element_boundary, field_inds_ctwrpr);
 
     // Primary diagonal block + RHS
-    constexpr int n_primary_dofs  = std::tuple_size_v< decltype(dof_inds.primary_src_inds) >;
-    auto          primary_upd_mat = eigen::RowMajorSquareMatrix< val_t, n_primary_dofs >{};
-    auto          primary_upd_rhs = Eigen::Vector< val_t, n_primary_dofs >{};
+    constexpr int           n_prim_dofs     = std::tuple_size_v< decltype(dof_inds.primary_src_inds) >;
+    thread_local const auto primary_upd_mat = std::make_unique< eigen::RowMajorSquareMatrix< val_t, n_prim_dofs > >();
+    auto                    primary_upd_rhs = Eigen::Vector< val_t, n_prim_dofs >{};
     for (size_t row_ind = 0; auto src_row : dof_inds.primary_src_inds)
     {
         for (size_t col_ind = 0; auto src_col : dof_inds.primary_src_inds)
-            primary_upd_mat(row_ind, col_ind++) = local_mat(src_row, src_col);
+            primary_upd_mat->operator()(row_ind, col_ind++) = local_mat(src_row, src_col);
         primary_upd_rhs[row_ind++] = local_vec[src_row];
     }
-    const auto [row_dofs, col_dofs, rhs_dofs] =
-        detail::getUnsortedPrimaryDofs(element, node_dof_map, element_boundary, field_inds_ctwrpr);
-    detail::scatterLocalSystem(primary_upd_mat, primary_upd_rhs, global_mat, global_rhs, row_dofs, col_dofs, rhs_dofs);
+    detail::scatterLocalSystem(*primary_upd_mat, primary_upd_rhs, global_mat, global_rhs, row_dofs, col_dofs, rhs_dofs);
 
     // Condensed diagonal block + RHS
     for (size_t row_ind = 0; auto src_row : dof_inds.cond_src_inds)
@@ -356,32 +356,50 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
 }
 
 template < size_t max_dofs_per_node >
-void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemblyImpl(
+void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSolutionImpl(
     const MeshPartition&                             mesh,
-    const NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map,
-    tpetra_crsmatrix_t&                              matrix,
-    std::span< val_t >                               rhs)
+    const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
+    std::span< const val_t >                         condensed_solution,
+    IndexRange_c auto&&                              sol_inds,
+    SolutionManager&                                 sol_man,
+    IndexRange_c auto&&                              sol_man_inds) const
 {
-    for (auto& [id, elem_data] : m_elem_data_map)
-    {
-        const auto elem_variant = mesh.find(id);
+    validateSolutionUpdateInds< max_dofs_per_node >(sol_inds, sol_man, sol_man_inds);
+    updateSolutionPrimaryDofs(node_dof_map, condensed_solution, sol_inds, sol_man, sol_man_inds);
+    const auto dest_col_views = std::invoke([&] {
+        std::vector< std::span< val_t > > retval;
+        retval.reserve(std::ranges::distance(sol_man_inds));
+        std::ranges::transform(
+            sol_man_inds, std::back_inserter(retval), [&](size_t i) { return sol_man.getFieldView(i); });
+        return retval;
+    });
+    std::for_each(std::execution::par, m_elem_data_map.cbegin(), m_elem_data_map.cend(), [&](const auto& map_entry) {
+        auto& [id, elem_data]          = map_entry;
+        const auto element_ptr_variant = mesh.find(id)->first;
         std::visit(
             [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >* element_ptr) {
+                const auto                                   primary_vals = std::invoke([&] {
+                    const auto [row_dofs, col_dofs, rhs_dofs] =
+                        detail::getUnsortedPrimaryDofs(*element_ptr, node_dof_map, element_boundary);
+                    auto retval = Eigen::Vector< val_t, Eigen::Dynamic >{rhs_dofs.size(), 1};
+                    for (Eigen::Index i = 0; auto dof : rhs_dofs)
+                        retval[i++] = condensed_solution[dof];
+                    return retval;
+                });
+                const Eigen::Vector< val_t, Eigen::Dynamic > internal_vals =
+                    elem_data.diag_block * (elem_data.rhs - elem_data.upper_block.transpose() * primary_vals);
+                for (Eigen::Index internal_ind = 0; auto node : getInternalNodes(*element_ptr))
                 {
-                    eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > diag_inv = elem_data.diag_block.inverse();
-                    elem_data.diag_block                                             = std::move(diag_inv);
+                    auto node_vals = std::array< val_t, max_dofs_per_node >{};
+                    for (auto int_dof_ind : elem_data.internal_dof_inds)
+                        node_vals[int_dof_ind] = internal_vals[internal_ind++];
+                    const auto local_node_ind = sol_man.getNodeMap().at(node);
+                    for (size_t i = 0; auto src_ind : sol_inds)
+                        dest_col_views[i++][local_node_ind] = node_vals[src_ind];
                 }
-                const eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > primary_upd_mat =
-                    -(elem_data.upper_block * elem_data.diag_block * elem_data.upper_block.transpose());
-                const Eigen::Vector< val_t, Eigen::Dynamic > primary_upd_rhs =
-                    -(elem_data.upper_block * elem_data.diag_block * elem_data.rhs);
-
-                const auto [row_dofs, col_dofs, rhs_dofs] =
-                    detail::getUnsortedPrimaryDofs(*element_ptr, dof_map, element_boundary);
-                detail::scatterLocalSystem(primary_upd_mat, primary_upd_rhs, matrix, rhs, row_dofs, col_dofs, rhs_dofs);
             },
-            elem_variant->first);
-    }
+            element_ptr_variant);
+    });
 }
 
 template < ElementTypes ET, el_o_t EO, size_t max_dofs_per_node, ArrayOf_c< size_t > auto field_inds >

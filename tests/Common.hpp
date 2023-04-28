@@ -19,7 +19,7 @@ inline void logErrorAndTerminate(std::string_view err_msg)
 
 #define REQUIRE(EXPR)                                                                                                  \
     if (not(EXPR))                                                                                                     \
-    logErrorAndTerminate("The following expression evaluated to false:\n" #EXPR)
+    logErrorAndTerminate("The following expression evaluated to false:\n\n  " #EXPR "\n\n")
 
 #define CHECK_THROWS(EXPR)                                                                                             \
     std::invoke([&] {                                                                                                  \

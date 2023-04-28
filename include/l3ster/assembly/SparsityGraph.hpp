@@ -10,11 +10,11 @@
 
 namespace lstr::detail
 {
-template < IndexRange_c auto dof_inds, size_t n_nodes, size_t dofs_per_node >
-auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                   nodes,
-                      const NodeToGlobalDofMap< dofs_per_node >&             node_dof_map,
-                      const NodeCondensationMap< CondensationPolicy::None >& cond_map,
-                      ConstexprValue< dof_inds >                             dofinds_ctwrpr = {})
+template < IndexRange_c auto dof_inds, size_t n_nodes, size_t dofs_per_node, CondensationPolicy CP >
+auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&       nodes,
+                      const NodeToGlobalDofMap< dofs_per_node >& node_dof_map,
+                      const NodeCondensationMap< CP >&           cond_map,
+                      ConstexprValue< dof_inds >                 dofinds_ctwrpr = {})
 {
     std::array< global_dof_t, std::ranges::size(dof_inds) * n_nodes > retval;
     std::ranges::copy(nodes | std::views::transform([&](n_id_t node) {

@@ -12,10 +12,10 @@ namespace lstr::util::tbb
 {
 namespace detail
 {
-template < SizedRandomAccessRange_c Range >
+template < std::ranges::sized_range Range >
 using blocked_iter_space_t = oneapi::tbb::blocked_range< std::ranges::range_difference_t< Range > >;
 
-auto makeBlockedIterSpace(SizedRandomAccessRange_c auto&& range) -> blocked_iter_space_t< decltype(range) >
+auto makeBlockedIterSpace(std::ranges::sized_range auto&& range) -> blocked_iter_space_t< decltype(range) >
 {
     return {0, std::ranges::ssize(range)};
 }

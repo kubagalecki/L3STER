@@ -270,6 +270,7 @@ AlgebraicSystem< max_dofs_per_node, CP >::AlgebraicSystem(const MpiComm&        
     m_node_dof_map = NodeToLocalDofMap{
         cond_map, node_global_dof_map, *m_matrix->getRowMap(), *m_matrix->getColMap(), *m_rhs->getMap()};
     m_condensation_manager = detail::StaticCondensationManager< CP >{mesh, m_node_dof_map, problemdef_ctwrpr};
+    m_condensation_manager.beginAssembly();
 
     if constexpr (dirichlet_def.size() != 0)
     {
