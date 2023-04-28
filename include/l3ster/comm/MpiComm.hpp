@@ -1,8 +1,7 @@
 #ifndef L3STER_COMM_MPICOMM_HPP
 #define L3STER_COMM_MPICOMM_HPP
 
-#include "l3ster/util/Concepts.hpp"
-#include "l3ster/util/SourceLocation.hpp"
+#include "l3ster/util/Common.hpp"
 
 extern "C"
 {
@@ -225,7 +224,7 @@ auto MpiComm::FileHandle::writeAtAsync(detail::mpi::MpiBorrowedBuf_c auto&& writ
     detail::mpi::handleMPIError(MPI_File_iwrite_at(m_file,
                                                    offset,
                                                    std::ranges::data(write_range),
-                                                   std::ranges::size(write_range),
+                                                   exactIntegerCast< int >(std::ranges::size(write_range)),
                                                    datatype,
                                                    &request.m_request),
                                 "MPI_File_iwrite_at failed");

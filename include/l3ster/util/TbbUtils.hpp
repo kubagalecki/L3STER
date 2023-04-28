@@ -33,6 +33,21 @@ void parallelFor(SizedRandomAccessRange_c auto&&                                
                               });
 }
 
+void parallelTransform(SizedRandomAccessRange_c auto&& input_range, auto output_iter, auto&& kernel)
+    requires std::random_access_iterator< decltype(output_iter) > and
+             requires(decltype(*std::ranges::cbegin(input_range)) input_element) {
+                 *output_iter = std::invoke(kernel, input_element);
+             }
+{
+    const auto iter_space = detail::makeBlockedIterSpace(input_range);
+    using iter_space_t    = decltype(iter_space);
+    oneapi::tbb::parallel_for(iter_space,
+                              [&, range_begin = std::ranges::cbegin(input_range)](const iter_space_t& subrange) {
+                                  for (auto i : std::views::iota(subrange.begin(), subrange.end()))
+                                      output_iter[i] = std::invoke(kernel, range_begin[i]);
+                              });
+}
+
 template < typename Reduction = std::plus<>, typename Transform = std::identity >
 auto parallelTransformReduce(SizedRandomAccessRange_c auto&& range,
                              const auto&                     identity,

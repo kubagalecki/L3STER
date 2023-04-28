@@ -2,6 +2,7 @@
 #define L3STER_UTIL_COMMON_HPP
 
 #include "l3ster/util/Concepts.hpp"
+#include "l3ster/util/SourceLocation.hpp"
 
 #include <algorithm>
 #include <array>
@@ -67,7 +68,7 @@ constexpr bool exactlyOneOf(T... args)
 }
 
 template < std::integral To, std::integral From >
-To exactIntegerCast(From from)
+To exactIntegerCast(From from, std::source_location loc = std::source_location::current())
     requires std::convertible_to< From, To >
 {
     constexpr auto max_from = static_cast< std::uintmax_t >(std::numeric_limits< From >::max());
@@ -76,14 +77,16 @@ To exactIntegerCast(From from)
     constexpr auto min_to   = static_cast< std::intmax_t >(std::numeric_limits< To >::min());
 
     if constexpr (max_from > max_to)
-        if (static_cast< std::uintmax_t >(from) > max_to)
-            throw std::runtime_error{
-                "The value being converted is greater then the maximum value representable by the target type"};
+        util::throwingAssert(
+            static_cast< std::uintmax_t >(from) <= max_to,
+            "The value being converted is greater then the maximum value representable by the target type",
+            loc);
 
     if constexpr (min_from < min_to)
-        if (static_cast< std::intmax_t >(from) < min_to)
-            throw std::runtime_error{
-                "The value being converted is less than the minimum value representable by the target type"};
+        util::throwingAssert(
+            static_cast< std::intmax_t >(from) >= min_to,
+            "The value being converted is less than the minimum value representable by the target type",
+            loc);
 
     return static_cast< To >(from);
 }

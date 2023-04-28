@@ -91,7 +91,7 @@ add_mpi_test( TpetraMapCreationTest.cpp Tpetra_Map_Creation "1;2;4" )
 add_mpi_test( SparsityGraphTest.cpp Sparsity_Graph "1;2;4" )
 add_mpi_test( DirichletBCTest.cpp Dirichlet_BC_Application "1;2;4" )
 add_mpi_test( GlobalAssemblyMPITest.cpp Solve_2D_diffusion_problem "1;2;4" )
-#add_mpi_test( VtkExportTest.cpp Export_results_to_VTK "1;2;4" )
+add_mpi_test( VtkExportTest.cpp Export_results_to_VTK "1;2;4" )
 
 #######################################################################################################################
 
