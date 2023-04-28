@@ -1,6 +1,3 @@
-#include "BelosSolverFactory_Tpetra.hpp"
-#include "Ifpack2_Factory.hpp"
-
 #define L3STER_ELEMENT_ORDERS 4
 #include "l3ster/l3ster.hpp"
 
@@ -67,9 +64,6 @@ int main(int argc, char* argv[])
     const auto field_inds_view = std::array{std::span< const size_t >{T_inds}, std::span< const size_t >{T_grad_inds}};
     constexpr auto field_names = std::array{"T"sv, "gradT"sv};
     constexpr auto dof_inds    = field_inds;
-    constexpr auto BT          = BasisTypes::Lagrange;
-    constexpr auto QT          = QuadratureTypes::GLeg;
-    constexpr auto QO          = q_o_t{mesh_order * 2};
 
     constexpr auto diffusion_kernel3d =
         []< typename T >(const auto&, const std::array< T, 3 >&, const SpaceTimePoint&) noexcept {
@@ -134,85 +128,34 @@ int main(int argc, char* argv[])
             error[3] = T_z - qz;
             return error;
         };
-
-    auto system_manager = makeAlgebraicSystemManager(comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr);
-    system_manager->beginAssembly();
-    system_manager->assembleDomainProblem< BT, QT, QO, dof_inds >(
-        diffusion_kernel3d, my_partition, std::views::single(domain_id), empty_field_val_getter);
-    system_manager->endAssembly();
-
     constexpr auto dirichlet_bc_val_def = [](const auto&, const auto&, const SpaceTimePoint& p) {
         Eigen::Vector< val_t, 1 > retval;
         retval[0] = 0.;
         return retval;
     };
 
-    auto dirichlet_vals = system_manager->getDirichletBCValueVector()->getLocalViewHost(Tpetra::Access::ReadWrite);
-    computeValuesAtNodes(dirichlet_bc_val_def,
-                         my_partition,
-                         boundary_ids,
-                         system_manager->getDofMap(),
-                         ConstexprValue< T_inds >{},
-                         empty_field_val_getter,
-                         asSpan(Kokkos::subview(dirichlet_vals, Kokkos::ALL, 0)));
+    auto system_manager =
+        makeAlgebraicSystem(comm, my_partition, element_boundary, probdef_ctwrpr, dirichletdef_ctwrpr);
+    system_manager->beginAssembly();
+    system_manager->assembleDomainProblem(diffusion_kernel3d, my_partition, std::views::single(domain_id));
+    system_manager->endAssembly(my_partition);
 
-    system_manager->beginModify();
+    system_manager->setDirichletBCValues(dirichlet_bc_val_def, my_partition, boundary_ids, ConstexprValue< T_inds >{});
     system_manager->applyDirichletBCs();
-    system_manager->endModify();
 
-    L3STER_PROFILE_REGION_BEGIN("Set up Ifpack2 Chebyshev preconditioner");
-    auto precond_params = makeTeuchosRCP< Teuchos::ParameterList >();
-    precond_params->set("chebyshev: degree", 3);
-    Ifpack2::Factory precond_factory;
-    auto             preconditioner = precond_factory.create("CHEBYSHEV", system_manager->getMatrix());
-    preconditioner->setParameters(*precond_params);
-    L3STER_PROFILE_REGION_BEGIN("Initialize");
-    preconditioner->initialize();
-    L3STER_PROFILE_REGION_END("Initialize");
-    L3STER_PROFILE_REGION_BEGIN("Compute");
-    preconditioner->compute();
-    L3STER_PROFILE_REGION_END("Compute");
-    L3STER_PROFILE_REGION_END("Set up Ifpack2 Chebyshev preconditioner");
-
-    L3STER_PROFILE_REGION_BEGIN("Set up Belos::LinearProblem");
-    auto algebraic_problem = makeTeuchosRCP< Belos::LinearProblem< val_t, tpetra_multivector_t, tpetra_operator_t > >(
-        system_manager->getMatrix(), system_manager->getSolutionVector(), system_manager->getRhs());
-    algebraic_problem->setLeftPrec(preconditioner);
-    if (not algebraic_problem->setProblem())
-        throw std::runtime_error{"Failed to set up Belos::LinearProblem"};
-    L3STER_PROFILE_REGION_END("Set up Belos::LinearProblem");
-
-    L3STER_PROFILE_REGION_BEGIN("Set up Belos::BlockCGSolMgr");
-    auto solver_params = makeTeuchosRCP< Teuchos::ParameterList >();
-    solver_params->set("Block Size", 1);
-    solver_params->set("Maximum Iterations", 10'000);
-    solver_params->set("Convergence Tolerance", 1.e-6);
-    solver_params->set("Verbosity",
-                       Belos::Warnings + Belos::IterationDetails + Belos::FinalSummary + Belos::TimingDetails);
-    solver_params->set("Output Frequency", 100);
-    Belos::SolverFactory< val_t, tpetra_multivector_t, tpetra_operator_t > solver_factory;
-    auto solver = solver_factory.create("Block CG", solver_params);
-    solver->setProblem(algebraic_problem);
-    L3STER_PROFILE_REGION_END("Set up Belos::BlockCGSolMgr");
-
-    L3STER_PROFILE_REGION_BEGIN("Solve the algebraic problem");
-    if (solver->solve() != Belos::Converged)
-        throw std::runtime_error{"Solver failed to converge"};
-    L3STER_PROFILE_REGION_END("Solve the algebraic problem");
+    solvers::CG solver{
+        1e-6, 10'000, static_cast< Belos::MsgType >(Belos::Warnings + Belos::FinalSummary + Belos::TimingDetails)};
+    auto solution = system_manager->makeSolutionVector();
+    system_manager->solve(solver, solution);
 
     L3STER_PROFILE_REGION_BEGIN("Solution management");
-    auto solution_manager = SolutionManager{my_partition, comm, n_fields};
-    solution_manager.updateSolution(
-        my_partition, *system_manager->getSolutionVector(), system_manager->getDofMap(), field_inds, probdef_ctwrpr);
-    solution_manager.communicateSharedValues();
+    auto solution_manager = SolutionManager{my_partition, n_fields};
+    system_manager->updateSolution(my_partition, solution, dof_inds, solution_manager, field_inds);
     L3STER_PROFILE_REGION_END("Solution management");
 
     L3STER_PROFILE_REGION_BEGIN("Compute solution error");
-    const auto fval_getter = [&](const auto& nodes) {
-        return gatherGlobalValues< field_inds >(nodes, solution_manager);
-    };
-    const auto error =
-        computeNormL2< BT, QT, QO >(comm, error_kernel, my_partition, std::views::single(domain_id), fval_getter);
+    const auto fval_getter = solution_manager.makeFieldValueGetter(field_inds);
+    const auto error = computeNormL2(comm, error_kernel, my_partition, std::views::single(domain_id), fval_getter);
     L3STER_PROFILE_REGION_END("Compute solution error");
 
     if (comm.getRank() == 0)
@@ -224,7 +167,7 @@ int main(int argc, char* argv[])
     }
 
     L3STER_PROFILE_REGION_BEGIN("Export results to VTK");
-    auto exporter = PvtuExporter{my_partition, solution_manager.getNodeMap()};
+    auto exporter = PvtuExporter{my_partition};
     exporter.exportSolution("Cube_Diffusion.pvtu", comm, solution_manager, field_names, field_inds_view);
     L3STER_PROFILE_REGION_END("Export results to VTK");
 }

@@ -19,6 +19,7 @@ public:
     {
         if (not is_initialized)
             static_cast< Derived* >(this)->initializeImpl(A, b, x);
+        is_initialized = true;
         static_cast< Derived* >(this)->solveImpl(A, b, x);
     }
 

@@ -32,6 +32,7 @@ MpiScopeGuard::MpiScopeGuard(int& argc, char**& argv)
 
 struct KokkosScopeGuard
 {
+    KokkosScopeGuard() { Kokkos::initialize(); }
     KokkosScopeGuard(int& argc, char** argv) { Kokkos::initialize(argc, argv); }
     KokkosScopeGuard(const KokkosScopeGuard&)                = delete;
     KokkosScopeGuard& operator=(const KokkosScopeGuard&)     = delete;

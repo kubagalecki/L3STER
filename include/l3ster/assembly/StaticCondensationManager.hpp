@@ -287,15 +287,12 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemb
         const auto element_ptr_variant = mesh.find(id)->first;
         std::visit(
             [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >* element_ptr) {
-                {
-                    eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > diag_inv = elem_data.diag_block.inverse();
-                    elem_data.diag_block                                             = std::move(diag_inv);
-                }
+                eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > diag_inv = elem_data.diag_block.inverse();
+                elem_data.diag_block                                             = std::move(diag_inv);
                 const eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > primary_upd_mat =
                     -(elem_data.upper_block * elem_data.diag_block * elem_data.upper_block.transpose());
                 const Eigen::Vector< val_t, Eigen::Dynamic > primary_upd_rhs =
                     -(elem_data.upper_block * elem_data.diag_block * elem_data.rhs);
-
                 const auto [row_dofs, col_dofs, rhs_dofs] =
                     detail::getUnsortedPrimaryDofs(*element_ptr, dof_map, element_boundary);
                 detail::scatterLocalSystem(primary_upd_mat, primary_upd_rhs, matrix, rhs, row_dofs, col_dofs, rhs_dofs);
@@ -314,6 +311,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
     const Element< ET, EO >&                                       element,
     ConstexprValue< field_inds >                                   field_inds_ctwrpr)
 {
+    L3STER_PROFILE_FUNCTION;
     auto&      cond_data = m_elem_data_map.at(element.getId());
     const auto dof_inds  = computeLocalDofInds(element, node_dof_map, cond_data.internal_dof_inds, field_inds_ctwrpr);
     const auto [row_dofs, col_dofs, rhs_dofs] =
@@ -364,6 +362,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSo
     SolutionManager&                                 sol_man,
     IndexRange_c auto&&                              sol_man_inds) const
 {
+    L3STER_PROFILE_FUNCTION;
     validateSolutionUpdateInds< max_dofs_per_node >(sol_inds, sol_man, sol_man_inds);
     updateSolutionPrimaryDofs(node_dof_map, condensed_solution, sol_inds, sol_man, sol_man_inds);
     const auto dest_col_views = std::invoke([&] {

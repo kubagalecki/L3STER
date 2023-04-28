@@ -127,6 +127,7 @@ template < size_t max_dofs_per_node, CondensationPolicy CP >
 void AlgebraicSystem< max_dofs_per_node, CP >::solve(Solver_c auto&                                solver,
                                                      const Teuchos::RCP< tpetra_femultivector_t >& solution) const
 {
+    L3STER_PROFILE_FUNCTION;
     solution->switchActiveMultiVector();
     solver.solve(m_matrix, m_rhs, solution);
     solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);
