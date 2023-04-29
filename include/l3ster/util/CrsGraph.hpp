@@ -22,7 +22,8 @@ public:
 
     auto operator()(std::size_t vertex_ind) noexcept -> std::span< VertexType >;
     auto operator()(std::size_t vertex_ind) const noexcept -> std::span< const VertexType >;
-    auto size() const noexcept -> std::size_t { return m_adj_offsets.size() - 1; }
+    auto getNRows() const noexcept -> std::size_t { return m_adj_offsets.size() - 1; }
+    auto getNEntries() const noexcept -> std::size_t { return m_adjacent.size(); }
 
 private:
     auto initAdjOffsets(auto&& adj_sizes) -> ArrayOwner< std::size_t >;

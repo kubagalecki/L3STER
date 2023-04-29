@@ -48,15 +48,6 @@ int main(int argc, char* argv[])
         distributeMesh(comm, mesh, std::vector< d_id_t >(boundary_ids.begin(), boundary_ids.end()), probdef_ctwrpr);
     const auto boundary_view = my_partition.getBoundaryView(boundary_ids);
 
-    {
-        std::stringstream log_msg;
-        log_msg << "Rank " << comm.getRank()
-                << "\n\tNumber of domain elements: " << my_partition.getDomain(domain_id).getNElements()
-                << "\n\tNumber of owned nodes: " << my_partition.getOwnedNodes().size()
-                << "\n\tNumber of ghost nodes: " << my_partition.getGhostNodes().size() << '\n';
-        std::cout << log_msg.view();
-    }
-
     constexpr auto n_fields    = detail::deduceNFields(problem_def);
     constexpr auto field_inds  = makeIotaArray< size_t, n_fields >();
     constexpr auto T_inds      = std::array< size_t, 1 >{0};
@@ -134,23 +125,24 @@ int main(int argc, char* argv[])
         return retval;
     };
 
-    auto system_manager =
-        makeAlgebraicSystem(comm, my_partition, element_boundary, probdef_ctwrpr, dirichletdef_ctwrpr);
-    system_manager->beginAssembly();
-    system_manager->assembleDomainProblem(diffusion_kernel3d, my_partition, std::views::single(domain_id));
-    system_manager->endAssembly(my_partition);
+    auto alg_system = makeAlgebraicSystem(comm, my_partition, element_boundary, probdef_ctwrpr, dirichletdef_ctwrpr);
+    alg_system->beginAssembly();
+    alg_system->assembleDomainProblem(diffusion_kernel3d, my_partition, std::views::single(domain_id));
+    alg_system->endAssembly(my_partition);
 
-    system_manager->setDirichletBCValues(dirichlet_bc_val_def, my_partition, boundary_ids, ConstexprValue< T_inds >{});
-    system_manager->applyDirichletBCs();
+    alg_system->describe(comm);
+
+    alg_system->setDirichletBCValues(dirichlet_bc_val_def, my_partition, boundary_ids, ConstexprValue< T_inds >{});
+    alg_system->applyDirichletBCs();
 
     solvers::CG solver{
         1e-6, 10'000, static_cast< Belos::MsgType >(Belos::Warnings + Belos::FinalSummary + Belos::TimingDetails)};
-    auto solution = system_manager->makeSolutionVector();
-    system_manager->solve(solver, solution);
+    auto solution = alg_system->makeSolutionVector();
+    alg_system->solve(solver, solution);
 
     L3STER_PROFILE_REGION_BEGIN("Solution management");
     auto solution_manager = SolutionManager{my_partition, n_fields};
-    system_manager->updateSolution(my_partition, solution, dof_inds, solution_manager, field_inds);
+    alg_system->updateSolution(my_partition, solution, dof_inds, solution_manager, field_inds);
     L3STER_PROFILE_REGION_END("Solution management");
 
     L3STER_PROFILE_REGION_BEGIN("Compute solution error");

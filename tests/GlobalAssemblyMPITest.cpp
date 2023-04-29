@@ -106,6 +106,7 @@ void test()
     assembleBoundaryProblem();
     CHECK_THROWS(alg_sys->applyDirichletBCs());
     alg_sys->endAssembly(mesh);
+    alg_sys->describe(comm);
     CHECK_THROWS(assembleDomainProblem());
     CHECK_THROWS(assembleBoundaryProblem());
     CHECK_THROWS(alg_sys->endAssembly(mesh));
@@ -114,11 +115,11 @@ void test()
         dirichlet_bc_val_def, mesh, std::array{left_boundary, right_boundary}, ConstexprValue< std::array{0} >{});
     alg_sys->applyDirichletBCs();
 
-    //    {
-    //        auto fake_problem = makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr);
-    //        fake_problem->endAssembly(mesh);
-    //        CHECK_THROWS(fake_problem->applyDirichletBCs());
-    //    }
+    {
+        auto fake_problem = makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr);
+        fake_problem->endAssembly(mesh);
+        CHECK_THROWS(fake_problem->applyDirichletBCs());
+    }
 
     constexpr auto dof_inds = makeIotaArray< size_t, 3 >();
 

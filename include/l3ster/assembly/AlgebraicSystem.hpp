@@ -82,6 +82,8 @@ public:
 
     void solve(Solver_c auto& solver, const Teuchos::RCP< tpetra_femultivector_t >& solution) const;
 
+    inline void describe(const MpiComm& comm, std::ostream& out = std::cout) const;
+
 private:
     inline void setToZero();
 
@@ -397,6 +399,34 @@ void AlgebraicSystem< max_dofs_per_node, CP >::assertState(State                
                                                            std::source_location src_loc) const
 {
     util::throwingAssert(m_state == expected, err_msg, src_loc);
+}
+
+template < size_t max_dofs_per_node, CondensationPolicy CP >
+void AlgebraicSystem< max_dofs_per_node, CP >::describe(const MpiComm& comm, std::ostream& out) const
+{
+    const auto local_num_rows    = m_matrix->getLocalNumRows();
+    const auto local_num_cols    = m_matrix->getLocalNumCols();
+    const auto local_num_entries = m_matrix->getLocalNumEntries();
+    auto       local_sizes_max   = std::array{local_num_rows, local_num_cols, local_num_entries};
+    auto       local_sizes_min   = local_sizes_max;
+    comm.reduceInPlace(local_sizes_max, 0, MPI_MAX);
+    comm.reduceInPlace(local_sizes_min, 0, MPI_MIN);
+    if (comm.getRank() == 0)
+    {
+        const auto        global_num_rows_range = m_matrix->getRangeMap()->getGlobalNumElements();
+        const auto        global_num_rows_sum   = m_matrix->getGlobalNumRows();
+        const auto        global_num_cols       = m_matrix->getGlobalNumCols();
+        const auto        global_num_entries    = m_matrix->getGlobalNumEntries();
+        std::stringstream msg;
+        msg << "\nThe algebraic system has dimensions " << global_num_rows_range << " by " << global_num_cols
+            << "\nDistribution among MPI ranks (min, max, total):"
+            << "\nRows:             " << local_sizes_min[0] << ", " << local_sizes_max[0] << ", " << global_num_rows_sum
+            << "\nColumns:          " << local_sizes_min[1] << ", " << local_sizes_max[1] << ", " << global_num_cols
+            << "\nNon-zero entries: " << local_sizes_min[2] << ", " << local_sizes_max[2] << ", " << global_num_entries
+            << "\n\n";
+        out << msg.view();
+    }
+    comm.barrier();
 }
 
 namespace detail

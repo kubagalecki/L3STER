@@ -238,6 +238,11 @@ auto computeDofGraph(const MeshPartition&                                    mes
     util::tbb::parallelFor(std::views::iota(size_t{}, owned_plus_shared_dofs.size()), remove_duplicate_entries);
     L3STER_PROFILE_REGION_END("Sort CRS graph rows and remove duplicates");
 
+    // Total number of local entries may not overflow local_dof_t (Tpetra limitation)
+    const auto num_entries = std::reduce(std::execution::par_unseq, crs_row_sizes.begin(), crs_row_sizes.end());
+    util::throwingAssert(num_entries <= static_cast< size_t >(std::numeric_limits< local_dof_t >::max()),
+                         "Size of local adjacency graph exceeded allowed value. Consider using more MPI ranks.");
+
     crs_row_sizes_dual_view.sync_device();
     return std::make_pair(std::move(graph), std::move(crs_row_sizes_dual_view));
 }
