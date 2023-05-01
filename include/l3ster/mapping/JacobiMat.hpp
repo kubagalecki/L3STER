@@ -27,7 +27,7 @@ auto getNatJacobiMatGenerator(const Element< T, O >& element)
                                 const val_t vert_coord = element.getData().vertices[shapefun_ind][spacedim_ind];
                                 const val_t shapefun_val =
                                     ReferenceBasisFunction< T,
-                                                            1, // Lagrange 1 == shape fun
+                                                            1,                    // Lagrange 1 == shape fun
                                                             shapefun_ind,
                                                             BasisTypes::Lagrange, // Lagrange 1 == shape fun
                                                             detail::derivativeByIndex(derdim_ind) >{}(point);

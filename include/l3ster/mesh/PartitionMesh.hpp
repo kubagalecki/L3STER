@@ -187,7 +187,7 @@ inline auto invokeMetisPartitioner(idx_t                 n_elements,
                                                 &objval_discarded,
                                                 retval.epart.data(),
                                                 retval.npart.data());
-    handleMetisErrorCode(error_code);
+    util::metis::handleMetisErrorCode(error_code);
     return retval;
 }
 
@@ -314,8 +314,7 @@ inline void reassignDisjointNodes(std::vector< std::pair< std::vector< n_id_t >,
     };
     for (auto& nodes : part_nodes)
         claim_nodes(nodes);
-    if (not disjoint_nodes.empty())
-        throw std::logic_error{"At least one node in the mesh does not belong to any element"};
+    util::throwingAssert(disjoint_nodes.empty(), "At least one node in the mesh does not belong to any element");
 }
 
 inline auto assignNodes(idx_t                                             n_parts,

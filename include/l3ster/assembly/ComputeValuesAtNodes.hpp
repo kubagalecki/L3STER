@@ -191,11 +191,12 @@ void computeValuesAtNodes(auto&&                                                
         }
         else
         {
-            std::cerr << "Attempting to compute nodal values for an element for which the passed kernel is invalid. "
-                         "Please check the kernel was defined correctly, and that you are setting nodal values in the "
-                         "correct domain (e.g. that you're not trying to evaluate a 2D kernel in a 3D domain). This "
-                         "process will now terminate.\n";
-            std::terminate();
+            util::terminatingAssert(
+                false,
+                "Attempting to compute nodal values for an element for which the passed kernel is invalid. Please "
+                "check the kernel was defined correctly, and that you are setting nodal values in the correct domain "
+                "(e.g. that you're not trying to evaluate a 2D kernel in a 3D domain). This process will now "
+                "terminate.");
         }
     };
     mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
@@ -248,11 +249,12 @@ void computeValuesAtBoundaryNodes(auto&&                                        
         }
         else
         {
-            std::cerr << "Attempting to compute boundary nodal values for an element for which the passed kernel is "
-                         "invalid. Please check the kernel was defined correctly, and that you are setting nodal "
-                         "values in the correct domain (e.g. that you're not trying to evaluate a 2D kernel in a 3D "
-                         "domain). This process will now terminate.\n";
-            std::terminate();
+            util::terminatingAssert(
+                false,
+                "Attempting to compute boundary nodal values for an element for which the passed kernel is invalid. "
+                "Please check the kernel was defined correctly, and that you are setting nodal values in the correct "
+                "domain (e.g. that you're not trying to evaluate a 2D kernel in a 3D domain). This process will now "
+                "terminate.");
         }
     };
     boundary.visit(process_element, std::execution::par);

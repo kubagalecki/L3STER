@@ -1,10 +1,12 @@
-#ifndef L3STER_SOURCELOCATION_HPP
-#define L3STER_SOURCELOCATION_HPP
+#ifndef L3STER_UTIL_ASSERTION_HPP
+#define L3STER_UTIL_ASSERTION_HPP
 
 #include <algorithm>
 #include <array>
 #include <charconv>
 #include <concepts>
+#include <exception>
+#include <iostream>
 #include <iterator>
 #include <ranges>
 #include <source_location>
@@ -13,6 +15,8 @@
 #include <string>
 
 namespace lstr::util
+{
+namespace detail
 {
 [[nodiscard]] inline auto parseSourceLocation(std::source_location src_loc) -> std::string
 {
@@ -29,12 +33,12 @@ namespace lstr::util
 
     const auto file_name  = std::string_view{src_loc.file_name()};
     const auto fun_name   = std::string_view{src_loc.function_name()};
-    const auto in_fun_txt = "; In function "sv;
+    const auto in_fun_txt = "\n\tIn function "sv;
     const auto line_txt   = parse_int(line_buf, src_loc.line());
     const auto col_txt    = parse_int(col_buf, src_loc.line());
 
-    auto retval = std::string{};
-    retval.reserve(file_name.size() + fun_name.size() + in_fun_txt.size() + line_txt.size() + col_txt.size() + 3u);
+    auto retval = std::string{"\t"};
+    retval.reserve(file_name.size() + fun_name.size() + in_fun_txt.size() + line_txt.size() + col_txt.size() + 5u);
     std::ranges::copy(file_name, std::back_inserter(retval));
     retval.push_back(':');
     std::ranges::copy(line_txt, std::back_inserter(retval));
@@ -42,23 +46,44 @@ namespace lstr::util
     std::ranges::copy(col_txt, std::back_inserter(retval));
     std::ranges::copy(in_fun_txt, std::back_inserter(retval));
     std::ranges::copy(fun_name, std::back_inserter(retval));
-    retval.push_back('\n');
+    retval.append("\n\t");
     return retval;
 }
 
-inline auto runtimeError(std::string_view err_messge, std::source_location src_loc = std::source_location::current())
+inline auto makeErrMsg(std::string_view err_message, std::source_location src_loc) -> std::string
 {
     auto err_msg_src_located = parseSourceLocation(src_loc);
-    err_msg_src_located.reserve(err_msg_src_located.size() + err_messge.size());
-    std::ranges::copy(err_messge, std::back_inserter(err_msg_src_located));
-    throw std::runtime_error{err_msg_src_located.c_str()};
+    err_msg_src_located.reserve(err_msg_src_located.size() + err_message.size());
+    std::ranges::copy(err_message, std::back_inserter(err_msg_src_located));
+    return err_msg_src_located;
 }
 
-inline auto
+inline void throwErrorWithLocation(std::string_view err_message, std::source_location src_loc)
+{
+    const auto err_msg = makeErrMsg(err_message, src_loc);
+    throw std::runtime_error{err_msg.c_str()};
+}
+
+inline void terminateWithMessage(std::string_view err_message, std::source_location src_loc)
+{
+    std::cerr << makeErrMsg(err_message, src_loc);
+    std::terminate();
+}
+} // namespace detail
+
+inline void
 throwingAssert(bool condition, std::string_view err_msg, std::source_location src_loc = std::source_location::current())
 {
     if (not condition)
-        runtimeError(err_msg, src_loc);
+        detail::throwErrorWithLocation(err_msg, src_loc);
+}
+
+inline void terminatingAssert(bool                 condition,
+                              std::string_view     err_msg,
+                              std::source_location src_loc = std::source_location::current())
+{
+    if (not condition)
+        detail::terminateWithMessage(err_msg, src_loc);
 }
 } // namespace lstr::util
-#endif // L3STER_SOURCELOCATION_HPP
+#endif // L3STER_UTIL_ASSERTION_HPP

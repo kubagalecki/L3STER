@@ -3,13 +3,13 @@
 
 #include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
-#include "l3ster/util/SourceLocation.hpp"
+#include "l3ster/util/Assertion.hpp"
 
 #include <iostream>
 
 inline void logErrorAndTerminate(std::string_view err_msg)
 {
-    auto err_src_loc = lstr::util::parseSourceLocation(std::source_location::current());
+    auto err_src_loc = lstr::util::detail::parseSourceLocation(std::source_location::current());
     err_src_loc.reserve(err_src_loc.size() + err_msg.size() + 1);
     std::ranges::copy(err_msg, std::back_inserter(err_src_loc));
     err_src_loc.push_back('\n');

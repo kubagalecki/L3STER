@@ -183,9 +183,9 @@ TEST_CASE("MetisGraphWrapper", "[util]")
             node_adjcncy[base + j - 1] = j;
     }
 
-    MetisGraphWrapper test_obj1{node_adjcncy_inds, node_adjcncy, n_nodes};
-    auto              test_obj2{std::move(test_obj1)};
-    auto              test_obj3 = test_obj2;
+    auto test_obj1 = util::metis::GraphWrapper{node_adjcncy_inds, node_adjcncy, n_nodes};
+    auto test_obj2{std::move(test_obj1)};
+    auto test_obj3 = test_obj2;
 
     test_obj3 = test_obj2;
     test_obj3 = test_obj3;

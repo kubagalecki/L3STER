@@ -1663,9 +1663,9 @@ public:
                 mMaxNumElementsAllowed = std::move(o.mMaxNumElementsAllowed);
                 mInfoInc               = std::move(o.mInfoInc);
                 mInfoHashShift         = std::move(o.mInfoHashShift);
-                WHash::    operator=(std::move(static_cast< WHash& >(o)));
+                WHash::operator=(std::move(static_cast< WHash& >(o)));
                 WKeyEqual::operator=(std::move(static_cast< WKeyEqual& >(o)));
-                DataPool:: operator=(std::move(static_cast< DataPool& >(o)));
+                DataPool::operator=(std::move(static_cast< DataPool& >(o)));
 
                 o.init();
             }
@@ -1732,9 +1732,9 @@ public:
             // clear also resets mInfo to 0, that's sometimes not necessary.
             destroy();
             init();
-            WHash::    operator=(static_cast< const WHash& >(o));
+            WHash::operator=(static_cast< const WHash& >(o));
             WKeyEqual::operator=(static_cast< const WKeyEqual& >(o));
-            DataPool:: operator=(static_cast< DataPool const& >(o));
+            DataPool::operator=(static_cast< DataPool const& >(o));
 
             return *this;
         }
@@ -1761,9 +1761,9 @@ public:
             mInfo = reinterpret_cast< uint8_t* >(mKeyVals + numElementsWithBuffer);
             // sentinel is set in cloneData
         }
-        WHash::    operator=(static_cast< const WHash& >(o));
+        WHash::operator=(static_cast< const WHash& >(o));
         WKeyEqual::operator=(static_cast< const WKeyEqual& >(o));
-        DataPool:: operator=(static_cast< DataPool const& >(o));
+        DataPool::operator=(static_cast< DataPool const& >(o));
         mHashMultiplier        = o.mHashMultiplier;
         mNumElements           = o.mNumElements;
         mMask                  = o.mMask;
@@ -2105,7 +2105,7 @@ public:
     typename std::enable_if< Self_::is_transparent, // NOLINT(modernize-use-nodiscard)
                              const_iterator >::type // NOLINT(modernize-use-nodiscard)
     find(const OtherKey& key) const
-    { // NOLINT(modernize-use-nodiscard)
+    {                                               // NOLINT(modernize-use-nodiscard)
         ROBIN_HOOD_TRACE(this)
         const size_t idx = findIdx(key);
         return const_iterator{mKeyVals + idx, mInfo + idx};

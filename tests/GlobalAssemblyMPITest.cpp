@@ -166,6 +166,8 @@ void test()
     comm.barrier();
     REQUIRE(error.norm() < 1e-10);
     REQUIRE(boundary_error.norm() < 1e-10);
+
+    alg_sys->beginAssembly();
 }
 
 // Solve 2D diffusion problem

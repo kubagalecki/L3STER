@@ -139,11 +139,12 @@ void assembleGlobalSystem(auto&&                                               k
         }
         else
         {
-            std::cerr << "Attempting to assemble local system for which the passed kernel is invalid. Please check "
-                         "that the kernel was defined correctly, and that you are assembling the problem in the "
-                         "correct domain (e.g. that you're not trying to assemble a 2D problem in a 3D domain). This "
-                         "process will now terminate.\n";
-            std::terminate(); // Throwing in a parallel context would terminate regardless
+            // Throwing in a parallel context would terminate regardless
+            util::terminatingAssert(
+                false,
+                "Attempting to assemble local system for which the passed kernel is invalid. Please check that the "
+                "kernel was defined correctly, and that you are assembling the problem in the correct domain (e.g. "
+                "that you're not trying to assemble a 2D problem in a 3D domain). This process will now terminate.\n");
         }
     };
     const auto stack_size_guard = util::StackSizeGuard{
@@ -184,11 +185,13 @@ void assembleGlobalBoundarySystem(auto&&                                        
         }
         else
         {
-            std::cerr << "Attempting to assemble local boundary system for which the passed kernel is invalid. Please "
-                         "check that the kernel was defined correctly, and that you are assembling the problem in the "
-                         "correct domain (e.g. that you're not trying to assemble a 2D problem in a 3D domain). This "
-                         "process will now terminate.\n";
-            std::terminate(); // Throwing in a parallel context would terminate regardless
+            // Throwing in a parallel context would terminate regardless
+            util::terminatingAssert(
+                false,
+                "Attempting to assemble local boundary system for which the passed kernel is invalid. Please check "
+                "that the kernel was defined correctly, and that you are assembling the problem in the correct domain "
+                "(e.g. that you're not trying to assemble a 2D problem in a 3D domain). This process will now "
+                "terminate.\n");
         };
     };
     const auto stack_size_guard = util::StackSizeGuard{

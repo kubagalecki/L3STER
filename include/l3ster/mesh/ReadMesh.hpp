@@ -2,6 +2,7 @@
 #define L3STER_MESH_READMESH_HPP
 
 #include "l3ster/mesh/Mesh.hpp"
+#include "l3ster/util/Assertion.hpp"
 #include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/Meta.hpp"
 
@@ -57,10 +58,11 @@ void reorderNodes(auto& nodes)
 inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh >)
 {
     L3STER_PROFILE_FUNCTION;
-    const auto throw_error = [&file_path](std::string_view message) {
+    const auto throw_error = [&file_path](std::string_view     message,
+                                          std::source_location src_loc = std::source_location::current()) {
         std::stringstream error_msg;
         error_msg << "Error: " << message << "\nWhile trying to read: " << file_path;
-        throw std::invalid_argument{error_msg.str()};
+        util::throwingAssert(false, error_msg.view(), src_loc);
     };
 
     std::ifstream file;
@@ -71,8 +73,7 @@ inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
                     std::istream_iterator< char >{},
                     section_name.cbegin(),
                     section_name.cend());
-        if (not file.good())
-            throw_error(err_msg);
+        util::throwingAssert(file.good(), err_msg);
     };
 
     enum class Format
@@ -140,7 +141,7 @@ inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
         }
 
         if (format != Format::ASCII_V4)
-            throw_error("Only the ASCII v4 gmsh format is currently supported [TO DO]");
+            throw_error("Only the ASCII v4 gmsh format is currently supported");
 
         return format;
     };
@@ -172,7 +173,7 @@ inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
                         std::stringstream error_msg;
                         error_msg << "Entity of dimension " << dim << " and tag " << entity_tag
                                   << " has more than one physical tag";
-                        throw_error(error_msg.str().c_str());
+                        throw_error(error_msg.view());
                     }
                     else if (n_physical_tags == 1)
                     {
@@ -326,7 +327,7 @@ inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
                 default:
                     std::stringstream err;
                     err << "Unsupported element type: " << element_type;
-                    throw_error(err.str().c_str());
+                    throw_error(err.view());
                 }
             }
             skip_until_section("$EndElements");
@@ -339,8 +340,7 @@ inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
 
     // Parse
     file.open(std::filesystem::path{file_path});
-    if (not file.is_open())
-        throw_error("Could not open mesh file");
+    util::throwingAssert(file.is_open(), "Could not open mesh file");
 
     const auto format_data  = parse_format();
     const auto entity_data  = parse_entities(format_data);

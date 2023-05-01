@@ -46,10 +46,10 @@ public:
                   SizedRangeOfConvertibleTo_c< n_id_t > auto&& nodes,
                   SizedRangeOfConvertibleTo_c< n_id_t > auto&& ghost_nodes);
 
-    inline const MetisGraphWrapper& initDualGraph();
-    void                            deleteDualGraph() noexcept { m_dual_graph.reset(); }
-    [[nodiscard]] bool              isDualGraphInitialized() const noexcept { return m_dual_graph.has_value(); }
-    [[nodiscard]] inline const MetisGraphWrapper& getDualGraph() const;
+    inline const util::metis::GraphWrapper& initDualGraph();
+    void                                    deleteDualGraph() noexcept { m_dual_graph.reset(); }
+    [[nodiscard]] bool                      isDualGraphInitialized() const noexcept { return m_dual_graph.has_value(); }
+    [[nodiscard]] inline const util::metis::GraphWrapper& getDualGraph() const;
 
     // Iteration (visiting) over elements
     template < SimpleExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
@@ -155,8 +155,8 @@ public:
     [[nodiscard]] domain_map_t getConversionAlloc() const;
 
 private:
-    [[nodiscard]] inline auto              convertToMetisFormat() const;
-    [[nodiscard]] inline MetisGraphWrapper makeMetisDualGraph() const;
+    [[nodiscard]] inline auto                      convertToMetisFormat() const;
+    [[nodiscard]] inline util::metis::GraphWrapper makeMetisDualGraph() const;
 
     static inline cfind_result_t constifyFindResult(find_result_t found);
 
@@ -170,10 +170,10 @@ private:
     template < ElementTypes T, el_o_t O >
     el_boundary_view_result_t getElementBoundaryViewFallback(const Element< T, O >& el, d_id_t d) const;
 
-    domain_map_t                       m_domains;
-    node_vec_t                         m_nodes;
-    size_t                             m_n_owned_nodes;
-    std::optional< MetisGraphWrapper > m_dual_graph;
+    domain_map_t                               m_domains;
+    node_vec_t                                 m_nodes;
+    size_t                                     m_n_owned_nodes;
+    std::optional< util::metis::GraphWrapper > m_dual_graph;
 };
 
 MeshPartition::MeshPartition(MeshPartition::domain_map_t domains_) : m_domains{std::move(domains_)}
@@ -204,12 +204,12 @@ MeshPartition::cfind_result_t MeshPartition::constifyFindResult(find_result_t fo
         return std::make_pair(*detail::constifyFound(found->first), found->second);
 }
 
-const MetisGraphWrapper& MeshPartition::initDualGraph()
+const util::metis::GraphWrapper& MeshPartition::initDualGraph()
 {
     return m_dual_graph ? *m_dual_graph : m_dual_graph.emplace(makeMetisDualGraph());
 }
 
-const MetisGraphWrapper& MeshPartition::getDualGraph() const
+const util::metis::GraphWrapper& MeshPartition::getDualGraph() const
 {
     if (m_dual_graph)
         return *m_dual_graph;
@@ -574,8 +574,9 @@ BoundaryView MeshPartition::getBoundaryView(detail::DomainIdRange_c auto&& bound
 
 size_t MeshPartition::getNElements() const
 {
-    return std::accumulate(
-        m_domains.cbegin(), m_domains.cend(), 0, [](size_t s, const auto& d) { return s + d.second.getNElements(); });
+    return std::transform_reduce(m_domains.cbegin(), m_domains.cend(), size_t{}, std::plus{}, [](const auto& d) {
+        return d.second.getNElements();
+    });
 }
 
 template < el_o_t O >
@@ -610,7 +611,7 @@ auto MeshPartition::convertToMetisFormat() const
     return std::make_pair(std::move(eptr), std::move(eind));
 }
 
-MetisGraphWrapper MeshPartition::makeMetisDualGraph() const
+util::metis::GraphWrapper MeshPartition::makeMetisDualGraph() const
 {
     auto [eptr, eind] = convertToMetisFormat();
     auto  ne          = exactIntegerCast< idx_t >(getNElements());
@@ -622,9 +623,9 @@ MetisGraphWrapper MeshPartition::makeMetisDualGraph() const
     idx_t* adjncy{};
 
     const auto error_code = METIS_MeshToDual(&ne, &nn, eptr.data(), eind.data(), &ncommon, &numflag, &xadj, &adjncy);
-    detail::handleMetisErrorCode(error_code);
+    util::metis::handleMetisErrorCode(error_code);
 
-    return MetisGraphWrapper{xadj, adjncy, getNElements()};
+    return util::metis::GraphWrapper{xadj, adjncy, getNElements()};
 }
 
 size_t MeshPartition::computeTopoHash() const

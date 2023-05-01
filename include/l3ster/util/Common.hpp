@@ -1,8 +1,8 @@
 #ifndef L3STER_UTIL_COMMON_HPP
 #define L3STER_UTIL_COMMON_HPP
 
+#include "l3ster/util/Assertion.hpp"
 #include "l3ster/util/Concepts.hpp"
-#include "l3ster/util/SourceLocation.hpp"
 
 #include <algorithm>
 #include <array>
@@ -135,15 +135,6 @@ struct Pair
     T1 first;
     T2 second;
 };
-
-template < std::integral T >
-std::vector< T > concatVectors(std::vector< T > v1, const std::vector< T >& v2)
-{
-    const auto v1_size_old = v1.size();
-    v1.resize(v1.size() + v2.size());
-    std::ranges::copy(v2, std::next(begin(v1), v1_size_old));
-    return v1;
-}
 
 template < IndexRange_c auto inds, typename T, size_t N, std::indirectly_writable< T > Iter >
 Iter copyValuesAtInds(const std::array< T, N >& array, Iter out_iter, ConstexprValue< inds > = {})

@@ -7,8 +7,8 @@
 #include "l3ster/bcs/DirichletBC.hpp"
 #include "l3ster/bcs/GetDirichletDofs.hpp"
 #include "l3ster/solve/SolverInterface.hpp"
+#include "l3ster/util/Assertion.hpp"
 #include "l3ster/util/GlobalResource.hpp"
-#include "l3ster/util/SourceLocation.hpp"
 #include "l3ster/util/TypeID.hpp"
 #include "l3ster/util/WeakCache.hpp"
 
