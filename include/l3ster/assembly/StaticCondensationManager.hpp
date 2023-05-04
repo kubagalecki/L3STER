@@ -287,8 +287,17 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemb
         const auto element_ptr_variant = mesh.find(id)->first;
         std::visit(
             [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >* element_ptr) {
+                std::stringstream out;
+
                 eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > diag_inv = elem_data.diag_block.inverse();
                 elem_data.diag_block                                             = std::move(diag_inv);
+
+                out << element_ptr->getId() << "\n\n"
+                    << elem_data.diag_block << "\n\n"
+                    << elem_data.upper_block << "\n\n"
+                    << elem_data.rhs << "\n---\n";
+                std::cerr << out.view();
+
                 const eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > primary_upd_mat =
                     -(elem_data.upper_block * elem_data.diag_block * elem_data.upper_block.transpose());
                 const Eigen::Vector< val_t, Eigen::Dynamic > primary_upd_rhs =
@@ -314,6 +323,21 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
     L3STER_PROFILE_FUNCTION;
     auto&      cond_data = m_elem_data_map.at(element.getId());
     const auto dof_inds  = computeLocalDofInds(element, node_dof_map, cond_data.internal_dof_inds, field_inds_ctwrpr);
+
+    constexpr auto print_range = [](auto&& r, std::stringstream& out) {
+        for (auto&& e : std::forward< decltype(r) >(r))
+            out << e << ' ';
+        out << '\n';
+    };
+    std::stringstream out;
+    out << element.getId() << '\n';
+    print_range(dof_inds.primary_src_inds, out);
+    print_range(dof_inds.primary_dest_inds, out);
+    print_range(dof_inds.cond_src_inds, out);
+    print_range(dof_inds.cond_dest_inds, out);
+    out << "---\n";
+    std::cerr << out.view();
+
     const auto [row_dofs, col_dofs, rhs_dofs] =
         detail::getUnsortedPrimaryDofs(element, node_dof_map, element_boundary, field_inds_ctwrpr);
 

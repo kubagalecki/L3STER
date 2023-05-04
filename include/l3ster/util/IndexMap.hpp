@@ -21,7 +21,7 @@ public:
         for (Index i = 0; const T& v : value_range)
             m_map.emplace(v, i++);
     }
-    Index operator()(const T& entry) const noexcept { return m_map.find(entry)->second; }
+    Index operator()(const T& entry) const noexcept { return m_map.at(entry); }
 
 private:
     robin_hood::unordered_flat_map< T, Index > m_map;

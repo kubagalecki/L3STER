@@ -5,6 +5,7 @@
 
 #include "l3ster/util/Common.hpp"
 #include "l3ster/util/Concepts.hpp"
+#include "l3ster/util/StaticVector.hpp"
 
 #include <functional>
 #include <numeric>
@@ -206,16 +207,19 @@ template < template < auto... > typename Inner, template < typename... > typenam
 using cart_prod_t = apply_in_out_t< Inner, Outer, decltype(zipArrays(getCartProdComponents< Params... >())) >;
 
 template < ArrayOf_c< bool > auto A >
-consteval auto getTrueInds()
+constexpr auto getTrueInds() -> std::array< size_t, std::ranges::count(A, true) >
 {
-    std::array< size_t, std::ranges::count(A, true) > retval;
-    auto                                              insert_it = retval.begin();
-    for (size_t i = 0; bool v : A)
-    {
-        if (v)
-            *insert_it++ = i;
-        ++i;
-    }
+    auto retval = std::array< size_t, std::ranges::count(A, true) >{};
+    std::ranges::copy_if(std::views::iota(size_t{}, A.size()), retval.begin(), [](size_t i) { return A[i]; });
+    return retval;
+}
+
+template < size_t N >
+constexpr auto getTrueInds(const std::array< bool, N >& a) -> util::StaticVector< size_t, N >
+{
+    auto retval = util::StaticVector< size_t, N >{};
+    std::ranges::copy_if(
+        std::views::iota(size_t{}, a.size()), std::back_inserter(retval), [&a](size_t i) { return a[i]; });
     return retval;
 }
 } // namespace lstr

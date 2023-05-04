@@ -14,24 +14,24 @@ class StaticVector
 public:
     using value_type = T;
 
-    T*       begin() { return m_data.begin(); }
-    const T* begin() const { return m_data.begin(); }
-    T*       end() { return m_data.begin() + m_size; }
-    const T* end() const { return m_data.begin() + m_size; }
+    constexpr T*       begin() { return m_data.begin(); }
+    constexpr const T* begin() const { return m_data.begin(); }
+    constexpr T*       end() { return m_data.begin() + m_size; }
+    constexpr const T* end() const { return m_data.begin() + m_size; }
 
-    T*       data() { return m_data.data(); }
-    const T* data() const { return m_data.data(); }
+    constexpr T*       data() { return m_data.data(); }
+    constexpr const T* data() const { return m_data.data(); }
 
-    T&       operator[](std::size_t i) { return m_data[i]; }
-    const T& operator[](std::size_t i) const { return m_data[i]; }
-    T&       front() { return m_data[0]; }
-    const T& front() const { return m_data[0]; }
-    T&       back() { return m_data[m_size - 1]; }
-    const T& back() const { return m_data[m_size - 1]; }
+    constexpr T&       operator[](std::size_t i) { return m_data[i]; }
+    constexpr const T& operator[](std::size_t i) const { return m_data[i]; }
+    constexpr T&       front() { return m_data[0]; }
+    constexpr const T& front() const { return m_data[0]; }
+    constexpr T&       back() { return m_data[m_size - 1]; }
+    constexpr const T& back() const { return m_data[m_size - 1]; }
 
-    [[nodiscard]] std::size_t size() const { return m_size; }
+    [[nodiscard]] constexpr std::size_t size() const { return m_size; }
 
-    void resize(std::size_t size, const T& val = T{})
+    constexpr void resize(std::size_t size, const T& val = T{})
     {
         if (size <= m_size)
             erase(std::prev(end(), m_size - size), end());
@@ -41,9 +41,9 @@ public:
             m_size = size;
         }
     }
-    void push_back(T t) { m_data[m_size++] = std::move(t); }
-    void pop_back() { std::destroy_at(begin() + --m_size); }
-    T*   erase(const T* first, const T* last)
+    constexpr void push_back(T t) { m_data[m_size++] = std::move(t); }
+    constexpr void pop_back() { std::destroy_at(begin() + --m_size); }
+    constexpr T*   erase(const T* first, const T* last)
     {
         const auto last_moved = std::move(const_cast< T* >(last), end(), const_cast< T* >(first));
         std::destroy(last_moved, end());

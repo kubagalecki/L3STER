@@ -50,16 +50,14 @@ void test()
 
     constexpr auto diffusion_kernel2d =
         [](const auto&, const std::array< std::array< val_t, 0 >, 2 >&, const SpaceTimePoint&) noexcept {
-            using mat_t = Eigen::Matrix< val_t, 4, 3 >;
-            std::pair< std::array< mat_t, 3 >, Eigen::Vector4d > retval;
+            auto retval           = std::pair< std::array< Eigen::Matrix< val_t, 4, 3 >, 3 >, Eigen::Vector4d >{};
             auto& [matrices, rhs] = retval;
             auto& [A0, A1, A2]    = matrices;
             constexpr double k    = 1.; // diffusivity
-
-            A0       = mat_t::Zero();
-            A1       = mat_t::Zero();
-            A2       = mat_t::Zero();
-            rhs      = Eigen::Vector4d::Zero();
+            A0.setZero();
+            A1.setZero();
+            A2.setZero();
+            rhs.setZero();
             A0(1, 1) = -1.;
             A0(2, 2) = -1.;
             A1(0, 1) = k;
@@ -73,23 +71,20 @@ void test()
     static_assert(detail::Kernel_c< decltype(diffusion_kernel2d), 2, 0 >);
     constexpr auto neumann_bc_kernel =
         [](const auto&, const auto&, const auto&, const Eigen::Matrix< val_t, 2, 1 >& normal) noexcept {
-            using mat_t = Eigen::Matrix< val_t, 1, 3 >;
-            using vec_t = Eigen::Vector< val_t, 1 >;
-            std::pair< std::array< mat_t, 3 >, vec_t > retval;
+            auto retval = std::pair< std::array< Eigen::Matrix< val_t, 1, 3 >, 3 >, Eigen::Vector< val_t, 1 > >{};
             auto& [matrices, rhs] = retval;
             auto& [A0, A1, A2]    = matrices;
-
-            A0       = mat_t::Zero();
-            A1       = mat_t::Zero();
-            A2       = mat_t::Zero();
-            rhs      = vec_t::Zero();
+            A0.setZero();
+            A1.setZero();
+            A2.setZero();
+            rhs.setZero();
             A0(0, 1) = normal[0];
             A0(0, 2) = normal[1];
             return retval;
         };
     constexpr auto dirichlet_bc_val_def = [node_dist](const auto&, const auto&, const SpaceTimePoint& p) {
-        Eigen::Vector< val_t, 1 > retval;
-        retval[0] = p.space.x() / node_dist.back();
+        auto retval = Eigen::Vector< val_t, 1 >{};
+        retval[0]   = p.space.x() / node_dist.back();
         return retval;
     };
 
@@ -139,13 +134,13 @@ void test()
     // Check results
     constexpr auto compute_error =
         [node_dist](const auto& vals, [[maybe_unused]] const auto& ders, const SpaceTimePoint& point) noexcept {
-            Eigen::Matrix< val_t, 3, 1 > error;
-            const auto                   T     = vals[0];
-            const auto                   dT_dx = vals[1];
-            const auto                   dT_dy = vals[2];
-            error[0]                           = T - point.space.x() / node_dist.back();
-            error[1]                           = dT_dx - 1. / node_dist.back();
-            error[2]                           = dT_dy;
+            auto       error = Eigen::Matrix< val_t, 3, 1 >{};
+            const auto T     = vals[0];
+            const auto dT_dx = vals[1];
+            const auto dT_dy = vals[2];
+            error[0]         = T - point.space.x() / node_dist.back();
+            error[1]         = dT_dx - 1. / node_dist.back();
+            error[2]         = dT_dy;
             return error;
         };
     constexpr auto compute_boundary_error =

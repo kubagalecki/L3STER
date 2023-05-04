@@ -593,3 +593,10 @@ TEST_CASE("StaticVector", "[util]")
     REQUIRE(vec.size() == 10);
     CHECK(std::ranges::equal(vec | std::views::drop(9), std::views::single(42)));
 }
+
+TEST_CASE("getTrueInds", "[util]")
+{
+    constexpr auto in  = std::array{false, false, false, true};
+    constexpr auto out = getTrueInds< in >();
+    static_assert(std::ranges::equal(out, std::views::single(3)));
+}

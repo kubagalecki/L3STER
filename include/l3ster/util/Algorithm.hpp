@@ -157,10 +157,10 @@ constexpr void forConstexpr(F&& f, ConstexprValue< R >)
                  std::make_integer_sequence< diff_t, std::ranges::size(R) >{});
 }
 
-template < typename F, std::ranges::sized_range auto R >
+template < typename F, std::ranges::range auto R >
 void forEachConstexprParallel(F&& f, ConstexprValue< R >)
 {
-    if constexpr (std::ranges::size(R) > 1) // tbb::parallel_invoke requires at least 2 function objects
+    if constexpr (std::ranges::distance(R) > 1) // tbb::parallel_invoke requires at least 2 function objects
     {
         using diff_t                 = std::ranges::range_difference_t< decltype(R) >;
         const auto invoke_on_indices = [&f]< diff_t... I >(std::integer_sequence< diff_t, I... >) {
@@ -171,10 +171,12 @@ void forEachConstexprParallel(F&& f, ConstexprValue< R >)
                 f(ConstexprValue< access_range(I) >{});
             }...);
         };
-        invoke_on_indices(std::make_integer_sequence< diff_t, std::ranges::size(R) >{});
+        invoke_on_indices(std::make_integer_sequence< diff_t, std::ranges::distance(R) >{});
     }
-    else
+    else if constexpr (std::ranges::distance(R) == 1)
         std::invoke(std::forward< F >(f), ConstexprValue< *std::ranges::cbegin(R) >{});
+    else
+        return;
 }
 
 template < typename T >
