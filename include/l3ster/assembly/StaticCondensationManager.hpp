@@ -113,6 +113,25 @@ template <>
 class StaticCondensationManager< CondensationPolicy::ElementBoundary > :
     public StaticCondensationManagerInterface< StaticCondensationManager< CondensationPolicy::ElementBoundary > >
 {
+    template < ElementTypes ET, el_o_t EO, size_t dofs_per_node >
+    struct LocalDofInds
+    {
+        static constexpr size_t n_primary_dofs =
+            dofs_per_node * ElementTraits< Element< ET, EO > >::boundary_node_inds.size();
+        static constexpr size_t n_condensed_dofs =
+            dofs_per_node * ElementTraits< Element< ET, EO > >::internal_node_inds.size();
+
+        std::array< std::uint32_t, n_primary_dofs >   primary_src_inds, primary_dest_inds;
+        std::array< std::uint32_t, n_condensed_dofs > cond_src_inds, cond_dest_inds;
+    };
+
+    struct ElementCondData
+    {
+        size_t                                                  internal_dofs_offs, internal_dofs_size;
+        eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > diag_block, upper_block;
+        Eigen::Vector< val_t, Eigen::Dynamic >                  rhs;
+    };
+
 public:
     StaticCondensationManager() = default;
     template < size_t max_dofs_per_node, ProblemDef_c auto problem_def >
@@ -143,31 +162,14 @@ public:
                              IndexRange_c auto&&                              sol_man_inds) const;
 
 private:
-    template < ElementTypes ET, el_o_t EO, size_t dofs_per_node >
-    struct LocalDofInds
-    {
-        static constexpr size_t n_primary_dofs =
-            dofs_per_node * ElementTraits< Element< ET, EO > >::boundary_node_inds.size();
-        static constexpr size_t n_condensed_dofs =
-            dofs_per_node * ElementTraits< Element< ET, EO > >::internal_node_inds.size();
-
-        std::array< std::uint32_t, n_primary_dofs >   primary_src_inds, primary_dest_inds;
-        std::array< std::uint32_t, n_condensed_dofs > cond_src_inds, cond_dest_inds;
-    };
+    inline auto getInternalDofInds(const ElementCondData& cond_data) const -> std::span< const std::uint8_t >;
 
     template < ElementTypes ET, el_o_t EO, size_t max_dofs_per_node, ArrayOf_c< size_t > auto field_inds >
-    static auto computeLocalDofInds(const Element< ET, EO >&                         element,
-                                    const NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map,
-                                    std::span< const std::uint8_t >                  internal_dof_inds,
-                                    ConstexprValue< field_inds >                     field_inds_ctwrpr)
+    auto computeLocalDofInds(const Element< ET, EO >&                         element,
+                             const NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map,
+                             const ElementCondData&                           cond_data,
+                             ConstexprValue< field_inds >                     field_inds_ctwrpr)
         -> LocalDofInds< ET, EO, field_inds.size() >;
-
-    struct ElementCondData
-    {
-        std::span< const std::uint8_t >                         internal_dof_inds;
-        eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > diag_block, upper_block;
-        Eigen::Vector< val_t, Eigen::Dynamic >                  rhs;
-    };
 
     robin_hood::unordered_flat_map< el_id_t, ElementCondData > m_elem_data_map;
     std::vector< std::uint8_t >                                m_internal_dof_inds;
@@ -224,6 +226,7 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
         std::transform_reduce(problem_def.begin(), problem_def.end(), size_t{}, std::plus{}, [&mesh](const auto& p) {
             return mesh.getDomain(p.first).getNElements();
         });
+    std::cout << n_active_elems << '\n';
     m_internal_dof_inds.reserve(n_active_elems * max_dofs_per_node);
     const auto compute_elem_dof_info = [&dof_map]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
         // Bitmap is initially inverted, i.e., 0 implies that the dof is active (avoids awkward all-true construction)
@@ -247,15 +250,16 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
     mesh.visit(
         [&compute_elem_dof_info, this]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
             const auto [n_boundary_dofs, internal_dof_bmp] = compute_elem_dof_info(element);
-            const auto el_int_dofs_begin                   = m_internal_dof_inds.end();
+            const auto el_int_dofs_offs                    = m_internal_dof_inds.size();
+            const auto n_int_dofs_per_node                 = internal_dof_bmp.count();
             for (std::uint8_t i = 0; i != internal_dof_bmp.size(); ++i)
                 if (internal_dof_bmp[i])
                     m_internal_dof_inds.push_back(i);
-            const auto el_int_dofs_end = m_internal_dof_inds.end();
             const auto n_internal_dofs =
-                ElementTraits< Element< ET, EO > >::internal_node_inds.size() * internal_dof_bmp.count();
+                ElementTraits< Element< ET, EO > >::internal_node_inds.size() * n_int_dofs_per_node;
             m_elem_data_map.emplace(element.getId(),
-                                    ElementCondData{.internal_dof_inds{el_int_dofs_begin, el_int_dofs_end},
+                                    ElementCondData{.internal_dofs_offs{el_int_dofs_offs},
+                                                    .internal_dofs_size{n_int_dofs_per_node},
                                                     .diag_block{n_internal_dofs, n_internal_dofs},
                                                     .upper_block{n_boundary_dofs, n_internal_dofs},
                                                     .rhs{n_internal_dofs, 1}});
@@ -322,7 +326,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
 {
     L3STER_PROFILE_FUNCTION;
     auto&      cond_data = m_elem_data_map.at(element.getId());
-    const auto dof_inds  = computeLocalDofInds(element, node_dof_map, cond_data.internal_dof_inds, field_inds_ctwrpr);
+    const auto dof_inds  = computeLocalDofInds(element, node_dof_map, cond_data, field_inds_ctwrpr);
 
     constexpr auto print_range = [](auto&& r, std::stringstream& out) {
         for (auto&& e : std::forward< decltype(r) >(r))
@@ -414,7 +418,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSo
                 for (Eigen::Index internal_ind = 0; auto node : getInternalNodes(*element_ptr))
                 {
                     auto node_vals = std::array< val_t, max_dofs_per_node >{};
-                    for (auto int_dof_ind : elem_data.internal_dof_inds)
+                    for (auto int_dof_ind : getInternalDofInds(elem_data))
                         node_vals[int_dof_ind] = internal_vals[internal_ind++];
                     const auto local_node_ind = sol_man.getNodeMap().at(node);
                     for (size_t i = 0; auto src_ind : sol_inds)
@@ -425,11 +429,18 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSo
     });
 }
 
+auto StaticCondensationManager< CondensationPolicy::ElementBoundary >::getInternalDofInds(
+    const ElementCondData& cond_data) const -> std::span< const std::uint8_t >
+{
+    return {std::views::counted(std::next(m_internal_dof_inds.cbegin(), cond_data.internal_dofs_offs),
+                                cond_data.internal_dofs_size)};
+}
+
 template < ElementTypes ET, el_o_t EO, size_t max_dofs_per_node, ArrayOf_c< size_t > auto field_inds >
 auto StaticCondensationManager< CondensationPolicy::ElementBoundary >::computeLocalDofInds(
     const Element< ET, EO >&                         element,
     const NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map,
-    std::span< const std::uint8_t >                  internal_dof_inds,
+    const ElementCondData&                           cond_data,
     ConstexprValue< field_inds >) -> LocalDofInds< ET, EO, field_inds.size() >
 {
     constexpr auto inds_to_bmp = [](const auto& inds) {
@@ -438,12 +449,31 @@ auto StaticCondensationManager< CondensationPolicy::ElementBoundary >::computeLo
             retval[i] = true;
         return retval;
     };
+    const auto     internal_dof_inds = getInternalDofInds(cond_data);
     constexpr auto active_inds_bmp   = inds_to_bmp(field_inds);
     const auto     internal_dof_bmp  = inds_to_bmp(internal_dof_inds);
-    auto           retval            = LocalDofInds< ET, EO, field_inds.size() >{};
-    size_t         primary_write_ind = 0, cond_write_ind = 0;
-    std::uint32_t  local_system_ind = 0, primary_ind = 0, cond_ind = 0;
-    auto           boundary_ind_iter = ElementTraits< Element< ET, EO > >::boundary_node_inds.cbegin();
+
+    constexpr auto print_bmp = []< size_t N >(const std::array< bool, N >& bmp) {
+        for (auto b : bmp)
+            std::cout << (b ? 1 : 0) << ' ';
+        std::cout << '\n';
+    };
+
+    std::cout << element.getId() << '\n';
+    for (auto i : field_inds)
+        std::cout << i << ' ';
+    std::cout << '\n';
+    for (int i : internal_dof_inds)
+        std::cout << i << ' ';
+    std::cout << '\n';
+    print_bmp(active_inds_bmp);
+    print_bmp(internal_dof_bmp);
+    std::cout << "---\n";
+
+    auto          retval            = LocalDofInds< ET, EO, field_inds.size() >{};
+    size_t        primary_write_ind = 0, cond_write_ind = 0;
+    std::uint32_t local_system_ind = 0, primary_ind = 0, cond_ind = 0;
+    auto          boundary_ind_iter = ElementTraits< Element< ET, EO > >::boundary_node_inds.cbegin();
     for (el_locind_t node_ind = 0; auto node : element.getNodes())
     {
         if (*boundary_ind_iter == node_ind++)

@@ -149,7 +149,7 @@ void assembleGlobalSystem(auto&&                                               k
     };
     const auto stack_size_guard = util::StackSizeGuard{
         util::default_stack_size + detail::deduceRequiredStackSizeDomain< decltype(kernel), n_fields >()};
-    mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
+    mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids)/*, std::execution::par*/);
 }
 
 template < size_t                   n_fields,
@@ -196,7 +196,7 @@ void assembleGlobalBoundarySystem(auto&&                                        
     };
     const auto stack_size_guard = util::StackSizeGuard{
         util::default_stack_size + detail::deduceRequiredStackSizeBoundary< decltype(kernel), n_fields >()};
-    boundary.visit(process_element, std::execution::par);
+    boundary.visit(process_element/*, std::execution::par*/);
 }
 } // namespace lstr
 #endif // L3STER_ASSEMBLY_ASSEMBLEGLOBALSYSTEM_HPP
