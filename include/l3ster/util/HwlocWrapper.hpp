@@ -1,7 +1,16 @@
 #ifndef L3STER_UTIL_NUMATOPOLOGY_HPP
 #define L3STER_UTIL_NUMATOPOLOGY_HPP
 
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wconversion"
+#endif
+
 #include "hwloc.h"
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
 
 #include <algorithm>
 #include <concepts>
@@ -71,10 +80,10 @@ void hwlocBitmapForEachWrapper(hwloc_bitmap_t bitmap, const F& fun)
     requires std::is_invocable_v< F, hwloc_bitmap_t >
 {
     HwlocBitmapRaiiWrapper helper{};
-    size_t                 index;
+    int                    index;
     hwloc_bitmap_foreach_begin(index, bitmap)
     {
-        hwloc_bitmap_only(helper, index);
+        hwloc_bitmap_only(helper, static_cast< unsigned >(index));
         fun(helper);
     }
     hwloc_bitmap_foreach_end();
@@ -85,10 +94,10 @@ void hwlocBitmapForEachWrapper(hwloc_const_bitmap_t bitmap, const F& fun)
     requires std::is_invocable_v< F, hwloc_const_bitmap_t >
 {
     HwlocBitmapRaiiWrapper helper{};
-    size_t                 index;
+    int                    index;
     hwloc_bitmap_foreach_begin(index, bitmap)
     {
-        hwloc_bitmap_only(helper, index);
+        hwloc_bitmap_only(helper, static_cast< unsigned >(index));
         fun(helper);
     }
     hwloc_bitmap_foreach_end();

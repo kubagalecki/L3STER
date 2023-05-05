@@ -1,8 +1,8 @@
 #ifndef L3STER_MESH_BOUNDARYVIEW_HPP
 #define L3STER_MESH_BOUNDARYVIEW_HPP
 
-#include "l3ster/mesh/Aliases.hpp"
 #include "l3ster/mesh/BoundaryElementView.hpp"
+#include "l3ster/mesh/ElementMeta.hpp"
 
 #include <utility>
 
@@ -28,13 +28,12 @@ public:
                typename Red,
                ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
     Zero reduce(Zero&& zero, Proj&& projection, Red&& reduction, ExecPolicy&& policy = {}) const
-        requires invocable_on_boundary_element_views_r< Proj, Zero > and
-                 requires(std::remove_cvref_t< Zero > z, std::remove_cvref_t< Red > r) {
-                     {
-                         std::invoke(
-                             std::forward< Red >(reduction), std::forward< Zero >(zero), std::forward< Zero >(zero))
-                     } -> std::convertible_to< std::remove_cvref_t< Zero > >;
-                 };
+        requires invocable_on_boundary_element_views_r< Proj, Zero > and requires(std::remove_cvref_t< Zero > z,
+                                                                                  std::remove_cvref_t< Red >  r) {
+            {
+                std::invoke(std::forward< Red >(reduction), std::forward< Zero >(zero), std::forward< Zero >(zero))
+            } -> std::convertible_to< std::remove_cvref_t< Zero > >;
+        };
 
     [[nodiscard]] const MeshPartition* getParent() const { return m_parent_partition; }
     [[nodiscard]] size_t               size() const { return m_boundary_elements.size(); }

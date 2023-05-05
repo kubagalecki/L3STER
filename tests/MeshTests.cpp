@@ -43,7 +43,7 @@ TEST_CASE("2D mesh import", "[mesh]")
     part.initDualGraph();
     std::vector< BoundaryView > boundaries;
     boundaries.reserve(4);
-    for (int i = 2; i <= 5; ++i)
+    for (d_id_t i = 2; i <= 5; ++i)
         boundaries.push_back(part.getBoundaryView(i));
     CHECK(boundaries[0].size() == 10);
     CHECK(boundaries[1].size() == 10);
@@ -63,7 +63,7 @@ TEST_CASE("3D mesh import", "[mesh]")
     CHECK(part.getNElements() == expected_nelements);
     CHECK(part.getOwnedNodes().size() == expected_nvertices);
 
-    for (int i = 2; i <= 7; ++i)
+    for (d_id_t i = 2; i <= 7; ++i)
         CHECK_NOTHROW(part.getBoundaryView(i));
     CHECK(part.getBoundaryView(42).size() == 0);
 }
@@ -109,7 +109,7 @@ TEMPLATE_TEST_CASE("Iteration over elements",
     const auto     policy    = TestType{};
 
     int        count           = 0;
-    const auto element_counter = [&](const auto& el) {
+    const auto element_counter = [&](const auto&) {
         ++std::atomic_ref{count};
     };
 
@@ -220,7 +220,7 @@ TEMPLATE_TEST_CASE("Element lookup", "[mesh]", std::execution::sequenced_policy,
             return std::ranges::equal(element_nodes, fake_nodes);
         },
         policy));
-    CHECK_FALSE(MeshPartition{}.find([](const auto& el) { return true; }, policy));
+    CHECK_FALSE(MeshPartition{}.find([](const auto&) { return true; }, policy));
     CHECK_FALSE(MeshPartition{}.find(0));
 }
 

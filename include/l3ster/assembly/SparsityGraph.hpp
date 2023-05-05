@@ -6,37 +6,51 @@
 #include "l3ster/util/CrsGraph.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/IndexMap.hpp"
-
-#include <bit>
-#include <mutex>
+#include "l3ster/util/StaticVector.hpp"
 
 namespace lstr::detail
 {
-template < IndexRange_c auto dof_inds, size_t n_nodes, size_t dofs_per_node >
+template < IndexRange_c auto dof_inds, size_t n_nodes, size_t dofs_per_node, CondensationPolicy CP >
 auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&       nodes,
-                      const NodeToGlobalDofMap< dofs_per_node >& map,
+                      const NodeToGlobalDofMap< dofs_per_node >& node_dof_map,
+                      const NodeCondensationMap< CP >&           cond_map,
                       ConstexprValue< dof_inds >                 dofinds_ctwrpr = {})
 {
     std::array< global_dof_t, std::ranges::size(dof_inds) * n_nodes > retval;
     std::ranges::copy(nodes | std::views::transform([&](n_id_t node) {
-                          return getValuesAtInds(map(node), dofinds_ctwrpr);
+                          return getValuesAtInds(node_dof_map(cond_map.getCondensedId(node)), dofinds_ctwrpr);
                       }) | std::views::join,
                       begin(retval));
     return retval;
 }
 
-template < IndexRange_c auto dof_inds, size_t n_nodes, size_t dofs_per_node, size_t num_maps >
+template < size_t n_nodes, size_t dofs_per_node >
+auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                              nodes,
+                      const NodeToGlobalDofMap< dofs_per_node >&                        node_dof_map,
+                      const NodeCondensationMap< CondensationPolicy::ElementBoundary >& cond_map)
+{
+    util::StaticVector< global_dof_t, dofs_per_node * n_nodes > retval;
+    std::ranges::copy(
+        nodes | std::views::transform([&](n_id_t node) { return node_dof_map(cond_map.getCondensedId(node)); }) |
+            std::views::join |
+            std::views::filter([](auto node) { return node != NodeToGlobalDofMap< dofs_per_node >::invalid_dof; }),
+        std::back_inserter(retval));
+    return retval;
+}
+
+template < IndexRange_c auto dof_inds, size_t n_nodes, size_t dofs_per_node, size_t num_maps, CondensationPolicy CP >
 auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                nodes,
-                      const NodeToLocalDofMap< dofs_per_node, num_maps >& map,
-                      ConstexprValue< dof_inds >                          dofinds_ctwrpr = {})
+                      const NodeToLocalDofMap< dofs_per_node, num_maps >& node_dof_map,
+                      CondensationPolicyTag< CP >,
+                      const ConstexprValue< dof_inds > dofinds_ctwrpr = {})
 {
     using dof_array_t = std::array< local_dof_t, std::ranges::size(dof_inds) * n_nodes >;
-    std::array< dof_array_t, num_maps >                    retval;
-    std::array< typename dof_array_t::iterator, num_maps > iters;
+    auto retval       = std::array< dof_array_t, num_maps >{};
+    auto iters        = std::array< typename dof_array_t::iterator, num_maps >{};
     std::ranges::transform(retval, begin(iters), [](auto& arr) { return arr.begin(); });
     for (auto node : nodes)
     {
-        const auto& all_dof_arrays = map(node);
+        const auto& all_dof_arrays = node_dof_map(node);
         for (size_t i = 0; const auto& all_dofs : all_dof_arrays)
         {
             iters[i] = copyValuesAtInds(all_dofs, iters[i], dofinds_ctwrpr);
@@ -46,22 +60,74 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                nodes,
     return retval;
 }
 
-template < IndexRange_c auto dof_inds, ElementTypes T, el_o_t O >
-auto getSortedElementDofs(const Element< T, O >&     element,
-                          const NodeToDofMap_c auto& map,
-                          ConstexprValue< dof_inds > dofinds_ctwrpr = {})
+template < size_t n_nodes, size_t dofs_per_node, size_t num_maps >
+auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                nodes,
+                      const NodeToLocalDofMap< dofs_per_node, num_maps >& node_dof_map)
 {
-    auto nodes_copy = element.getNodes();
-    std::ranges::sort(nodes_copy);
-    return getDofsFromNodes(nodes_copy, map, dofinds_ctwrpr);
+    using dof_vec_t = util::StaticVector< local_dof_t, dofs_per_node * n_nodes >;
+    std::array< dof_vec_t, num_maps > retval;
+    for (auto node : nodes)
+    {
+        const auto& all_dof_arrays = node_dof_map(node);
+        for (size_t i = 0; const auto& all_dofs : all_dof_arrays)
+        {
+            std::ranges::copy_if(all_dofs, std::back_inserter(retval[i]), [](local_dof_t dof) {
+                return dof != NodeToLocalDofMap< dofs_per_node, num_maps >::invalid_dof;
+            });
+            ++i;
+        }
+    }
+    return retval;
 }
 
-template < IndexRange_c auto dof_inds, ElementTypes T, el_o_t O >
-auto getUnsortedElementDofs(const Element< T, O >&     element,
-                            const NodeToDofMap_c auto& map,
-                            ConstexprValue< dof_inds > dofinds_ctwrpr = {})
+template < IndexRange_c auto dof_inds, ElementTypes ET, el_o_t EO >
+auto getSortedPrimaryDofs(const Element< ET, EO >&                               element,
+                          const NodeToDofMap_c auto&                             node_dof_map,
+                          const NodeCondensationMap< CondensationPolicy::None >& cond_map,
+                          ConstexprValue< dof_inds >                             dofinds_ctwrpr = {})
 {
-    return getDofsFromNodes(element.getNodes(), map, dofinds_ctwrpr);
+    auto primary_nodes = getPrimaryNodesArray< CondensationPolicy::None >(element);
+    std::ranges::sort(primary_nodes);
+    return getDofsFromNodes(primary_nodes, node_dof_map, cond_map, dofinds_ctwrpr);
+}
+
+template < IndexRange_c auto dof_inds, ElementTypes ET, el_o_t EO, size_t max_dofs_per_node, CondensationPolicy CP >
+auto getUnsortedPrimaryDofs(const Element< ET, EO >&                       element,
+                            const NodeToGlobalDofMap< max_dofs_per_node >& node_dof_map,
+                            const NodeCondensationMap< CP >&               cond_map,
+                            ConstexprValue< dof_inds >                     dofinds_ctwrpr = {})
+{
+    return getDofsFromNodes(getPrimaryNodesArray< CP >(element), node_dof_map, cond_map, dofinds_ctwrpr);
+}
+
+template < IndexRange_c auto  dof_inds,
+           ElementTypes       ET,
+           el_o_t             EO,
+           size_t             max_dofs_per_node,
+           size_t             num_maps,
+           CondensationPolicy CP >
+auto getUnsortedPrimaryDofs(const Element< ET, EO >&                                element,
+                            const NodeToLocalDofMap< max_dofs_per_node, num_maps >& node_dof_map,
+                            CondensationPolicyTag< CP >                             cond_policy,
+                            ConstexprValue< dof_inds >                              dofinds_ctwrpr = {})
+{
+    return getDofsFromNodes(getPrimaryNodesArray< CP >(element), node_dof_map, cond_policy, dofinds_ctwrpr);
+}
+
+template < ElementTypes ET, el_o_t EO, size_t max_dofs_per_node, CondensationPolicy CP >
+auto getUnsortedPrimaryDofs(const Element< ET, EO >&                       element,
+                            const NodeToGlobalDofMap< max_dofs_per_node >& node_dof_map,
+                            const NodeCondensationMap< CP >&               cond_map)
+{
+    return getDofsFromNodes(getPrimaryNodesArray< CP >(element), node_dof_map, cond_map);
+}
+
+template < ElementTypes ET, el_o_t EO, size_t max_dofs_per_node, size_t num_maps, CondensationPolicy CP >
+auto getUnsortedPrimaryDofs(const Element< ET, EO >&                                element,
+                            const NodeToLocalDofMap< max_dofs_per_node, num_maps >& node_dof_map,
+                            CondensationPolicyTag< CP >)
+{
+    return getDofsFromNodes(getPrimaryNodesArray< CP >(element), node_dof_map);
 }
 
 struct NodeDofs
@@ -70,26 +136,29 @@ struct NodeDofs
     size_t                      n_owned_dofs;
 };
 
-template < size_t max_dofs_per_node >
-auto computeNodeDofs(const MeshPartition& mesh, const NodeToGlobalDofMap< max_dofs_per_node >& node_to_dof_map)
-    -> NodeDofs
+template < size_t max_dofs_per_node, CondensationPolicy CP >
+auto computeNodeDofs(const MeshPartition&                           mesh,
+                     const NodeToGlobalDofMap< max_dofs_per_node >& node_to_dof_map,
+                     const NodeCondensationMap< CP >&               cond_map) -> NodeDofs
 {
-    const auto getNodeDofs = [&node_to_dof_map](auto node_span) {
-        return node_span | std::views::transform(node_to_dof_map) | std::views::join |
+    const auto get_node_dofs = [&node_to_dof_map](auto&& node_range) {
+        return std::forward< decltype(node_range) >(node_range) | std::views::transform(node_to_dof_map) |
+               std::views::join |
                std::views::filter([](auto dof) { return dof != NodeToGlobalDofMap< max_dofs_per_node >::invalid_dof; });
     };
     std::vector< global_dof_t > dofs;
-    dofs.reserve(mesh.getAllNodes().size() * max_dofs_per_node);
-    std::ranges::copy(getNodeDofs(mesh.getOwnedNodes()), std::back_inserter(dofs));
+    dofs.reserve(cond_map.getCondensedIds().size() * max_dofs_per_node);
+    std::ranges::copy(get_node_dofs(getCondensedOwnedNodesView(mesh, cond_map)), std::back_inserter(dofs));
     const auto n_owned_dofs = dofs.size();
-    std::ranges::copy(getNodeDofs(mesh.getGhostNodes()), std::back_inserter(dofs));
+    std::ranges::copy(get_node_dofs(getCondensedGhostNodesView(mesh, cond_map)), std::back_inserter(dofs));
     dofs.shrink_to_fit();
     return {std::move(dofs), n_owned_dofs};
 }
 
-template < auto problem_def >
+template < auto problem_def, CondensationPolicy CP >
 auto computeDofGraph(const MeshPartition&                                    mesh,
                      const NodeToGlobalDofMap< deduceNFields(problem_def) >& node_to_dof_map,
+                     const NodeCondensationMap< CP >&                        cond_map,
                      std::span< const global_dof_t >                         owned_plus_shared_dofs,
                      ConstexprValue< problem_def >                           problem_def_ctwrapper)
     -> std::pair< util::CrsGraph< global_dof_t >, Kokkos::DualView< size_t*, tpetra_fecrsgraph_t::execution_space > >
@@ -100,15 +169,18 @@ auto computeDofGraph(const MeshPartition&                                    mes
     L3STER_PROFILE_REGION_END("Compute global to local DOF map");
 
     const auto iterate_over_mesh = [&](auto&& element_kernel) {
-        const auto domain_kernel = [&]< auto dom_def >(ConstexprValue< dom_def >) {
-            constexpr auto domain_id              = dom_def.first;
-            constexpr auto covered_dof_inds       = getTrueInds< dom_def.second >();
-            const auto     wrapped_element_kernel = [&](const auto& element) {
-                std::invoke(element_kernel, element, ConstexprValue< covered_dof_inds >{});
-            };
-            mesh.visit(wrapped_element_kernel, domain_id, std::execution::par);
-        };
-        forEachConstexprParallel(domain_kernel, problem_def_ctwrapper);
+        forEachConstexprParallel(
+            [&]< auto dom_def >(ConstexprValue< dom_def >) {
+                constexpr auto domain_id        = dom_def.first;
+                constexpr auto covered_dof_inds = getTrueInds< dom_def.second >();
+                mesh.visit(
+                    [&](const auto& element) {
+                        std::invoke(element_kernel, element, ConstexprValue< covered_dof_inds >{});
+                    },
+                    domain_id,
+                    std::execution::par);
+            },
+            problem_def_ctwrapper);
     };
 
     auto crs_row_sizes_dual_view = Kokkos::DualView< size_t*, tpetra_fecrsgraph_t::execution_space >{
@@ -118,9 +190,17 @@ auto computeDofGraph(const MeshPartition&                                    mes
     const auto crs_row_sizes = asSpan(crs_row_sizes_host_view);
     std::ranges::fill(crs_row_sizes, size_t{});
 
+    const auto get_element_dofs = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element,
+                                                                    auto                     dofinds_ctwrpr) {
+        if constexpr (CP == CondensationPolicy::None)
+            return getUnsortedPrimaryDofs(element, node_to_dof_map, cond_map, dofinds_ctwrpr);
+        else if constexpr ((CP == CondensationPolicy::ElementBoundary))
+            return getUnsortedPrimaryDofs(element, node_to_dof_map, cond_map);
+    };
+
     const auto compute_max_row_sizes = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element,
-                                                                         auto                     dof_inds_ctwrapper) {
-        const auto element_dofs = getUnsortedElementDofs(element, node_to_dof_map, dof_inds_ctwrapper);
+                                                                         auto                     dofinds_ctwrpr) {
+        const auto element_dofs = get_element_dofs(element, dofinds_ctwrpr);
         for (auto global_dof : element_dofs)
         {
             const auto local_dof = global_to_local_dof_map(global_dof);
@@ -136,7 +216,7 @@ auto computeDofGraph(const MeshPartition&                                    mes
 
     const auto fill_graph = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element,
                                                               auto                     dof_inds_ctwrapper) {
-        const auto element_dofs = getUnsortedElementDofs(element, node_to_dof_map, dof_inds_ctwrapper);
+        const auto element_dofs = get_element_dofs(element, dof_inds_ctwrapper);
         for (auto global_dof : element_dofs)
         {
             const auto local_dof     = global_to_local_dof_map(global_dof);
@@ -161,31 +241,41 @@ auto computeDofGraph(const MeshPartition&                                    mes
     util::tbb::parallelFor(std::views::iota(size_t{}, owned_plus_shared_dofs.size()), remove_duplicate_entries);
     L3STER_PROFILE_REGION_END("Sort CRS graph rows and remove duplicates");
 
+    // Total number of local entries may not overflow local_dof_t (Tpetra limitation)
+    const auto num_entries = std::reduce(std::execution::par_unseq, crs_row_sizes.begin(), crs_row_sizes.end());
+    util::throwingAssert(num_entries <= static_cast< size_t >(std::numeric_limits< local_dof_t >::max()),
+                         "Size of local adjacency graph exceeded allowed value. Consider using more MPI ranks.");
+
     crs_row_sizes_dual_view.sync_device();
     return std::make_pair(std::move(graph), std::move(crs_row_sizes_dual_view));
 }
 
-inline auto makeDofMaps(std::span< const global_dof_t > owned,
-                        std::span< const global_dof_t > owned_plus_shared,
-                        const MpiComm&                  comm)
+inline auto initCrsGraph(const MpiComm&                                                    comm,
+                         std::span< const global_dof_t >                                   owned_dofs,
+                         std::span< const global_dof_t >                                   owned_plus_shared_dofs,
+                         Kokkos::DualView< size_t*, tpetra_fecrsgraph_t::execution_space > row_sizes)
 {
-    return std::make_pair(makeTpetraMap(owned, comm), makeTpetraMap(owned_plus_shared, comm));
+    auto owned_map             = makeTpetraMap(owned_dofs, comm);
+    auto owned_plus_shared_map = makeTpetraMap(owned_plus_shared_dofs, comm);
+    return makeTeuchosRCP< tpetra_fecrsgraph_t >(
+        std::move(owned_map), std::move(owned_plus_shared_map), std::move(row_sizes));
 }
 
-template < detail::ProblemDef_c auto problem_def >
+template < detail::ProblemDef_c auto problem_def, CondensationPolicy CP >
 Teuchos::RCP< const tpetra_fecrsgraph_t >
-makeSparsityGraph(const MeshPartition&                                    mesh,
+makeSparsityGraph(const MpiComm&                                          comm,
+                  const MeshPartition&                                    mesh,
                   const NodeToGlobalDofMap< deduceNFields(problem_def) >& node_to_dof_map,
-                  ConstexprValue< problem_def >                           problemdef_ctwrapper,
-                  const MpiComm&                                          comm)
+                  const NodeCondensationMap< CP >&                        cond_map,
+                  ConstexprValue< problem_def >                           problemdef_ctwrapper)
 {
     L3STER_PROFILE_FUNCTION;
-    const auto [all_dofs, n_owned_dofs] = computeNodeDofs(mesh, node_to_dof_map);
+    const auto [all_dofs, n_owned_dofs] = computeNodeDofs(mesh, node_to_dof_map, cond_map);
     const auto owned_plus_shared_dofs   = std::span{all_dofs};
     const auto owned_dofs               = owned_plus_shared_dofs.subspan(0, n_owned_dofs);
-    auto [dof_graph, row_sizes] = computeDofGraph(mesh, node_to_dof_map, owned_plus_shared_dofs, problemdef_ctwrapper);
-    const auto [owned_map, owned_plus_shared_map] = makeDofMaps(owned_dofs, owned_plus_shared_dofs, comm);
-    auto retval = makeTeuchosRCP< tpetra_fecrsgraph_t >(owned_map, owned_plus_shared_map, row_sizes);
+    auto [dof_graph, row_sizes] =
+        computeDofGraph(mesh, node_to_dof_map, cond_map, owned_plus_shared_dofs, problemdef_ctwrapper);
+    auto retval = initCrsGraph(comm, owned_dofs, owned_plus_shared_dofs, row_sizes);
     retval->beginAssembly();
     L3STER_PROFILE_REGION_BEGIN("Insert into Tpetra::FECrsGraph");
     const auto row_sizes_host_view = row_sizes.view_host();

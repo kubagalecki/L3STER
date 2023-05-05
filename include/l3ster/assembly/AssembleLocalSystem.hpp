@@ -10,26 +10,27 @@
 #include "l3ster/mapping/MapReferenceToPhysical.hpp"
 #include "l3ster/mesh/BoundaryElementView.hpp"
 #include "l3ster/util/Caliper.hpp"
+#include "l3ster/util/SetStackSize.hpp"
 
 namespace lstr
 {
 namespace detail
 {
 template < typename T >
-concept ValidKernelResult_c = Pair_c< T > and Array_c< typename T::first_type > and
-                              EigenMatrix_c< typename T::first_type::value_type > and
-                              EigenVector_c< typename T::second_type > and
-                              (T::first_type::value_type::RowsAtCompileTime == T::second_type::RowsAtCompileTime);
+concept ValidKernelResult_c =
+    Pair_c< T > and Array_c< typename T::first_type > and eigen::Matrix_c< typename T::first_type::value_type > and
+    eigen::Vector_c< typename T::second_type > and
+    (T::first_type::value_type::RowsAtCompileTime == T::second_type::RowsAtCompileTime);
 
 template < typename K, dim_t dim, size_t n_fields >
 concept Kernel_c = requires(K                                                kernel,
                             std::array< val_t, n_fields >                    node_vals,
                             std::array< std::array< val_t, n_fields >, dim > node_ders,
                             SpaceTimePoint                                   point) {
-                       {
-                           std::invoke(kernel, node_vals, node_ders, point)
-                       } noexcept -> ValidKernelResult_c;
-                   };
+    {
+        std::invoke(kernel, node_vals, node_ders, point)
+    } noexcept -> ValidKernelResult_c;
+};
 
 template < typename K, dim_t dim, size_t n_fields >
 concept BoundaryKernel_c = requires(K                                                kernel,
@@ -37,10 +38,10 @@ concept BoundaryKernel_c = requires(K                                           
                                     std::array< std::array< val_t, n_fields >, dim > node_ders,
                                     SpaceTimePoint                                   point,
                                     Eigen::Vector< val_t, dim >                      normal) {
-                               {
-                                   std::invoke(kernel, node_vals, node_ders, point, normal)
-                               } noexcept -> ValidKernelResult_c;
-                           };
+    {
+        std::invoke(kernel, node_vals, node_ders, point, normal)
+    } noexcept -> ValidKernelResult_c;
+};
 
 template < typename Kernel, dim_t dim, size_t n_fields >
     requires Kernel_c< Kernel, dim, n_fields > or BoundaryKernel_c< Kernel, dim, n_fields >
@@ -76,8 +77,8 @@ inline constexpr std::size_t n_equations =
     kernel_result_t< Kernel, dim, n_fields >::first_type::value_type::RowsAtCompileTime;
 
 template < int n_nodes, int n_fields >
-auto computeFieldVals(const Eigen::Vector< val_t, n_nodes >&                 basis_vals,
-                      const EigenRowMajorMatrix< val_t, n_nodes, n_fields >& node_vals)
+auto computeFieldVals(const Eigen::Vector< val_t, n_nodes >&                   basis_vals,
+                      const eigen::RowMajorMatrix< val_t, n_nodes, n_fields >& node_vals)
 {
     std::array< val_t, n_fields > retval;
     if constexpr (n_fields != 0)
@@ -89,13 +90,13 @@ auto computeFieldVals(const Eigen::Vector< val_t, n_nodes >&                 bas
 }
 
 template < int n_nodes, int n_fields, int dim >
-auto computeFieldDers(const EigenRowMajorMatrix< val_t, dim, n_nodes >&      basis_ders,
-                      const EigenRowMajorMatrix< val_t, n_nodes, n_fields >& node_vals)
+auto computeFieldDers(const eigen::RowMajorMatrix< val_t, dim, n_nodes >&      basis_ders,
+                      const eigen::RowMajorMatrix< val_t, n_nodes, n_fields >& node_vals)
 {
     std::array< std::array< val_t, n_fields >, dim > retval;
     if constexpr (n_fields != 0)
     {
-        const EigenRowMajorMatrix< val_t, dim, n_fields > field_ders_packed = basis_ders * node_vals;
+        const eigen::RowMajorMatrix< val_t, dim, n_fields > field_ders_packed = basis_ders * node_vals;
         for (size_t dim_ind = 0; dim_ind < static_cast< size_t >(dim); ++dim_ind)
             std::copy_n(std::next(field_ders_packed.data(), dim_ind * n_fields), n_fields, retval[dim_ind].begin());
     }
@@ -105,10 +106,17 @@ auto computeFieldDers(const EigenRowMajorMatrix< val_t, dim, n_nodes >&      bas
 template < size_t problem_size, size_t update_size >
 class LocalSystemManager
 {
+    static constexpr size_t target_update_size = 128;
+    static constexpr size_t updates_per_batch  = intDivRoundUp(target_update_size, update_size);
+    static constexpr size_t batch_update_size  = update_size * updates_per_batch;
+    using batch_update_matrix_t = Eigen::Matrix< val_t, problem_size, batch_update_size, Eigen::ColMajor >;
+
 public:
-    using matrix_t = EigenRowMajorSquareMatrix< val_t, problem_size >;
+    using matrix_t = eigen::RowMajorSquareMatrix< val_t, problem_size >;
     using vector_t = Eigen::Vector< val_t, problem_size >;
     using system_t = std::pair< matrix_t, vector_t >;
+
+    static constexpr size_t required_stack_size = 2 * problem_size * batch_update_size * sizeof(val_t);
 
     inline void            setZero();
     inline const system_t& getSystem();
@@ -117,20 +125,15 @@ public:
     void update(const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dim + 1 >& kernel_result,
                 const Eigen::Vector< val_t, update_size >&                                    kernel_rhs,
                 const Eigen::Vector< val_t, n_bases >&                                        basis_vals,
-                const EigenRowMajorMatrix< val_t, dim, n_bases >&                             basis_ders,
+                const eigen::RowMajorMatrix< val_t, dim, n_bases >&                           basis_ders,
                 val_t                                                                         weight);
 
 private:
-    static constexpr size_t target_update_size = 128;
-    static constexpr size_t updates_per_batch  = intDivRoundUp(target_update_size, update_size);
-    static constexpr size_t batch_update_size  = update_size * updates_per_batch;
-    using batch_update_matrix_t = Eigen::Matrix< val_t, problem_size, batch_update_size, Eigen::ColMajor >;
-
     template < int n_unknowns, int n_bases, int dim >
     static auto
     makeBasisBlock(const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dim + 1 >& kernel_result,
                    const Eigen::Vector< val_t, n_bases >&                                        basis_vals,
-                   const EigenRowMajorMatrix< val_t, dim, n_bases >&                             basis_ders,
+                   const eigen::RowMajorMatrix< val_t, dim, n_bases >&                           basis_ders,
                    size_t                                                                        basis_ind);
 
     inline auto tieBatchData(bool is_positive);
@@ -155,10 +158,11 @@ template < int n_unknowns, int n_bases, int dim >
 auto LocalSystemManager< problem_size, update_size >::makeBasisBlock(
     const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dim + 1 >& kernel_result,
     const Eigen::Vector< val_t, n_bases >&                                        basis_vals,
-    const EigenRowMajorMatrix< val_t, dim, n_bases >&                             basis_ders,
+    const eigen::RowMajorMatrix< val_t, dim, n_bases >&                           basis_ders,
     size_t                                                                        basis_ind)
 {
-    EigenRowMajorMatrix< val_t, n_unknowns, update_size > retval = basis_vals[basis_ind] * kernel_result[0].transpose();
+    eigen::RowMajorMatrix< val_t, n_unknowns, update_size > retval =
+        basis_vals[basis_ind] * kernel_result[0].transpose();
     for (size_t dim_ind = 0; dim_ind < static_cast< size_t >(dim); ++dim_ind)
         retval += basis_ders(dim_ind, basis_ind) * kernel_result[dim_ind + 1].transpose();
     return retval;
@@ -170,7 +174,7 @@ void LocalSystemManager< problem_size, update_size >::update(
     const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dim + 1 >& kernel_result,
     const Eigen::Vector< val_t, update_size >&                                    kernel_rhs,
     const Eigen::Vector< val_t, n_bases >&                                        basis_vals,
-    const EigenRowMajorMatrix< val_t, dim, n_bases >&                             basis_ders,
+    const eigen::RowMajorMatrix< val_t, dim, n_bases >&                           basis_ders,
     val_t                                                                         weight)
 {
     const bool is_wgt_positive      = weight >= 0.;
@@ -243,11 +247,11 @@ void LocalSystemManager< problem_size, update_size >::setZero()
 } // namespace detail
 
 template < ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
-const auto& assembleLocalSystem(auto&&                                                                    kernel,
-                                const Element< ET, EO >&                                                  element,
-                                const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
-                                const ReferenceBasisAtQuadrature< ET, EO, QL >&                           basis_at_qps,
-                                val_t                                                                     time)
+const auto& assembleLocalSystem(auto&&                                                                      kernel,
+                                const Element< ET, EO >&                                                    element,
+                                const eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
+                                const ReferenceBasisAtQuadrature< ET, EO, QL >& basis_at_qps,
+                                val_t                                           time)
     requires detail::Kernel_c< decltype(kernel), Element< ET, EO >::native_dim, n_fields >
 {
     L3STER_PROFILE_FUNCTION;
@@ -273,11 +277,11 @@ const auto& assembleLocalSystem(auto&&                                          
 
 template < typename Kernel, ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
 const auto&
-assembleLocalBoundarySystem(Kernel&&                                                                  kernel,
-                            BoundaryElementView< ET, EO >                                             el_view,
-                            const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
-                            const ReferenceBasisAtQuadrature< ET, EO, QL >&                           basis_at_qps,
-                            val_t                                                                     time)
+assembleLocalBoundarySystem(Kernel&&                                                                    kernel,
+                            BoundaryElementView< ET, EO >                                               el_view,
+                            const eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
+                            const ReferenceBasisAtQuadrature< ET, EO, QL >&                             basis_at_qps,
+                            val_t                                                                       time)
     requires detail::BoundaryKernel_c< Kernel, Element< ET, EO >::native_dim, n_fields >
 {
     L3STER_PROFILE_FUNCTION;

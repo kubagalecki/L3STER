@@ -29,12 +29,6 @@ consteval size_t deduceNDomains(const problem_def_t< n_fields, n_domains >&)
     return n_domains;
 }
 
-template < size_t n_fields, size_t n_domains >
-constexpr size_t getFieldUllongSize(const problem_def_t< n_fields, n_domains >&)
-{
-    return bitsetNUllongs< n_fields >();
-}
-
 using empty_problem_def_t = std::array< Pair< d_id_t, std::array< bool, 0 > >, 0 >;
 } // namespace lstr::detail
 #endif // L3STER_ASSEMBLY_PROBLEMDEFINITION_HPP

@@ -1,8 +1,8 @@
 #ifndef L3STER_MESH_DOMAIN_HPP
 #define L3STER_MESH_DOMAIN_HPP
 
-#include "l3ster/mesh/Aliases.hpp"
 #include "l3ster/mesh/Element.hpp"
+#include "l3ster/mesh/ElementMeta.hpp"
 #include "l3ster/util/Common.hpp"
 #include "l3ster/util/TbbUtils.hpp"
 
@@ -53,12 +53,11 @@ public:
     auto
     transformReduce(const auto& zero, auto&& reduction, auto&& transform, SimpleExecutionPolicy_c auto&& policy) const
         -> std::decay_t< decltype(zero) >
-        requires invocable_on_const_elements_r< decltype(transform), std::decay_t< decltype(zero) > > and
-                 requires {
-                     {
-                         std::invoke(reduction, zero, zero)
-                     } -> std::convertible_to< std::decay_t< decltype(zero) > >;
-                 };
+        requires invocable_on_const_elements_r< decltype(transform), std::decay_t< decltype(zero) > > and requires {
+            {
+                std::invoke(reduction, zero, zero)
+            } -> std::convertible_to< std::decay_t< decltype(zero) > >;
+        };
 
     [[nodiscard]] find_result_t              find(invocable_on_const_elements_r< bool > auto&& predicate,
                                                   SimpleExecutionPolicy_c auto&&               policy);
@@ -192,12 +191,11 @@ auto Domain::transformReduce(const auto&                    zero,
                              auto&&                         reduction,
                              auto&&                         transform,
                              SimpleExecutionPolicy_c auto&& policy) const -> std::decay_t< decltype(zero) >
-    requires invocable_on_const_elements_r< decltype(transform), std::decay_t< decltype(zero) > > and
-             requires {
-                 {
-                     std::invoke(reduction, zero, zero)
-                 } -> std::convertible_to< std::decay_t< decltype(zero) > >;
-             }
+    requires invocable_on_const_elements_r< decltype(transform), std::decay_t< decltype(zero) > > and requires {
+        {
+            std::invoke(reduction, zero, zero)
+        } -> std::convertible_to< std::decay_t< decltype(zero) > >;
+    }
 {
     if constexpr (SequencedPolicy_c< decltype(policy) >)
     {
@@ -305,7 +303,7 @@ auto Domain::wrapElementVisitor(auto&& element_visitor, SimpleExecutionPolicy_c 
                 std::ranges::for_each(element_vector, element_visitor);
             };
         else
-            return [&element_visitor, &policy](auto& element_vector) {
+            return [&element_visitor](auto& element_vector) {
                 util::tbb::parallelFor(element_vector, element_visitor);
             };
     }
@@ -316,7 +314,7 @@ auto Domain::wrapElementVisitor(auto&& element_visitor, SimpleExecutionPolicy_c 
                 std::ranges::for_each(element_vector, element_visitor);
             };
         else
-            return [&element_visitor, &policy](const auto& element_vector) {
+            return [&element_visitor](const auto& element_vector) {
                 util::tbb::parallelFor(element_vector, element_visitor);
             };
     }
@@ -350,7 +348,6 @@ Domain Domain::getConversionAlloc() const
 class DomainView
 {
 public:
-    DomainView() = default;
     DomainView(const Domain& domain_, d_id_t id_) : domain{std::addressof(domain_)}, id{id_} {}
 
     [[nodiscard]] d_id_t getID() const { return id; }
@@ -358,8 +355,8 @@ public:
     [[nodiscard]] size_t getNElements() const { return domain->getNElements(); }
 
 private:
-    const Domain* domain = nullptr;
-    d_id_t        id;
+    const Domain* domain{};
+    d_id_t        id{};
 };
 } // namespace lstr
 #endif // L3STER_MESH_DOMAIN_HPP

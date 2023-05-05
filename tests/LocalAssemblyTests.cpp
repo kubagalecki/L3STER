@@ -109,7 +109,7 @@ TEST_CASE("Local system assembly", "[local_asm]")
         u(nonbc_inds) = u_red;
         u(bc_inds)    = bc_vals;
 
-        for (auto node : std::views::iota(0u, element.n_nodes))
+        for (el_locind_t node = 0; node != element.n_nodes; ++node)
         {
             const auto node_location = nodePhysicalLocation(element, node);
             const auto node_value    = solution(node_location);
@@ -117,6 +117,4 @@ TEST_CASE("Local system assembly", "[local_asm]")
             CHECK(u[sys_index] == Approx{node_value});
         }
     }
-
-    // TODO: write a few more tests, including 3D ones; blocked by: Eigen issue #2375
 }

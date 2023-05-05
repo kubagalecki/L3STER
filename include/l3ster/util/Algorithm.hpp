@@ -14,10 +14,10 @@ namespace lstr
 template < std::random_access_iterator It, typename F >
 std::vector< size_t > sortingPermutation(It first, It last, F&& compare)
     requires requires(It i, F f) {
-                 {
-                     f(*i, *i)
-                 } -> std::convertible_to< bool >;
-             }
+        {
+            f(*i, *i)
+        } -> std::convertible_to< bool >;
+    }
 {
     std::vector< size_t > indices(std::distance(first, last));
     std::iota(begin(indices), end(indices), 0u);
@@ -36,10 +36,10 @@ template < std::random_access_iterator                                It_in,
            std::output_iterator< decltype(*std::declval< It_in >()) > It_out >
 void copyPermuted(It_in first_in, It_in last_in, It_perm first_perm, It_out first_out)
     requires requires(It_perm it) {
-                 {
-                     *it
-                 } -> std::convertible_to< std::ptrdiff_t >;
-             }
+        {
+            *it
+        } -> std::convertible_to< std::ptrdiff_t >;
+    }
 {
     for (auto i = std::distance(first_in, last_in); i > 0; --i)
         *first_out++ = first_in[*first_perm++];
@@ -130,9 +130,9 @@ matchingPermutation(R1&& r_pattern, R2&& r_match, O out, Pred pred = {}, Proj1 p
                                                                                    Proj1,
                                                                                    Proj2 >
 {
-    O out_initial = out;
+    auto out_initial = out;
     std::ranges::for_each(r_match, [&](auto&& match_el) {
-        *(out++) = std::distance(begin(r_pattern),
+        *(out++) = std::distance(std::ranges::begin(r_pattern),
                                  std::ranges::find_if(
                                      r_pattern, [&](auto&& el) { return pred(el, proj2(match_el)); }, proj1));
     });
@@ -157,10 +157,10 @@ constexpr void forConstexpr(F&& f, ConstexprValue< R >)
                  std::make_integer_sequence< diff_t, std::ranges::size(R) >{});
 }
 
-template < typename F, std::ranges::sized_range auto R >
+template < typename F, std::ranges::range auto R >
 void forEachConstexprParallel(F&& f, ConstexprValue< R >)
 {
-    if constexpr (std::ranges::size(R) > 1) // tbb::parallel_invoke requires at least 2 function objects
+    if constexpr (std::ranges::distance(R) > 1) // tbb::parallel_invoke requires at least 2 function objects
     {
         using diff_t                 = std::ranges::range_difference_t< decltype(R) >;
         const auto invoke_on_indices = [&f]< diff_t... I >(std::integer_sequence< diff_t, I... >) {
@@ -171,10 +171,12 @@ void forEachConstexprParallel(F&& f, ConstexprValue< R >)
                 f(ConstexprValue< access_range(I) >{});
             }...);
         };
-        invoke_on_indices(std::make_integer_sequence< diff_t, std::ranges::size(R) >{});
+        invoke_on_indices(std::make_integer_sequence< diff_t, std::ranges::distance(R) >{});
     }
-    else
+    else if constexpr (std::ranges::distance(R) == 1)
         std::invoke(std::forward< F >(f), ConstexprValue< *std::ranges::cbegin(R) >{});
+    else
+        return;
 }
 
 template < typename T >
@@ -206,9 +208,9 @@ reduceConsecutive(R&& range, Cmp&& comparator = {}, Red&& reduction = {})
         if (adj_range_begin == std::ranges::end(range))
             break;
         auto next_adjacent = std::next(adj_range_begin);
-        *write_pos         = reduction(*adj_range_begin, *next_adjacent);
+        *write_pos         = std::invoke(reduction, std::as_const(*adj_range_begin), std::as_const(*next_adjacent));
         while (std::next(next_adjacent) != std::ranges::end(range) and
-               comparator(*next_adjacent, *std::next(next_adjacent)))
+               std::invoke(comparator, std::as_const(*next_adjacent), std::as_const(*std::next(next_adjacent))))
             *write_pos = reduction(*write_pos, *++next_adjacent);
         ++write_pos;
         it = ++next_adjacent;
@@ -223,5 +225,17 @@ constexpr auto makeIotaArray(const T& first = T{})
     std::iota(begin(retval), end(retval), first);
     return retval;
 }
+
+namespace util
+{
+template < typename T >
+void sortRemoveDup(std::vector< T >& vec)
+{
+    std::ranges::sort(vec);
+    const auto erase_range = std::ranges::unique(vec);
+    vec.erase(erase_range.begin(), erase_range.end());
+    vec.shrink_to_fit();
+}
+} // namespace util
 } // namespace lstr
 #endif // L3STER_UTIL_ALGORITHM_HPP

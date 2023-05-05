@@ -13,10 +13,10 @@ concept IntegralKernel_c = requires(T                                           
                                     std::array< val_t, n_fields >                    node_vals,
                                     std::array< std::array< val_t, n_fields >, dim > node_ders,
                                     SpaceTimePoint                                   point) {
-                               {
-                                   std::invoke(int_kernel, node_vals, node_ders, point)
-                               } noexcept -> EigenVector_c;
-                           };
+    {
+        std::invoke(int_kernel, node_vals, node_ders, point)
+    } noexcept -> eigen::Vector_c;
+};
 
 template < typename T, dim_t dim, size_t n_fields >
 concept BoundaryIntegralKernel_c = requires(T                                                int_kernel,
@@ -24,10 +24,10 @@ concept BoundaryIntegralKernel_c = requires(T                                   
                                             std::array< std::array< val_t, n_fields >, dim > node_ders,
                                             SpaceTimePoint                                   point,
                                             Eigen::Vector< val_t, dim >                      normal) {
-                                       {
-                                           std::invoke(int_kernel, node_vals, node_ders, point, normal)
-                                       } noexcept -> EigenVector_c;
-                                   };
+    {
+        std::invoke(int_kernel, node_vals, node_ders, point, normal)
+    } noexcept -> eigen::Vector_c;
+};
 
 template < typename IntKernel, dim_t dim, size_t n_fields >
     requires IntegralKernel_c< IntKernel, dim, n_fields > or BoundaryIntegralKernel_c< IntKernel, dim, n_fields >
@@ -107,11 +107,11 @@ concept PotentiallyValidBoundaryIntegralKernel_c =
     PotentiallyValidIntegralKernelDeductionHelper< Kernel, n_fields >::boundary;
 
 template < ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
-auto evalElementIntegral(auto&&                                                                    kernel,
-                         const Element< ET, EO >&                                                  element,
-                         const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
-                         const ReferenceBasisAtQuadrature< ET, EO, QL >&                           basis_at_qps,
-                         val_t                                                                     time)
+auto evalElementIntegral(auto&&                                                                      kernel,
+                         const Element< ET, EO >&                                                    element,
+                         const eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
+                         const ReferenceBasisAtQuadrature< ET, EO, QL >&                             basis_at_qps,
+                         val_t                                                                       time)
     requires IntegralKernel_c< decltype(kernel), Element< ET, EO >::native_dim, n_fields >
 {
     const auto jacobi_mat_generator = getNatJacobiMatGenerator(element);
@@ -128,11 +128,11 @@ auto evalElementIntegral(auto&&                                                 
 }
 
 template < ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
-auto evalElementBoundaryIntegral(auto&&                                                                    kernel,
-                                 const BoundaryElementView< ET, EO >&                                      el_view,
-                                 const EigenRowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
-                                 const ReferenceBasisAtQuadrature< ET, EO, QL >&                           basis_at_qps,
-                                 val_t                                                                     time)
+auto evalElementBoundaryIntegral(auto&&                                                                      kernel,
+                                 const BoundaryElementView< ET, EO >&                                        el_view,
+                                 const eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
+                                 const ReferenceBasisAtQuadrature< ET, EO, QL >& basis_at_qps,
+                                 val_t                                           time)
     requires BoundaryIntegralKernel_c< decltype(kernel), Element< ET, EO >::native_dim, n_fields >
 {
     const auto jacobi_mat_generator = getNatJacobiMatGenerator(*el_view);
@@ -150,23 +150,26 @@ auto evalElementBoundaryIntegral(auto&&                                         
     return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, result_t{result_t::Zero()});
 }
 
-template < BasisTypes BT, QuadratureTypes QT, q_o_t QO >
-auto evalLocalIntegral(auto&&                  kernel,
-                       const MeshPartition&    mesh,
-                       DomainIdRange_c auto&&  domain_ids,
-                       FieldValGetter_c auto&& field_val_getter,
-                       val_t                   time)
-    requires PotentiallyValidIntegralKernel_c< decltype(kernel), deduce_n_fields< decltype(field_val_getter) > >
+template < size_t n_fields, AssemblyOptions options >
+auto evalLocalIntegral(auto&&                                               kernel,
+                       const MeshPartition&                                 mesh,
+                       DomainIdRange_c auto&&                               domain_ids,
+                       const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
+                       ConstexprValue< options >,
+                       val_t time)
+    requires PotentiallyValidIntegralKernel_c< decltype(kernel), n_fields >
 {
-    constexpr auto n_fields     = deduce_n_fields< decltype(field_val_getter) >;
     constexpr auto n_components = n_integral_components< decltype(kernel), n_fields >;
     using integral_t            = Eigen::Vector< val_t, n_components >;
     const auto reduce_element   = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) -> integral_t {
         constexpr auto el_dim = Element< ET, EO >::native_dim;
         if constexpr (IntegralKernel_c< decltype(kernel), el_dim, n_fields >)
         {
-            const auto  field_vals = field_val_getter(element.getNodes());
-            const auto& qbv        = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
+            constexpr auto BT         = options.basis_type;
+            constexpr auto QT         = options.quad_type;
+            constexpr auto QO         = options.order(EO);
+            const auto     field_vals = field_val_getter(element.getNodes());
+            const auto&    qbv        = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
             return evalElementIntegral(kernel, element, field_vals, qbv, time);
         }
         else
@@ -185,14 +188,14 @@ auto evalLocalIntegral(auto&&                  kernel,
                                 std::execution::par);
 }
 
-template < BasisTypes BT, QuadratureTypes QT, q_o_t QO >
-auto evalLocalBoundaryIntegral(auto&&                  kernel,
-                               const BoundaryView&     boundary,
-                               FieldValGetter_c auto&& field_val_getter,
-                               val_t                   time)
-    requires PotentiallyValidBoundaryIntegralKernel_c< decltype(kernel), deduce_n_fields< decltype(field_val_getter) > >
+template < size_t n_fields, AssemblyOptions options >
+auto evalLocalBoundaryIntegral(auto&&                                               kernel,
+                               const BoundaryView&                                  boundary,
+                               const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
+                               ConstexprValue< options >,
+                               val_t time)
+    requires PotentiallyValidBoundaryIntegralKernel_c< decltype(kernel), n_fields >
 {
-    constexpr auto n_fields     = deduce_n_fields< decltype(field_val_getter) >;
     constexpr auto n_components = n_integral_components< decltype(kernel), n_fields >;
     using integral_t            = Eigen::Vector< val_t, n_components >;
     const auto reduce_element =
@@ -200,8 +203,11 @@ auto evalLocalBoundaryIntegral(auto&&                  kernel,
         constexpr auto el_dim = Element< ET, EO >::native_dim;
         if constexpr (BoundaryIntegralKernel_c< decltype(kernel), el_dim, n_fields >)
         {
-            const auto  field_vals = field_val_getter(el_view->getNodes());
-            const auto& qbv        = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
+            constexpr auto BT         = options.basis_type;
+            constexpr auto QT         = options.quad_type;
+            constexpr auto QO         = options.order(EO);
+            const auto     field_vals = field_val_getter(el_view->getNodes());
+            const auto&    qbv        = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
             return evalElementBoundaryIntegral(kernel, el_view, field_vals, qbv, time);
         }
         else
@@ -217,20 +223,22 @@ auto evalLocalBoundaryIntegral(auto&&                  kernel,
 }
 } // namespace detail
 
-template < BasisTypes BT, QuadratureTypes QT, q_o_t QO >
-auto evalIntegral(const MpiComm&                  comm,
-                  auto&&                          kernel,
-                  const MeshPartition&            mesh,
-                  detail::DomainIdRange_c auto&&  domain_ids,
-                  detail::FieldValGetter_c auto&& field_val_getter,
-                  val_t                           time = 0.)
+template < size_t n_fields = 0, AssemblyOptions opts = {} >
+auto evalIntegral(const MpiComm&                                       comm,
+                  auto&&                                               kernel,
+                  const MeshPartition&                                 mesh,
+                  detail::DomainIdRange_c auto&&                       domain_ids,
+                  const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
+                  ConstexprValue< opts >                               opts_ctwrpr      = {},
+                  val_t                                                time             = 0.)
 {
-    const EigenVector_c auto local_integral =
-        detail::evalLocalIntegral< BT, QT, QO >(std::forward< decltype(kernel) >(kernel),
-                                                mesh,
-                                                std::forward< decltype(domain_ids) >(domain_ids),
-                                                std::forward< decltype(field_val_getter) >(field_val_getter),
-                                                time);
+    const eigen::Vector_c auto local_integral =
+        detail::evalLocalIntegral(std::forward< decltype(kernel) >(kernel),
+                                  mesh,
+                                  std::forward< decltype(domain_ids) >(domain_ids),
+                                  field_val_getter,
+                                  opts_ctwrpr,
+                                  time);
     using integral_t = std::remove_const_t< decltype(local_integral) >;
     integral_t global_integral;
     comm.allReduce(
@@ -238,18 +246,16 @@ auto evalIntegral(const MpiComm&                  comm,
     return global_integral;
 }
 
-template < BasisTypes BT, QuadratureTypes QT, q_o_t QO >
-auto evalBoundaryIntegral(const MpiComm&                  comm,
-                          auto&&                          kernel,
-                          const BoundaryView&             boundary,
-                          detail::FieldValGetter_c auto&& field_val_getter,
-                          val_t                           time = 0.)
+template < size_t n_fields = 0, AssemblyOptions opts = {} >
+auto evalBoundaryIntegral(const MpiComm&                                       comm,
+                          auto&&                                               kernel,
+                          const BoundaryView&                                  boundary,
+                          const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
+                          ConstexprValue< opts >                               opts_ctwrpr      = {},
+                          val_t                                                time             = 0.)
 {
-    const EigenVector_c auto local_integral =
-        detail::evalLocalBoundaryIntegral< BT, QT, QO >(std::forward< decltype(kernel) >(kernel),
-                                                        boundary,
-                                                        std::forward< decltype(field_val_getter) >(field_val_getter),
-                                                        time);
+    const eigen::Vector_c auto local_integral = detail::evalLocalBoundaryIntegral(
+        std::forward< decltype(kernel) >(kernel), boundary, field_val_getter, opts_ctwrpr, time);
     using integral_t = std::remove_const_t< decltype(local_integral) >;
     integral_t global_integral;
     comm.allReduce(

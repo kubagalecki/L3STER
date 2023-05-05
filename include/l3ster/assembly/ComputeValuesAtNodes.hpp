@@ -19,7 +19,7 @@ concept ValueAtNodeKernel_c =
              SpaceTimePoint                                   p) {
         {
             std::invoke(kernel, vals, ders, p)
-        } -> EigenVector_c;
+        } -> eigen::Vector_c;
     } and
     (std::invoke_result_t< Kernel,
                            std::array< val_t, n_fields >,
@@ -35,7 +35,7 @@ concept ValueAtNodeBoundaryKernel_c =
              Eigen::Vector< val_t, dim >                      normal) {
         {
             std::invoke(kernel, vals, ders, p, normal)
-        } -> EigenVector_c;
+        } -> eigen::Vector_c;
     } and
     (std::invoke_result_t< Kernel,
                            std::array< val_t, n_fields >,
@@ -69,15 +69,15 @@ template < typename Kernel, size_t n_fields, size_t results_size >
 concept PotentiallyValidBoundaryNodalKernel_c =
     PotentiallyValidNodalKernelDeductionHelper< Kernel, n_fields, results_size >::boundary;
 
-template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps >
+template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
 auto initValsAndParents(const MeshPartition&                                    mesh,
                         detail::DomainIdRange_c auto&&                          domain_ids,
                         const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                         ConstexprValue< dof_inds >                              dofinds_ctwrpr,
-                        detail::FieldValGetter_c auto&&                         field_val_getter,
-                        std::span< val_t >                                      values) -> std::vector< std::uint8_t >
+                        const SolutionManager::FieldValueGetter< n_fields >&,
+                        std::span< val_t > values) -> std::vector< std::uint8_t >
 {
-    if constexpr (deduce_n_fields< decltype(field_val_getter) > != 0)
+    if constexpr (n_fields != 0)
     {
         std::vector< std::uint8_t > retval(values.size(), 0);
         const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
@@ -96,12 +96,12 @@ auto initValsAndParents(const MeshPartition&                                    
         return {};
 }
 
-template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps >
+template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
 auto initValsAndParents(const BoundaryView&                                     boundary,
                         const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                         ConstexprValue< dof_inds >                              dofinds_ctwrpr,
-                        detail::FieldValGetter_c auto&&                         field_val_getter,
-                        std::span< val_t >                                      values) -> std::vector< std::uint8_t >
+                        const SolutionManager::FieldValueGetter< n_fields >&,
+                        std::span< val_t > values) -> std::vector< std::uint8_t >
 {
     std::vector< std::uint8_t > retval(values.size(), 0);
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
@@ -142,18 +142,16 @@ void computeValuesAtNodes(const MeshPartition&                                  
     mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
 }
 
-template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps >
+template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
 void computeValuesAtNodes(auto&&                                                  kernel,
                           const MeshPartition&                                    mesh,
                           detail::DomainIdRange_c auto&&                          domain_ids,
                           const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                           ConstexprValue< dof_inds >                              dofinds_ctwrpr,
-                          detail::FieldValGetter_c auto&&                         field_val_getter,
+                          const SolutionManager::FieldValueGetter< n_fields >&    field_val_getter,
                           std::span< val_t >                                      values,
                           val_t                                                   time = 0.)
-    requires detail::PotentiallyValidNodalKernel_c< decltype(kernel),
-                                                    detail::deduce_n_fields< decltype(field_val_getter) >,
-                                                    std::ranges::size(dof_inds) > and
+    requires detail::PotentiallyValidNodalKernel_c< decltype(kernel), n_fields, std::ranges::size(dof_inds) > and
              (std::ranges::all_of(dof_inds, [](size_t dof) { return dof < max_dofs_per_node; }))
 {
     L3STER_PROFILE_FUNCTION;
@@ -161,7 +159,7 @@ void computeValuesAtNodes(auto&&                                                
         detail::initValsAndParents(mesh, domain_ids, map, dofinds_ctwrpr, field_val_getter, values);
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
         if constexpr (detail::ValueAtNodeKernel_c< decltype(kernel),
-                                                   detail::deduce_n_fields< decltype(field_val_getter) >,
+                                                   n_fields,
                                                    Element< ET, EO >::native_dim,
                                                    std::ranges::size(dof_inds) >)
         {
@@ -181,7 +179,7 @@ void computeValuesAtNodes(auto&&                                                
                 const auto field_ders      = detail::computeFieldDers(phys_basis_ders, node_vals);
                 const auto ker_res = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time});
                 for (size_t dof_ind = 0; auto dof : getValuesAtInds(map(el_nodes[node_ind]).front(), dofinds_ctwrpr))
-                    if constexpr (detail::deduce_n_fields< decltype(field_val_getter) > != 0)
+                    if constexpr (n_fields != 0)
                         std::atomic_ref{values[dof]}.fetch_add(
                             ker_res[dof_ind++] / static_cast< double >(num_parents[dof]), std::memory_order_relaxed);
                     else
@@ -193,34 +191,34 @@ void computeValuesAtNodes(auto&&                                                
         }
         else
         {
-            std::cerr << "Attempting to compute nodal values for an element for which the passed kernel is invalid. "
-                         "Please check the kernel was defined correctly, and that you are setting nodal values in the "
-                         "correct domain (e.g. that you're not trying to evaluate a 2D kernel in a 3D domain). This "
-                         "process will now terminate.\n";
-            std::terminate();
+            util::terminatingAssert(
+                false,
+                "Attempting to compute nodal values for an element for which the passed kernel is invalid. Please "
+                "check the kernel was defined correctly, and that you are setting nodal values in the correct domain "
+                "(e.g. that you're not trying to evaluate a 2D kernel in a 3D domain). This process will now "
+                "terminate.");
         }
     };
     mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
 }
 
-template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps >
+template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
 void computeValuesAtBoundaryNodes(auto&&                                                  kernel,
                                   const BoundaryView&                                     boundary,
                                   const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                                   ConstexprValue< dof_inds >                              dofinds_ctwrpr,
-                                  detail::FieldValGetter_c auto&&                         field_val_getter,
+                                  const SolutionManager::FieldValueGetter< n_fields >&    field_val_getter,
                                   std::span< val_t >                                      values,
                                   val_t                                                   time = 0.)
-    requires detail::PotentiallyValidBoundaryNodalKernel_c< decltype(kernel),
-                                                            detail::deduce_n_fields< decltype(field_val_getter) >,
-                                                            std::ranges::size(dof_inds) > and
+    requires detail::
+                 PotentiallyValidBoundaryNodalKernel_c< decltype(kernel), n_fields, std::ranges::size(dof_inds) > and
              (std::ranges::all_of(dof_inds, [](size_t dof) { return dof < max_dofs_per_node; }))
 {
     L3STER_PROFILE_FUNCTION;
     const auto num_parents     = detail::initValsAndParents(boundary, map, dofinds_ctwrpr, field_val_getter, values);
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(BoundaryElementView< ET, EO > el_view) {
         if constexpr (detail::ValueAtNodeBoundaryKernel_c< decltype(kernel),
-                                                           detail::deduce_n_fields< decltype(field_val_getter) >,
+                                                           n_fields,
                                                            Element< ET, EO >::native_dim,
                                                            std::ranges::size(dof_inds) >)
         {
@@ -251,11 +249,12 @@ void computeValuesAtBoundaryNodes(auto&&                                        
         }
         else
         {
-            std::cerr << "Attempting to compute boundary nodal values for an element for which the passed kernel is "
-                         "invalid. Please check the kernel was defined correctly, and that you are setting nodal "
-                         "values in the correct domain (e.g. that you're not trying to evaluate a 2D kernel in a 3D "
-                         "domain). This process will now terminate.\n";
-            std::terminate();
+            util::terminatingAssert(
+                false,
+                "Attempting to compute boundary nodal values for an element for which the passed kernel is invalid. "
+                "Please check the kernel was defined correctly, and that you are setting nodal values in the correct "
+                "domain (e.g. that you're not trying to evaluate a 2D kernel in a 3D domain). This process will now "
+                "terminate.");
         }
     };
     boundary.visit(process_element, std::execution::par);

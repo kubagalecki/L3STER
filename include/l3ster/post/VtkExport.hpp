@@ -16,7 +16,7 @@ namespace lstr
 class PvtuExporter
 {
 public:
-    inline PvtuExporter(const MeshPartition& mesh, const tpetra_map_t& local_global_map);
+    inline PvtuExporter(const MeshPartition& mesh);
     void        exportSolution(std::string_view                                                file_name,
                                const MpiComm&                                                  comm,
                                const SolutionManager&                                          solution_manager,
@@ -54,8 +54,9 @@ private:
                              SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds,
                              const std::vector< ArrayOwner< char > >& encoded_fields) const -> std::string;
 
-    size_t
-    enqueueWrite(std::shared_ptr< MpiComm::FileHandle > file, ptrdiff_t pos, ContiguousSizedRangeOf< char > auto&& text)
+    MPI_Offset enqueueWrite(std::shared_ptr< MpiComm::FileHandle > file,
+                            MPI_Offset                             pos,
+                            ContiguousSizedRangeOf< char > auto&&  text)
         requires std::ranges::borrowed_range< decltype(text) > or std::same_as< std::string&&, decltype(text) > or
                  std::same_as< ArrayOwner< char >&&, decltype(text) >;
     inline void flushWriteQueue();
@@ -276,9 +277,10 @@ inline unsigned getLocalNodeIndex(const MeshPartition& mesh, n_id_t node)
 {
     const auto owned_find_result = std::ranges::lower_bound(mesh.getOwnedNodes(), node);
     if (owned_find_result != end(mesh.getOwnedNodes()) and *owned_find_result == node)
-        return std::distance(begin(mesh.getOwnedNodes()), owned_find_result);
+        return static_cast< unsigned >(std::distance(begin(mesh.getOwnedNodes()), owned_find_result));
     const auto ghost_find_result = std::ranges::lower_bound(mesh.getGhostNodes(), node);
-    return mesh.getOwnedNodes().size() + std::distance(begin(mesh.getGhostNodes()), ghost_find_result);
+    return static_cast< unsigned >(mesh.getOwnedNodes().size() +
+                                   std::distance(begin(mesh.getGhostNodes()), ghost_find_result));
 }
 
 inline auto serializeTopology(const MeshPartition& mesh)
@@ -488,8 +490,7 @@ inline auto openVtuFile(std::string_view name, const MpiComm& comm)
 }
 } // namespace detail::vtk
 
-PvtuExporter::PvtuExporter(const MeshPartition& mesh, const tpetra_map_t& local_global_map)
-    : m_n_nodes{mesh.getAllNodes().size()}
+PvtuExporter::PvtuExporter(const MeshPartition& mesh) : m_n_nodes{mesh.getAllNodes().size()}
 {
     L3STER_PROFILE_FUNCTION;
     updateNodeCoords(mesh);
@@ -524,14 +525,14 @@ void PvtuExporter::updateNodeCoords(const MeshPartition& mesh)
 
 void PvtuExporter::initTopo(const MeshPartition& mesh)
 {
-    auto topo_serialization                                        = detail::vtk::serializeTopology(mesh);
-    auto& [sizes, data]                                            = topo_serialization;
-    const auto& [num_cells, topo_sec_sz, offs_sec_sz, type_sec_sz] = sizes;
-    m_n_cells                                                      = num_cells;
-    m_section_sizes.topology                                       = topo_sec_sz;
-    m_section_sizes.offsets                                        = offs_sec_sz;
-    m_section_sizes.cell_types                                     = type_sec_sz;
-    m_encoded_topo                                                 = std::move(data);
+    auto topo_serialization                                       = detail::vtk::serializeTopology(mesh);
+    auto& [sizes, data]                                           = topo_serialization;
+    const auto [num_cells, topo_sec_sz, offs_sec_sz, type_sec_sz] = sizes;
+    m_n_cells                                                     = num_cells;
+    m_section_sizes.topology                                      = topo_sec_sz;
+    m_section_sizes.offsets                                       = offs_sec_sz;
+    m_section_sizes.cell_types                                    = type_sec_sz;
+    m_encoded_topo                                                = std::move(data);
 }
 
 void PvtuExporter::enqueuePvtuFileWrite(
@@ -560,7 +561,7 @@ void PvtuExporter::enqueueVtuFileWrite(
 {
     const auto file_name_vtu_ext = std::filesystem::path{file_name}.replace_extension("vtu").string();
     const auto vtu_file_handle   = detail::vtk::openVtuFile(file_name_vtu_ext, comm);
-    auto       enqueue_write     = [this, &vtu_file_handle, pos = ptrdiff_t{}](auto&& text) mutable {
+    auto       enqueue_write     = [this, &vtu_file_handle, pos = MPI_Offset{0}](auto&& text) mutable {
         pos += enqueueWrite(vtu_file_handle, pos, std::forward< decltype(text) >(text));
     };
 
@@ -648,13 +649,13 @@ auto PvtuExporter::makeDataDescription(
     return retval;
 }
 
-size_t PvtuExporter::enqueueWrite(std::shared_ptr< MpiComm::FileHandle > file,
-                                  ptrdiff_t                              pos,
-                                  ContiguousSizedRangeOf< char > auto&&  text)
+MPI_Offset PvtuExporter::enqueueWrite(std::shared_ptr< MpiComm::FileHandle > file,
+                                      MPI_Offset                             pos,
+                                      ContiguousSizedRangeOf< char > auto&&  text)
     requires std::ranges::borrowed_range< decltype(text) > or std::same_as< std::string&&, decltype(text) > or
              std::same_as< ArrayOwner< char >&&, decltype(text) >
 {
-    const size_t write_length = std::ranges::size(text);
+    const MPI_Offset write_length = std::ranges::ssize(text);
     if constexpr (std::ranges::borrowed_range< decltype(text) >)
     {
         auto request = file->writeAtAsync(std::forward< decltype(text) >(text), pos);

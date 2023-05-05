@@ -1,162 +1,62 @@
 #include "l3ster/assembly/SolutionManager.hpp"
-#include "l3ster/assembly/AlgebraicSystemManager.hpp"
-#include "l3ster/assembly/ComputeValuesAtNodes.hpp"
-#include "l3ster/comm/DistributeMesh.hpp"
-#include "l3ster/mesh/primitives/SquareMesh.hpp"
-#include "l3ster/util/ScopeGuards.hpp"
+#include "l3ster/mesh/PartitionMesh.hpp"
+#include "l3ster/mesh/primitives/CubeMesh.hpp"
 
-#include "Common.hpp"
+#include "catch2/catch.hpp"
 
-int main(int argc, char* argv[])
+using namespace lstr;
+
+TEST_CASE("Solution Manager", "[sol_man]")
 {
-    using namespace lstr;
-    L3sterScopeGuard scope_guard{argc, argv};
-    const MpiComm    comm{MPI_COMM_WORLD};
+    constexpr std::array node_dist = {0., 1., 2., 3., 4., 5.};
+    constexpr size_t     n_parts   = 4;
+    auto                 mesh      = makeCubeMesh(node_dist);
+    mesh                           = partitionMesh(mesh, n_parts, {});
+    constexpr size_t n_fields      = 3;
+    auto             sol_mans      = std::vector< SolutionManager >{};
+    std::ranges::transform(
+        mesh.getPartitions(), std::back_inserter(sol_mans), [&, i = 0](const MeshPartition& part) mutable {
+            return SolutionManager{part, n_fields, static_cast< val_t >(i++)};
+        });
 
-    const std::array node_dist{0., 1., 2., 3., 4., 5., 6.};
-    constexpr auto   mesh_order = 2;
-    auto             mesh       = makeSquareMesh(node_dist);
-    mesh.getPartitions()[0].initDualGraph();
-    mesh.getPartitions()[0]    = convertMeshToOrder< mesh_order >(mesh.getPartitions()[0]);
-    constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
-    const auto my_partition = distributeMesh(comm, mesh, {bot_boundary, top_boundary, left_boundary, right_boundary});
+    REQUIRE(std::ranges::all_of(sol_mans, [&](const SolutionManager& sm) { return sm.nFields() == n_fields; }));
+    for (size_t i = 0; const auto& sm : sol_mans)
+        REQUIRE(sm.nNodes() == mesh.getPartitions()[i++].getAllNodes().size());
 
-    // Define multiple problems to check correct indexing by SolutionManager
-    constexpr auto problem_def1        = std::array{Pair{d_id_t{domain_id}, std::array{true, false}},
-                                             Pair{d_id_t{bot_boundary}, std::array{true, true}}};
-    constexpr auto problem_def_ctwrpr1 = ConstexprValue< problem_def1 >{};
-    constexpr auto n_fields1           = detail::deduceNFields(problem_def1);
-    constexpr auto field_inds1         = std::array< size_t, n_fields1 >{0, 2};
-    auto           system_manager1     = makeAlgebraicSystemManager(comm, my_partition, problem_def_ctwrpr1);
-
-    constexpr auto problem_def2        = std::array{Pair{d_id_t{domain_id}, std::array{true}}};
-    constexpr auto problem_def_ctwrpr2 = ConstexprValue< problem_def2 >{};
-    constexpr auto n_fields2           = detail::deduceNFields(problem_def2);
-    constexpr auto field_inds2         = std::array< size_t, n_fields2 >{1};
-    auto           system_manager2     = makeAlgebraicSystemManager(comm, my_partition, problem_def_ctwrpr2);
-
-    auto solution_manager = SolutionManager{my_partition, comm, n_fields1 + n_fields2};
-
-    // Set values for the first problem
-    auto solution1 = system_manager1->getSolutionVector();
-    {
-        auto solution_view = Kokkos::subview(solution1->getLocalViewHost(Tpetra::Access::ReadWrite), Kokkos::ALL, 0);
-        computeValuesAtNodes(my_partition,
-                             std::views::single(domain_id),
-                             system_manager1->getDofMap(),
-                             ConstexprValue< std::array{0} >{},
-                             std::array{1.},
-                             asSpan(solution_view));
-        computeValuesAtNodes(my_partition,
-                             std::views::single(bot_boundary),
-                             system_manager1->getDofMap(),
-                             ConstexprValue< std::array{1} >{},
-                             std::array{2.},
-                             asSpan(solution_view));
-    }
-
-    // Set values for the second problem
-    auto solution2 = system_manager2->getSolutionVector();
-    {
-        auto solution_view = Kokkos::subview(solution2->getLocalViewHost(Tpetra::Access::ReadWrite), Kokkos::ALL, 0);
-        computeValuesAtNodes(my_partition,
-                             std::views::single(domain_id),
-                             system_manager2->getDofMap(),
-                             ConstexprValue< std::array{0} >{},
-                             std::array{3.},
-                             asSpan(solution_view));
-    }
-
-    CHECK_THROWS(std::ignore = solution_manager.getFieldView(0));
-
-    // Update values in the solution manager
-    solution_manager.updateSolution(
-        my_partition, *solution1, system_manager1->getDofMap(), field_inds1, problem_def_ctwrpr1);
-    solution_manager.communicateSharedValues();
-    solution_manager.updateSolution(
-        my_partition, *solution2, system_manager2->getDofMap(), field_inds2, problem_def_ctwrpr2);
-    solution_manager.communicateSharedValues();
-    CHECK_THROWS(solution_manager.communicateSharedValues());
-
-    bool success = true;
-    // Check the first problem's fields
-    {
-        const auto field0_vals = solution_manager.getFieldView(field_inds1[0]);
-        const auto field1_vals = solution_manager.getFieldView(field_inds1[1]);
-        const auto n_nodes     = my_partition.getAllNodes().size();
-        const auto n_rows      = static_cast< size_t >(field0_vals.size());
-        if (n_rows != n_nodes)
+    for (auto& sm : sol_mans)
+        for (size_t i = 0; i != n_fields; ++i)
         {
-            std::stringstream err_msg;
-            err_msg
-                << "Error on rank " << comm.getRank()
-                << ": the nodal solution multivector has a different number of rows than the number of nodes in the "
-                   "mesh partition\nNumber of nodes in the partition: "
-                << n_nodes << "\nNumber of rows: " << n_rows << '\n';
-            std::cerr << err_msg.str();
-            success = false;
-        }
-        if (const auto non_ones = std::ranges::count_if(field0_vals, [](auto v) { return v != 1.; }); non_ones != 0)
-        {
-            std::stringstream err_msg;
-            err_msg << "Error on rank " << comm.getRank() << ": Field 0 had " << non_ones << " incorrect value"
-                    << (non_ones == 1 ? "" : "s") << " (!= 1.)\n ";
-            std::cerr << err_msg.str();
-            success = false;
+            CHECK(sm.getFieldView(i).data() == std::as_const(sm).getFieldView(i).data());
+            CHECK(sm.getFieldView(i).size() == std::as_const(sm).getFieldView(i).size());
         }
 
-        std::vector< n_id_t > bad_nodes;
-        const auto            lookup_node_local_ind = [&](n_id_t node) {
-            const auto owned_it = std::ranges::find(my_partition.getOwnedNodes(), node);
-            if (owned_it != my_partition.getOwnedNodes().end())
-                return std::distance(my_partition.getOwnedNodes().begin(), owned_it);
-            else
-                return std::distance(my_partition.getGhostNodes().begin(),
-                                     std::ranges::find(my_partition.getGhostNodes(), node));
-        };
-        my_partition.visit(
+    constexpr auto field_inds = makeIotaArray< size_t, n_fields >();
+    for (size_t i = 0; const auto& sm : sol_mans)
+    {
+        const auto& part = mesh.getPartitions()[i];
+        part.visit(
             [&](const auto& element) {
-                for (auto node : element.getNodes())
-                    if (field1_vals[lookup_node_local_ind(node)] != 2.)
-                        bad_nodes.push_back(node);
+                for (auto n : element.getNodes())
+                    for (auto fv : sm.getNodeValues(n, std::span{field_inds}))
+                        CHECK(fv == static_cast< val_t >(i));
             },
-            std::views::single(bot_boundary));
-        if (bad_nodes.size() != 0)
-        {
-            std::ranges::sort(bad_nodes);
-            const auto erase_range = std::ranges::unique(bad_nodes);
-            bad_nodes.erase(std::ranges::begin(erase_range), std::ranges::end(erase_range));
-            std::stringstream err_msg;
-            err_msg << "Error on rank " << comm.getRank() << ": Field 2 had " << bad_nodes.size() << " incorrect value"
-                    << (bad_nodes.size() == 1 ? "" : "s") << " (!= 2.)\nThe affected nodes are:\n";
-            const auto log_bad_node = [&](n_id_t node) {
-                err_msg << node << ": ";
-                if (my_partition.isGhostNode(node))
-                    err_msg << "ghost\n";
-                else
-                    err_msg << "owned\n";
-            };
-            for (auto n : bad_nodes)
-                log_bad_node(n);
-            err_msg << '\n';
-            std::cerr << err_msg.str();
-            success = false;
-        }
+            std::execution::par);
+        ++i;
     }
-    // Check the second problem's field
+
+    for (auto& sm : sol_mans)
+        for (auto i : field_inds)
+            sm.setField(i, 42.);
+    for (size_t i = 0; const auto& sm : sol_mans)
     {
-        const auto field_vals = solution_manager.getFieldView(field_inds2[0]);
-        if (const auto non_threes = std::ranges::count_if(field_vals, [](auto v) { return v != 3.; }); non_threes != 0)
-        {
-            std::stringstream err_msg;
-            err_msg << "Error on rank " << comm.getRank() << ": Field 1 had " << non_threes << " incorrect value"
-                    << (non_threes == 1 ? "" : "s") << " (!= 3.)\n ";
-            std::cerr << err_msg.str();
-            success = false;
-        }
+        const auto& part = mesh.getPartitions()[i];
+        part.visit(
+            [&](const auto& element) {
+                for (auto n : element.getNodes())
+                    for (auto fv : sm.getNodeValues(n, std::span{field_inds}))
+                        CHECK(fv == 42.);
+            },
+            std::execution::par);
+        ++i;
     }
-    if (success)
-        return EXIT_SUCCESS;
-    else
-        return EXIT_FAILURE;
 }

@@ -11,7 +11,7 @@ struct ReferenceBasisAtPoints
     static constexpr auto n_bases = Element< ET, EO >::n_nodes;
     static constexpr auto dim     = Element< ET, EO >::native_dim;
     using basis_vals_t            = std::array< Eigen::Vector< val_t, n_bases >, n_points >;
-    using basis_ders_t            = std::array< EigenRowMajorMatrix< val_t, dim, n_bases >, n_points >;
+    using basis_ders_t            = std::array< eigen::RowMajorMatrix< val_t, dim, n_bases >, n_points >;
 
     basis_vals_t values;
     basis_ders_t derivatives;

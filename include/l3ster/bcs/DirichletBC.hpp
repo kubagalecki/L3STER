@@ -1,9 +1,6 @@
 #ifndef L3STER_BCS_DIRICHLETBC_HPP
 #define L3STER_BCS_DIRICHLETBC_HPP
 
-#include "Tpetra_CrsMatrix.hpp"
-#include "Tpetra_Vector.hpp"
-
 #include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/TrilinosUtils.hpp"
 
@@ -68,14 +65,15 @@ DirichletBCAlgebraic::DirichletBCAlgebraic(const Teuchos::RCP< const tpetra_crsg
         {
             const auto dbc_mat_col_local  = local_cols_dbc[lc_ind];
             const auto dbc_mat_col_global = m_dirichlet_col_mat->getColMap()->getGlobalElement(dbc_mat_col_local);
-            for (size_t i = 0; i != local_cols_full.size(); ++i)
+            for (local_dof_t i = 0; i != std::ranges::ssize(local_cols_full); ++i)
                 if (col_map.getGlobalElement(local_cols_full[i]) == dbc_mat_col_global)
                 {
                     m_bc_local_col_inds.push_back(i);
                     break;
                 }
         }
-        m_bc_local_col_inds_offsets.push_back(m_bc_local_col_inds_offsets.back() + local_cols_dbc.size());
+        m_bc_local_col_inds_offsets.push_back(m_bc_local_col_inds_offsets.back() +
+                                              static_cast< local_dof_t >(local_cols_dbc.size()));
     };
     for (local_dof_t local_row = 0; static_cast< size_t >(local_row) < sparsity_graph->getLocalNumRows(); ++local_row)
     {

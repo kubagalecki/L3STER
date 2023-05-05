@@ -4,7 +4,7 @@
 #include "l3ster/defs/Typedefs.h"
 #include "l3ster/util/Concepts.hpp"
 
-#include "l3ster/util/IncludeEigen.hpp"
+#include "l3ster/util/EigenUtils.hpp"
 
 #include <cmath>
 #include <utility>
@@ -12,7 +12,7 @@
 namespace lstr
 {
 /*
-usage: const auto& [qp, w] = computeGaussRule<N>(a, b, c)
+usage: const auto [qp, w] = computeGaussRule<N>(a, b, c)
 
 Compute the N-point Gauss quadrature rule (abscissas qp and weights w) over the interval [-1, 1] for
 an orthogonal polynomial family given by the recurrence relation:
@@ -22,19 +22,19 @@ Reference:
 Golub, G. H., & Welsch, J. H. (1969). Calculation of Gauss quadrature rules.
 Mathematics of Computation, 23(106), 221–221. https://doi.org/10.1090/s0025-5718-69-99647-1
 */
-template < size_t ORDER >
+template < size_t order >
 auto computeGaussRule(Mapping_c< size_t, val_t > auto&& a,
                       Mapping_c< size_t, val_t > auto&& b,
                       Mapping_c< size_t, val_t > auto&& c,
-                      std::integral_constant< size_t, ORDER > = {})
+                      std::integral_constant< size_t, order > = {})
 {
-    static_assert(ORDER > 0u);
-    using matrix_t = Eigen::Matrix< val_t, ORDER, ORDER >;
+    static_assert(order > 0u);
+    using matrix_t = Eigen::Matrix< val_t, order, order >;
 
     // Note: variable names follow the reference
     matrix_t J = matrix_t::Zero();
 
-    for (size_t ind = 0; ind < ORDER - 1; ++ind)
+    for (size_t ind = 0; ind < order - 1; ++ind)
     {
         const auto  n     = ind + 1;
         const val_t alpha = -b(n) / a(n);
@@ -43,17 +43,17 @@ auto computeGaussRule(Mapping_c< size_t, val_t > auto&& a,
         J(ind + 1, ind)   = beta;
         J(ind, ind + 1)   = beta;
     }
-    J(ORDER - 1, ORDER - 1) = -b(ORDER) / a(ORDER);
+    J(order - 1, order - 1) = -b(order) / a(order);
 
     auto eigen_solver = Eigen::SelfAdjointEigenSolver< matrix_t >{};
     eigen_solver.compute(J);
     const auto& eig_vals = eigen_solver.eigenvalues();
     const auto& eig_vecs = eigen_solver.eigenvectors();
 
-    std::array< val_t, ORDER > points;
-    std::array< val_t, ORDER > weights;
+    std::array< val_t, order > points;
+    std::array< val_t, order > weights;
 
-    for (size_t i = 0; i < ORDER; ++i)
+    for (size_t i = 0; i < order; ++i)
     {
         points[i]  = eig_vals[i];
         weights[i] = 2. * eig_vecs(0, i) * eig_vecs(0, i);

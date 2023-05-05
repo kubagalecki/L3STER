@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <concepts>
+#include <functional>
 
 namespace lstr
 {

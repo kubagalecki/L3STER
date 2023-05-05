@@ -36,6 +36,7 @@ add_executable( L3STER_tests TestsMain.cpp
                 MeshTests.cpp
                 NodeAllocationTests.cpp
                 QuadratureTests.cpp
+                SolutionManagerTest.cpp
                 UtilTests.cpp
                 )
 target_include_directories( L3STER_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR} )
@@ -79,18 +80,19 @@ function( add_mpi_test source name nprocs )
 endfunction()
 
 # Define individual tests
-add_mpi_test( "GlobalDofGatherTest.cpp" "Distribute_global_DOF_intervals" "2;4" )
-add_mpi_test( "MpiBlockingCommunicationTest.cpp" "MPI_blocking_communication" "1;2;4" )
-add_mpi_test( "MpiAsyncCommunicationTest.cpp" "MPI_async_communication" "1;2;4" )
-add_mpi_test( "MeshSendRecvTest.cpp" "Mesh_send_recv" "2;4" )
-add_mpi_test( "MeshDistributionTest.cpp" "Mesh_distribution" "1;2;4" )
-add_mpi_test( "NodeThroughputInfoTest.cpp" "Node_throughput_calculation" "1;2;4" )
-add_mpi_test( "TpetraMapCreationTest.cpp" "Tpetra_Map_Creation" "1;2;4" )
-add_mpi_test( "SparsityGraphTest.cpp" "Sparsity_Graph" "1;2;4" )
-add_mpi_test( "DirichletBCTest.cpp" "Dirichlet_BC_application_test" "1;2;4" )
-add_mpi_test( "SolutionManagerTest.cpp" "SolutionManager_test" "1;2;4" )
-add_mpi_test( "GlobalAssemblyMPITest.cpp" "Solve_2D_diffusion_problem" "1;2;4" )
-add_mpi_test( "VtkExportTest.cpp" "Export_results_to_VTK" "1;2;4" )
+add_mpi_test( NodeCondensationTest.cpp Condense_Element_Boundary_Nodes "1;2;4" )
+add_mpi_test( GlobalDofGatherTest.cpp Distribute_Global_DOF_Intervals "2;4" )
+add_mpi_test( MpiBlockingCommunicationTest.cpp MPI_Blocking_Communication "1;2;4" )
+add_mpi_test( MpiAsyncCommunicationTest.cpp MPI_Async_Communication "1;2;4" )
+add_mpi_test( MeshSendRecvTest.cpp Mesh_Send_Receive "2;4" )
+add_mpi_test( MeshDistributionTest.cpp Mesh_Distribution "1;2;4" )
+add_mpi_test( NodeThroughputInfoTest.cpp Node_Throughput_Calculation "1;2;4" )
+add_mpi_test( TpetraMapCreationTest.cpp Tpetra_Map_Creation "1;2;4" )
+add_mpi_test( SparsityGraphTest.cpp Sparsity_Graph "1;2;4" )
+add_mpi_test( DirichletBCTest.cpp Dirichlet_BC_Application "1;2;4" )
+add_mpi_test( Diffusion2DTest.cpp Solve_2D_diffusion_problem "1;2;4" )
+add_mpi_test( MultiDomainTest.cpp Solve_Multi_Domain_Problem "1;2;4" )
+add_mpi_test( VtkExportTest.cpp Export_results_to_VTK "1;2;4" )
 
 #######################################################################################################################
 

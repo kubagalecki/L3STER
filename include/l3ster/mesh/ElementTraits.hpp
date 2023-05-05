@@ -84,12 +84,12 @@ private:
             {
                 for (size_t j = 0; j < nodes_per_edge; ++j)
                 {
-                    retval[0][index] = index;                                   // front
-                    retval[1][index] = retval[0][index] + back_shift;           // back
-                    retval[2][index] = i * nodes_per_side + j;                  // bottom
-                    retval[3][index] = retval[2][index] + top_shift;            // top
-                    retval[4][index] = i * nodes_per_side + j * nodes_per_edge; // left
-                    retval[5][index] = retval[4][index] + right_shift;          // right
+                    retval[0][index] = static_cast< el_locind_t >(index);                                   // front
+                    retval[1][index] = static_cast< el_locind_t >(retval[0][index] + back_shift);           // back
+                    retval[2][index] = static_cast< el_locind_t >(i * nodes_per_side + j);                  // bottom
+                    retval[3][index] = static_cast< el_locind_t >(retval[2][index] + top_shift);            // top
+                    retval[4][index] = static_cast< el_locind_t >(i * nodes_per_side + j * nodes_per_edge); // left
+                    retval[5][index] = static_cast< el_locind_t >(retval[4][index] + right_shift);          // right
                     ++index;
                 }
             }
@@ -124,10 +124,10 @@ private:
 
             for (size_t i = 0; i < nodes_per_side; ++i)
             {
-                retval[0][i] = i;                          // bottom
-                retval[1][i] = retval[0][i] + top_shift;   // top
-                retval[2][i] = i * nodes_per_side;         // left
-                retval[3][i] = retval[2][i] + right_shift; // right
+                retval[0][i] = static_cast< el_locind_t >(i);                          // bottom
+                retval[1][i] = static_cast< el_locind_t >(retval[0][i] + top_shift);   // top
+                retval[2][i] = static_cast< el_locind_t >(i * nodes_per_side);         // left
+                retval[3][i] = static_cast< el_locind_t >(retval[2][i] + right_shift); // right
             }
             return retval;
         }

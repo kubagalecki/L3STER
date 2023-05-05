@@ -1,7 +1,7 @@
 #ifndef L3STER_UTIL_ROTATIONMATRIX_HPP
 #define L3STER_UTIL_ROTATIONMATRIX_HPP
 
-#include "l3ster/util/IncludeEigen.hpp"
+#include "l3ster/util/EigenUtils.hpp"
 
 #include <cmath>
 #include <concepts>

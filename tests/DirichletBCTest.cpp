@@ -3,44 +3,49 @@
 #include "l3ster/bcs/GetDirichletDofs.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
+#include "l3ster/solve/Solvers.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
-#include "Amesos2.hpp"
-#include "Tpetra_MultiVector.hpp"
+#include "Common.hpp"
 
-int main(int argc, char* argv[])
+using namespace lstr;
+
+template < CondensationPolicy CP >
+void test()
 {
-    using namespace lstr;
-    L3sterScopeGuard scope_guard{argc, argv};
-
     const MpiComm comm{MPI_COMM_WORLD};
 
-    const std::array node_dist{0., 1., 2., 3., 4., 5.};
-    constexpr auto   boundary     = 3;
-    const auto       mesh         = makeCubeMesh(node_dist);
-    auto             my_partition = distributeMesh(comm, mesh, {boundary});
-
+    constexpr auto   boundary       = 3;
     constexpr d_id_t domain_id      = 0;
-    constexpr auto   problem_def    = ConstexprValue< std::array{Pair{d_id_t{domain_id}, std::array{true}}} >{};
-    const auto       dof_intervals  = computeDofIntervals(my_partition, problem_def, comm);
-    const auto       global_dof_map = NodeToGlobalDofMap{my_partition, dof_intervals};
-    const auto       sparsity_graph = detail::makeSparsityGraph(my_partition, global_dof_map, problem_def, comm);
+    constexpr auto   problem_def    = std::array{Pair{d_id_t{domain_id}, std::array{true}}};
+    constexpr auto   dirichlet_def  = std::array{Pair{d_id_t{boundary}, std::array{true}}};
+    constexpr auto   probdef_ctwrpr = ConstexprValue< problem_def >{};
+    constexpr auto   dirdef_ctwrpr  = ConstexprValue< dirichlet_def >{};
 
-    const auto bv = my_partition.getBoundaryView(boundary);
+    constexpr auto node_dist     = std::array{0., 1., 2., 3., 4., 5.};
+    const auto     mesh          = makeCubeMesh(node_dist);
+    auto           my_partition  = distributeMesh(comm, mesh, {boundary});
+    const auto     boundary_view = my_partition.getBoundaryView(boundary);
 
-    constexpr auto dirichlet_def = ConstexprValue< std::array{Pair{d_id_t{boundary}, std::array{true}}} >{};
-    const auto& [owned_bcdofs, shared_bcdofs] =
-        detail::getDirichletDofs(my_partition, sparsity_graph, global_dof_map, problem_def, dirichlet_def);
+    const auto cond_map            = detail::makeCondensationMap< CP >(comm, my_partition, probdef_ctwrpr);
+    const auto dof_intervals       = computeDofIntervals(comm, my_partition, cond_map, probdef_ctwrpr);
+    const auto global_node_dof_map = NodeToGlobalDofMap{dof_intervals, cond_map};
+    const auto sparsity_graph =
+        detail::makeSparsityGraph(comm, my_partition, global_node_dof_map, cond_map, probdef_ctwrpr);
+
+    const auto [owned_bcdofs, shared_bcdofs] = detail::getDirichletDofs(
+        my_partition, sparsity_graph, global_node_dof_map, cond_map, probdef_ctwrpr, dirdef_ctwrpr);
     const auto dirichlet_bc = DirichletBCAlgebraic{sparsity_graph, owned_bcdofs, shared_bcdofs};
 
-    auto                   matrix = makeTeuchosRCP< tpetra_fecrsmatrix_t >(sparsity_graph);
-    tpetra_femultivector_t input_vectors{sparsity_graph->getRowMap(), sparsity_graph->getImporter(), 2};
-    tpetra_multivector_t   result_vectors{sparsity_graph->getRowMap(), 2};
+    auto matrix         = makeTeuchosRCP< tpetra_fecrsmatrix_t >(sparsity_graph);
+    auto input_vectors  = tpetra_femultivector_t{sparsity_graph->getRowMap(), sparsity_graph->getImporter(), 2};
+    auto result_vectors = tpetra_multivector_t{sparsity_graph->getRowMap(), 2};
+
     matrix->beginAssembly();
     input_vectors.beginAssembly();
 
     const auto dof_map = NodeToLocalDofMap{
-        my_partition, global_dof_map, *matrix->getRowMap(), *matrix->getColMap(), *input_vectors.getMap()};
+        cond_map, global_node_dof_map, *matrix->getRowMap(), *matrix->getColMap(), *input_vectors.getMap()};
 
     {
         auto rhs      = input_vectors.getVectorNonConst(0)->getDataNonConst();
@@ -49,17 +54,16 @@ int main(int argc, char* argv[])
             [&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
                 if constexpr (T == ElementTypes::Hex and O == 1)
                 {
-                    constexpr int n_dofs = Element< T, O >::n_nodes;
-                    using local_mat_t    = EigenRowMajorMatrix< val_t, n_dofs, n_dofs >;
-                    using local_vec_t    = Eigen::Matrix< val_t, n_dofs, 1 >;
-                    std::pair< local_mat_t, local_vec_t > local_system;
-                    auto& [local_mat, local_vec] = local_system;
-                    local_mat                    = local_mat_t::Random();
-                    local_mat                    = local_mat.template selfadjointView< Eigen::Lower >();
-                    local_vec                    = local_vec_t::Random();
+                    constexpr int n_dofs    = detail::getNumPrimaryNodes< CP, T, O >() * /* dofs per node */ 1;
+                    auto          local_mat = eigen::RowMajorSquareMatrix< val_t, n_dofs >{};
+                    auto          local_vec = Eigen::Vector< val_t, n_dofs >{};
+                    local_mat.setRandom();
+                    local_mat = local_mat.template selfadjointView< Eigen::Lower >();
+                    local_vec.setRandom();
 
+                    constexpr auto dof_inds_wrpr = ConstexprValue< std::array{size_t{0}} >{};
                     const auto [row_dofs, col_dofs, rhs_dofs] =
-                        detail::getUnsortedElementDofs< std::array{size_t{0}} >(element, dof_map);
+                        detail::getUnsortedPrimaryDofs(element, dof_map, CondensationPolicyTag< CP >{}, dof_inds_wrpr);
                     detail::scatterLocalSystem(local_mat, local_vec, *matrix, rhs_view, row_dofs, col_dofs, rhs_dofs);
                 }
             },
@@ -101,20 +105,10 @@ int main(int argc, char* argv[])
     const auto data_transp =
         Kokkos::subview(result_vector2->getLocalViewHost(Tpetra::Access::ReadOnly), Kokkos::ALL, 0);
     for (int i = 0; i < data_notransp.extent_int(0); ++i)
-        if (not approx(data_notransp[i], data_transp[i]))
-        {
-            std::cerr << "Application of Dirichlet BC broke the symmetry of the matrix\n";
-            comm.abort();
-        }
+        REQUIRE(approx(data_notransp[i], data_transp[i]));
 
-    Amesos2::KLU2< tpetra_crsmatrix_t, tpetra_multivector_t > solver{matrix, result_vector1, rhs_vector};
-
-    if (not solver.matrixShapeOK())
-    {
-        std::cerr << "Bad matrix shape\n";
-        comm.abort();
-    }
-
+    auto solver = Amesos2::KLU2< tpetra_crsmatrix_t, tpetra_multivector_t >{matrix, result_vector1, rhs_vector};
+    REQUIRE(solver.matrixShapeOK());
     solver.preOrdering().symbolicFactorization().numericFactorization().solve();
 
     const auto solution_vals =
@@ -123,10 +117,13 @@ int main(int argc, char* argv[])
     for (auto global_bcdof : owned_bcdofs)
     {
         const auto local_bcdof = matrix->getRowMap()->getLocalElement(global_bcdof);
-        if (not approx(solution_vals[local_bcdof], bc_vals[local_bcdof]))
-        {
-            std::cerr << "Result of solve does not satisfy the Dirichlet BC\n";
-            comm.abort();
-        }
+        REQUIRE(approx(solution_vals[local_bcdof], bc_vals[local_bcdof]));
     }
+}
+
+int main(int argc, char* argv[])
+{
+    L3sterScopeGuard scope_guard{argc, argv};
+    test< CondensationPolicy::None >();
+    test< CondensationPolicy::ElementBoundary >();
 }

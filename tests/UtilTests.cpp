@@ -8,6 +8,7 @@
 #include "l3ster/util/Meta.hpp"
 #include "l3ster/util/MetisUtils.hpp"
 #include "l3ster/util/SetStackSize.hpp"
+#include "l3ster/util/StaticVector.hpp"
 
 #include "MakeRandomVector.hpp"
 
@@ -64,9 +65,8 @@ TEST_CASE("Constexpr vector", "[util]")
 {
     SECTION("Size & capcity")
     {
-        constexpr int  size = 3, cap = 8;
-        constexpr auto vec_params             = getConstexprVecParams(size, cap);
-        const auto& [size_result, cap_result] = vec_params;
+        constexpr int size = 3, cap = 8;
+        const auto [size_result, cap_result] = getConstexprVecParams(size, cap);
         CHECK(size_result == size);
         CHECK(cap_result >= cap);
     }
@@ -79,9 +79,8 @@ TEST_CASE("Constexpr vector", "[util]")
 
     SECTION("Reserve capacity")
     {
-        constexpr int  cap                    = 10;
-        constexpr auto vec_params             = checkConstexprVectorReserve(cap);
-        const auto& [size_result, cap_result] = vec_params;
+        constexpr int cap                    = 10;
+        const auto [size_result, cap_result] = checkConstexprVectorReserve(cap);
         CHECK(size_result == 0);
         CHECK(cap_result == cap);
     }
@@ -111,29 +110,29 @@ TEST_CASE("Stack size manipulation", "[util]")
 {
     SECTION("Increase stack size by 1")
     {
-        const auto& [initial, max] = getStackSize();
+        const auto [initial, max] = util::detail::getStackSize();
         CHECK(initial <= max);
-        setMinStackSize(initial + 1);
-        const auto& [current, ignore] = getStackSize();
+        util::detail::setMinStackSize(initial + 1);
+        const auto [current, ignore] = util::detail::getStackSize();
         CHECK(initial + 1 == current);
     }
 
     SECTION("Increse beyond limit")
     {
-        const auto& [initial, max] = getStackSize();
+        const auto [initial, max] = util::detail::getStackSize();
         if (max < std::numeric_limits< std::decay_t< decltype(max) > >::max())
         {
-            CHECK_THROWS(setMinStackSize(max + 1ul));
-            const auto& [current, ignore] = getStackSize();
+            CHECK_THROWS(util::detail::setMinStackSize(max + 1ul));
+            const auto [current, ignore] = util::detail::getStackSize();
             CHECK(initial == current);
         }
     }
 
     SECTION("Decreasing is a noop")
     {
-        const auto& [initial, max] = getStackSize();
-        setMinStackSize(initial - 1);
-        const auto& [current, ignore] = getStackSize();
+        const auto [initial, max] = util::detail::getStackSize();
+        util::detail::setMinStackSize(initial - 1);
+        const auto [current, ignore] = util::detail::getStackSize();
         CHECK(initial == current);
     }
 }
@@ -146,9 +145,9 @@ TEMPLATE_TEST_CASE("Bitset (de-)serialization",
                    ConstexprValue< 128u >,
                    ConstexprValue< 257u >)
 {
-    constexpr auto size               = TestType::value;
-    constexpr auto n_runs             = 1 << 8;
-    constexpr auto make_random_bitset = [] {
+    constexpr static auto size               = TestType::value;
+    constexpr auto        n_runs             = 1 << 8;
+    constexpr auto        make_random_bitset = [] {
         std::bitset< size >                    retval;
         std::uniform_int_distribution< short > dist{0, 1};
         std::mt19937                           prng{std::random_device{}()};
@@ -167,26 +166,26 @@ TEMPLATE_TEST_CASE("Bitset (de-)serialization",
 TEST_CASE("MetisGraphWrapper", "[util]")
 {
     // Test data is a full graph of size n_nodes
-    constexpr ptrdiff_t n_nodes     = 10;
-    constexpr ptrdiff_t n_node_nbrs = n_nodes - 1;
+    constexpr idx_t n_nodes     = 10;
+    constexpr idx_t n_node_nbrs = n_nodes - 1;
 
     auto node_adjcncy_inds = static_cast< idx_t* >(malloc(sizeof(idx_t) * (n_nodes + 1)));
     auto node_adjcncy      = static_cast< idx_t* >(malloc(sizeof(idx_t) * n_nodes * n_node_nbrs));
 
-    for (ptrdiff_t i = 0; i <= n_nodes; ++i)
+    for (idx_t i = 0; i <= n_nodes; ++i)
         node_adjcncy_inds[i] = i * n_node_nbrs;
-    for (ptrdiff_t i = 0; i < n_nodes; ++i)
+    for (idx_t i = 0; i < n_nodes; ++i)
     {
         auto base = node_adjcncy_inds[i];
-        for (ptrdiff_t j = 0; j < i; ++j)
+        for (idx_t j = 0; j < i; ++j)
             node_adjcncy[base + j] = j;
-        for (ptrdiff_t j = i + 1; j < n_nodes; ++j)
+        for (idx_t j = i + 1; j < n_nodes; ++j)
             node_adjcncy[base + j - 1] = j;
     }
 
-    MetisGraphWrapper test_obj1{node_adjcncy_inds, node_adjcncy, n_nodes};
-    auto              test_obj2{std::move(test_obj1)};
-    auto              test_obj3 = test_obj2;
+    auto test_obj1 = util::metis::GraphWrapper{node_adjcncy_inds, node_adjcncy, n_nodes};
+    auto test_obj2{std::move(test_obj1)};
+    auto test_obj3 = test_obj2;
 
     test_obj3 = test_obj2;
     test_obj3 = test_obj3;
@@ -549,11 +548,13 @@ TEST_CASE("Base64 encoding", "[util]")
     test(text_sv | std::views::drop(3) | std::views::take(2), std::string_view{"ZW0="});
 
     // Test whether sequential and parallel implementations yield identical results
-    auto             prng           = std::mt19937{std::random_device{}()};
-    auto             dist           = std::uniform_int_distribution< char >{};
     constexpr size_t long_text_size = 1ul << 25;
     std::string      long_text(long_text_size, '\0');
-    std::generate(long_text.begin(), long_text.end(), [&] { return dist(prng); });
+    std::ranges::generate(
+        long_text,
+        [prng = std::mt19937{std::random_device{}()}, dist = std::uniform_int_distribution< int >{0, 255}]() mutable {
+            return static_cast< char >(dist(prng));
+        });
     std::string long_text_b64_par(long_text_size * 4 / 3 + 4, '\0');
     std::string long_text_b64_seq(long_text_size * 4 / 3 + 4, '\0');
     encodeAsBase64(long_text, long_text_b64_par.begin());
@@ -562,4 +563,40 @@ TEST_CASE("Base64 encoding", "[util]")
     const auto lp             = detail::b64::encB64SerialImpl(long_byte_span, seq_ptr);
     detail::b64::encB64Remainder(long_byte_span.subspan(lp), seq_ptr);
     CHECK(long_text_b64_seq == long_text_b64_par);
+}
+
+TEST_CASE("StaticVector", "[util]")
+{
+    auto vec = util::StaticVector< int, 100 >{};
+    CHECK(vec.size() == 0);
+    std::generate_n(std::back_inserter(vec),
+                    100,
+                    [prng = std::mt19937{std::random_device{}()},
+                     dist = std::uniform_int_distribution< int >{}]() mutable { return dist(prng); });
+    REQUIRE(vec.size() == 100);
+    vec.resize(50);
+    REQUIRE(vec.size() == 50);
+    std::ranges::sort(vec);
+    CHECK(vec.front() <= vec.back());
+    CHECK(std::ranges::is_sorted(vec));
+    vec.erase(std::next(vec.begin(), 10), std::prev(vec.end(), 10));
+    REQUIRE(vec.size() == 20);
+    vec.resize(10);
+    CHECK(std::ranges::is_sorted(vec));
+    vec.pop_back();
+    REQUIRE(vec.size() == 9);
+    const auto vec_copy = vec;
+    vec.erase(vec.end(), vec.end());
+    REQUIRE(vec.size() == 9);
+    CHECK(std::ranges::equal(vec, vec_copy));
+    vec.resize(10, 42);
+    REQUIRE(vec.size() == 10);
+    CHECK(std::ranges::equal(vec | std::views::drop(9), std::views::single(42)));
+}
+
+TEST_CASE("getTrueInds", "[util]")
+{
+    constexpr auto in  = std::array{false, false, false, true};
+    constexpr auto out = getTrueInds< in >();
+    static_assert(std::ranges::equal(out, std::views::single(3)));
 }

@@ -1,7 +1,7 @@
 #ifndef L3STER_COMM_MPICOMM_HPP
 #define L3STER_COMM_MPICOMM_HPP
 
-#include "l3ster/util/Concepts.hpp"
+#include "l3ster/util/Common.hpp"
 
 extern "C"
 {
@@ -45,10 +45,10 @@ L3STER_MPI_TYPE_MAPPING_STRUCT(float, MPI_FLOAT)                           // NO
 L3STER_MPI_TYPE_MAPPING_STRUCT(double, MPI_DOUBLE)                         // NOLINT
 L3STER_MPI_TYPE_MAPPING_STRUCT(long double, MPI_LONG_DOUBLE)               // NOLINT
 
-inline void handleMPIError(int error, const char* message)
+inline void
+handleMPIError(int error, std::string_view err_msg, std::source_location src_loc = std::source_location::current())
 {
-    if (error) [[unlikely]]
-        throw std::runtime_error{message};
+    util::throwingAssert(not error, err_msg, src_loc);
 }
 
 template < typename T >
@@ -118,7 +118,7 @@ public:
         MPI_File m_file = MPI_FILE_NULL;
     };
 
-    inline MpiComm(MPI_Comm comm);
+    inline MpiComm(MPI_Comm comm, MPI_Errhandler err_handler = MPI_ERRORS_ARE_FATAL);
     MpiComm(const MpiComm&)            = delete;
     MpiComm& operator=(const MpiComm&) = delete;
     MpiComm(MpiComm&& other) noexcept : m_comm{std::exchange(other.m_comm, MPI_COMM_NULL)} {}
@@ -137,6 +137,8 @@ public:
     void barrier() const { detail::mpi::handleMPIError(MPI_Barrier(m_comm), "MPI_Barrier failed"); }
     template < detail::mpi::MpiBuf_c Data, detail::mpi::MpiOutputIterator_c< Data > It >
     void reduce(Data&& data, It out_it, int root, MPI_Op op) const;
+    template < detail::mpi::MpiBuf_c Data >
+    void reduceInPlace(Data&& data, int root, MPI_Op op) const;
     template < detail::mpi::MpiBuf_c Data, detail::mpi::MpiOutputIterator_c< Data > It >
     void allReduce(Data&& data, It out_it, MPI_Op op) const;
     template < detail::mpi::MpiBuf_c Data, detail::mpi::MpiOutputIterator_c< Data > It >
@@ -222,7 +224,7 @@ auto MpiComm::FileHandle::writeAtAsync(detail::mpi::MpiBorrowedBuf_c auto&& writ
     detail::mpi::handleMPIError(MPI_File_iwrite_at(m_file,
                                                    offset,
                                                    std::ranges::data(write_range),
-                                                   std::ranges::size(write_range),
+                                                   exactIntegerCast< int >(std::ranges::size(write_range)),
                                                    datatype,
                                                    &request.m_request),
                                 "MPI_File_iwrite_at failed");
@@ -273,6 +275,16 @@ void MpiComm::reduce(Data&& data, It out_it, int root, MPI_Op op) const
 {
     const auto [datatype, buf_begin, buf_size] = detail::mpi::decomposeMpiBuf(data);
     detail::mpi::handleMPIError(MPI_Reduce(buf_begin, std::addressof(*out_it), buf_size, datatype, op, root, m_comm),
+                                "MPI_Reduce failed");
+}
+
+template < detail::mpi::MpiBuf_c Data >
+void MpiComm::reduceInPlace(Data&& data, int root, MPI_Op op) const
+{
+    const auto [datatype, buf_begin, buf_size] = detail::mpi::decomposeMpiBuf(data);
+    detail::mpi::handleMPIError(getRank() == root
+                                    ? MPI_Reduce(MPI_IN_PLACE, buf_begin, buf_size, datatype, op, root, m_comm)
+                                    : MPI_Reduce(buf_begin, nullptr, buf_size, datatype, op, root, m_comm),
                                 "MPI_Reduce failed");
 }
 
@@ -350,9 +362,10 @@ void MpiComm::freeOwnedComm()
         MPI_Comm_free(&m_comm);
 }
 
-MpiComm::MpiComm(MPI_Comm comm)
+MpiComm::MpiComm(MPI_Comm comm, MPI_Errhandler err_handler)
 {
     detail::mpi::handleMPIError(MPI_Comm_dup(comm, &m_comm), "MPI_Comm_dup failed");
+    detail::mpi::handleMPIError(MPI_Comm_set_errhandler(m_comm, err_handler), "MPI_Comm_set_errhandler failed");
 }
 
 MpiComm& MpiComm::operator=(MpiComm&& other) noexcept

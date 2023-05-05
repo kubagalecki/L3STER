@@ -1,6 +1,7 @@
 #ifndef L3STER_UTIL_COMMON_HPP
 #define L3STER_UTIL_COMMON_HPP
 
+#include "l3ster/util/Assertion.hpp"
 #include "l3ster/util/Concepts.hpp"
 
 #include <algorithm>
@@ -67,7 +68,7 @@ constexpr bool exactlyOneOf(T... args)
 }
 
 template < std::integral To, std::integral From >
-To exactIntegerCast(From from)
+To exactIntegerCast(From from, std::source_location loc = std::source_location::current())
     requires std::convertible_to< From, To >
 {
     constexpr auto max_from = static_cast< std::uintmax_t >(std::numeric_limits< From >::max());
@@ -76,14 +77,16 @@ To exactIntegerCast(From from)
     constexpr auto min_to   = static_cast< std::intmax_t >(std::numeric_limits< To >::min());
 
     if constexpr (max_from > max_to)
-        if (static_cast< std::uintmax_t >(from) > max_to)
-            throw std::runtime_error{
-                "The value being converted is greater then the maximum value representable by the target type"};
+        util::throwingAssert(
+            static_cast< std::uintmax_t >(from) <= max_to,
+            "The value being converted is greater then the maximum value representable by the target type",
+            loc);
 
     if constexpr (min_from < min_to)
-        if (static_cast< std::intmax_t >(from) < min_to)
-            throw std::runtime_error{
-                "The value being converted is less than the minimum value representable by the target type"};
+        util::throwingAssert(
+            static_cast< std::intmax_t >(from) >= min_to,
+            "The value being converted is less than the minimum value representable by the target type",
+            loc);
 
     return static_cast< To >(from);
 }
@@ -133,17 +136,8 @@ struct Pair
     T2 second;
 };
 
-template < std::integral T >
-std::vector< T > concatVectors(std::vector< T > v1, const std::vector< T >& v2)
-{
-    const auto v1_size_old = v1.size();
-    v1.resize(v1.size() + v2.size());
-    std::ranges::copy(v2, std::next(begin(v1), v1_size_old));
-    return v1;
-}
-
 template < IndexRange_c auto inds, typename T, size_t N, std::indirectly_writable< T > Iter >
-Iter copyValuesAtInds(const std::array< T, N >& array, Iter out_iter, ConstexprValue< inds > inds_ctwrpr = {})
+Iter copyValuesAtInds(const std::array< T, N >& array, Iter out_iter, ConstexprValue< inds > = {})
     requires(std::ranges::all_of(inds, [](size_t i) { return i < N; }))
 {
     for (auto i : inds)

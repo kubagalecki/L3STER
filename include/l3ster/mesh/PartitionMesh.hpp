@@ -4,6 +4,7 @@
 #include "l3ster/assembly/ProblemDefinition.hpp"
 #include "l3ster/mesh/Mesh.hpp"
 #include "l3ster/util/Algorithm.hpp"
+#include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/MetisUtils.hpp"
 #include "l3ster/util/RobinHoodHashTables.hpp"
@@ -81,7 +82,7 @@ inline auto getDomainData(const MeshPartition& mesh, const std::vector< d_id_t >
 {
     size_t n_elements = 0, topology_size = 0;
     mesh.visit(
-        [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& el) {
+        [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >&) {
             ++n_elements;
             topology_size += ElementTraits< Element< ET, EO > >::boundary_node_inds.size();
         },
@@ -105,11 +106,10 @@ inline auto prepMetisInput(const MeshPartition&         part,
     e_ptr.push_back(0);
     part.visit(
         [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
-            const auto condensed_view = ElementTraits< Element< ET, EO > >::boundary_node_inds |
-                                        std::views::transform([&](auto i) { return element.getNodes()[i]; }) |
-                                        std::views::transform([&](auto n) { return cond_map[n]; });
+            const auto condensed_view =
+                getBoundaryNodes(element) | std::views::transform([&](auto n) { return cond_map[n]; });
             std::ranges::copy(condensed_view, std::back_inserter(e_ind));
-            e_ptr.push_back(e_ptr.back() + std::ranges::size(condensed_view));
+            e_ptr.push_back(static_cast< idx_t >(e_ptr.back() + std::ranges::ssize(condensed_view)));
         },
         domain_ids);
     return retval;
@@ -120,8 +120,7 @@ inline auto makeNodeCondensationMaps(const MeshPartition& mesh) -> std::array< s
     std::vector< n_id_t > forward_map(mesh.getAllNodes().size()), reverse_map;
     mesh.visit(
         [&forward_map]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
-            for (auto node : ElementTraits< Element< T, O > >::boundary_node_inds |
-                                 std::views::transform([&element](el_locind_t i) { return element.getNodes()[i]; }))
+            for (auto node : getBoundaryNodes(element))
                 std::atomic_ref{forward_map[node]}.store(1, std::memory_order_relaxed);
         },
         std::execution::par);
@@ -188,7 +187,7 @@ inline auto invokeMetisPartitioner(idx_t                 n_elements,
                                                 &objval_discarded,
                                                 retval.epart.data(),
                                                 retval.npart.data());
-    handleMetisErrorCode(error_code);
+    util::metis::handleMetisErrorCode(error_code);
     return retval;
 }
 
@@ -206,8 +205,7 @@ inline auto uncondenseNodes(const std::vector< idx_t >&  epart,
         mesh.visit(
             [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
                 const auto el_part = epart[el_ind++];
-                for (auto n : ElementTraits< Element< ET, EO > >::internal_node_inds |
-                                  std::views::transform([&](auto i) { return element.getNodes()[i]; }))
+                for (auto n : getInternalNodes(element))
                     retval[n] = el_part;
             },
             id);
@@ -216,7 +214,6 @@ inline auto uncondenseNodes(const std::vector< idx_t >&  epart,
 
 inline auto partitionCondensedMesh(const MeshPartition&         mesh,
                                    const std::vector< d_id_t >& domain_ids,
-                                   const std::vector< d_id_t >& boundary_ids,
                                    DomainData                   domain_data,
                                    idx_t                        n_parts,
                                    std::vector< real_t >        part_weights,
@@ -296,7 +293,7 @@ inline void assignBoundaryElements(const MeshPartition&                        p
 inline void reassignDisjointNodes(std::vector< std::pair< std::vector< n_id_t >, std::vector< n_id_t > > >& part_nodes,
                                   std::vector< idx_t >& disjoint_nodes)
 {
-    const auto claim_nodes = [&](idx_t part, std::pair< std::vector< n_id_t >, std::vector< n_id_t > >& nodes) {
+    const auto claim_nodes = [&](std::pair< std::vector< n_id_t >, std::vector< n_id_t > >& nodes) {
         std::vector< n_id_t > claimed;
         auto& [owned_nodes, ghost_nodes] = nodes;
         const auto try_claim             = [&](idx_t node) {
@@ -315,10 +312,9 @@ inline void reassignDisjointNodes(std::vector< std::pair< std::vector< n_id_t >,
         std::ranges::copy(claimed, insert_pos);
         std::ranges::inplace_merge(owned_nodes, insert_pos);
     };
-    for (idx_t part = 0; auto& nodes : part_nodes)
-        claim_nodes(part++, nodes);
-    if (not disjoint_nodes.empty())
-        throw std::logic_error{"At least one node in the mesh does not belong to any element"};
+    for (auto& nodes : part_nodes)
+        claim_nodes(nodes);
+    util::throwingAssert(disjoint_nodes.empty(), "At least one node in the mesh does not belong to any element");
 }
 
 inline auto assignNodes(idx_t                                             n_parts,
@@ -337,9 +333,9 @@ inline auto assignNodes(idx_t                                             n_part
                 [&](const auto& element) {
                     for (auto node : element.getNodes())
                         if (npart[node] == part_ind)
-                            owned_nodes.insert(node);
+                            owned_nodes.insert(static_cast< idx_t >(node));
                         else
-                            ghost_nodes.insert(node);
+                            ghost_nodes.insert(static_cast< idx_t >(node));
                 },
                 std::execution::seq);
         }
@@ -384,7 +380,7 @@ inline auto partitionMeshImpl(const MeshPartition&         mesh,
     const auto domain_ids  = getDomainIds(mesh, boundary_ids);
     const auto domain_data = getDomainData(mesh, domain_ids);
     auto [epart, npart]    = partitionCondensedMesh(
-        mesh, domain_ids, boundary_ids, domain_data, n_parts, std::move(part_weights), std::move(node_weights));
+        mesh, domain_ids, domain_data, n_parts, std::move(part_weights), std::move(node_weights));
     auto new_domain_maps = makeDomainMaps(mesh, n_parts, epart, domain_ids);
     assignBoundaryElements(mesh, epart, new_domain_maps, domain_ids, boundary_ids, domain_data.n_elements);
     auto node_vecs = assignNodes(n_parts, npart, new_domain_maps);
