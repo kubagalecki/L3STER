@@ -206,20 +206,21 @@ using apply_in_out_t = typename detail::ApplyInnerOuterDeductionHelper< Inner, O
 template < template < auto... > typename Inner, template < typename... > typename Outer, std::array... Params >
 using cart_prod_t = apply_in_out_t< Inner, Outer, decltype(zipArrays(getCartProdComponents< Params... >())) >;
 
-template < ArrayOf_c< bool > auto A >
-constexpr auto getTrueInds() -> std::array< size_t, std::ranges::count(A, true) >
-{
-    auto retval = std::array< size_t, std::ranges::count(A, true) >{};
-    std::ranges::copy_if(std::views::iota(size_t{}, A.size()), retval.begin(), [](size_t i) { return A[i]; });
-    return retval;
-}
-
 template < size_t N >
 constexpr auto getTrueInds(const std::array< bool, N >& a) -> util::StaticVector< size_t, N >
 {
     auto retval = util::StaticVector< size_t, N >{};
     std::ranges::copy_if(
         std::views::iota(size_t{}, a.size()), std::back_inserter(retval), [&a](size_t i) { return a[i]; });
+    return retval;
+}
+
+template < ArrayOf_c< bool > auto A >
+constexpr auto getTrueInds(ConstexprValue< A > = {})
+{
+    constexpr auto true_inds_sv = getTrueInds(A);
+    auto           retval       = std::array< size_t, true_inds_sv.size() >{};
+    std::ranges::copy(true_inds_sv, retval.begin());
     return retval;
 }
 } // namespace lstr

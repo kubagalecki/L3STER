@@ -222,12 +222,6 @@ template < size_t max_dofs_per_node, ProblemDef_c auto problem_def >
 StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensationManager(
     const MeshPartition& mesh, const NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map, ConstexprValue< problem_def >)
 {
-    const auto n_active_elems =
-        std::transform_reduce(problem_def.begin(), problem_def.end(), size_t{}, std::plus{}, [&mesh](const auto& p) {
-            return mesh.getDomain(p.first).getNElements();
-        });
-    std::cout << n_active_elems << '\n';
-    m_internal_dof_inds.reserve(n_active_elems * max_dofs_per_node);
     const auto compute_elem_dof_info = [&dof_map]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
         // Bitmap is initially inverted, i.e., 0 implies that the dof is active (avoids awkward all-true construction)
         using dof_bmp_t    = std::bitset< max_dofs_per_node >;
@@ -291,17 +285,8 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemb
         const auto element_ptr_variant = mesh.find(id)->first;
         std::visit(
             [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >* element_ptr) {
-                std::stringstream out;
-
                 eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > diag_inv = elem_data.diag_block.inverse();
                 elem_data.diag_block                                             = std::move(diag_inv);
-
-                out << element_ptr->getId() << "\n\n"
-                    << elem_data.diag_block << "\n\n"
-                    << elem_data.upper_block << "\n\n"
-                    << elem_data.rhs << "\n---\n";
-                std::cerr << out.view();
-
                 const eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > primary_upd_mat =
                     -(elem_data.upper_block * elem_data.diag_block * elem_data.upper_block.transpose());
                 const Eigen::Vector< val_t, Eigen::Dynamic > primary_upd_rhs =
@@ -327,21 +312,6 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
     L3STER_PROFILE_FUNCTION;
     auto&      cond_data = m_elem_data_map.at(element.getId());
     const auto dof_inds  = computeLocalDofInds(element, node_dof_map, cond_data, field_inds_ctwrpr);
-
-    constexpr auto print_range = [](auto&& r, std::stringstream& out) {
-        for (auto&& e : std::forward< decltype(r) >(r))
-            out << e << ' ';
-        out << '\n';
-    };
-    std::stringstream out;
-    out << element.getId() << '\n';
-    print_range(dof_inds.primary_src_inds, out);
-    print_range(dof_inds.primary_dest_inds, out);
-    print_range(dof_inds.cond_src_inds, out);
-    print_range(dof_inds.cond_dest_inds, out);
-    out << "---\n";
-    std::cerr << out.view();
-
     const auto [row_dofs, col_dofs, rhs_dofs] =
         detail::getUnsortedPrimaryDofs(element, node_dof_map, element_boundary, field_inds_ctwrpr);
 
@@ -452,23 +422,6 @@ auto StaticCondensationManager< CondensationPolicy::ElementBoundary >::computeLo
     const auto     internal_dof_inds = getInternalDofInds(cond_data);
     constexpr auto active_inds_bmp   = inds_to_bmp(field_inds);
     const auto     internal_dof_bmp  = inds_to_bmp(internal_dof_inds);
-
-    constexpr auto print_bmp = []< size_t N >(const std::array< bool, N >& bmp) {
-        for (auto b : bmp)
-            std::cout << (b ? 1 : 0) << ' ';
-        std::cout << '\n';
-    };
-
-    std::cout << element.getId() << '\n';
-    for (auto i : field_inds)
-        std::cout << i << ' ';
-    std::cout << '\n';
-    for (int i : internal_dof_inds)
-        std::cout << i << ' ';
-    std::cout << '\n';
-    print_bmp(active_inds_bmp);
-    print_bmp(internal_dof_bmp);
-    std::cout << "---\n";
 
     auto          retval            = LocalDofInds< ET, EO, field_inds.size() >{};
     size_t        primary_write_ind = 0, cond_write_ind = 0;

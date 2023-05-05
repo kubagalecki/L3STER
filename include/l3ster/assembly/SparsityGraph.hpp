@@ -156,7 +156,7 @@ auto computeNodeDofs(const MeshPartition&                           mesh,
 }
 
 template < auto problem_def, CondensationPolicy CP >
-auto computeDofGraph([[maybe_unused]] const MeshPartition&                   mesh,
+auto computeDofGraph(const MeshPartition&                                    mesh,
                      const NodeToGlobalDofMap< deduceNFields(problem_def) >& node_to_dof_map,
                      const NodeCondensationMap< CP >&                        cond_map,
                      std::span< const global_dof_t >                         owned_plus_shared_dofs,
@@ -168,38 +168,19 @@ auto computeDofGraph([[maybe_unused]] const MeshPartition&                   mes
     const auto global_to_local_dof_map = IndexMap{owned_plus_shared_dofs};
     L3STER_PROFILE_REGION_END("Compute global to local DOF map");
 
-    /*constexpr auto print_def = []< auto dom_def >(ConstexprValue< dom_def >) {
-        constexpr auto    domain_id        = dom_def.first;
-        constexpr auto    covered_dof_inds = getTrueInds(dom_def.second);
-        std::stringstream out;
-        out << domain_id << ": ";
-        for (auto b : dom_def.second)
-            out << (b ? 1 : 0) << ' ';
-        out << "true indices: ";
-        for (auto di : covered_dof_inds)
-            out << di << ' ';
-        out << '\n';
-        std::cerr << out.view();
-    };*/
-
     const auto iterate_over_mesh = [&](auto&& element_kernel) {
-        const auto domain_kernel = [&]< auto dom_def >(ConstexprValue< dom_def >) {
-            //            print_def(arg);
-            constexpr auto domain_id          = dom_def.first;
-            constexpr auto covered_dof_inds   = getTrueInds(dom_def.second);
-            constexpr auto covered_dofs_array = std::invoke([&] {
-                auto retval = std::array< size_t, covered_dof_inds.size() >{};
-                std::ranges::copy(covered_dof_inds, retval.begin());
-                return retval;
-            });
-            mesh.visit(
-                [&](const auto& element) {
-                    std::invoke(element_kernel, element, ConstexprValue< covered_dofs_array >{});
-                },
-                domain_id,
-                std::execution::par);
-        };
-        forEachConstexprParallel(domain_kernel, problem_def_ctwrapper);
+        forEachConstexprParallel(
+            [&]< auto dom_def >(ConstexprValue< dom_def >) {
+                constexpr auto domain_id        = dom_def.first;
+                constexpr auto covered_dof_inds = getTrueInds< dom_def.second >();
+                mesh.visit(
+                    [&](const auto& element) {
+                        std::invoke(element_kernel, element, ConstexprValue< covered_dof_inds >{});
+                    },
+                    domain_id,
+                    std::execution::par);
+            },
+            problem_def_ctwrapper);
     };
 
     auto crs_row_sizes_dual_view = Kokkos::DualView< size_t*, tpetra_fecrsgraph_t::execution_space >{
@@ -210,19 +191,16 @@ auto computeDofGraph([[maybe_unused]] const MeshPartition&                   mes
     std::ranges::fill(crs_row_sizes, size_t{});
 
     const auto get_element_dofs = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element,
-                                                                    auto                     dof_inds_ctwrapper) {
+                                                                    auto                     dofinds_ctwrpr) {
         if constexpr (CP == CondensationPolicy::None)
-            return getUnsortedPrimaryDofs(element, node_to_dof_map, cond_map, dof_inds_ctwrapper);
+            return getUnsortedPrimaryDofs(element, node_to_dof_map, cond_map, dofinds_ctwrpr);
         else if constexpr ((CP == CondensationPolicy::ElementBoundary))
             return getUnsortedPrimaryDofs(element, node_to_dof_map, cond_map);
     };
 
     const auto compute_max_row_sizes = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element,
-                                                                         auto                     dof_inds_ctwrapper) {
-        const auto element_dofs = get_element_dofs(element, dof_inds_ctwrapper);
-        util::throwingAssert(
-            std::ranges::count(element_dofs, NodeToGlobalDofMap< deduceNFields(problem_def) >::invalid_dof) == 0,
-            "Invalid DOFs");
+                                                                         auto                     dofinds_ctwrpr) {
+        const auto element_dofs = get_element_dofs(element, dofinds_ctwrpr);
         for (auto global_dof : element_dofs)
         {
             const auto local_dof = global_to_local_dof_map(global_dof);

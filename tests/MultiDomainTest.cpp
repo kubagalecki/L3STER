@@ -16,6 +16,8 @@ void test()
     static constexpr auto domains        = std::array< d_id_t, 4 >{13, 14, 15, 16};
     constexpr auto        problem_def    = std::invoke([] {
         auto retval = std::array< Pair< d_id_t, std::array< bool, domains.size() > >, domains.size() >{};
+        for (auto& a : retval)
+            a.second.fill(false);
         for (size_t i = 0; auto& [dom, cov] : retval)
         {
             dom      = domains[i];
@@ -57,16 +59,12 @@ void test()
                                    empty_field_val_getter,                                                             \
                                    ConstexprValue< std::array{size_t{DOMAIN}} >{});
 
-    std::puts("Made it to beginAssembly");
     alg_sys->beginAssembly();
-    std::puts("Made it to assembly");
     ASSEMBLE_CONST_PROBLEM(0);
     ASSEMBLE_CONST_PROBLEM(1);
     ASSEMBLE_CONST_PROBLEM(2);
     ASSEMBLE_CONST_PROBLEM(3);
-    std::puts("Made it to endAssembly");
     alg_sys->endAssembly(mesh);
-    alg_sys->describe(comm);
 
     auto solver   = solvers::Lapack{};
     auto solution = alg_sys->makeSolutionVector();
@@ -82,7 +80,7 @@ void test()
     {
         const auto field_vals = solution_manager.getFieldView(i);
         REQUIRE(std::ranges::all_of(field_vals,
-                                    [&](double v) { return std::fabs(v - static_cast< double >(i + 1) < 1e-8); }));
+                                    [&](double v) { return std::fabs(v - static_cast< double >(i + 1) < 1e-10); }));
     }
 }
 
