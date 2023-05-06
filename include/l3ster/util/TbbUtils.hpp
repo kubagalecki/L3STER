@@ -6,7 +6,9 @@
 #include "oneapi/tbb.h"
 
 #include <iterator>
+#include <map>
 #include <ranges>
+#include <shared_mutex>
 
 namespace lstr::util::tbb
 {
@@ -31,6 +33,43 @@ void parallelFor(SizedRandomAccessRange_c auto&&                                
                                   for (auto i : std::views::iota(subrange.begin(), subrange.end()))
                                       std::invoke(kernel, range_begin[i]);
                               });
+}
+
+void parallelFor(std::ranges::sized_range auto&&                                            range,
+                 std::invocable< std::ranges::range_reference_t< decltype(range) > > auto&& kernel)
+{
+    const auto iter_space = detail::makeBlockedIterSpace(range);
+    auto       iter_cache =
+        std::map{std::pair{iter_space.begin(), std::ranges::begin(range)}, {iter_space.end(), std::ranges::end(range)}};
+    std::shared_mutex mutex;
+
+    const auto get_iter = [&](std::ranges::range_difference_t< decltype(range) > index) {
+        const auto upper_bound                 = std::invoke([&] {
+            const auto lock = std::shared_lock{mutex};
+            return iter_cache.upper_bound(index);
+        });
+        const auto [closest_ind, closest_iter] = *std::prev(upper_bound);
+        return std::next(closest_iter, index - closest_ind);
+    };
+    const auto cache_iter = [&](std::ranges::range_difference_t< decltype(range) > index,
+                                std::ranges::iterator_t< decltype(range) >         iter) {
+        {
+            const auto lock = std::shared_lock{mutex};
+            if (iter_cache.contains(index))
+                return;
+        }
+        const auto lock = std::lock_guard{mutex};
+        iter_cache.emplace(index, iter);
+    };
+
+    oneapi::tbb::parallel_for(iter_space, [&](const decltype(iter_space)& subrange) {
+        auto       ind     = subrange.begin();
+        auto       iter    = get_iter(ind);
+        const auto end_ind = subrange.end();
+        for (; ind != end_ind; ++ind)
+            std::invoke(kernel, *iter++);
+        cache_iter(ind, iter);
+    });
 }
 
 void parallelTransform(SizedRandomAccessRange_c auto&& input_range, auto output_iter, auto&& kernel)
