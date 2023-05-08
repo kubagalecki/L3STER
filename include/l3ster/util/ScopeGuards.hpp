@@ -3,6 +3,7 @@
 
 #include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/defs/TrilinosTypedefs.h"
+#include "l3ster/util/SetStackSize.hpp"
 
 namespace lstr
 {
@@ -44,11 +45,16 @@ struct KokkosScopeGuard
 class L3sterScopeGuard
 {
 public:
-    L3sterScopeGuard(int& argc, char** argv) : m_mpi_guard{argc, argv}, m_kokkos_guard{argc, argv} {}
+    L3sterScopeGuard(int& argc, char** argv)
+        : m_mpi_guard{argc, argv},
+          m_kokkos_guard{argc, argv},
+          m_stack_size_guard{util::detail::MaxStackSizeTracker::get()}
+    {}
 
 private:
     detail::MpiScopeGuard    m_mpi_guard;
     detail::KokkosScopeGuard m_kokkos_guard;
+    util::StackSizeGuard     m_stack_size_guard;
 };
 } // namespace lstr
 #endif // L3STER_UTIL_KOKKOSSCOPEGUARD_HPP

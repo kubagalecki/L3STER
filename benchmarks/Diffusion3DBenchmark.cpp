@@ -1,4 +1,4 @@
-#define L3STER_ELEMENT_ORDERS 4
+#define L3STER_ELEMENT_ORDERS 8
 #include "l3ster/l3ster.hpp"
 
 #include "DataPath.h"
@@ -25,7 +25,7 @@ int main(int argc, char* argv[])
     constexpr auto        dirichletdef_ctwrpr = ConstexprValue< dirichlet_def >{};
 
     constexpr auto node_dist = std::invoke([] {
-        constexpr size_t                   edge_divs = 12;
+        constexpr size_t                   edge_divs = 2;
         constexpr auto                     dx        = 1. / static_cast< val_t >(edge_divs);
         std::array< val_t, edge_divs + 1 > retval{};
         for (double x = 0; auto& r : retval)

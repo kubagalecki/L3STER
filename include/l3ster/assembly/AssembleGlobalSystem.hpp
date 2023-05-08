@@ -147,8 +147,9 @@ void assembleGlobalSystem(auto&&                                               k
                 "that you're not trying to assemble a 2D problem in a 3D domain). This process will now terminate.\n");
         }
     };
-    const auto stack_size_guard = util::StackSizeGuard{
-        util::default_stack_size + detail::deduceRequiredStackSizeDomain< decltype(kernel), n_fields >()};
+    constexpr auto required_stack_size =
+        util::default_stack_size + detail::deduceRequiredStackSizeDomain< decltype(kernel), n_fields >();
+    util::requestStackSize< required_stack_size >();
     mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
 }
 
@@ -194,8 +195,9 @@ void assembleGlobalBoundarySystem(auto&&                                        
                 "terminate.\n");
         };
     };
-    const auto stack_size_guard = util::StackSizeGuard{
-        util::default_stack_size + detail::deduceRequiredStackSizeBoundary< decltype(kernel), n_fields >()};
+    constexpr auto required_stack_size =
+        util::default_stack_size + detail::deduceRequiredStackSizeBoundary< decltype(kernel), n_fields >();
+    util::requestStackSize< required_stack_size >();
     boundary.visit(process_element, std::execution::par);
 }
 } // namespace lstr
