@@ -38,31 +38,33 @@ void parallelFor(SizedRandomAccessRange_c auto&&                                
 void parallelFor(std::ranges::sized_range auto&&                                            range,
                  std::invocable< std::ranges::range_reference_t< decltype(range) > > auto&& kernel)
 {
-    const auto iter_space = detail::makeBlockedIterSpace(range);
-    auto       iter_cache =
-        std::map{std::pair{iter_space.begin(), std::ranges::begin(range)}, {iter_space.end(), std::ranges::end(range)}};
-    std::shared_mutex mutex;
+    using diff_t     = std::ranges::range_difference_t< decltype(range) >;
+    auto iter_cache  = std::map< diff_t, std::ranges::iterator_t< decltype(range) > >{};
+    auto cache_mutex = std::shared_mutex{};
+    iter_cache.emplace(0, std::ranges::begin(range));
+    iter_cache.emplace(std::ranges::ssize(range), std::ranges::end(range));
 
     const auto get_iter = [&](std::ranges::range_difference_t< decltype(range) > index) {
-        const auto upper_bound                 = std::invoke([&] {
-            const auto lock = std::shared_lock{mutex};
-            return iter_cache.upper_bound(index);
+        const auto [closest_ind, closest_iter] = std::invoke([&] {
+            const auto lock = std::shared_lock{cache_mutex};
+            return *std::prev(iter_cache.upper_bound(index));
         });
-        const auto [closest_ind, closest_iter] = *std::prev(upper_bound);
         return std::next(closest_iter, index - closest_ind);
     };
     const auto cache_iter = [&](std::ranges::range_difference_t< decltype(range) > index,
                                 std::ranges::iterator_t< decltype(range) >         iter) {
         {
-            const auto lock = std::shared_lock{mutex};
+            const auto lock = std::shared_lock{cache_mutex};
             if (iter_cache.contains(index))
                 return;
         }
-        const auto lock = std::lock_guard{mutex};
+        const auto lock = std::lock_guard{cache_mutex};
         iter_cache.emplace(index, iter);
     };
 
-    oneapi::tbb::parallel_for(iter_space, [&](const decltype(iter_space)& subrange) {
+    const auto iter_space = detail::makeBlockedIterSpace(range);
+    using iter_space_t    = std::remove_const_t< decltype(iter_space) >;
+    oneapi::tbb::parallel_for(iter_space, [&](const iter_space_t& subrange) {
         auto       ind     = subrange.begin();
         auto       iter    = get_iter(ind);
         const auto end_ind = subrange.end();
