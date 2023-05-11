@@ -4,14 +4,17 @@
 #include "l3ster/util/Common.hpp"
 #include "l3ster/util/ConstexprRefStableCollection.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
+#include "l3ster/util/HwlocWrapper.hpp"
 #include "l3ster/util/IndexMap.hpp"
 #include "l3ster/util/Meta.hpp"
 #include "l3ster/util/MetisUtils.hpp"
+#include "l3ster/util/ScopeGuards.hpp"
 #include "l3ster/util/SetStackSize.hpp"
 #include "l3ster/util/StaticVector.hpp"
 #include "l3ster/util/TbbUtils.hpp"
 
 #include "MakeRandomVector.hpp"
+#include "TestDataPath.h"
 
 #include "catch2/catch.hpp"
 #include "tbb/tbb.h"
@@ -631,3 +634,24 @@ TEST_CASE("Non-random access parallel for", "[util]")
         CHECK(parallel_accumulator.load() == sequential_sum);
     }
 }
+
+TEST_CASE("Hwloc topology info", "[util, hwloc]")
+{
+    const auto topology = util::hwloc::Topology{};
+    REQUIRE_FALSE(topology.isEmpty());
+    REQUIRE(L3STER_N_NUMA_NODES == topology.getNNodes());
+    REQUIRE(L3STER_N_CORES == topology.getNCores());
+    REQUIRE(L3STER_N_HWTHREADS == topology.getNHwThreads());
+}
+
+#ifdef _OPENMP
+TEST_CASE("OpenMP num threads control", "[util]")
+{
+    const auto max_threads_initial = omp_get_max_threads();
+    {
+        const auto max_par_guard = detail::MaxParallelismGuard{1};
+        CHECK(omp_get_max_threads() == 1);
+    }
+    CHECK(omp_get_max_threads() == max_threads_initial);
+}
+#endif

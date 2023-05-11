@@ -3,6 +3,7 @@
 
 #include "l3ster/assembly/ScatterLocalSystem.hpp"
 #include "l3ster/assembly/SolutionManager.hpp"
+#include "l3ster/util/ScopeGuards.hpp"
 #include "l3ster/util/TbbUtils.hpp"
 
 namespace lstr::detail
@@ -280,6 +281,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemb
     tpetra_crsmatrix_t&                              matrix,
     std::span< val_t >                               rhs)
 {
+    const auto max_par_guard = detail::MaxParallelismGuard{};
     util::tbb::parallelFor(m_elem_data_map, [&](auto& map_entry) {
         auto& [id, elem_data]          = map_entry;
         const auto element_ptr_variant = mesh.find(id)->first;
