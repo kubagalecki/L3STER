@@ -51,19 +51,20 @@ void test()
         };
     static_assert(detail::Kernel_c< decltype(const_kernel), 2, 0 >);
 
-#define ASSEMBLE_CONST_PROBLEM(DOMAIN)                                                                                 \
-    set_value = static_cast< double >(DOMAIN + 1);                                                                     \
-    alg_sys->assembleDomainProblem(const_kernel,                                                                       \
-                                   mesh,                                                                               \
-                                   std::views::single(domains[DOMAIN]),                                                \
-                                   empty_field_val_getter,                                                             \
-                                   ConstexprValue< std::array{size_t{DOMAIN}} >{});
+    const auto assemble_problem_in_dom = [&]< auto dom_ind >(ConstexprValue< dom_ind >) {
+        set_value = static_cast< double >(dom_ind + 1);
+        alg_sys->assembleDomainProblem(const_kernel,
+                                       mesh,
+                                       std::views::single(domains[dom_ind]),
+                                       empty_field_val_getter,
+                                       ConstexprValue< std::array{size_t{dom_ind}} >{});
+    };
 
     alg_sys->beginAssembly();
-    ASSEMBLE_CONST_PROBLEM(0);
-    ASSEMBLE_CONST_PROBLEM(1);
-    ASSEMBLE_CONST_PROBLEM(2);
-    ASSEMBLE_CONST_PROBLEM(3);
+    assemble_problem_in_dom(ConstexprValue< 0 >{});
+    assemble_problem_in_dom(ConstexprValue< 1 >{});
+    assemble_problem_in_dom(ConstexprValue< 2 >{});
+    assemble_problem_in_dom(ConstexprValue< 3 >{});
     alg_sys->endAssembly(mesh);
 
     auto solver   = solvers::Lapack{};
@@ -80,7 +81,7 @@ void test()
     {
         const auto field_vals = solution_manager.getFieldView(i);
         REQUIRE(std::ranges::all_of(field_vals,
-                                    [&](double v) { return std::fabs(v - static_cast< double >(i + 1) < 1e-10); }));
+                                    [&](double v) { return std::fabs(v - static_cast< double >(i + 1)) < 1e-10; }));
     }
 }
 
