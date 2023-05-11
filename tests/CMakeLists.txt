@@ -28,13 +28,11 @@ include( Catch )
 
 add_executable( L3STER_tests TestsMain.cpp
                 DofTests.cpp
-                HwlocTests.cpp
                 LocalAssemblyTests.cpp
                 MappingTests.cpp
                 MathTests.cpp
                 MeshSerializationTests.cpp
                 MeshTests.cpp
-                NodeAllocationTests.cpp
                 QuadratureTests.cpp
                 SolutionManagerTest.cpp
                 UtilTests.cpp
@@ -102,9 +100,23 @@ execute_process( COMMAND lscpu
                  COMMAND grep -i numa
                  COMMAND head -1
                  COMMAND grep -o "[0-9]*"
+                 COMMAND tr -d "\\012\\015"
                  OUTPUT_VARIABLE L3STER_N_NUMA_NODES
                  )
+execute_process( COMMAND grep ^cpu\\scores /proc/cpuinfo
+                 COMMAND uniq
+                 COMMAND grep -o "[0-9]*"
+                 COMMAND tr -d "\\012\\015"
+                 OUTPUT_VARIABLE L3STER_N_CORES
+                 )
+execute_process( COMMAND grep -c ^processor /proc/cpuinfo
+                 COMMAND uniq
+                 COMMAND grep -o "[0-9]*"
+                 COMMAND tr -d "\\012\\015"
+                 OUTPUT_VARIABLE L3STER_N_HWTHREADS
+                 )
 set( L3STER_TESTS_DATA_PATH "${CMAKE_CURRENT_SOURCE_DIR}/data" )
+
 configure_file( TestDataPath.h.in TestDataPath.h )
 
 #######################################################################################################################

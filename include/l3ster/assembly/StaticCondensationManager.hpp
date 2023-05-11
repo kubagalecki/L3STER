@@ -3,6 +3,7 @@
 
 #include "l3ster/assembly/ScatterLocalSystem.hpp"
 #include "l3ster/assembly/SolutionManager.hpp"
+#include "l3ster/util/ScopeGuards.hpp"
 #include "l3ster/util/TbbUtils.hpp"
 
 namespace lstr::detail
@@ -265,7 +266,7 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
 
 void StaticCondensationManager< CondensationPolicy::ElementBoundary >::beginAssemblyImpl()
 {
-    std::for_each(std::execution::par, m_elem_data_map.begin(), m_elem_data_map.end(), [&](auto& map_entry) {
+    util::tbb::parallelFor(m_elem_data_map, [&](auto& map_entry) {
         auto& [id, payload] = map_entry;
         payload.diag_block.setZero();
         payload.upper_block.setZero();
@@ -280,7 +281,8 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemb
     tpetra_crsmatrix_t&                              matrix,
     std::span< val_t >                               rhs)
 {
-    std::for_each(std::execution::par, m_elem_data_map.begin(), m_elem_data_map.end(), [&](auto& map_entry) {
+    const auto max_par_guard = detail::MaxParallelismGuard{};
+    util::tbb::parallelFor(m_elem_data_map, [&](auto& map_entry) {
         auto& [id, elem_data]          = map_entry;
         const auto element_ptr_variant = mesh.find(id)->first;
         std::visit(
@@ -370,7 +372,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSo
             sol_man_inds, std::back_inserter(retval), [&](size_t i) { return sol_man.getFieldView(i); });
         return retval;
     });
-    std::for_each(std::execution::par, m_elem_data_map.cbegin(), m_elem_data_map.cend(), [&](const auto& map_entry) {
+    util::tbb::parallelFor(m_elem_data_map, [&](const auto& map_entry) {
         auto& [id, elem_data]          = map_entry;
         const auto element_ptr_variant = mesh.find(id)->first;
         std::visit(

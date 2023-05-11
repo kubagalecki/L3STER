@@ -1,6 +1,8 @@
 #ifndef L3STER_UTIL_NUMATOPOLOGY_HPP
 #define L3STER_UTIL_NUMATOPOLOGY_HPP
 
+#include "l3ster/util/Assertion.hpp"
+
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wconversion"
@@ -12,210 +14,134 @@
 #pragma GCC diagnostic pop
 #endif
 
-#include <algorithm>
-#include <concepts>
+#include <functional>
 #include <limits>
-#include <stdexcept>
-#include <type_traits>
+#include <memory>
+#include <numeric>
+#include <utility>
 #include <vector>
 
-namespace lstr
+namespace lstr::util::hwloc
 {
-// C++ wrapper for hwloc
-// Assumes a symmetric topology, however admits different numbers of PUs at each node
-struct HwlocWrapper
-{
-    inline HwlocWrapper();
-    HwlocWrapper(const HwlocWrapper&)            = delete;
-    HwlocWrapper(HwlocWrapper&&)                 = delete;
-    HwlocWrapper& operator=(const HwlocWrapper&) = delete;
-    HwlocWrapper& operator=(HwlocWrapper&&)      = delete;
-    inline ~HwlocWrapper();
-
-    [[nodiscard]] size_t         getMachineSize() const noexcept { return cpu_masks.size(); }
-    [[nodiscard]] size_t         getNodeSize(size_t node) const noexcept { return cpu_masks[node].size(); }
-    [[nodiscard]] const auto&    getNodeMasks(size_t node) const noexcept { return cpu_masks[node]; }
-    [[nodiscard]] hwloc_bitmap_t getMachineMask() const noexcept { return hwloc_get_root_obj(topo)->cpuset; }
-
-    inline void                                      bindThreadToCore(size_t node, size_t cpu) const;
-    inline void                                      bindThreadToNode(size_t node) const;
-    [[nodiscard]] inline std::pair< size_t, size_t > getLastThreadLocation() const;
-
-    [[nodiscard]] inline void* allocateOnNode(size_t size, size_t node) const noexcept;
-    void                       free(void* addr, size_t size) const noexcept { hwloc_free(topo, addr, size); }
-
-private:
-    inline void initTopology();
-    inline void populateTopologyInfo() noexcept;
-    inline void groupCpus();
-
-    template < typename F >
-    [[nodiscard]] std::pair< size_t, size_t > findCpuIf(const F&) const noexcept
-        requires std::is_invocable_r_v< bool, F, hwloc_cpuset_t >;
-
-    std::vector< std::vector< hwloc_cpuset_t > > cpu_masks{};
-    std::vector< hwloc_nodeset_t >               node_masks{};
-    hwloc_topology_t                             topo{};
-};
-
 namespace detail
 {
-struct HwlocBitmapRaiiWrapper
+class BitmapWrapper
 {
-    HwlocBitmapRaiiWrapper() : bmp{hwloc_bitmap_alloc()} {}
-    HwlocBitmapRaiiWrapper(const HwlocBitmapRaiiWrapper&)            = delete;
-    HwlocBitmapRaiiWrapper(HwlocBitmapRaiiWrapper&&)                 = delete;
-    HwlocBitmapRaiiWrapper& operator=(const HwlocBitmapRaiiWrapper&) = delete;
-    HwlocBitmapRaiiWrapper& operator=(HwlocBitmapRaiiWrapper&&)      = delete;
-    ~HwlocBitmapRaiiWrapper() { hwloc_bitmap_free(bmp); }
+public:
+    BitmapWrapper() : m_bitmap{hwloc_bitmap_alloc(), &hwloc_bitmap_free} { assertNotNull(); }
+    BitmapWrapper(hwloc_const_bitmap_t bmp) : m_bitmap{hwloc_bitmap_dup(bmp), &hwloc_bitmap_free} { assertNotNull(); }
 
-    // clang-tidy warns about implicit conversion, but that's exactly the point [NOLINTNEXTLINE]
-    operator hwloc_bitmap_t() const { return bmp; }
+    operator hwloc_bitmap_t() { return m_bitmap.get(); }
+    operator hwloc_const_bitmap_t() const { return m_bitmap.get(); }
 
-    hwloc_bitmap_t bmp;
+    void forEachSetIndex(std::invocable< unsigned int > auto&& body) const
+    {
+        unsigned int i{};
+        hwloc_bitmap_foreach_begin(i, m_bitmap.get())
+        {
+            std::invoke(body, i);
+        }
+        hwloc_bitmap_foreach_end();
+    }
+
+private:
+    void assertNotNull(std::source_location sl = std::source_location::current()) const
+    {
+        throwingAssert(bool{m_bitmap}, "Hwloc bitmap allocation failed", sl);
+    }
+
+    std::unique_ptr< std::remove_pointer_t< hwloc_bitmap_t >, decltype(&hwloc_bitmap_free) > m_bitmap;
 };
 
-template < typename F >
-void hwlocBitmapForEachWrapper(hwloc_bitmap_t bitmap, const F& fun)
-    requires std::is_invocable_v< F, hwloc_bitmap_t >
+inline bool operator==(const BitmapWrapper& b1, const BitmapWrapper& b2)
 {
-    HwlocBitmapRaiiWrapper helper{};
-    int                    index;
-    hwloc_bitmap_foreach_begin(index, bitmap)
-    {
-        hwloc_bitmap_only(helper, static_cast< unsigned >(index));
-        fun(helper);
-    }
-    hwloc_bitmap_foreach_end();
-}
-
-template < typename F >
-void hwlocBitmapForEachWrapper(hwloc_const_bitmap_t bitmap, const F& fun)
-    requires std::is_invocable_v< F, hwloc_const_bitmap_t >
-{
-    HwlocBitmapRaiiWrapper helper{};
-    int                    index;
-    hwloc_bitmap_foreach_begin(index, bitmap)
-    {
-        hwloc_bitmap_only(helper, static_cast< unsigned >(index));
-        fun(helper);
-    }
-    hwloc_bitmap_foreach_end();
-}
-
-template < std::derived_from< std::exception > Exception_t >
-void handleHwlocError(int error, const char* err_msg)
-{
-    if (error)
-        throw Exception_t{err_msg};
+    return hwloc_bitmap_isequal(b1, b2);
 }
 } // namespace detail
 
-inline HwlocWrapper::HwlocWrapper()
+class Topology
 {
-    initTopology();
-    populateTopologyInfo();
-    groupCpus();
-}
-
-inline HwlocWrapper::~HwlocWrapper()
-{
-    for (auto& bitmap_vector : cpu_masks)
-        std::ranges::for_each(bitmap_vector, [](hwloc_cpuset_t cpu) { hwloc_bitmap_free(cpu); });
-    std::ranges::for_each(node_masks, [](hwloc_nodeset_t node) { hwloc_bitmap_free(node); });
-    hwloc_topology_destroy(topo);
-}
-
-inline void HwlocWrapper::bindThreadToCore(size_t node, size_t cpu) const
-{
-    const auto err = hwloc_set_cpubind(topo, cpu_masks[node][cpu], HWLOC_CPUBIND_THREAD);
-    detail::handleHwlocError< std::runtime_error >(err, "failed to bind thread to core");
-}
-
-inline void HwlocWrapper::bindThreadToNode(size_t node) const
-{
-    detail::HwlocBitmapRaiiWrapper cpu_set{};
-    hwloc_cpuset_from_nodeset(topo, cpu_set, node_masks[node]);
-    const auto err = hwloc_set_cpubind(topo, cpu_set, HWLOC_CPUBIND_THREAD);
-    detail::handleHwlocError< std::runtime_error >(err, "failed to bind thread to NUMA node");
-}
-
-inline std::pair< size_t, size_t > HwlocWrapper::getLastThreadLocation() const
-{
-    detail::HwlocBitmapRaiiWrapper cpu{};
-    const auto                     err = hwloc_get_last_cpu_location(topo, cpu, HWLOC_CPUBIND_THREAD);
-    detail::handleHwlocError< std::runtime_error >(err,
-                                                   "hwloc failed to obtain the last location of the current thread");
-    const auto retval = findCpuIf([&](hwloc_const_cpuset_t set) { return hwloc_bitmap_isequal(set, cpu); });
-    if (retval.first == std::numeric_limits< size_t >::max())
-        throw std::logic_error{"The thread location provided by hwloc seems to lie outside of the machine's topology"};
-    return retval;
-}
-
-inline void* HwlocWrapper::allocateOnNode(size_t size, size_t node) const noexcept
-{
-    return hwloc_alloc_membind(topo, size, node_masks[node], HWLOC_MEMBIND_BIND, HWLOC_MEMBIND_BYNODESET);
-}
-
-inline void HwlocWrapper::initTopology()
-{
-    const auto err = hwloc_topology_init(&topo) or hwloc_topology_load(topo);
-    detail::handleHwlocError< std::runtime_error >(err, "hwloc failed to obtain topology information");
-}
-
-inline void HwlocWrapper::populateTopologyInfo() noexcept
-{
-    hwloc_const_nodeset_t node_set = hwloc_topology_get_topology_nodeset(topo);
-    const size_t          n_nodes  = hwloc_bitmap_weight(node_set);
-    cpu_masks.reserve(n_nodes);
-    node_masks.reserve(n_nodes);
-    detail::HwlocBitmapRaiiWrapper cpu_set{};
-    detail::hwlocBitmapForEachWrapper(node_set, [&](hwloc_const_nodeset_t node) {
-        node_masks.push_back(hwloc_bitmap_dup(node));
-        hwloc_cpuset_from_nodeset(topo, cpu_set, node);
-        std::vector< hwloc_cpuset_t > cpus;
-        cpus.reserve(hwloc_bitmap_weight(cpu_set));
-        detail::hwlocBitmapForEachWrapper(cpu_set, [&](hwloc_cpuset_t cpu) { cpus.push_back(hwloc_bitmap_dup(cpu)); });
-        cpu_masks.push_back(std::move(cpus));
-    });
-}
-
-inline void HwlocWrapper::groupCpus()
-{
-    const auto cpu_to_obj = [&](hwloc_cpuset_t set) {
-        return hwloc_get_obj_inside_cpuset_by_type(topo, set, HWLOC_OBJ_PU, 0);
-    };
-    const auto pu_depth = hwloc_get_type_depth(topo, HWLOC_OBJ_PU);
-    const auto cpu_dist = [&](hwloc_cpuset_t cpu1, hwloc_cpuset_t cpu2) {
-        return pu_depth - hwloc_get_common_ancestor_obj(topo, cpu_to_obj(cpu1), cpu_to_obj(cpu2))->depth;
-    };
-    for (auto& node : cpu_masks)
+public:
+    Topology() : m_topology{nullptr, &hwloc_topology_destroy}
     {
-        if (node.size() < 2)
-            continue;
-        for (auto it = begin(node); it + 2 != end(node); ++it)
-            std::partial_sort(it + 1, it + 2, end(node), [&](hwloc_cpuset_t c1, hwloc_cpuset_t c2) {
-                return cpu_dist(*it, c1) < cpu_dist(*it, c2);
+        init();
+        populate();
+    }
+
+    size_t getNNodes() const { return m_machine.size(); }
+    size_t getNCores(size_t node) const { return m_machine.at(node).second.size(); }
+    size_t getNCores() const
+    {
+        auto node_range = std::views::iota(size_t{}, getNNodes()) | std::views::common;
+        return std::transform_reduce(
+            std::ranges::cbegin(node_range), std::ranges::cend(node_range), size_t{}, std::plus{}, [this](size_t node) {
+                return getNCores(node);
             });
     }
-}
+    size_t getNHwThreads(size_t node, size_t core) const
+    {
+        return static_cast< size_t >(hwloc_bitmap_weight(m_machine.at(node).second.at(core)));
+    }
+    size_t getNHwThreads() const
+    {
+        auto node_range = std::views::iota(size_t{}, getNNodes()) | std::views::common;
+        return std::transform_reduce(
+            std::ranges::cbegin(node_range), std::ranges::cend(node_range), size_t{}, std::plus{}, [this](size_t node) {
+                auto core_range = std::views::iota(size_t{}, getNCores(node)) | std::views::common;
+                return std::transform_reduce(std::ranges::cbegin(core_range),
+                                             std::ranges::cend(core_range),
+                                             size_t{},
+                                             std::plus{},
+                                             [this, node](size_t core) { return getNHwThreads(node, core); });
+            });
+    }
+    bool isEmpty() const { return m_machine.empty(); }
 
-template < typename F >
-std::pair< size_t, size_t > HwlocWrapper::findCpuIf(const F& fun) const noexcept
-    requires std::is_invocable_r_v< bool, F, hwloc_cpuset_t >
+private:
+    inline void init();
+    inline void populate();
+
+    using Core     = detail::BitmapWrapper;                                   // core cpu set
+    using NumaNode = std::pair< detail::BitmapWrapper, std::vector< Core > >; // node set + cores
+
+    std::vector< NumaNode >                                                                         m_machine;
+    std::unique_ptr< std::remove_pointer_t< hwloc_topology_t >, decltype(&hwloc_topology_destroy) > m_topology;
+};
+
+void Topology::init()
 {
-    std::pair< size_t, size_t > retval;
-    auto& [node, cpu] = retval;
-
-    const auto find_cpu = [&](const std::vector< hwloc_cpuset_t >& cpus) {
-        cpu = std::distance(cpus.begin(), std::ranges::find_if(cpus, fun));
-        return cpu < cpus.size();
-    };
-    const auto   node_it  = std::ranges::find_if(cpu_masks, find_cpu);
-    const size_t node_ind = std::distance(cpu_masks.begin(), node_it);
-    node                  = node_ind == cpu_masks.size() ? std::numeric_limits< size_t >::max() : node_ind;
-    return retval;
+    hwloc_topology_t topo_ptr{};
+    const auto       init_err = hwloc_topology_init(&topo_ptr);
+    throwingAssert(not init_err, "Failed to initialize hwloc topology");
+    m_topology.reset(topo_ptr);
+    const auto load_err = hwloc_topology_load(m_topology.get());
+    throwingAssert(not load_err, "Failed to load hwloc topology");
 }
-} // namespace lstr
 
+void Topology::populate()
+{
+    const auto nodeset = detail::BitmapWrapper{hwloc_topology_get_topology_nodeset(m_topology.get())};
+    const auto n_nodes = hwloc_bitmap_weight(nodeset);
+    m_machine.reserve(static_cast< std::size_t >(n_nodes));
+    nodeset.forEachSetIndex([this](unsigned int node) {
+        auto& [node_mask, cores] = m_machine.emplace_back();
+        hwloc_bitmap_set(node_mask, static_cast< unsigned int >(node));
+        auto       node_cpuset       = detail::BitmapWrapper{};
+        const auto node_cpu_conv_err = hwloc_cpuset_from_nodeset(m_topology.get(), node_cpuset, node_mask);
+        throwingAssert(not node_cpu_conv_err, "Failed to convert hwloc nodeset to cpuset");
+        const auto n_cpus_in_node =
+            hwloc_get_nbobjs_inside_cpuset_by_type(m_topology.get(), node_cpuset, HWLOC_OBJ_CORE);
+        throwingAssert(n_cpus_in_node >= 0, "Failed to determine number of cores in NUMA node");
+        const auto n_cpus_in_node_unsigned = static_cast< unsigned int >(n_cpus_in_node);
+        cores.reserve(n_cpus_in_node_unsigned);
+        for (unsigned int cpu_ind = 0; cpu_ind != n_cpus_in_node_unsigned; ++cpu_ind)
+        {
+            const auto cpu_ptr =
+                hwloc_get_obj_inside_cpuset_by_type(m_topology.get(), node_cpuset, HWLOC_OBJ_CORE, cpu_ind);
+            throwingAssert(cpu_ptr, "Failed to query hwloc core object");
+            cores.emplace_back(cpu_ptr->cpuset);
+        }
+    });
+}
+} // namespace lstr::util::hwloc
 #endif // L3STER_UTIL_NUMATOPOLOGY_HPP

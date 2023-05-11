@@ -413,8 +413,7 @@ auto encodeFieldImpl(SizedRangeOfConvertibleTo_c< std::span< const val_t > > aut
     const auto node_vals = std::span{alloc_to_encode}.subspan(1);
 
     // Interleave field values
-    auto&& node_range = std::views::iota(0ul, n_nodes) | std::views::common;
-    std::for_each(std::execution::par, std::ranges::begin(node_range), std::ranges::end(node_range), [&](size_t node) {
+    util::tbb::parallelFor(std::views::iota(0ul, n_nodes), [&](size_t node) {
         auto output_iter = std::next(begin(node_vals), static_cast< ptrdiff_t >(node * n_fields_to_export));
         for (auto fv : field_values)
             *output_iter++ = fv[node];

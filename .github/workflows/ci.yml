@@ -1,5 +1,10 @@
 name: tests
-on: [ push, pull_request ]
+on:
+  push:
+    branches:
+      - main
+      - 'releases/**'
+  pull_request:
 
 env:
   DOCKER_BASE: "${{ secrets.DOCKER_HUB_USERNAME }}/${{ secrets.DOCKER_HUB_IMAGE }}:latest"

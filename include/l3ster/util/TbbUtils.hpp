@@ -6,7 +6,9 @@
 #include "oneapi/tbb.h"
 
 #include <iterator>
+#include <map>
 #include <ranges>
+#include <shared_mutex>
 
 namespace lstr::util::tbb
 {
@@ -31,6 +33,45 @@ void parallelFor(SizedRandomAccessRange_c auto&&                                
                                   for (auto i : std::views::iota(subrange.begin(), subrange.end()))
                                       std::invoke(kernel, range_begin[i]);
                               });
+}
+
+void parallelFor(std::ranges::sized_range auto&&                                            range,
+                 std::invocable< std::ranges::range_reference_t< decltype(range) > > auto&& kernel)
+{
+    using diff_t     = std::ranges::range_difference_t< decltype(range) >;
+    auto iter_cache  = std::map< diff_t, std::ranges::iterator_t< decltype(range) > >{};
+    auto cache_mutex = std::shared_mutex{};
+    iter_cache.emplace(0, std::ranges::begin(range));
+    iter_cache.emplace(std::ranges::ssize(range), std::ranges::end(range));
+
+    const auto get_iter = [&](std::ranges::range_difference_t< decltype(range) > index) {
+        const auto [closest_ind, closest_iter] = std::invoke([&] {
+            const auto lock = std::shared_lock{cache_mutex};
+            return *std::prev(iter_cache.upper_bound(index));
+        });
+        return std::next(closest_iter, index - closest_ind);
+    };
+    const auto cache_iter = [&](std::ranges::range_difference_t< decltype(range) > index,
+                                std::ranges::iterator_t< decltype(range) >         iter) {
+        {
+            const auto lock = std::shared_lock{cache_mutex};
+            if (iter_cache.contains(index))
+                return;
+        }
+        const auto lock = std::lock_guard{cache_mutex};
+        iter_cache.emplace(index, iter);
+    };
+
+    const auto iter_space = detail::makeBlockedIterSpace(range);
+    using iter_space_t    = std::remove_const_t< decltype(iter_space) >;
+    oneapi::tbb::parallel_for(iter_space, [&](const iter_space_t& subrange) {
+        auto       ind     = subrange.begin();
+        auto       iter    = get_iter(ind);
+        const auto end_ind = subrange.end();
+        for (; ind != end_ind; ++ind)
+            std::invoke(kernel, *iter++);
+        cache_iter(ind, iter);
+    });
 }
 
 void parallelTransform(SizedRandomAccessRange_c auto&& input_range, auto output_iter, auto&& kernel)
