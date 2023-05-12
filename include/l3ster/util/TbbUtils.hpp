@@ -5,6 +5,8 @@
 
 #include "oneapi/tbb.h"
 
+#include <algorithm>
+#include <cmath>
 #include <iterator>
 #include <map>
 #include <ranges>
@@ -17,9 +19,21 @@ namespace detail
 template < std::ranges::sized_range Range >
 using blocked_iter_space_t = oneapi::tbb::blocked_range< std::ranges::range_difference_t< Range > >;
 
-auto makeBlockedIterSpace(std::ranges::sized_range auto&& range) -> blocked_iter_space_t< decltype(range) >
+auto makeBlockedIterSpace(std::ranges::sized_range auto&& range, size_t grain = 1)
+    -> blocked_iter_space_t< decltype(range) >
 {
-    return {0, std::ranges::ssize(range)};
+    return {0, std::ranges::ssize(range), grain};
+}
+
+inline size_t largeGrainSizeHeuristic(size_t range_size, size_t max_parallel_agents)
+{
+    const auto   r_sz       = static_cast< double >(range_size);
+    const auto   par        = static_cast< double >(max_parallel_agents);
+    const double grain_size = 2 * std::sqrt(r_sz / par);
+
+    const size_t grain_lower_bnd = 1;
+    const size_t grain_upper_bnd = range_size / max_parallel_agents + 1;
+    return std::clamp(static_cast< size_t >(std::llround(grain_size)), grain_lower_bnd, grain_upper_bnd);
 }
 } // namespace detail
 
@@ -62,8 +76,15 @@ void parallelFor(std::ranges::sized_range auto&&                                
         iter_cache.emplace(index, iter);
     };
 
-    const auto iter_space = detail::makeBlockedIterSpace(range);
+    // Note: setting the grain size is important in the non-random access case (hence the heuristic)
+    //   grain too small -> contention on the iterator map becomes dominant
+    //   grain too large -> cost of advancing the iterator becomes dominant
+    const auto num_par_agents =
+        oneapi::tbb::global_control::active_value(oneapi::tbb::global_control::max_allowed_parallelism);
+    const auto grain      = detail::largeGrainSizeHeuristic(std::ranges::size(range), num_par_agents);
+    const auto iter_space = detail::makeBlockedIterSpace(range, grain);
     using iter_space_t    = std::remove_const_t< decltype(iter_space) >;
+
     oneapi::tbb::parallel_for(iter_space, [&](const iter_space_t& subrange) {
         auto       ind     = subrange.begin();
         auto       iter    = get_iter(ind);
