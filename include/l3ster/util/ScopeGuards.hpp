@@ -11,36 +11,83 @@ namespace lstr
 {
 namespace detail
 {
-struct MpiScopeGuard
+class MpiScopeGuard
 {
+public:
     inline MpiScopeGuard(int& argc, char**& argv);
-    MpiScopeGuard(const MpiScopeGuard&)                = delete;
-    MpiScopeGuard& operator=(const MpiScopeGuard&)     = delete;
-    MpiScopeGuard(MpiScopeGuard&&) noexcept            = default;
-    MpiScopeGuard& operator=(MpiScopeGuard&&) noexcept = default;
-    ~MpiScopeGuard() { MPI_Finalize(); }
+    MpiScopeGuard(const MpiScopeGuard&)            = delete;
+    MpiScopeGuard& operator=(const MpiScopeGuard&) = delete;
+    MpiScopeGuard(MpiScopeGuard&& other) noexcept : m_is_owning{std::exchange(other.m_is_owning, false)} {};
+    MpiScopeGuard& operator=(MpiScopeGuard&& other) noexcept
+    {
+        if (this != &other)
+            m_is_owning = std::exchange(other.m_is_owning, false);
+        return *this;
+    }
+    ~MpiScopeGuard()
+    {
+        if (m_is_owning)
+            MPI_Finalize();
+    }
+
+private:
+    bool m_is_owning = false;
 };
 
 MpiScopeGuard::MpiScopeGuard(int& argc, char**& argv)
 {
+    int        initialized{};
+    const auto init_check_err = MPI_Initialized(&initialized);
+    detail::mpi::handleMPIError(init_check_err, "Failed to check MPI initialization status");
+    if (initialized)
+        return;
+
     constexpr auto required_mode = MPI_THREAD_FUNNELED;
     int            provided_mode{};
     int            mpi_status = MPI_Init_thread(&argc, &argv, required_mode, &provided_mode);
-    detail::mpi::handleMPIError(mpi_status, "failed to initialize MPI");
+    detail::mpi::handleMPIError(mpi_status, "Failed to initialize MPI");
+    m_is_owning = true;
     util::throwingAssert(
         provided_mode >= required_mode,
         "The installed configuration of MPI does not support the required threading mode MPI_THREAD_FUNNELED");
 }
 
-struct KokkosScopeGuard
+class KokkosScopeGuard
 {
-    KokkosScopeGuard() { Kokkos::initialize(); }
-    KokkosScopeGuard(int& argc, char** argv) { Kokkos::initialize(argc, argv); }
-    KokkosScopeGuard(const KokkosScopeGuard&)                = delete;
-    KokkosScopeGuard& operator=(const KokkosScopeGuard&)     = delete;
-    KokkosScopeGuard(KokkosScopeGuard&&) noexcept            = default;
-    KokkosScopeGuard& operator=(KokkosScopeGuard&&) noexcept = default;
-    ~KokkosScopeGuard() { Kokkos::finalize(); }
+public:
+    KokkosScopeGuard()
+    {
+        if (not Kokkos::is_initialized())
+        {
+            Kokkos::initialize();
+            m_is_owning = true;
+        }
+    }
+    KokkosScopeGuard(int& argc, char** argv)
+    {
+        if (not Kokkos::is_initialized())
+        {
+            Kokkos::initialize(argc, argv);
+            m_is_owning = true;
+        }
+    }
+    KokkosScopeGuard(const KokkosScopeGuard&)            = delete;
+    KokkosScopeGuard& operator=(const KokkosScopeGuard&) = delete;
+    KokkosScopeGuard(KokkosScopeGuard&& other) noexcept : m_is_owning{std::exchange(other.m_is_owning, false)} {};
+    KokkosScopeGuard& operator=(KokkosScopeGuard&& other) noexcept
+    {
+        if (this != &other)
+            m_is_owning = std::exchange(other.m_is_owning, false);
+        return *this;
+    }
+    ~KokkosScopeGuard()
+    {
+        if (m_is_owning)
+            Kokkos::finalize();
+    }
+
+private:
+    bool m_is_owning;
 };
 } // namespace detail
 

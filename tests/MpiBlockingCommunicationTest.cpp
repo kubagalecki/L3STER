@@ -8,8 +8,8 @@
 int main(int argc, char* argv[])
 {
     using namespace lstr;
-    L3sterScopeGuard scope_guard{argc, argv};
-    MpiComm          comm{MPI_COMM_WORLD, MPI_ERRORS_RETURN};
+    const auto scope_guard = L3sterScopeGuard{argc, argv};
+    MpiComm    comm{MPI_COMM_WORLD, MPI_ERRORS_RETURN};
 
     const auto size = comm.getSize();
     const auto rank = comm.getRank();
@@ -30,4 +30,7 @@ int main(int argc, char* argv[])
         comm.send(expected, rank + 1);
 
     CHECK_THROWS(comm.send(std::views::single(0), size));
+
+    // Code coverage for the branch checking initialization/finalization
+    const auto scope_guard2 = L3sterScopeGuard{argc, argv};
 }
