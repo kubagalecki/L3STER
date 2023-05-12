@@ -42,27 +42,7 @@ struct KokkosScopeGuard
     KokkosScopeGuard& operator=(KokkosScopeGuard&&) noexcept = default;
     ~KokkosScopeGuard() { Kokkos::finalize(); }
 };
-} // namespace detail
 
-class L3sterScopeGuard
-{
-public:
-    L3sterScopeGuard(int& argc, char** argv)
-        : m_mpi_guard{argc, argv},
-          m_kokkos_guard{argc, argv},
-          m_stack_size_guard{util::detail::MaxStackSizeTracker::get()}
-    {
-        (void)GlobalResource< util::hwloc::Topology >::getMaybeUninitialized();
-    }
-
-private:
-    detail::MpiScopeGuard    m_mpi_guard;
-    detail::KokkosScopeGuard m_kokkos_guard;
-    util::StackSizeGuard     m_stack_size_guard;
-};
-
-namespace detail
-{
 class MaxParallelismGuard
 {
 public:
@@ -99,5 +79,22 @@ private:
 #endif
 };
 } // namespace detail
+
+class L3sterScopeGuard
+{
+public:
+    L3sterScopeGuard(int& argc, char** argv)
+        : m_max_par_guard{},
+          m_mpi_guard{argc, argv},
+          m_kokkos_guard{argc, argv},
+          m_stack_size_guard{util::detail::MaxStackSizeTracker::get()}
+    {}
+
+private:
+    detail::MaxParallelismGuard m_max_par_guard;
+    detail::MpiScopeGuard       m_mpi_guard;
+    detail::KokkosScopeGuard    m_kokkos_guard;
+    util::StackSizeGuard        m_stack_size_guard;
+};
 } // namespace lstr
 #endif // L3STER_UTIL_KOKKOSSCOPEGUARD_HPP
