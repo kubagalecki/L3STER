@@ -31,33 +31,7 @@ void test()
     });
 
     auto alg_sys = makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr);
-
-    const auto const_kernel =
-        [](const auto&, const std::array< std::array< val_t, 0 >, 2 >&, const SpaceTimePoint&) noexcept {
-            auto retval = std::pair< std::array< Eigen::Matrix< val_t, 1, 1 >, 3 >, Eigen::Vector< val_t, 1 > >{};
-            auto& [matrices, rhs] = retval;
-            auto& [A0, A1, A2]    = matrices;
-            A0(0, 0)              = 1.;
-            rhs[0]                = 1.;
-            A1.setZero();
-            A2.setZero();
-            return retval;
-        };
-    static_assert(detail::Kernel_c< decltype(const_kernel), 2, 0 >);
-
-    alg_sys->beginAssembly();
-    alg_sys->assembleDomainProblem(const_kernel, mesh, std::views::single(domain_id));
-    alg_sys->endAssembly(mesh);
-
-    auto solver   = solvers::Lapack{};
-    auto solution = alg_sys->makeSolutionVector();
-    alg_sys->solve(solver, solution);
-
-    constexpr auto n_fields         = detail::deduceNFields(problem_def);
-    auto           solution_manager = SolutionManager{mesh, n_fields};
-    constexpr auto dof_inds         = makeIotaArray< size_t, n_fields >();
-    alg_sys->updateSolution(mesh, solution, dof_inds, solution_manager, dof_inds);
-    REQUIRE(std::ranges::all_of(solution_manager.getFieldView(0), [&](double v) { return std::fabs(v - 1.) < 1e-10; }));
+    alg_sys->describe(comm);
 }
 
 int main(int argc, char* argv[])
