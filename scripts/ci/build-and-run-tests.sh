@@ -31,5 +31,5 @@ if [ -n "$DEPLOYMENT_TESTS" ]; then
     ../tests || exit 1
 fi
 
-cmake --build . -- -j "$(($(grep -c ^processor /proc/cpuinfo) - 4))" || exit 1
+cmake --build . -- -j "$(($(grep -c ^processor /proc/cpuinfo) - 2))" || exit 1
 ctest --output-on-failure --timeout 300 --test-dir $TEST_DIR || exit 1

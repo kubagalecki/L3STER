@@ -41,14 +41,24 @@ void parallelFor(SizedRandomAccessRange_c auto&&                                
 
 namespace detail
 {
-inline size_t largeGrainSizeHeuristic(size_t range_size, size_t max_parallel_agents)
+inline size_t largeGrainSizeHeuristic(std::ranges::sized_range auto&& range)
 {
-    const auto   r_sz       = static_cast< double >(range_size);
-    const auto   par        = static_cast< double >(max_parallel_agents);
-    const double grain_size = 4 * std::pow(r_sz / par, .8);
+    const size_t par = oneapi::tbb::global_control::active_value(oneapi::tbb::global_control::max_allowed_parallelism);
+    const auto   par_fp           = static_cast< double >(par);
+    const size_t range_size       = std::ranges::size(range);
+    const auto   range_size_fp    = static_cast< double >(range_size);
+    const auto   range_bytes_fp   = range_size_fp * sizeof(std::ranges::range_value_t< decltype(range) >);
+    const auto   bytes_per_worker = range_bytes_fp / par_fp;
+
+    constexpr double shift                 = 1'250'000.;
+    constexpr double scale                 = .0'000'038;
+    constexpr double max_chunks_per_worker = 40.;
+    const double     desired_chunks_per_worker =
+        (max_chunks_per_worker - 1.) / (std::exp(-scale * (bytes_per_worker - shift)) + 1.) + 1.;
+    const double grain_size = range_size_fp / par_fp / desired_chunks_per_worker;
 
     const size_t grain_lower_bnd = 1;
-    const size_t grain_upper_bnd = range_size / max_parallel_agents + 1;
+    const size_t grain_upper_bnd = range_size / par + 1;
     return std::clamp(static_cast< size_t >(std::llround(grain_size)), grain_lower_bnd, grain_upper_bnd);
 }
 
@@ -125,9 +135,7 @@ void parallelFor(std::ranges::sized_range auto&&                                
                  std::invocable< std::ranges::range_reference_t< decltype(range) > > auto&& kernel)
 {
     auto       iter_cache = detail::IteratorCache{range};
-    const auto num_par_agents =
-        oneapi::tbb::global_control::active_value(oneapi::tbb::global_control::max_allowed_parallelism);
-    const auto grain      = detail::largeGrainSizeHeuristic(std::ranges::size(range), num_par_agents);
+    const auto grain      = detail::largeGrainSizeHeuristic(range);
     const auto iter_space = detail::makeBlockedIterSpace(range, grain);
 
     oneapi::tbb::parallel_for(iter_space, [&](const auto& subrange) {
