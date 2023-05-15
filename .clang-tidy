@@ -1,7 +1,0 @@
----
-Checks:          '*,-fuchsia-*,-google-*,-zircon-*,-abseil-*,-modernize-use-trailing-return-type,-llvm*,-altera*,-readability*,-hicpp*,-cppcoreguidelines-avoid-magic-numbers,-misc*,-cppcoreguidelines-pro-type-const-cast'
-WarningsAsErrors: '*'
-HeaderFilterRegex: '.*L3STER/include.*'
-FormatStyle:     none
-
-

@@ -129,7 +129,7 @@ class StaticCondensationManager< CondensationPolicy::ElementBoundary > :
     struct ElementCondData
     {
         size_t                                                  internal_dofs_offs, internal_dofs_size;
-        eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > diag_block, upper_block;
+        eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > diag_block, diag_block_inv, upper_block;
         Eigen::Vector< val_t, Eigen::Dynamic >                  rhs;
     };
 
@@ -174,6 +174,7 @@ private:
 
     robin_hood::unordered_flat_map< el_id_t, ElementCondData > m_elem_data_map;
     std::vector< std::uint8_t >                                m_internal_dof_inds;
+    std::vector< el_id_t >                                     m_element_ids;
 };
 
 template < typename Derived >
@@ -256,18 +257,21 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
                                     ElementCondData{.internal_dofs_offs{el_int_dofs_offs},
                                                     .internal_dofs_size{n_int_dofs_per_node},
                                                     .diag_block{n_internal_dofs, n_internal_dofs},
+                                                    .diag_block_inv{n_internal_dofs, n_internal_dofs},
                                                     .upper_block{n_boundary_dofs, n_internal_dofs},
                                                     .rhs{n_internal_dofs, 1}});
         },
         problem_def | std::views::transform([](const auto& pair) { return pair.first; }),
         std::execution::seq);
     m_internal_dof_inds.shrink_to_fit();
+    m_element_ids.reserve(m_elem_data_map.size());
+    std::ranges::transform(m_elem_data_map, std::back_inserter(m_element_ids), [](const auto& p) { return p.first; });
 }
 
 void StaticCondensationManager< CondensationPolicy::ElementBoundary >::beginAssemblyImpl()
 {
-    util::tbb::parallelFor(m_elem_data_map, [&](auto& map_entry) {
-        auto& [id, payload] = map_entry;
+    util::tbb::parallelFor(m_element_ids, [&](el_id_t id) {
+        auto& payload = m_elem_data_map.at(id);
         payload.diag_block.setZero();
         payload.upper_block.setZero();
         payload.rhs.setZero();
@@ -282,17 +286,17 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemb
     std::span< val_t >                               rhs)
 {
     const auto max_par_guard = detail::MaxParallelismGuard{};
-    util::tbb::parallelFor(m_elem_data_map, [&](auto& map_entry) {
-        auto& [id, elem_data]          = map_entry;
+    util::tbb::parallelFor(m_element_ids, [&](el_id_t id) {
+        auto&      elem_data           = m_elem_data_map.at(id);
         const auto element_ptr_variant = mesh.find(id)->first;
         std::visit(
             [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >* element_ptr) {
-                eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > diag_inv = elem_data.diag_block.inverse();
-                elem_data.diag_block                                             = std::move(diag_inv);
-                const eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > primary_upd_mat =
-                    -(elem_data.upper_block * elem_data.diag_block * elem_data.upper_block.transpose());
-                const Eigen::Vector< val_t, Eigen::Dynamic > primary_upd_rhs =
-                    -(elem_data.upper_block * elem_data.diag_block * elem_data.rhs);
+                elem_data.diag_block_inv = elem_data.diag_block.inverse();
+                thread_local eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > primary_upd_mat;
+                thread_local Eigen::Vector< val_t, Eigen::Dynamic >                  primary_upd_rhs;
+                primary_upd_mat =
+                    -(elem_data.upper_block * elem_data.diag_block_inv * elem_data.upper_block.transpose());
+                primary_upd_rhs = -(elem_data.upper_block * elem_data.diag_block_inv * elem_data.rhs);
                 const auto [row_dofs, col_dofs, rhs_dofs] =
                     detail::getUnsortedPrimaryDofs(*element_ptr, dof_map, element_boundary);
                 detail::scatterLocalSystem(primary_upd_mat, primary_upd_rhs, matrix, rhs, row_dofs, col_dofs, rhs_dofs);
@@ -312,8 +316,8 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
     ConstexprValue< field_inds >                                   field_inds_ctwrpr)
 {
     L3STER_PROFILE_FUNCTION;
-    auto&      cond_data = m_elem_data_map.at(element.getId());
-    const auto dof_inds  = computeLocalDofInds(element, node_dof_map, cond_data, field_inds_ctwrpr);
+    auto&      elem_data = m_elem_data_map.at(element.getId());
+    const auto dof_inds  = computeLocalDofInds(element, node_dof_map, elem_data, field_inds_ctwrpr);
     const auto [row_dofs, col_dofs, rhs_dofs] =
         detail::getUnsortedPrimaryDofs(element, node_dof_map, element_boundary, field_inds_ctwrpr);
 
@@ -336,9 +340,9 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
         for (size_t col_ind = 0; auto src_col : dof_inds.cond_src_inds)
         {
             const auto dest_col = dof_inds.cond_dest_inds[col_ind++];
-            cond_data.diag_block(dest_row, dest_col) += local_mat(src_row, src_col);
+            elem_data.diag_block(dest_row, dest_col) += local_mat(src_row, src_col);
         }
-        cond_data.rhs[dest_row] += local_vec[src_row];
+        elem_data.rhs[dest_row] += local_vec[src_row];
     }
 
     // Off-diagonal block (upper)
@@ -348,7 +352,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
         for (size_t col_ind = 0; auto src_col : dof_inds.cond_src_inds)
         {
             const auto dest_col = dof_inds.cond_dest_inds[col_ind++];
-            cond_data.upper_block(dest_row, dest_col) += local_mat(src_row, src_col);
+            elem_data.upper_block(dest_row, dest_col) += local_mat(src_row, src_col);
         }
     }
 }
@@ -372,29 +376,41 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSo
             sol_man_inds, std::back_inserter(retval), [&](size_t i) { return sol_man.getFieldView(i); });
         return retval;
     });
-    util::tbb::parallelFor(m_elem_data_map, [&](const auto& map_entry) {
-        auto& [id, elem_data]          = map_entry;
+
+    util::tbb::parallelFor(m_element_ids, [&](el_id_t id) {
+        // Thread local variables to minimize dynamic allocation in a parallel context
+        thread_local Eigen::Vector< val_t, Eigen::Dynamic > primary_vals, internal_vals;
+        thread_local std::vector< size_t >                  valid_internal_inds;
+
+        auto&      elem_data           = m_elem_data_map.at(id);
         const auto element_ptr_variant = mesh.find(id)->first;
         std::visit(
             [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >* element_ptr) {
-                const auto                                   primary_vals = std::invoke([&] {
-                    const auto [row_dofs, col_dofs, rhs_dofs] =
-                        detail::getUnsortedPrimaryDofs(*element_ptr, node_dof_map, element_boundary);
-                    auto retval = Eigen::Vector< val_t, Eigen::Dynamic >{rhs_dofs.size(), 1};
-                    for (Eigen::Index i = 0; auto dof : rhs_dofs)
-                        retval[i++] = condensed_solution[dof];
-                    return retval;
-                });
-                const Eigen::Vector< val_t, Eigen::Dynamic > internal_vals =
-                    elem_data.diag_block * (elem_data.rhs - elem_data.upper_block.transpose() * primary_vals);
+                const auto [row_dofs, col_dofs, rhs_dofs] =
+                    detail::getUnsortedPrimaryDofs(*element_ptr, node_dof_map, element_boundary);
+                primary_vals.resize(rhs_dofs.size());
+                for (Eigen::Index i = 0; auto dof : rhs_dofs)
+                    primary_vals[i++] = condensed_solution[dof];
+                internal_vals =
+                    elem_data.diag_block_inv * (elem_data.rhs - elem_data.upper_block.transpose() * primary_vals);
+
+                valid_internal_inds.clear();
+                const auto internal_dof_inds = getInternalDofInds(elem_data);
+                for (size_t i = 0; auto sol_ind : sol_inds)
+                {
+                    if (std::ranges::binary_search(internal_dof_inds, sol_ind))
+                        valid_internal_inds.push_back(i);
+                    ++i;
+                }
+
                 for (Eigen::Index internal_ind = 0; auto node : getInternalNodes(*element_ptr))
                 {
-                    auto node_vals = std::array< val_t, max_dofs_per_node >{};
-                    for (auto int_dof_ind : getInternalDofInds(elem_data))
-                        node_vals[int_dof_ind] = internal_vals[internal_ind++];
                     const auto local_node_ind = sol_man.getNodeMap().at(node);
-                    for (size_t i = 0; auto src_ind : sol_inds)
-                        dest_col_views[i++][local_node_ind] = node_vals[src_ind];
+                    auto       node_vals      = std::array< val_t, max_dofs_per_node >{};
+                    for (auto int_dof_ind : internal_dof_inds)
+                        node_vals[int_dof_ind] = internal_vals[internal_ind++];
+                    for (size_t i : valid_internal_inds)
+                        dest_col_views[i][local_node_ind] = node_vals[*std::next(std::ranges::cbegin(sol_inds), i)];
                 }
             },
             element_ptr_variant);

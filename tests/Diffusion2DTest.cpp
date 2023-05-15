@@ -168,7 +168,8 @@ void test()
 // Solve 2D diffusion problem
 int main(int argc, char* argv[])
 {
-    L3sterScopeGuard scope_guard{argc, argv};
+    const auto max_par_guard = detail::MaxParallelismGuard{4};
+    const auto scope_guard   = L3sterScopeGuard{argc, argv};
     test< CondensationPolicy::None >();
     test< CondensationPolicy::ElementBoundary >();
 }

@@ -29,12 +29,9 @@ static void BM_PhysBasisDersComputation(benchmark::State& state)
         ->Unit(benchmark::kMicrosecond);
 #define DEF_PHYS_BAS_BENCH_SUITE(EO)                                                                                   \
     DEF_PHYS_BAS_BENCH(0, EO);                                                                                         \
-    DEF_PHYS_BAS_BENCH(4, EO);                                                                                         \
-    DEF_PHYS_BAS_BENCH(8, EO);                                                                                         \
-    DEF_PHYS_BAS_BENCH(12, EO);                                                                                        \
-    DEF_PHYS_BAS_BENCH(16, EO);                                                                                        \
-    DEF_PHYS_BAS_BENCH(20, EO);                                                                                        \
-    DEF_PHYS_BAS_BENCH(24, EO);
+    DEF_PHYS_BAS_BENCH(6, EO);                                                                                         \
+    DEF_PHYS_BAS_BENCH(18, EO);
+
 DEF_PHYS_BAS_BENCH_SUITE(1)
 DEF_PHYS_BAS_BENCH_SUITE(2)
 DEF_PHYS_BAS_BENCH_SUITE(4)
