@@ -45,7 +45,7 @@ inline size_t largeGrainSizeHeuristic(size_t range_size, size_t max_parallel_age
 {
     const auto   r_sz       = static_cast< double >(range_size);
     const auto   par        = static_cast< double >(max_parallel_agents);
-    const double grain_size = 4 * std::sqrt(r_sz / par);
+    const double grain_size = 4 * std::pow(r_sz / par, .8);
 
     const size_t grain_lower_bnd = 1;
     const size_t grain_upper_bnd = range_size / max_parallel_agents + 1;
@@ -103,7 +103,7 @@ public:
         const bool   is_boundary = static_cast< size_t >(std::countr_zero(pos)) >= m_slot_size_log2;
         const size_t slot_ind    = getSlotIndex(pos) + not is_boundary;
         const size_t dest_pos    = slot_ind << m_slot_size_log2;
-        if (dest_pos >= m_range_size)
+        if (dest_pos >= m_range_size or m_iter_ptrs[slot_ind].load(std::memory_order_relaxed))
             return;
         auto      desired = new Iterator{std::next(iter, dest_pos - pos)};
         Iterator* expected{};

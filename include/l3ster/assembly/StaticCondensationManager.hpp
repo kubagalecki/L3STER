@@ -174,6 +174,7 @@ private:
 
     robin_hood::unordered_flat_map< el_id_t, ElementCondData > m_elem_data_map;
     std::vector< std::uint8_t >                                m_internal_dof_inds;
+    std::vector< el_id_t >                                     m_element_ids;
 };
 
 template < typename Derived >
@@ -263,12 +264,14 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
         problem_def | std::views::transform([](const auto& pair) { return pair.first; }),
         std::execution::seq);
     m_internal_dof_inds.shrink_to_fit();
+    m_element_ids.reserve(m_elem_data_map.size());
+    std::ranges::transform(m_elem_data_map, std::back_inserter(m_element_ids), [](const auto& p) { return p.first; });
 }
 
 void StaticCondensationManager< CondensationPolicy::ElementBoundary >::beginAssemblyImpl()
 {
-    util::tbb::parallelFor(m_elem_data_map, [&](auto& map_entry) {
-        auto& [id, payload] = map_entry;
+    util::tbb::parallelFor(m_element_ids, [&](el_id_t id) {
+        auto& payload = m_elem_data_map.at(id);
         payload.diag_block.setZero();
         payload.upper_block.setZero();
         payload.rhs.setZero();
@@ -283,8 +286,8 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemb
     std::span< val_t >                               rhs)
 {
     const auto max_par_guard = detail::MaxParallelismGuard{};
-    util::tbb::parallelFor(m_elem_data_map, [&](auto& map_entry) {
-        auto& [id, elem_data]          = map_entry;
+    util::tbb::parallelFor(m_element_ids, [&](el_id_t id) {
+        auto&      elem_data           = m_elem_data_map.at(id);
         const auto element_ptr_variant = mesh.find(id)->first;
         std::visit(
             [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >* element_ptr) {
@@ -313,8 +316,8 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
     ConstexprValue< field_inds >                                   field_inds_ctwrpr)
 {
     L3STER_PROFILE_FUNCTION;
-    auto&      cond_data = m_elem_data_map.at(element.getId());
-    const auto dof_inds  = computeLocalDofInds(element, node_dof_map, cond_data, field_inds_ctwrpr);
+    auto&      elem_data = m_elem_data_map.at(element.getId());
+    const auto dof_inds  = computeLocalDofInds(element, node_dof_map, elem_data, field_inds_ctwrpr);
     const auto [row_dofs, col_dofs, rhs_dofs] =
         detail::getUnsortedPrimaryDofs(element, node_dof_map, element_boundary, field_inds_ctwrpr);
 
@@ -337,9 +340,9 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
         for (size_t col_ind = 0; auto src_col : dof_inds.cond_src_inds)
         {
             const auto dest_col = dof_inds.cond_dest_inds[col_ind++];
-            cond_data.diag_block(dest_row, dest_col) += local_mat(src_row, src_col);
+            elem_data.diag_block(dest_row, dest_col) += local_mat(src_row, src_col);
         }
-        cond_data.rhs[dest_row] += local_vec[src_row];
+        elem_data.rhs[dest_row] += local_vec[src_row];
     }
 
     // Off-diagonal block (upper)
@@ -349,7 +352,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
         for (size_t col_ind = 0; auto src_col : dof_inds.cond_src_inds)
         {
             const auto dest_col = dof_inds.cond_dest_inds[col_ind++];
-            cond_data.upper_block(dest_row, dest_col) += local_mat(src_row, src_col);
+            elem_data.upper_block(dest_row, dest_col) += local_mat(src_row, src_col);
         }
     }
 }
@@ -374,12 +377,12 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSo
         return retval;
     });
 
-    util::tbb::parallelFor(m_elem_data_map, [&](const auto& map_entry) {
+    util::tbb::parallelFor(m_element_ids, [&](el_id_t id) {
         // Thread local variables to minimize dynamic allocation in a parallel context
         thread_local Eigen::Vector< val_t, Eigen::Dynamic > primary_vals, internal_vals;
         thread_local std::vector< size_t >                  valid_internal_inds;
 
-        auto& [id, elem_data]          = map_entry;
+        auto&      elem_data           = m_elem_data_map.at(id);
         const auto element_ptr_variant = mesh.find(id)->first;
         std::visit(
             [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >* element_ptr) {
