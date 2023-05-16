@@ -19,29 +19,24 @@ void vtkExportTest2D()
 {
     const MpiComm comm{MPI_COMM_WORLD};
 
-    constexpr auto node_distx = std::invoke([] {
+    constexpr auto   node_distx = std::invoke([] {
         auto retval = std::array< double, 11 >{};
         for (size_t i = 0; i < retval.size(); ++i)
             retval[i] = -.5 + static_cast< double >(i) * 2.5 / (retval.size() - 1);
         return retval;
     });
-    constexpr auto node_disty = std::invoke([] {
+    constexpr auto   node_disty = std::invoke([] {
         auto retval = std::array< double, 15 >{};
         for (size_t i = 0; i < retval.size(); ++i)
             retval[i] = -.5 + static_cast< double >(i) * 2. / (retval.size() - 1);
         return retval;
     });
-
-    Mesh mesh;
-    if (comm.getRank() == 0)
-    {
-        constexpr auto mesh_order = 2;
-        mesh                      = makeSquareMesh(node_distx, node_disty);
-        mesh.getPartitions().front().initDualGraph();
-        mesh.getPartitions().front() = convertMeshToOrder< mesh_order >(mesh.getPartitions().front());
-    }
+    constexpr auto   mesh_order = 2;
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
-    const auto my_partition = distributeMesh(comm, mesh, {bot_boundary, top_boundary, left_boundary, right_boundary});
+    const auto       my_partition =
+        generateAndDistributeMesh< mesh_order >(comm,
+                                                [&] { return makeSquareMesh(node_distx, node_disty); },
+                                                {bot_boundary, top_boundary, left_boundary, right_boundary});
 
     constexpr auto problem_def       = std::array{Pair{domain_id, std::array{false, true, false, true}},
                                             Pair{bot_boundary, std::array{true, false, true, false}},
@@ -104,17 +99,10 @@ void vtkExportTest3D()
             retval[i] = -1. + static_cast< double >(i) * 2. / (retval.size() - 1);
         return retval;
     }();
-
-    Mesh mesh;
-    if (comm.getRank() == 0)
-    {
-        constexpr auto mesh_order = 2;
-        mesh                      = makeCubeMesh(node_dist);
-        mesh.getPartitions().front().initDualGraph();
-        mesh.getPartitions().front() = convertMeshToOrder< mesh_order >(mesh.getPartitions().front());
-    }
-    const auto my_partition = distributeMesh(comm, mesh, {1, 2, 3, 4, 5, 6});
-    const auto boundary     = my_partition.getBoundaryView(makeIotaArray< d_id_t, 6 >(1));
+    constexpr auto mesh_order = 2;
+    const auto     my_partition =
+        generateAndDistributeMesh< mesh_order >(comm, [&] { return makeCubeMesh(node_dist); }, {1, 2, 3, 4, 5, 6});
+    const auto boundary = my_partition.getBoundaryView(makeIotaArray< d_id_t, 6 >(1));
 
     constexpr d_id_t domain_id = 0;
     constexpr auto problem_def = std::array{Pair{d_id_t{domain_id}, std::array{true, true, true, false, false, false}},

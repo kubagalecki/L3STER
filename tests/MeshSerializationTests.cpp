@@ -34,12 +34,11 @@ bool compareEqual(const MeshPartition& p1, const MeshPartition& p2)
 
 TEST_CASE("Mesh serialization", "[mesh-serial]")
 {
-    const auto  mesh              = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::gmsh_tag);
-    const auto& original_part     = mesh.getPartitions()[0];
-    const auto  serialized_part   = SerializedPartition{original_part};
-    const auto  deserialized_part = deserializePartition(serialized_part);
+    const auto mesh              = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::gmsh_tag);
+    const auto serialized_mesh   = SerializedPartition{mesh};
+    const auto deserialized_mesh = deserializePartition(serialized_mesh);
 
-    CHECK(std::ranges::equal(deserialized_part.getOwnedNodes(), original_part.getOwnedNodes()));
-    CHECK(std::ranges::equal(deserialized_part.getGhostNodes(), original_part.getGhostNodes()));
-    CHECK(compareEqual(deserialized_part, original_part));
+    CHECK(std::ranges::equal(deserialized_mesh.getOwnedNodes(), mesh.getOwnedNodes()));
+    CHECK(std::ranges::equal(deserialized_mesh.getGhostNodes(), mesh.getGhostNodes()));
+    CHECK(compareEqual(deserialized_mesh, mesh));
 }

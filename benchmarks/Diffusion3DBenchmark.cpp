@@ -24,7 +24,7 @@ int main(int argc, char* argv[])
     constexpr auto        probdef_ctwrpr      = ConstexprValue< problem_def >{};
     constexpr auto        dirichletdef_ctwrpr = ConstexprValue< dirichlet_def >{};
 
-    constexpr auto node_dist = std::invoke([] {
+    constexpr auto node_dist    = std::invoke([] {
         constexpr size_t                   edge_divs = 2;
         constexpr auto                     dx        = 1. / static_cast< val_t >(edge_divs);
         std::array< val_t, edge_divs + 1 > retval{};
@@ -35,17 +35,13 @@ int main(int argc, char* argv[])
         }
         return retval;
     });
-
-    constexpr auto mesh_order = L3STER_ELEMENT_ORDERS;
-    Mesh           mesh;
-    if (comm.getRank() == 0)
-    {
-        mesh = makeCubeMesh(node_dist);
-        mesh.getPartitions().front().initDualGraph();
-        mesh.getPartitions().front() = convertMeshToOrder< mesh_order >(mesh.getPartitions().front());
-    }
-    const auto my_partition =
-        distributeMesh(comm, mesh, std::vector< d_id_t >(boundary_ids.begin(), boundary_ids.end()), probdef_ctwrpr);
+    constexpr auto mesh_order   = L3STER_ELEMENT_ORDERS;
+    const auto     my_partition = generateAndDistributeMesh< mesh_order >(
+        comm,
+        [&] { return makeCubeMesh(node_dist); },
+        std::vector< d_id_t >(boundary_ids.begin(), boundary_ids.end()),
+        {},
+        probdef_ctwrpr);
     const auto boundary_view = my_partition.getBoundaryView(boundary_ids);
 
     constexpr auto n_fields    = detail::deduceNFields(problem_def);

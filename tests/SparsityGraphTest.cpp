@@ -71,19 +71,18 @@ private:
 template < CondensationPolicy CP >
 void test()
 {
-    const MpiComm comm{MPI_COMM_WORLD};
-    Mesh          mesh;
-    MeshPartition full_mesh;
+    const auto    comm = MpiComm{MPI_COMM_WORLD};
+    MeshPartition mesh, full_mesh;
     if (comm.getRank() == 0)
     {
         constexpr auto node_dist = std::array{0., 1., 2., 3., 4.};
         mesh                     = makeCubeMesh(node_dist);
-        mesh.getPartitions().front().initDualGraph();
-        full_mesh                   = convertMeshToOrder< 2 >(mesh.getPartitions().front());
+        mesh.initDualGraph();
+        full_mesh                   = convertMeshToOrder< 2 >(mesh);
         const auto full_mesh_serial = SerializedPartition{full_mesh};
         for (int dest_rank = 1; dest_rank < comm.getSize(); ++dest_rank)
             sendPartition(comm, full_mesh_serial, dest_rank);
-        mesh.getPartitions().front() = full_mesh;
+        mesh = full_mesh;
     }
     else
     {

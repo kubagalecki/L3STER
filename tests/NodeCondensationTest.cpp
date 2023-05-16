@@ -21,11 +21,11 @@ void test(CondensationPolicyTag< CP > = {})
     std::iota(boundaries.begin(), boundaries.end(), 1);
     const auto dist_mesh = comm.getRank() == 0 ? std::invoke([&] {
         auto retval = makeCubeMesh(node_dist);
-        retval.getPartitions().front().initDualGraph();
-        retval.getPartitions().front() = convertMeshToOrder< mesh_order >(retval.getPartitions().front());
+        retval.initDualGraph();
+        retval = convertMeshToOrder< mesh_order >(retval);
         return retval;
     })
-                                               : Mesh{};
+                                               : MeshPartition{};
     const auto mesh      = distributeMesh(comm, dist_mesh, boundaries, problemdef_ctwrpr);
 
     const auto  condensation_map         = detail::makeCondensationMap< CP >(comm, mesh, problemdef_ctwrpr);

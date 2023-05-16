@@ -471,12 +471,11 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
         SECTION("2D")
         {
             const auto mesh = makeSquareMesh(node_pos);
-            const auto part = mesh.getPartitions()[0];
 
-            const auto b_bottom = part.getBoundaryView(1);
-            const auto b_top    = part.getBoundaryView(2);
-            const auto b_left   = part.getBoundaryView(3);
-            const auto b_right  = part.getBoundaryView(4);
+            const auto b_bottom = mesh.getBoundaryView(1);
+            const auto b_top    = mesh.getBoundaryView(2);
+            const auto b_left   = mesh.getBoundaryView(3);
+            const auto b_right  = mesh.getBoundaryView(4);
 
             check_all_in_plane(b_bottom, Space::Y, node_pos.front());
             check_all_in_plane(b_top, Space::Y, node_pos.back());
@@ -486,14 +485,13 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
         SECTION("3D")
         {
             const auto mesh = makeCubeMesh(node_pos);
-            const auto part = mesh.getPartitions()[0];
 
-            const auto b_front  = part.getBoundaryView(1);
-            const auto b_back   = part.getBoundaryView(2);
-            const auto b_bottom = part.getBoundaryView(3);
-            const auto b_top    = part.getBoundaryView(4);
-            const auto b_left   = part.getBoundaryView(5);
-            const auto b_right  = part.getBoundaryView(6);
+            const auto b_front  = mesh.getBoundaryView(1);
+            const auto b_back   = mesh.getBoundaryView(2);
+            const auto b_bottom = mesh.getBoundaryView(3);
+            const auto b_top    = mesh.getBoundaryView(4);
+            const auto b_left   = mesh.getBoundaryView(5);
+            const auto b_right  = mesh.getBoundaryView(6);
 
             check_all_in_plane(b_front, Space::Z, node_pos.front());
             check_all_in_plane(b_back, Space::Z, node_pos.back());
@@ -508,12 +506,11 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
         SECTION("2D")
         {
             const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag);
-            const auto part = mesh.getPartitions()[0];
 
-            const auto b_bottom = part.getBoundaryView(5);
-            const auto b_top    = part.getBoundaryView(3);
-            const auto b_left   = part.getBoundaryView(2);
-            const auto b_right  = part.getBoundaryView(4);
+            const auto b_bottom = mesh.getBoundaryView(5);
+            const auto b_top    = mesh.getBoundaryView(3);
+            const auto b_left   = mesh.getBoundaryView(2);
+            const auto b_right  = mesh.getBoundaryView(4);
 
             check_all_in_plane(b_bottom, Space::Y, -.5);
             check_all_in_plane(b_top, Space::Y, .5);
@@ -523,14 +520,13 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
         SECTION("3D")
         {
             const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), gmsh_tag);
-            const auto part = mesh.getPartitions()[0];
 
-            const auto b_front  = part.getBoundaryView(2);
-            const auto b_back   = part.getBoundaryView(3);
-            const auto b_bottom = part.getBoundaryView(4);
-            const auto b_top    = part.getBoundaryView(5);
-            const auto b_left   = part.getBoundaryView(7);
-            const auto b_right  = part.getBoundaryView(6);
+            const auto b_front  = mesh.getBoundaryView(2);
+            const auto b_back   = mesh.getBoundaryView(3);
+            const auto b_bottom = mesh.getBoundaryView(4);
+            const auto b_top    = mesh.getBoundaryView(5);
+            const auto b_left   = mesh.getBoundaryView(7);
+            const auto b_right  = mesh.getBoundaryView(6);
 
             check_all_in_plane(b_front, Space::Z, -1.);
             check_all_in_plane(b_back, Space::Z, 1.);

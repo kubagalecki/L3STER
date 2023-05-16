@@ -1,14 +1,14 @@
 #ifndef L3STER_CUBEMESH_HPP
 #define L3STER_CUBEMESH_HPP
 
-#include "l3ster/mesh/Mesh.hpp"
+#include "l3ster/mesh/MeshPartition.hpp"
 
 namespace lstr
 {
 template < std::ranges::random_access_range Rx,
            std::ranges::random_access_range Ry,
            std::ranges::random_access_range Rz >
-inline Mesh makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz)
+auto makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz) -> MeshPartition
     requires std::convertible_to< std::ranges::range_value_t< std::decay_t< Rx > >, val_t > and
              std::convertible_to< std::ranges::range_value_t< std::decay_t< Ry > >, val_t > and
              std::convertible_to< std::ranges::range_value_t< std::decay_t< Rz > >, val_t >
@@ -131,11 +131,11 @@ inline Mesh makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz)
 
     std::vector< n_id_t > nodes(n_dx * n_dy * n_dz);
     std::iota(begin(nodes), end(nodes), 0u);
-    return Mesh{{MeshPartition{std::move(domains), std::move(nodes), std::vector< n_id_t >{}}}};
+    return {std::move(domains), std::move(nodes), std::vector< n_id_t >{}};
 }
 
 template < std::ranges::random_access_range R >
-inline Mesh makeCubeMesh(R&& dist)
+auto makeCubeMesh(R&& dist) -> MeshPartition
     requires std::convertible_to< std::ranges::range_value_t< std::decay_t< R > >, val_t >
 {
     return makeCubeMesh(dist, dist, dist);

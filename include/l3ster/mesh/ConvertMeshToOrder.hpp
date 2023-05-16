@@ -2,7 +2,7 @@
 #define L3STER_MESH_CONVERTMESHTOORDER_HPP
 
 #include "l3ster/mesh/ElementIntersecting.hpp"
-#include "l3ster/mesh/Mesh.hpp"
+#include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/Common.hpp"
 #include "l3ster/util/MetisUtils.hpp"

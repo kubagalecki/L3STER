@@ -21,22 +21,16 @@ void test()
                                               Pair{right_boundary, std::array{true, false, false}}};
     constexpr auto   dirichletdef_ctwrpr = ConstexprValue< dirichlet_def >{};
 
-    constexpr auto node_dist            = std::array{0., 1., 2., 3., 4., 5., 6.};
-    constexpr auto mesh_order           = 2;
-    const auto     mesh                 = std::invoke([&] {
-        if (comm.getRank() == 0)
-        {
-            auto full_mesh = makeSquareMesh(node_dist);
-            full_mesh.getPartitions().front().initDualGraph();
-            full_mesh.getPartitions().front() = convertMeshToOrder< mesh_order >(full_mesh.getPartitions().front());
-            return distributeMesh(
-                comm, full_mesh, {bot_boundary, top_boundary, left_boundary, right_boundary}, probdef_ctwrpr);
-        }
-        else
-            return distributeMesh(comm, {}, {}, probdef_ctwrpr);
-    });
-    const auto     adiabatic_bound_view = mesh.getBoundaryView(std::array{bot_boundary, top_boundary});
-    const auto     whole_bound_view =
+    constexpr auto node_dist  = std::array{0., 1., 2., 3., 4., 5., 6.};
+    constexpr auto mesh_order = 2;
+    const auto     mesh       = generateAndDistributeMesh< mesh_order >(
+        comm,
+        [&] { return makeSquareMesh(node_dist); },
+        {bot_boundary, top_boundary, left_boundary, right_boundary},
+        {},
+        probdef_ctwrpr);
+    const auto adiabatic_bound_view = mesh.getBoundaryView(std::array{bot_boundary, top_boundary});
+    const auto whole_bound_view =
         mesh.getBoundaryView(std::array{top_boundary, bot_boundary, left_boundary, right_boundary});
 
     auto alg_sys = makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr, dirichletdef_ctwrpr);

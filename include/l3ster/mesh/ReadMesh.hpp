@@ -1,7 +1,7 @@
 #ifndef L3STER_MESH_READMESH_HPP
 #define L3STER_MESH_READMESH_HPP
 
-#include "l3ster/mesh/Mesh.hpp"
+#include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/util/Assertion.hpp"
 #include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/Meta.hpp"
@@ -55,7 +55,7 @@ void reorderNodes(auto& nodes)
 }
 } // namespace detail
 
-inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh >)
+inline auto readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh >) -> MeshPartition
 {
     L3STER_PROFILE_FUNCTION;
     const auto throw_error = [&file_path](std::string_view     message,
@@ -342,14 +342,10 @@ inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
     file.open(std::filesystem::path{file_path});
     util::throwingAssert(file.is_open(), "Could not open mesh file");
 
-    const auto format_data  = parse_format();
-    const auto entity_data  = parse_entities(format_data);
-    const auto node_data    = parse_nodes(format_data);
-    auto       element_data = parse_elements(format_data, entity_data, node_data);
-
-    std::vector< MeshPartition > parts;
-    parts.emplace_back(std::move(element_data));
-    return Mesh{std::move(parts)};
+    const auto format_data = parse_format();
+    const auto entity_data = parse_entities(format_data);
+    const auto node_data   = parse_nodes(format_data);
+    return parse_elements(format_data, entity_data, node_data);
 }
 } // namespace lstr
 #endif // L3STER_MESH_READMESH_HPP

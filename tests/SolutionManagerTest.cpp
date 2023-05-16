@@ -8,20 +8,19 @@ using namespace lstr;
 
 TEST_CASE("Solution Manager", "[sol_man]")
 {
-    constexpr std::array node_dist = {0., 1., 2., 3., 4., 5.};
-    constexpr size_t     n_parts   = 4;
-    auto                 mesh      = makeCubeMesh(node_dist);
-    mesh                           = partitionMesh(mesh, n_parts, {});
-    constexpr size_t n_fields      = 3;
-    auto             sol_mans      = std::vector< SolutionManager >{};
-    std::ranges::transform(
-        mesh.getPartitions(), std::back_inserter(sol_mans), [&, i = 0](const MeshPartition& part) mutable {
-            return SolutionManager{part, n_fields, static_cast< val_t >(i++)};
-        });
+    constexpr auto   node_dist  = std::array{0., 1., 2., 3., 4., 5.};
+    constexpr size_t n_parts    = 4;
+    const auto       mesh       = makeCubeMesh(node_dist);
+    const auto       partitions = partitionMesh(mesh, n_parts, {});
+    constexpr size_t n_fields   = 3;
+    auto             sol_mans   = std::vector< SolutionManager >{};
+    std::ranges::transform(partitions, std::back_inserter(sol_mans), [&, i = 0](const MeshPartition& part) mutable {
+        return SolutionManager{part, n_fields, static_cast< val_t >(i++)};
+    });
 
     REQUIRE(std::ranges::all_of(sol_mans, [&](const SolutionManager& sm) { return sm.nFields() == n_fields; }));
     for (size_t i = 0; const auto& sm : sol_mans)
-        REQUIRE(sm.nNodes() == mesh.getPartitions()[i++].getAllNodes().size());
+        REQUIRE(sm.nNodes() == partitions.at(i++).getAllNodes().size());
 
     for (auto& sm : sol_mans)
         for (size_t i = 0; i != n_fields; ++i)
@@ -33,7 +32,7 @@ TEST_CASE("Solution Manager", "[sol_man]")
     constexpr auto field_inds = makeIotaArray< size_t, n_fields >();
     for (size_t i = 0; const auto& sm : sol_mans)
     {
-        const auto& part = mesh.getPartitions()[i];
+        const auto& part = partitions.at(i);
         part.visit(
             [&](const auto& element) {
                 for (auto n : element.getNodes())
@@ -49,7 +48,7 @@ TEST_CASE("Solution Manager", "[sol_man]")
             sm.setField(i, 42.);
     for (size_t i = 0; const auto& sm : sol_mans)
     {
-        const auto& part = mesh.getPartitions()[i];
+        const auto& part = partitions.at(i);
         part.visit(
             [&](const auto& element) {
                 for (auto n : element.getNodes())

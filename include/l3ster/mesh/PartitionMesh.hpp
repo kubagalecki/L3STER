@@ -2,7 +2,7 @@
 #define L3STER_MESH_PARTITIONMESH_HPP
 
 #include "l3ster/assembly/ProblemDefinition.hpp"
-#include "l3ster/mesh/Mesh.hpp"
+#include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
@@ -362,20 +362,20 @@ inline auto assignNodes(idx_t                                             n_part
 inline auto
 makeMeshFromPartitionComponents(std::vector< MeshPartition::domain_map_t >&&                               dom_maps,
                                 std::vector< std::pair< std::vector< n_id_t >, std::vector< n_id_t > > >&& node_vecs)
-    -> Mesh
+    -> std::vector< MeshPartition >
 {
-    std::vector< MeshPartition > new_parts;
-    new_parts.reserve(dom_maps.size());
+    std::vector< MeshPartition > retval;
+    retval.reserve(dom_maps.size());
     for (size_t i = 0; auto& [owned, ghost] : node_vecs)
-        new_parts.emplace_back(std::move(dom_maps[i++]), std::move(owned), std::move(ghost));
-    return Mesh{std::move(new_parts)};
+        retval.emplace_back(std::move(dom_maps[i++]), std::move(owned), std::move(ghost));
+    return retval;
 }
 
 inline auto partitionMeshImpl(const MeshPartition&         mesh,
                               idx_t                        n_parts,
                               const std::vector< d_id_t >& boundary_ids,
                               std::vector< real_t >        part_weights,
-                              std::vector< idx_t >         node_weights) -> Mesh
+                              std::vector< idx_t >         node_weights) -> std::vector< MeshPartition >
 {
     const auto domain_ids  = getDomainIds(mesh, boundary_ids);
     const auto domain_data = getDomainData(mesh, domain_ids);
@@ -390,24 +390,25 @@ inline auto partitionMeshImpl(const MeshPartition&         mesh,
 
 template < RangeOfConvertibleTo_c< real_t > PartWgtRange = std::array< real_t, 0 >,
            detail::ProblemDef_c auto        problem_def  = detail::empty_problem_def_t{} >
-Mesh partitionMesh(const Mesh&                   mesh,
+auto partitionMesh(const MeshPartition&          mesh,
                    idx_t                         n_parts,
                    const std::vector< d_id_t >&  boundary_ids,
                    PartWgtRange&&                part_weights   = {},
-                   ConstexprValue< problem_def > probdef_ctwrpr = {})
+                   ConstexprValue< problem_def > probdef_ctwrpr = {}) -> std::vector< MeshPartition >
 {
     L3STER_PROFILE_FUNCTION;
-    if (mesh.getPartitions().size() != 1)
-        throw std::logic_error{"Cannot partition a mesh which is either empty or has already been partitioned"};
-    if (n_parts <= 1)
-        return mesh;
+    util::throwingAssert(mesh.getGhostNodes().empty() and
+                             mesh.getOwnedNodes().back() == mesh.getOwnedNodes().size() - 1,
+                         "You cannot partition a mesh which has already been partitioned");
 
-    return detail::part::partitionMeshImpl(
-        mesh.getPartitions().front(),
-        n_parts,
-        boundary_ids,
-        detail::part::convertPartWeights(std::forward< PartWgtRange >(part_weights)),
-        detail::part::computeNodeWeights(mesh.getPartitions().front(), probdef_ctwrpr));
+    if (n_parts <= 1)
+        return {mesh};
+
+    return detail::part::partitionMeshImpl(mesh,
+                                           n_parts,
+                                           boundary_ids,
+                                           detail::part::convertPartWeights(std::forward< PartWgtRange >(part_weights)),
+                                           detail::part::computeNodeWeights(mesh, probdef_ctwrpr));
 }
 } // namespace lstr
 #endif // L3STER_MESH_PARTITIONMESH_HPP
