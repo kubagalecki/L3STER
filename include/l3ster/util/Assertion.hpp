@@ -6,6 +6,7 @@
 #include <charconv>
 #include <concepts>
 #include <exception>
+#include <functional>
 #include <iostream>
 #include <iterator>
 #include <ranges>
@@ -58,10 +59,21 @@ inline auto makeErrMsg(std::string_view err_message, std::source_location src_lo
     return err_msg_src_located;
 }
 
-inline void throwErrorWithLocation(std::string_view err_message, std::source_location src_loc)
+template < typename Exception >
+void throwErrorWithLocation(std::string_view err_message, std::source_location src_loc)
 {
-    const auto err_msg = makeErrMsg(err_message, src_loc);
-    throw std::runtime_error{err_msg.c_str()};
+    throw std::invoke([&] {
+        if constexpr (std::constructible_from< Exception, const char* >)
+        {
+            const auto err_msg = makeErrMsg(err_message, src_loc);
+            return Exception{err_msg.c_str()};
+        }
+        else if constexpr (std::default_initializable< Exception >)
+            return Exception{};
+        else
+            static_assert(not std::same_as< Exception, Exception >,
+                          "The exception must be either default-initializable or constructible from a const char*");
+    });
 }
 
 inline void terminateWithMessage(std::string_view err_message, std::source_location src_loc)
@@ -71,11 +83,13 @@ inline void terminateWithMessage(std::string_view err_message, std::source_locat
 }
 } // namespace detail
 
-inline void
-throwingAssert(bool condition, std::string_view err_msg, std::source_location src_loc = std::source_location::current())
+template < typename Exception = std::runtime_error >
+void throwingAssert(bool                 condition,
+                    std::string_view     err_msg = {},
+                    std::source_location src_loc = std::source_location::current())
 {
     if (not condition)
-        detail::throwErrorWithLocation(err_msg, src_loc);
+        detail::throwErrorWithLocation< Exception >(err_msg, src_loc);
 }
 
 inline void terminatingAssert(bool                 condition,

@@ -114,10 +114,8 @@ std::vector< Element< ET, EO > >& Domain< orders... >::getElementVector()
 {
     using el_vec_t = element_vector_t< ET, EO >;
     if (not m_element_vectors.empty())
-    {
-        if (Element< ET, EO >::native_dim != m_dim)
-            throw std::invalid_argument("Element dimension incompatible with domain dimension");
-    }
+        util::throwingAssert< std::invalid_argument >(Element< ET, EO >::native_dim == m_dim,
+                                                      "Element dimension incompatible with domain dimension");
     else
         m_dim = Element< ET, EO >::native_dim;
 
@@ -170,10 +168,8 @@ void Domain< orders... >::reserve(size_t size)
     using el_vec_t = element_vector_t< ET, EO >;
 
     if (not m_element_vectors.empty())
-    {
-        if (Element< ET, EO >::native_dim != m_dim)
-            throw std::invalid_argument("Pushing element to domain of different dimension");
-    }
+        util::throwingAssert< std::invalid_argument >(Element< ET, EO >::native_dim == m_dim,
+                                                      "Pushing element to domain of different dimension");
     else
         m_dim = Element< ET, EO >::native_dim;
 

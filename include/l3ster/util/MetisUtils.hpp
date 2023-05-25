@@ -74,8 +74,7 @@ GraphWrapper::span_t GraphWrapper::getElementAdjacent(size_t el_id) const
 
 inline void handleMetisErrorCode(int err_code, std::source_location src_loc = std::source_location::current())
 {
-    if (err_code == METIS_ERROR_MEMORY)
-        throw std::bad_alloc{};
+    util::throwingAssert< std::bad_alloc >(err_code != METIS_ERROR_MEMORY, {}, src_loc);
     util::throwingAssert(err_code == METIS_OK, "Metis runtime error", src_loc);
 }
 } // namespace lstr::util::metis

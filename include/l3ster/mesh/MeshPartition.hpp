@@ -236,10 +236,8 @@ template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 const util::metis::GraphWrapper& MeshPartition< orders... >::getDualGraph() const
 {
-    if (m_dual_graph)
-        return *m_dual_graph;
-    else
-        throw std::runtime_error{"Attempting to access dual graph before initialization"};
+    util::throwingAssert(m_dual_graph.has_value(), "Attempting to access dual graph before initialization");
+    return *m_dual_graph;
 }
 
 // Implementation note: It should be possible to sequentially traverse elements in a deterministic order (e.g. the mesh
@@ -655,12 +653,12 @@ auto MeshPartition< orders... >::getBoundaryView(detail::DomainIdRange_c auto&& 
             std::visit(emplace_element, domain_element_variant_opt->first);
         };
         visit(insert_boundary_element_view, id, std::execution::par);
-        if (error_flag.load())
-            throw std::runtime_error{
-                "BoundaryView could not be constructed because some of the boundary elements are not edges/faces of "
-                "any of the domain elements in the partition. This may be because the mesh was partitioned with "
-                "incorrectly specified boundaries, resulting in the edge/face element being in a different partition "
-                "than its parent area/volume element."};
+        util::throwingAssert(
+            not error_flag.load(),
+            "BoundaryView could not be constructed because some of the boundary elements are not edges/faces of "
+            "any of the domain elements in the partition. This may be because the mesh was partitioned with "
+            "incorrectly specified boundaries, resulting in the edge/face element being in a different partition "
+            "than its parent area/volume element.");
     }
     return BoundaryView{std::move(boundary_elements), *this};
 }

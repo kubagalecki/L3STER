@@ -302,7 +302,7 @@ inline auto readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
                     constexpr auto el_type = detail::lookupElt< I >();
                     std::generate_n(block_domain.getBackInserter< el_type, 1 >(), block_size, [&] {
                         size_t element_tag;
-                        file >> element_tag; // throw away tag
+                        file >> element_tag; // discard tag
                         std::array< n_id_t, Element< el_type, 1 >::n_nodes > nodes;
                         std::copy_n(std::istream_iterator< n_id_t >(file), nodes.size(), begin(nodes));
                         detail::reorderNodes< el_type >(nodes);

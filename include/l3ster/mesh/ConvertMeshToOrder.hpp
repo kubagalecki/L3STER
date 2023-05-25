@@ -14,8 +14,8 @@ auto convertMeshToOrder(const MeshPartition< 1 >& mesh, std::integral_constant< 
     -> MeshPartition< O_CONV >
 {
     L3STER_PROFILE_FUNCTION;
-    if (not mesh.isDualGraphInitialized())
-        throw std::logic_error("Initialize the dual graph of the mesh before converting it to a different order");
+    util::throwingAssert(mesh.isDualGraphInitialized(),
+                         "Initialize the dual graph of the mesh before converting it to a different order");
 
     const auto&         dual_graph  = mesh.getDualGraph();
     auto                new_domains = mesh.getConversionAlloc< O_CONV >();

@@ -437,8 +437,8 @@ auto encodeFieldImpl(SizedRangeOfConvertibleTo_c< std::span< const val_t > > aut
 auto encodeField(const SolutionManager& solution_manager, IndexRange_c auto&& component_inds) -> ArrayOwner< char >
 {
     const auto n_fields = std::ranges::size(component_inds);
-    if (n_fields == 0 or n_fields > 3)
-        throw std::runtime_error{"Field groupings must have size 1 (scalar), 2 (2D), or 3 (3D)"};
+    util::throwingAssert(n_fields != 0 and n_fields <= 3,
+                         "Field groupings must have size 1 (scalar), 2 (2D), or 3 (3D)");
 
     if (n_fields == 1) // Directly encode nodal values
     {
@@ -511,8 +511,8 @@ void PvtuExporter::exportSolution(std::string_view                              
                                   SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds)
 {
     L3STER_PROFILE_FUNCTION;
-    if (std::ranges::size(field_names) != std::ranges::size(field_component_inds))
-        throw std::runtime_error{"exportSolution: field names and groupings must have the same size"};
+    util::throwingAssert(std::ranges::size(field_names) == std::ranges::size(field_component_inds),
+                         "Field names and groupings must have the same size");
 
     flushWriteQueue();
     if (comm.getRank() == 0)
