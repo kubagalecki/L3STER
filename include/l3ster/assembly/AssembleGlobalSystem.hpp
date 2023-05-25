@@ -34,7 +34,7 @@ namespace detail
 {
 // Checking whether the kernel is being invoked in a domain where it is valid is fundamentally a run-time endeavor.
 // What we can do at compile time is to assert that there at least exists a domain dimension for which it is valid.
-template < typename Kernel, size_t n_fields >
+template < typename Kernel, size_t n_fields, el_o_t... orders >
 struct PotentiallyValidKernelDeductionHelper
 {
     template < ElementTypes T, el_o_t O >
@@ -42,24 +42,27 @@ struct PotentiallyValidKernelDeductionHelper
     {
         static constexpr bool value = Kernel_c< Kernel, Element< T, O >::native_dim, n_fields >;
     };
-    static constexpr bool domain = assert_any_element< DeductionHelperDomain >;
+    static constexpr bool domain =
+        ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
 
     template < ElementTypes T, el_o_t O >
     struct DeductionHelperBoundary
     {
         static constexpr bool value = BoundaryKernel_c< Kernel, Element< T, O >::native_dim, n_fields >;
     };
-    static constexpr bool boundary = assert_any_element< DeductionHelperBoundary >;
+    static constexpr bool boundary =
+        ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperBoundary >;
 };
-template < typename Kernel, size_t n_fields >
-concept PotentiallyValidKernel_c = PotentiallyValidKernelDeductionHelper< Kernel, n_fields >::domain;
-template < typename Kernel, size_t n_fields >
-concept PotentiallyValidBoundaryKernel_c = PotentiallyValidKernelDeductionHelper< Kernel, n_fields >::boundary;
+template < typename Kernel, size_t n_fields, el_o_t... orders >
+concept PotentiallyValidKernel_c = PotentiallyValidKernelDeductionHelper< Kernel, n_fields, orders... >::domain;
+template < typename Kernel, size_t n_fields, el_o_t... orders >
+concept PotentiallyValidBoundaryKernel_c =
+    PotentiallyValidKernelDeductionHelper< Kernel, n_fields, orders... >::boundary;
 
 // During local assembly, when performing rank updates of statically-sized matrices, Eigen allocates data on the stack.
 // For larger matrices, this results in stack overflow. The following code estimates the required stack size to be the
 // size of the rank update matrix, which has been shown to be sufficient during testing.
-template < typename Kernel, size_t n_fields >
+template < typename Kernel, size_t n_fields, el_o_t... orders >
 struct KernelStackSizeDeductionHelper
 {
     template < ElementTypes ET, el_o_t EO >
@@ -75,7 +78,7 @@ struct KernelStackSizeDeductionHelper
     };
     static constexpr size_t domain =
         std::invoke([]< typename... DH >(TypePack< DH... >) { return std::ranges::max(std::array{DH::value...}); },
-                    parametrize_type_over_element_types_and_orders_t< TypePack, DeductionHelperDomain >{});
+                    parametrize_type_over_element_types_and_orders_t< TypePack, DeductionHelperDomain, orders... >{});
 
     template < ElementTypes ET, el_o_t EO >
     struct DeductionHelperBoundary
@@ -90,29 +93,30 @@ struct KernelStackSizeDeductionHelper
     };
     static constexpr size_t boundary =
         std::invoke([]< typename... DH >(TypePack< DH... >) { return std::ranges::max(std::array{DH::value...}); },
-                    parametrize_type_over_element_types_and_orders_t< TypePack, DeductionHelperBoundary >{});
+                    parametrize_type_over_element_types_and_orders_t< TypePack, DeductionHelperBoundary, orders... >{});
 };
 
-template < typename Kernel, size_t n_fields >
+template < typename Kernel, size_t n_fields, el_o_t... orders >
 consteval auto deduceRequiredStackSizeDomain() -> size_t
 {
-    return detail::KernelStackSizeDeductionHelper< Kernel, n_fields >::domain;
+    return detail::KernelStackSizeDeductionHelper< Kernel, n_fields, orders... >::domain;
 }
 
-template < typename Kernel, size_t n_fields >
+template < typename Kernel, size_t n_fields, el_o_t... orders >
 consteval auto deduceRequiredStackSizeBoundary() -> size_t
 {
-    return detail::KernelStackSizeDeductionHelper< Kernel, n_fields >::boundary;
+    return detail::KernelStackSizeDeductionHelper< Kernel, n_fields, orders... >::boundary;
 }
 } // namespace detail
 
-template < size_t                   n_fields,
+template < el_o_t... orders,
+           size_t                   n_fields,
            ArrayOf_c< size_t > auto field_inds,
            size_t                   dofs_per_node,
            CondensationPolicy       CP,
            AssemblyOptions          asm_opts >
 void assembleGlobalSystem(auto&&                                               kernel,
-                          const MeshPartition&                                 mesh,
+                          const MeshPartition< orders... >&                    mesh,
                           detail::DomainIdRange_c auto&&                       domain_ids,
                           const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
                           tpetra_crsmatrix_t&                                  global_mat,
@@ -122,7 +126,7 @@ void assembleGlobalSystem(auto&&                                               k
                           ConstexprValue< field_inds >                         field_inds_ctwrpr,
                           ConstexprValue< asm_opts >,
                           val_t time = 0.)
-    requires detail::PotentiallyValidKernel_c< decltype(kernel), n_fields >
+    requires detail::PotentiallyValidKernel_c< decltype(kernel), n_fields, orders... >
 {
     L3STER_PROFILE_FUNCTION;
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
@@ -149,19 +153,20 @@ void assembleGlobalSystem(auto&&                                               k
         }
     };
     constexpr auto required_stack_size =
-        util::default_stack_size + detail::deduceRequiredStackSizeDomain< decltype(kernel), n_fields >();
+        util::default_stack_size + detail::deduceRequiredStackSizeDomain< decltype(kernel), n_fields, orders... >();
     util::requestStackSize< required_stack_size >();
     const auto max_par_guard = detail::MaxParallelismGuard{};
     mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
 }
 
-template < size_t                   n_fields,
+template < el_o_t... orders,
+           size_t                   n_fields,
            ArrayOf_c< size_t > auto field_inds,
            size_t                   dofs_per_node,
            CondensationPolicy       CP,
            AssemblyOptions          asm_opts >
 void assembleGlobalBoundarySystem(auto&&                                               kernel,
-                                  const BoundaryView&                                  boundary,
+                                  const BoundaryView< orders... >&                     boundary,
                                   const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
                                   tpetra_crsmatrix_t&                                  global_mat,
                                   std::span< val_t >                                   global_rhs,
@@ -170,7 +175,7 @@ void assembleGlobalBoundarySystem(auto&&                                        
                                   ConstexprValue< field_inds >                         field_inds_ctwrpr,
                                   ConstexprValue< asm_opts >,
                                   val_t time = 0.)
-    requires detail::PotentiallyValidBoundaryKernel_c< decltype(kernel), n_fields >
+    requires detail::PotentiallyValidBoundaryKernel_c< decltype(kernel), n_fields, orders... >
 {
     L3STER_PROFILE_FUNCTION;
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
@@ -198,7 +203,7 @@ void assembleGlobalBoundarySystem(auto&&                                        
         };
     };
     constexpr auto required_stack_size =
-        util::default_stack_size + detail::deduceRequiredStackSizeBoundary< decltype(kernel), n_fields >();
+        util::default_stack_size + detail::deduceRequiredStackSizeBoundary< decltype(kernel), n_fields, orders... >();
     util::requestStackSize< required_stack_size >();
     const auto max_par_guard = detail::MaxParallelismGuard{};
     boundary.visit(process_element, std::execution::par);

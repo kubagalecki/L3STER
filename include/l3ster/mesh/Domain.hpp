@@ -18,17 +18,25 @@
 
 namespace lstr
 {
+template < el_o_t... orders >
+    requires(sizeof...(orders) > 0)
 class Domain
 {
-public:
-    template < ElementTypes ET, el_o_t EO >
-    using element_vector_t         = std::vector< Element< ET, EO > >;
-    using element_vector_variant_t = parametrize_type_over_element_types_and_orders_t< std::variant, element_vector_t >;
-    using element_vector_variant_vector_t = std::vector< element_vector_variant_t >;
-    using find_result_t                   = std::optional< element_ptr_variant_t >;
-    using const_find_result_t             = std::optional< element_cptr_variant_t >;
+    using Constraint = detail::ElementDeductionHelper< orders... >;
 
+public:
+    template < el_o_t... friend_orders >
+        requires(sizeof...(friend_orders) > 0)
+    friend class Domain;
     friend struct SerializedDomain;
+
+    template < ElementTypes ET, el_o_t EO >
+    using element_vector_t = std::vector< Element< ET, EO > >;
+    using element_vector_variant_t =
+        parametrize_type_over_element_types_and_orders_t< std::variant, element_vector_t, orders... >;
+    using element_vector_variant_vector_t = std::vector< element_vector_variant_t >;
+    using find_result_t                   = std::optional< element_ptr_variant_t< orders... > >;
+    using const_find_result_t             = std::optional< element_cptr_variant_t< orders... > >;
 
     Domain() = default;
     Domain(element_vector_variant_vector_t&& element_vectors_, dim_t dim_)
@@ -44,38 +52,51 @@ public:
     template < ElementTypes ET, el_o_t EO >
     void reserve(size_t size);
 
-    template < SimpleExecutionPolicy_c ExecPolicy >
-    void visit(invocable_on_elements auto&& element_visitor, ExecPolicy&& policy);
-    template < SimpleExecutionPolicy_c ExecPolicy >
-    void visit(invocable_on_const_elements auto&& element_visitor, ExecPolicy&& policy) const;
+    template < typename F, SimpleExecutionPolicy_c ExecPolicy >
+    void visit(F&& element_visitor, ExecPolicy&& policy)
+        requires(Constraint::template invocable_on_elements< F >);
+    template < typename F, SimpleExecutionPolicy_c ExecPolicy >
+    void visit(F&& element_visitor, ExecPolicy&& policy) const
+        requires(Constraint::template invocable_on_const_elements< F >);
 
     // Note: `zero` must be the identity element for the reduction
     auto
     transformReduce(const auto& zero, auto&& reduction, auto&& transform, SimpleExecutionPolicy_c auto&& policy) const
         -> std::decay_t< decltype(zero) >
-        requires invocable_on_const_elements_r< decltype(transform), std::decay_t< decltype(zero) > > and requires {
-            {
-                std::invoke(reduction, zero, zero)
-            } -> std::convertible_to< std::decay_t< decltype(zero) > >;
-        };
+        requires(Constraint::template invocable_on_const_elements_return< std::decay_t< decltype(zero) >,
+                                                                          decltype(transform) > and
+                 requires {
+                     {
+                         std::invoke(reduction, zero, zero)
+                     } -> std::convertible_to< std::decay_t< decltype(zero) > >;
+                 });
 
-    [[nodiscard]] find_result_t              find(invocable_on_const_elements_r< bool > auto&& predicate,
-                                                  SimpleExecutionPolicy_c auto&&               policy);
-    [[nodiscard]] const_find_result_t        find(invocable_on_const_elements_r< bool > auto&& predicate,
-                                                  SimpleExecutionPolicy_c auto&&               policy) const;
-    [[nodiscard]] inline find_result_t       find(el_id_t id);
-    [[nodiscard]] inline const_find_result_t find(el_id_t id) const;
+    template < typename F >
+    auto find(F&& predicate, SimpleExecutionPolicy_c auto&& policy) -> find_result_t
+        requires(Constraint::template invocable_on_const_elements_return< bool, F >);
+    template < typename F >
+    auto find(F&& predicate, SimpleExecutionPolicy_c auto&& policy) const -> const_find_result_t
+        requires(Constraint::template invocable_on_const_elements_return< bool, F >);
+    inline auto find(el_id_t id) -> find_result_t;
+    inline auto find(el_id_t id) const -> const_find_result_t;
 
     [[nodiscard]] dim_t         getDim() const { return m_dim; };
     [[nodiscard]] inline size_t getNElements() const;
 
     template < el_o_t O_CONV >
-    [[nodiscard]] Domain getConversionAlloc() const;
+    auto getConversionAlloc() const -> Domain< O_CONV >;
 
     template < ElementTypes ET, el_o_t EO >
-    std::vector< Element< ET, EO > >& getElementVector();
+    auto getElementVector() -> std::vector< Element< ET, EO > >&;
 
 private:
+    inline static auto constifyFound(const find_result_t& f) -> const_find_result_t
+    {
+        if (not f)
+            return {};
+        return constifyVariant(*f);
+    }
+
     template < Access access >
     static auto wrapElementVisitor(auto&& element_visitor, SimpleExecutionPolicy_c auto&& policy);
 
@@ -84,24 +105,17 @@ private:
 };
 
 namespace detail
-{
-inline Domain::const_find_result_t constifyFound(const Domain::find_result_t& f)
-{
-    if (not f)
-        return {};
-    return constifyVariant(*f);
-}
-} // namespace detail
+{}
 
+template < el_o_t... orders >
+    requires(sizeof...(orders) > 0)
 template < ElementTypes ET, el_o_t EO >
-std::vector< Element< ET, EO > >& Domain::getElementVector()
+auto Domain< orders... >::getElementVector() -> std::vector< Element< ET, EO > >&
 {
     using el_vec_t = element_vector_t< ET, EO >;
     if (not m_element_vectors.empty())
-    {
-        if (Element< ET, EO >::native_dim != m_dim)
-            throw std::invalid_argument("Element dimension incompatible with domain dimension");
-    }
+        util::throwingAssert< std::invalid_argument >(Element< ET, EO >::native_dim == m_dim,
+                                                      "Element dimension incompatible with domain dimension");
     else
         m_dim = Element< ET, EO >::native_dim;
 
@@ -114,14 +128,18 @@ std::vector< Element< ET, EO > >& Domain::getElementVector()
         return std::get< el_vec_t >(*vector_variant_it);
 }
 
+template < el_o_t... orders >
+    requires(sizeof...(orders) > 0)
 template < ElementTypes ET, el_o_t EO >
-void Domain::push(const Element< ET, EO >& element)
+void Domain< orders... >::push(const Element< ET, EO >& element)
 {
     emplaceBack< ET, EO >(element);
 }
 
+template < el_o_t... orders >
+    requires(sizeof...(orders) > 0)
 template < ElementTypes T, el_o_t O, typename... ArgTypes >
-void Domain::emplaceBack(ArgTypes&&... Args)
+void Domain< orders... >::emplaceBack(ArgTypes&&... Args)
 {
     using el_t   = Element< T, O >;
     auto& vector = getElementVector< T, O >();
@@ -134,22 +152,24 @@ void Domain::emplaceBack(ArgTypes&&... Args)
         });
 }
 
+template < el_o_t... orders >
+    requires(sizeof...(orders) > 0)
 template < ElementTypes ET, el_o_t EO >
-auto Domain::getBackInserter()
+auto Domain< orders... >::getBackInserter()
 {
     return std::back_inserter(getElementVector< ET, EO >());
 }
 
+template < el_o_t... orders >
+    requires(sizeof...(orders) > 0)
 template < ElementTypes ET, el_o_t EO >
-void Domain::reserve(size_t size)
+void Domain< orders... >::reserve(size_t size)
 {
     using el_vec_t = element_vector_t< ET, EO >;
 
     if (not m_element_vectors.empty())
-    {
-        if (Element< ET, EO >::native_dim != m_dim)
-            throw std::invalid_argument("Pushing element to domain of different dimension");
-    }
+        util::throwingAssert< std::invalid_argument >(Element< ET, EO >::native_dim == m_dim,
+                                                      "Pushing element to domain of different dimension");
     else
         m_dim = Element< ET, EO >::native_dim;
 
@@ -161,8 +181,11 @@ void Domain::reserve(size_t size)
         std::get< el_vec_t >(*vector_variant_it).reserve(size);
 }
 
-template < SimpleExecutionPolicy_c ExecPolicy >
-void Domain::visit(invocable_on_elements auto&& element_visitor, ExecPolicy&& policy)
+template < el_o_t... orders >
+    requires(sizeof...(orders) > 0)
+template < typename F, SimpleExecutionPolicy_c ExecPolicy >
+void Domain< orders... >::visit(F&& element_visitor, ExecPolicy&& policy)
+    requires(Constraint::template invocable_on_elements< F >)
 {
     const auto vec_variant_visitor = wrapElementVisitor< Access::ReadWrite >(element_visitor, policy);
     const auto invoke_visitor      = [&vec_variant_visitor](element_vector_variant_t& el_vec) {
@@ -174,8 +197,11 @@ void Domain::visit(invocable_on_elements auto&& element_visitor, ExecPolicy&& po
         util::tbb::parallelFor(m_element_vectors, invoke_visitor);
 }
 
-template < SimpleExecutionPolicy_c ExecPolicy >
-void Domain::visit(invocable_on_const_elements auto&& element_visitor, ExecPolicy&& policy) const
+template < el_o_t... orders >
+    requires(sizeof...(orders) > 0)
+template < typename F, SimpleExecutionPolicy_c ExecPolicy >
+void Domain< orders... >::visit(F&& element_visitor, ExecPolicy&& policy) const
+    requires(Constraint::template invocable_on_const_elements< F >)
 {
     const auto vec_variant_visitor = wrapElementVisitor< Access::ReadOnly >(element_visitor, policy);
     const auto invoke_visitor      = [&vec_variant_visitor](const element_vector_variant_t& el_vec) {
@@ -187,15 +213,19 @@ void Domain::visit(invocable_on_const_elements auto&& element_visitor, ExecPolic
         util::tbb::parallelFor(m_element_vectors, invoke_visitor);
 }
 
-auto Domain::transformReduce(const auto&                    zero,
-                             auto&&                         reduction,
-                             auto&&                         transform,
-                             SimpleExecutionPolicy_c auto&& policy) const -> std::decay_t< decltype(zero) >
-    requires invocable_on_const_elements_r< decltype(transform), std::decay_t< decltype(zero) > > and requires {
-        {
-            std::invoke(reduction, zero, zero)
-        } -> std::convertible_to< std::decay_t< decltype(zero) > >;
-    }
+template < el_o_t... orders >
+    requires(sizeof...(orders) > 0)
+auto Domain< orders... >::transformReduce(const auto&                    zero,
+                                          auto&&                         reduction,
+                                          auto&&                         transform,
+                                          SimpleExecutionPolicy_c auto&& policy) const -> std::decay_t< decltype(zero) >
+    requires(Constraint::template invocable_on_const_elements_return< std::decay_t< decltype(zero) >,
+                                                                      decltype(transform) > and
+             requires {
+                 {
+                     std::invoke(reduction, zero, zero)
+                 } -> std::convertible_to< std::decay_t< decltype(zero) > >;
+             })
 {
     if constexpr (SequencedPolicy_c< decltype(policy) >)
     {
@@ -224,17 +254,20 @@ auto Domain::transformReduce(const auto&                    zero,
     }
 }
 
-Domain::find_result_t Domain::find(invocable_on_const_elements_r< bool > auto&& predicate,
-                                   SimpleExecutionPolicy_c auto&&               policy)
+template < el_o_t... orders >
+    requires(sizeof...(orders) > 0)
+template < typename F >
+auto Domain< orders... >::find(F&& predicate, SimpleExecutionPolicy_c auto&& policy) -> find_result_t
+    requires(Constraint::template invocable_on_const_elements_return< bool, F >)
 {
-    std::optional< element_ptr_variant_t > opt_el_ptr_variant;
-    std::mutex                             mut;
+    std::optional< element_ptr_variant_t< orders... > > opt_el_ptr_variant;
+    std::mutex                                          mutex;
     const auto vector_visitor = [&]< ElementTypes T, el_o_t O >(const element_vector_t< T, O >& el_vec) {
         const auto el_it = std::find_if(policy, cbegin(el_vec), cend(el_vec), predicate);
         if (el_it != el_vec.cend())
         {
-            std::lock_guard lock{mut};
-            opt_el_ptr_variant.emplace(const_cast< Element< T, O >* >(&*el_it));
+            const auto lock = std::lock_guard{mutex};
+            opt_el_ptr_variant.emplace(const_cast< Element< T, O >* >(std::addressof(*el_it)));
             return true;
         }
         else
@@ -247,16 +280,20 @@ Domain::find_result_t Domain::find(invocable_on_const_elements_r< bool > auto&& 
     return opt_el_ptr_variant;
 }
 
-Domain::const_find_result_t Domain::find(invocable_on_const_elements_r< bool > auto&& predicate,
-                                         SimpleExecutionPolicy_c auto&&               policy) const
+template < el_o_t... orders >
+    requires(sizeof...(orders) > 0)
+template < typename F >
+auto Domain< orders... >::find(F&& predicate, SimpleExecutionPolicy_c auto&& policy) const -> const_find_result_t
+    requires(Constraint::template invocable_on_const_elements_return< bool, F >)
 {
-    return detail::constifyFound(
-        const_cast< Domain* >(this)->find(predicate, std::forward< decltype(policy) >(policy)));
+    return constifyFound(const_cast< Domain* >(this)->find(predicate, std::forward< decltype(policy) >(policy)));
 }
 
-Domain::find_result_t Domain::find(el_id_t id)
+template < el_o_t... orders >
+    requires(sizeof...(orders) > 0)
+auto Domain< orders... >::find(el_id_t id) -> find_result_t
 {
-    std::optional< element_ptr_variant_t > opt_el_ptr_variant;
+    std::optional< element_ptr_variant_t< orders... > > opt_el_ptr_variant;
     const auto vector_visitor = [&]< ElementTypes T, el_o_t O >(element_vector_t< T, O >& el_vec) -> bool {
         if (el_vec.empty())
             return false;
@@ -288,13 +325,17 @@ Domain::find_result_t Domain::find(el_id_t id)
     return opt_el_ptr_variant;
 }
 
-Domain::const_find_result_t Domain::find(el_id_t id) const
+template < el_o_t... orders >
+    requires(sizeof...(orders) > 0)
+auto Domain< orders... >::find(el_id_t id) const -> const_find_result_t
 {
-    return detail::constifyFound(const_cast< Domain* >(this)->find(id));
+    return constifyFound(const_cast< Domain< orders... >* >(this)->find(id));
 }
 
+template < el_o_t... orders >
+    requires(sizeof...(orders) > 0)
 template < Access access >
-auto Domain::wrapElementVisitor(auto&& element_visitor, SimpleExecutionPolicy_c auto&& policy)
+auto Domain< orders... >::wrapElementVisitor(auto&& element_visitor, SimpleExecutionPolicy_c auto&& policy)
 {
     if constexpr (access == Access::ReadWrite)
     {
@@ -320,7 +361,9 @@ auto Domain::wrapElementVisitor(auto&& element_visitor, SimpleExecutionPolicy_c 
     }
 }
 
-size_t Domain::getNElements() const
+template < el_o_t... orders >
+    requires(sizeof...(orders) > 0)
+size_t Domain< orders... >::getNElements() const
 {
     return std::accumulate(
         begin(m_element_vectors), end(m_element_vectors), 0u, [](size_t sum, const auto& el_vec_var) {
@@ -328,35 +371,39 @@ size_t Domain::getNElements() const
         });
 }
 
+template < el_o_t... orders >
+    requires(sizeof...(orders) > 0)
 template < el_o_t O_CONV >
-Domain Domain::getConversionAlloc() const
+auto Domain< orders... >::getConversionAlloc() const -> Domain< O_CONV >
 {
-    Domain alloc;
-    alloc.m_element_vectors.reserve(m_element_vectors.size());
-    alloc.m_dim = m_dim;
+    Domain< O_CONV > retval;
+    retval.m_element_vectors.reserve(m_element_vectors.size());
+    retval.m_dim = m_dim;
     for (const auto& el_v : m_element_vectors)
     {
         std::visit(
             [&]< ElementTypes T, el_o_t O >(const element_vector_t< T, O >& existing_vec) {
-                alloc.reserve< T, O_CONV >(existing_vec.size());
+                retval.template reserve< T, O_CONV >(existing_vec.size());
             },
             el_v);
     }
-    return alloc;
+    return retval;
 }
 
+template < el_o_t... orders >
+    requires(sizeof...(orders) > 0)
 class DomainView
 {
 public:
-    DomainView(const Domain& domain_, d_id_t id_) : domain{std::addressof(domain_)}, id{id_} {}
+    DomainView(const Domain< orders... >& domain_, d_id_t id_) : domain{std::addressof(domain_)}, id{id_} {}
 
     [[nodiscard]] d_id_t getID() const { return id; }
     [[nodiscard]] dim_t  getDim() const { return domain->getDim(); }
     [[nodiscard]] size_t getNElements() const { return domain->getNElements(); }
 
 private:
-    const Domain* domain{};
-    d_id_t        id{};
+    const Domain< orders... >* domain{};
+    d_id_t                     id{};
 };
 } // namespace lstr
 #endif // L3STER_MESH_DOMAIN_HPP

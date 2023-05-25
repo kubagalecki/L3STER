@@ -1,25 +1,27 @@
-#ifndef L3STER_MESH_ELEMENTTYPES_H
-#define L3STER_MESH_ELEMENTTYPES_H
+#ifndef L3STER_MESH_ELEMENTTYPES_HPP
+#define L3STER_MESH_ELEMENTTYPES_HPP
 
-#include "l3ster/mesh/Constants.hpp"
-
+#include <algorithm>
 #include <array>
+#include <functional>
 #include <utility>
-
-#define L3STER_SIZED_ENUM(name, type, ...)                                                                             \
-    enum class name : type                                                                                             \
-    {                                                                                                                  \
-        __VA_ARGS__,                                                                                                   \
-        Count                                                                                                          \
-    }
 
 namespace lstr
 {
-L3STER_SIZED_ENUM(ElementTypes, std::uint8_t, Hex, Quad, Line);
+enum struct ElementTypes
+{
+    Hex  = 0,
+    Quad = 1,
+    Line = 2,
+    // Update count when adding new element types
+    Count = 3
+};
 
 // Array containing all defined element types
-inline constexpr auto element_types = []< size_t... I >(std::index_sequence< I... >) {
-    return std::array{static_cast< ElementTypes >(I)...};
-}(std::make_index_sequence< static_cast< size_t >(ElementTypes::Count) >{});
+inline constexpr auto element_types = std::invoke([] {
+    auto retval = std::array< ElementTypes, static_cast< size_t >(ElementTypes::Count) >{};
+    std::ranges::generate(retval, [i = 0]() mutable { return static_cast< ElementTypes >(i++); });
+    return retval;
+});
 } // namespace lstr
-#endif // L3STER_MESH_ELEMENTTYPES_H
+#endif // L3STER_MESH_ELEMENTTYPES_HPP

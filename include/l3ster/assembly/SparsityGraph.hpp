@@ -136,8 +136,8 @@ struct NodeDofs
     size_t                      n_owned_dofs;
 };
 
-template < size_t max_dofs_per_node, CondensationPolicy CP >
-auto computeNodeDofs(const MeshPartition&                           mesh,
+template < el_o_t... orders, size_t max_dofs_per_node, CondensationPolicy CP >
+auto computeNodeDofs(const MeshPartition< orders... >&              mesh,
                      const NodeToGlobalDofMap< max_dofs_per_node >& node_to_dof_map,
                      const NodeCondensationMap< CP >&               cond_map) -> NodeDofs
 {
@@ -155,8 +155,8 @@ auto computeNodeDofs(const MeshPartition&                           mesh,
     return {std::move(dofs), n_owned_dofs};
 }
 
-template < auto problem_def, CondensationPolicy CP >
-auto computeDofGraph(const MeshPartition&                                    mesh,
+template < el_o_t... orders, auto problem_def, CondensationPolicy CP >
+auto computeDofGraph(const MeshPartition< orders... >&                       mesh,
                      const NodeToGlobalDofMap< deduceNFields(problem_def) >& node_to_dof_map,
                      const NodeCondensationMap< CP >&                        cond_map,
                      std::span< const global_dof_t >                         owned_plus_shared_dofs,
@@ -261,10 +261,10 @@ inline auto initCrsGraph(const MpiComm&                                         
         std::move(owned_map), std::move(owned_plus_shared_map), std::move(row_sizes));
 }
 
-template < detail::ProblemDef_c auto problem_def, CondensationPolicy CP >
+template < el_o_t... orders, detail::ProblemDef_c auto problem_def, CondensationPolicy CP >
 Teuchos::RCP< const tpetra_fecrsgraph_t >
 makeSparsityGraph(const MpiComm&                                          comm,
-                  const MeshPartition&                                    mesh,
+                  const MeshPartition< orders... >&                       mesh,
                   const NodeToGlobalDofMap< deduceNFields(problem_def) >& node_to_dof_map,
                   const NodeCondensationMap< CP >&                        cond_map,
                   ConstexprValue< problem_def >                           problemdef_ctwrapper)

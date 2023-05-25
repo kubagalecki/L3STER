@@ -10,18 +10,13 @@ using namespace lstr;
 template < CondensationPolicy CP >
 void test()
 {
-    MpiComm comm{MPI_COMM_WORLD};
-
-    Mesh mesh_full;
-    if (comm.getRank() == 0)
-    {
-        constexpr std::array dist{0., 1., 2., 3., 4.};
-        constexpr auto       order = 2;
-        mesh_full                  = makeCubeMesh(dist);
-        mesh_full.getPartitions().front().initDualGraph();
-        mesh_full.getPartitions().front() = convertMeshToOrder< order >(mesh_full.getPartitions().front());
-    }
-    const auto     mesh            = distributeMesh(comm, mesh_full, {});
+    const auto     comm            = MpiComm{MPI_COMM_WORLD};
+    constexpr auto order           = 2;
+    const auto     mesh            = generateAndDistributeMesh< order >(comm,
+                                                         [] {
+                                                             return makeCubeMesh(std::array{0., 1., 2., 3., 4.});
+                                                         },
+                                                         {});
     constexpr auto probdef_ctwrpr  = ConstexprValue< std::array{Pair{d_id_t{0}, std::array{false, true}}} >{};
     const auto     cond_map        = detail::makeCondensationMap< CP >(comm, mesh, probdef_ctwrpr);
     auto           owned_condensed = detail::getCondensedOwnedNodesView(mesh, cond_map);

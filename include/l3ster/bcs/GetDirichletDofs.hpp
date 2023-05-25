@@ -5,8 +5,8 @@
 
 namespace lstr::detail
 {
-template < CondensationPolicy CP, ProblemDef_c auto problem_def, ProblemDef_c auto dirichlet_def >
-auto getDirichletDofs(const MeshPartition&                                            mesh,
+template < el_o_t... orders, CondensationPolicy CP, ProblemDef_c auto problem_def, ProblemDef_c auto dirichlet_def >
+auto getDirichletDofs(const MeshPartition< orders... >&                               mesh,
                       const Teuchos::RCP< const tpetra_fecrsgraph_t >&                sparsity_graph,
                       const NodeToGlobalDofMap< detail::deduceNFields(problem_def) >& node_to_dof_map,
                       const NodeCondensationMap< CP >&                                cond_map,

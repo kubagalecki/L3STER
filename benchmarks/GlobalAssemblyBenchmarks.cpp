@@ -4,25 +4,24 @@
 static void BM_OwnerOrSharedNodeDeterminationNotGhost(benchmark::State& state)
 {
     auto       mesh            = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
-    auto&      part            = mesh.getPartitions()[0];
-    const auto n_nodes_visited = part.transformReduce(
+    const auto n_nodes_visited = mesh.transformReduce(
         0ul,
         std::plus<>{},
         [](const auto& element) { return element.getNodes().size(); },
         std::views::single(1),
         std::execution::par);
 
-    part.initDualGraph();
-    const auto n_parts = state.range(0);
-    mesh               = partitionMesh(mesh, n_parts, {2});
+    mesh.initDualGraph();
+    const auto n_parts    = state.range(0);
+    const auto partitions = partitionMesh(mesh, n_parts, {2});
 
     for (auto _ : state)
     {
-        for (const auto& prt : mesh.getPartitions())
-            prt.visit(
+        for (const auto& part : partitions)
+            part.visit(
                 [&](const auto& element) {
                     for (auto node : element.getNodes())
-                        benchmark::DoNotOptimize(not prt.isGhostNode(node));
+                        benchmark::DoNotOptimize(not part.isGhostNode(node));
                 },
                 std::views::single(1));
     }
@@ -39,25 +38,24 @@ BENCHMARK(BM_OwnerOrSharedNodeDeterminationNotGhost)
 static void BM_OwnerOrSharedNodeDeterminationShared(benchmark::State& state)
 {
     auto       mesh            = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
-    auto&      part            = mesh.getPartitions()[0];
-    const auto n_nodes_visited = part.transformReduce(
+    const auto n_nodes_visited = mesh.transformReduce(
         0ul,
         std::plus<>{},
         [](const auto& element) { return element.getNodes().size(); },
         std::views::single(1),
         std::execution::par);
 
-    part.initDualGraph();
-    const auto n_parts = state.range(0);
-    mesh               = partitionMesh(mesh, n_parts, {2});
+    mesh.initDualGraph();
+    const auto n_parts    = state.range(0);
+    const auto partitions = partitionMesh(mesh, n_parts, {2});
 
     for (auto _ : state)
     {
-        for (const auto& prt : mesh.getPartitions())
-            prt.visit(
+        for (const auto& part : partitions)
+            part.visit(
                 [&](const auto& element) {
                     for (auto node : element.getNodes())
-                        benchmark::DoNotOptimize(prt.isOwnedNode(node));
+                        benchmark::DoNotOptimize(part.isOwnedNode(node));
                 },
                 std::views::single(1));
     }

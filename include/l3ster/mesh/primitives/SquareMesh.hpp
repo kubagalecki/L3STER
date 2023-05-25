@@ -1,12 +1,12 @@
 #ifndef L3STER_SQUAREMESH_HPP
 #define L3STER_SQUAREMESH_HPP
 
-#include "l3ster/mesh/Mesh.hpp"
+#include "l3ster/mesh/MeshPartition.hpp"
 
 namespace lstr
 {
 template < std::ranges::random_access_range Rx, std::ranges::random_access_range Ry >
-inline Mesh makeSquareMesh(Rx&& distx, Ry&& disty)
+auto makeSquareMesh(Rx&& distx, Ry&& disty) -> MeshPartition< 1 >
     requires std::convertible_to< std::ranges::range_value_t< std::decay_t< Rx > >, val_t > and
              std::convertible_to< std::ranges::range_value_t< std::decay_t< Ry > >, val_t >
 {
@@ -15,7 +15,7 @@ inline Mesh makeSquareMesh(Rx&& distx, Ry&& disty)
     const size_t e_dx = n_dx - 1;
     const size_t e_dy = n_dy - 1;
 
-    MeshPartition::domain_map_t domains;
+    auto domains = MeshPartition< 1 >::domain_map_t{};
     domains[0].reserve< ElementTypes::Quad, 1 >(e_dx * e_dy);
     domains[1].reserve< ElementTypes::Line, 1 >(e_dx);
     domains[2].reserve< ElementTypes::Line, 1 >(e_dx);
@@ -71,11 +71,11 @@ inline Mesh makeSquareMesh(Rx&& distx, Ry&& disty)
 
     std::vector< n_id_t > nodes(n_dx * n_dy);
     std::iota(begin(nodes), end(nodes), 0u);
-    return Mesh{{MeshPartition{std::move(domains), std::move(nodes), std::vector< n_id_t >{}}}};
+    return {std::move(domains), std::move(nodes), std::vector< n_id_t >{}};
 }
 
 template < std::ranges::random_access_range R >
-inline Mesh makeSquareMesh(R&& dist)
+auto makeSquareMesh(R&& dist) -> MeshPartition< 1 >
     requires std::convertible_to< std::ranges::range_value_t< std::decay_t< R > >, val_t >
 {
     return makeSquareMesh(dist, dist);

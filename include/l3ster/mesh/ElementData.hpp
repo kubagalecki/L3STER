@@ -19,8 +19,9 @@ struct ElementData< T, O >
     ElementData() = default;
     ElementData(const vertex_array_t& vertices_) : vertices{vertices_} {} // NOLINT implicit conversion intended
     template < el_o_t O_ >                                                // NOLINTNEXTLINE implicit conversion intended
+    ElementData(const ElementData< T, O_ >& d)
         requires(O != O_)
-    ElementData(const ElementData< T, O_ >& d) : vertices{d.vertices}
+        : vertices{d.vertices}
     {}
 
     vertex_array_t vertices;

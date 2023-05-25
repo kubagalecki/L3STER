@@ -23,7 +23,7 @@ void serializeElementData(const Element< T, O >& el, val_t* dest) noexcept
     auto&          verts   = el.getData().vertices;
     for (ptrdiff_t vert_i = 0; vert_i < n_verts; ++vert_i)
         for (ptrdiff_t dim_i = 0; dim_i < 3; ++dim_i)
-            dest[vert_i * 3 + dim_i] = verts[vert_i][dim_i]; // NOLINT
+            dest[vert_i * 3 + dim_i] = verts[vert_i][dim_i];
 }
 
 class ElementSerializer
@@ -56,7 +56,8 @@ private:
 struct SerializedDomain
 {
     SerializedDomain() = default;
-    explicit inline SerializedDomain(const Domain& domain);
+    template < el_o_t... orders >
+    explicit SerializedDomain(const Domain< orders... >& domain);
 
     std::vector< n_id_t >            element_nodes;
     std::vector< val_t >             element_data;
@@ -66,7 +67,8 @@ struct SerializedDomain
     std::vector< el_o_t >            orders;
 };
 
-SerializedDomain::SerializedDomain(const Domain& domain)
+template < el_o_t... el_orders >
+SerializedDomain::SerializedDomain(const Domain< el_orders... >& domain)
 {
     size_t       node_size{0u}, data_size{0u}, id_size{0u};
     const size_t offset_size{domain.m_element_vectors.size()};
@@ -102,13 +104,15 @@ SerializedDomain::SerializedDomain(const Domain& domain)
 struct SerializedPartition
 {
     SerializedPartition() = default;
-    explicit SerializedPartition(const MeshPartition& part)
+    template < el_o_t... orders >
+    explicit SerializedPartition(const MeshPartition< orders... >& part)
         : m_nodes{part.m_nodes}, m_n_owned_nodes{part.m_n_owned_nodes}
     {
         for (const auto& [id, dom] : part.m_domains)
             m_domains.emplace(id, dom);
     }
-    explicit SerializedPartition(MeshPartition&& part)
+    template < el_o_t... orders >
+    explicit SerializedPartition(MeshPartition< orders... >&& part)
         : m_nodes{std::move(part.m_nodes)}, m_n_owned_nodes{part.m_n_owned_nodes}
     {
         for (const auto& [id, dom] : part.m_domains)
@@ -117,7 +121,7 @@ struct SerializedPartition
 
     std::map< d_id_t, SerializedDomain > m_domains;
     std::vector< n_id_t >                m_nodes;
-    size_t                               m_n_owned_nodes;
+    size_t                               m_n_owned_nodes{};
 };
 } // namespace lstr
 #endif // L3STER_COMM_SERIALIZEMESH_HPP

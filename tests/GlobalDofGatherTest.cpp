@@ -15,7 +15,7 @@ using namespace lstr;
 template < CondensationPolicy CP >
 void test(CondensationPolicyTag< CP > = {})
 {
-    MpiComm comm{MPI_COMM_WORLD};
+    const auto comm = MpiComm{MPI_COMM_WORLD};
 
     constexpr auto problem_def       = std::array{Pair{d_id_t{1}, std::array{false, true, false}},
                                             Pair{d_id_t{2}, std::array{false, true, true}},
@@ -25,14 +25,14 @@ void test(CondensationPolicyTag< CP > = {})
                                             Pair{d_id_t{6}, std::array{true, true, true}}};
     constexpr auto problemdef_ctwrpr = ConstexprValue< problem_def >{};
 
-    const auto mesh_full   = comm.getRank() != 0 ? Mesh{} : std::invoke([] {
-        constexpr auto       order = 2;
+    static constexpr el_o_t mesh_order = 2;
+    const auto              mesh_full  = comm.getRank() == 0 ? std::invoke([] {
         constexpr std::array dist{0., 1., 2.};
         auto                 retval = makeCubeMesh(dist);
-        retval.getPartitions().front().initDualGraph();
-        retval.getPartitions().front() = convertMeshToOrder< order >(retval.getPartitions().front());
-        return retval;
-    });
+        retval.initDualGraph();
+        return convertMeshToOrder< mesh_order >(retval);
+    })
+                                                             : MeshPartition< mesh_order >{};
     const auto mesh_parted = std::invoke([&] { return distributeMesh(comm, mesh_full, {}, problemdef_ctwrpr); });
 
     const auto cond_map                = detail::makeCondensationMap< CP >(comm, mesh_parted, problemdef_ctwrpr);
@@ -56,10 +56,9 @@ void test(CondensationPolicyTag< CP > = {})
         for (auto it = gather_buf.begin(); it != gather_buf.end(); std::advance(it, serial_int.size()))
             REQUIRE(std::ranges::equal(std::views::counted(it, serial_int.size()), serial_int));
 
-        const auto  comm_self          = MpiComm{MPI_COMM_SELF};
-        const auto& full_part          = mesh_full.getPartitions().front();
-        const auto  cond_map_self      = detail::makeCondensationMap< CP >(comm_self, full_part, problemdef_ctwrpr);
-        const auto  intervals_expected = detail::computeLocalDofIntervals(full_part, cond_map_self, problemdef_ctwrpr);
+        const auto comm_self          = MpiComm{MPI_COMM_SELF};
+        const auto cond_map_self      = detail::makeCondensationMap< CP >(comm_self, mesh_full, problemdef_ctwrpr);
+        const auto intervals_expected = detail::computeLocalDofIntervals(mesh_full, cond_map_self, problemdef_ctwrpr);
         REQUIRE(intervals_expected == global_intervals);
     }
 }

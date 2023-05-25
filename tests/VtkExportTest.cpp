@@ -19,29 +19,24 @@ void vtkExportTest2D()
 {
     const MpiComm comm{MPI_COMM_WORLD};
 
-    constexpr auto node_distx = std::invoke([] {
+    constexpr auto   node_distx = std::invoke([] {
         auto retval = std::array< double, 11 >{};
         for (size_t i = 0; i < retval.size(); ++i)
             retval[i] = -.5 + static_cast< double >(i) * 2.5 / (retval.size() - 1);
         return retval;
     });
-    constexpr auto node_disty = std::invoke([] {
+    constexpr auto   node_disty = std::invoke([] {
         auto retval = std::array< double, 15 >{};
         for (size_t i = 0; i < retval.size(); ++i)
             retval[i] = -.5 + static_cast< double >(i) * 2. / (retval.size() - 1);
         return retval;
     });
-
-    Mesh mesh;
-    if (comm.getRank() == 0)
-    {
-        constexpr auto mesh_order = 2;
-        mesh                      = makeSquareMesh(node_distx, node_disty);
-        mesh.getPartitions().front().initDualGraph();
-        mesh.getPartitions().front() = convertMeshToOrder< mesh_order >(mesh.getPartitions().front());
-    }
+    constexpr auto   mesh_order = 2;
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
-    const auto my_partition = distributeMesh(comm, mesh, {bot_boundary, top_boundary, left_boundary, right_boundary});
+    const auto       my_partition =
+        generateAndDistributeMesh< mesh_order >(comm,
+                                                [&] { return makeSquareMesh(node_distx, node_disty); },
+                                                {bot_boundary, top_boundary, left_boundary, right_boundary});
 
     constexpr auto problem_def       = std::array{Pair{domain_id, std::array{false, true, false, true}},
                                             Pair{bot_boundary, std::array{true, false, true, false}},
@@ -55,31 +50,36 @@ void vtkExportTest2D()
     const auto system_manager   = makeAlgebraicSystem(comm, my_partition, no_condensation, problemdef_ctwrpr);
     auto       solution_manager = SolutionManager{my_partition, n_fields};
 
-    auto         solution      = system_manager->makeSolutionVector();
-    auto         solution_view = solution->get1dViewNonConst();
-    const double Re            = 40.;
-    const double lambda        = Re / 2. - std::sqrt(Re * Re / 4. - 4. * pi * pi);
-    const auto   bot_top_vals  = std::array< val_t, 2 >{1., pi};
-    computeValuesAtNodes(my_partition,
-                         std::array{bot_boundary, top_boundary},
-                         system_manager->getDofMap(),
-                         ConstexprValue< scalar_inds >{},
-                         bot_top_vals,
-                         solution_view);
-    computeValuesAtNodes(
-        [&]([[maybe_unused]] const auto& vals, [[maybe_unused]] const auto& ders, const SpaceTimePoint& p) {
-            Eigen::Vector2d retval;
-            // Kovasznay flow velocity field
-            retval[0] = 1. - std::exp(lambda * p.space.x()) * std::cos(2. * pi * p.space.y());
-            retval[1] = lambda * std::exp(lambda * p.space.x()) * std::sin(2 * pi * p.space.y()) / (2. * pi);
-            return retval;
-        },
-        my_partition,
-        std::views::single(domain_id),
-        system_manager->getDofMap(),
-        ConstexprValue< vec_inds >{},
-        empty_field_val_getter,
-        solution_view);
+    auto solution = system_manager->makeSolutionVector();
+    {
+        auto         solution_view = solution->get1dViewNonConst();
+        const double Re            = 40.;
+        const double lambda        = Re / 2. - std::sqrt(Re * Re / 4. - 4. * pi * pi);
+        const auto   bot_top_vals  = std::array< val_t, 2 >{1., pi};
+        computeValuesAtNodes(my_partition,
+                             std::array{bot_boundary, top_boundary},
+                             system_manager->getDofMap(),
+                             ConstexprValue< scalar_inds >{},
+                             bot_top_vals,
+                             solution_view);
+        computeValuesAtNodes(
+            [&]([[maybe_unused]] const auto& vals, [[maybe_unused]] const auto& ders, const SpaceTimePoint& p) {
+                Eigen::Vector2d retval;
+                // Kovasznay flow velocity field
+                retval[0] = 1. - std::exp(lambda * p.space.x()) * std::cos(2. * pi * p.space.y());
+                retval[1] = lambda * std::exp(lambda * p.space.x()) * std::sin(2 * pi * p.space.y()) / (2. * pi);
+                return retval;
+            },
+            my_partition,
+            std::views::single(domain_id),
+            system_manager->getDofMap(),
+            ConstexprValue< vec_inds >{},
+            empty_field_val_getter,
+            solution_view);
+    }
+    solution->switchActiveMultiVector();
+    solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);
+    solution->switchActiveMultiVector();
     system_manager->updateSolution(my_partition, solution, all_field_inds, solution_manager, all_field_inds);
 
     auto       exporter        = PvtuExporter{my_partition};
@@ -104,17 +104,10 @@ void vtkExportTest3D()
             retval[i] = -1. + static_cast< double >(i) * 2. / (retval.size() - 1);
         return retval;
     }();
-
-    Mesh mesh;
-    if (comm.getRank() == 0)
-    {
-        constexpr auto mesh_order = 2;
-        mesh                      = makeCubeMesh(node_dist);
-        mesh.getPartitions().front().initDualGraph();
-        mesh.getPartitions().front() = convertMeshToOrder< mesh_order >(mesh.getPartitions().front());
-    }
-    const auto my_partition = distributeMesh(comm, mesh, {1, 2, 3, 4, 5, 6});
-    const auto boundary     = my_partition.getBoundaryView(makeIotaArray< d_id_t, 6 >(1));
+    constexpr auto mesh_order = 2;
+    const auto     my_partition =
+        generateAndDistributeMesh< mesh_order >(comm, [&] { return makeCubeMesh(node_dist); }, {1, 2, 3, 4, 5, 6});
+    const auto boundary = my_partition.getBoundaryView(makeIotaArray< d_id_t, 6 >(1));
 
     constexpr d_id_t domain_id = 0;
     constexpr auto problem_def = std::array{Pair{d_id_t{domain_id}, std::array{true, true, true, false, false, false}},
@@ -132,34 +125,39 @@ void vtkExportTest3D()
     const auto system_manager   = makeAlgebraicSystem(comm, my_partition, no_condensation, problemdef_ctwrpr);
     auto       solution_manager = SolutionManager{my_partition, n_fields};
 
-    auto solution      = system_manager->makeSolutionVector();
-    auto solution_view = solution->get1dViewNonConst();
-    computeValuesAtNodes(
-        [&]([[maybe_unused]] const auto& vals, [[maybe_unused]] const auto& ders, const SpaceTimePoint& point) {
-            Eigen::Vector3d retval;
-            const auto&     p = point.space;
-            const auto      r = std::sqrt(p.x() * p.x() + p.y() * p.y() + p.z() * p.z());
-            retval[0]         = r;
-            retval[1]         = p.y();
-            retval[2]         = p.z();
-            return retval;
-        },
-        my_partition,
-        std::views::single(domain_id),
-        system_manager->getDofMap(),
-        ConstexprValue< domain_field_inds >{},
-        empty_field_val_getter,
-        solution_view);
-    computeValuesAtBoundaryNodes([&](const auto&,
-                                     const std::array< std::array< val_t, 0 >, 3 >&,
-                                     const auto&,
-                                     const Eigen::Vector3d& normal) -> Eigen::Vector3d { return normal; },
-                                 boundary,
-                                 system_manager->getDofMap(),
-                                 ConstexprValue< boundary_field_inds >{},
-                                 empty_field_val_getter,
-                                 solution_view);
+    auto solution = system_manager->makeSolutionVector();
+    {
+        auto solution_view = solution->get1dViewNonConst();
+        computeValuesAtNodes(
+            [&]([[maybe_unused]] const auto& vals, [[maybe_unused]] const auto& ders, const SpaceTimePoint& point) {
+                Eigen::Vector3d retval;
+                const auto&     p = point.space;
+                const auto      r = std::sqrt(p.x() * p.x() + p.y() * p.y() + p.z() * p.z());
+                retval[0]         = r;
+                retval[1]         = p.y();
+                retval[2]         = p.z();
+                return retval;
+            },
+            my_partition,
+            std::views::single(domain_id),
+            system_manager->getDofMap(),
+            ConstexprValue< domain_field_inds >{},
+            empty_field_val_getter,
+            solution_view);
+        computeValuesAtBoundaryNodes([&](const auto&,
+                                         const std::array< std::array< val_t, 0 >, 3 >&,
+                                         const auto&,
+                                         const Eigen::Vector3d& normal) -> Eigen::Vector3d { return normal; },
+                                     boundary,
+                                     system_manager->getDofMap(),
+                                     ConstexprValue< boundary_field_inds >{},
+                                     empty_field_val_getter,
+                                     solution_view);
 
+        solution->switchActiveMultiVector();
+        solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);
+        solution->switchActiveMultiVector();
+    }
     constexpr auto field_inds = makeIotaArray< size_t, n_fields >();
     system_manager->updateSolution(my_partition, solution, field_inds, solution_manager, field_inds);
 

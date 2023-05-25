@@ -1,7 +1,7 @@
 #ifndef L3STER_MESH_READMESH_HPP
 #define L3STER_MESH_READMESH_HPP
 
-#include "l3ster/mesh/Mesh.hpp"
+#include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/util/Assertion.hpp"
 #include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/Meta.hpp"
@@ -55,7 +55,7 @@ void reorderNodes(auto& nodes)
 }
 } // namespace detail
 
-inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh >)
+inline auto readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh >) -> MeshPartition< 1 >
 {
     L3STER_PROFILE_FUNCTION;
     const auto throw_error = [&file_path](std::string_view     message,
@@ -272,9 +272,9 @@ inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
     const auto parse_elements = [&](Format, const entity_data_t& entity_data, const node_data_t& node_data) {
         skip_until_section("$Elements", "'Elements' section not found");
 
-        typename MeshPartition::domain_map_t domain_map;
+        auto domain_map = MeshPartition< 1 >::domain_map_t{};
 
-        const auto parse_elements_asciiv4 = [&]() {
+        const auto parse_elements_asciiv4 = [&]() -> MeshPartition< 1 > {
             size_t n_blocks, n_elements, min_element_tag, max_element_tag, element_id = 0;
             file >> n_blocks >> n_elements >> min_element_tag >> max_element_tag;
 
@@ -296,13 +296,13 @@ inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
                 size_t block_size;
                 file >> entity_dim >> entity_tag >> element_type >> block_size;
 
-                Domain& block_domain = domain_map[entity_data.first[entity_dim].at(entity_tag)];
+                auto& block_domain = domain_map[entity_data.first[entity_dim].at(entity_tag)];
 
                 const auto push_elements = [&]< size_t I >(std::integral_constant< size_t, I >) {
                     constexpr auto el_type = detail::lookupElt< I >();
                     std::generate_n(block_domain.getBackInserter< el_type, 1 >(), block_size, [&] {
                         size_t element_tag;
-                        file >> element_tag; // throw away tag
+                        file >> element_tag; // discard tag
                         std::array< n_id_t, Element< el_type, 1 >::n_nodes > nodes;
                         std::copy_n(std::istream_iterator< n_id_t >(file), nodes.size(), begin(nodes));
                         detail::reorderNodes< el_type >(nodes);
@@ -331,7 +331,7 @@ inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
                 }
             }
             skip_until_section("$EndElements");
-            return MeshPartition{std::move(domain_map)};
+            return {std::move(domain_map)};
         };
 
         return parse_elements_asciiv4();
@@ -342,14 +342,10 @@ inline Mesh readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
     file.open(std::filesystem::path{file_path});
     util::throwingAssert(file.is_open(), "Could not open mesh file");
 
-    const auto format_data  = parse_format();
-    const auto entity_data  = parse_entities(format_data);
-    const auto node_data    = parse_nodes(format_data);
-    auto       element_data = parse_elements(format_data, entity_data, node_data);
-
-    std::vector< MeshPartition > parts;
-    parts.emplace_back(std::move(element_data));
-    return Mesh{std::move(parts)};
+    const auto format_data = parse_format();
+    const auto entity_data = parse_entities(format_data);
+    const auto node_data   = parse_nodes(format_data);
+    return parse_elements(format_data, entity_data, node_data);
 }
 } // namespace lstr
 #endif // L3STER_MESH_READMESH_HPP

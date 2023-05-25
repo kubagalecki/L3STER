@@ -16,13 +16,15 @@ namespace lstr
 class PvtuExporter
 {
 public:
-    inline PvtuExporter(const MeshPartition& mesh);
-    void        exportSolution(std::string_view                                                file_name,
-                               const MpiComm&                                                  comm,
-                               const SolutionManager&                                          solution_manager,
-                               SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
-                               SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds);
-    inline void updateNodeCoords(const MeshPartition& mesh);
+    template < el_o_t... orders >
+    explicit PvtuExporter(const MeshPartition< orders... >& mesh);
+    void exportSolution(std::string_view                                                file_name,
+                        const MpiComm&                                                  comm,
+                        const SolutionManager&                                          solution_manager,
+                        SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
+                        SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds);
+    template < el_o_t... orders >
+    void updateNodeCoords(const MeshPartition< orders... >& mesh);
 
 private:
     struct SectionSizes
@@ -39,7 +41,8 @@ private:
         MpiComm::Request                       request;
     };
 
-    inline void initTopo(const MeshPartition& mesh);
+    template < el_o_t... orders >
+    void initTopo(const MeshPartition< orders... >& mesh);
 
     void enqueuePvtuFileWrite(std::string_view                                                file_name,
                               const MpiComm&                                                  comm,
@@ -259,7 +262,8 @@ auto serializeElementSubtopo(const Element< ET, EO >& element)
     return retval;
 }
 
-inline std::array< size_t, 2 > getLocalTopoSize(const MeshPartition& mesh)
+template < el_o_t... orders >
+std::array< size_t, 2 > getLocalTopoSize(const MeshPartition< orders... >& mesh)
 {
     constexpr auto get_el_entries = []< ElementTypes ET, el_o_t EO >(const Element< ET, EO >&) {
         return std::array{numSubels< ET, EO >(), numSerialTopoEntries< ET, EO >()};
@@ -273,7 +277,8 @@ inline std::array< size_t, 2 > getLocalTopoSize(const MeshPartition& mesh)
         mesh.getDomainIds());
 }
 
-inline unsigned getLocalNodeIndex(const MeshPartition& mesh, n_id_t node)
+template < el_o_t... orders >
+unsigned getLocalNodeIndex(const MeshPartition< orders... >& mesh, n_id_t node)
 {
     const auto owned_find_result = std::ranges::lower_bound(mesh.getOwnedNodes(), node);
     if (owned_find_result != end(mesh.getOwnedNodes()) and *owned_find_result == node)
@@ -283,7 +288,8 @@ inline unsigned getLocalNodeIndex(const MeshPartition& mesh, n_id_t node)
                                    std::distance(begin(mesh.getGhostNodes()), ghost_find_result));
 }
 
-inline auto serializeTopology(const MeshPartition& mesh)
+template < el_o_t... orders >
+auto serializeTopology(const MeshPartition< orders... >& mesh)
 {
     constexpr auto n_unsigned_chars = sizeof(std::uint64_t) / sizeof(unsigned char);
     constexpr auto n_unsigneds      = sizeof(std::uint64_t) / sizeof(unsigned);
@@ -343,7 +349,8 @@ inline auto serializeTopology(const MeshPartition& mesh)
     return std::make_pair(sizes, std::move(b64_data));
 }
 
-inline std::string makeCoordsSerialized(const MeshPartition& mesh)
+template < el_o_t... orders >
+std::string makeCoordsSerialized(const MeshPartition< orders... >& mesh)
 {
     constexpr size_t space_dim        = 3;
     const auto       n_nodes          = mesh.getAllNodes().size();
@@ -430,8 +437,8 @@ auto encodeFieldImpl(SizedRangeOfConvertibleTo_c< std::span< const val_t > > aut
 auto encodeField(const SolutionManager& solution_manager, IndexRange_c auto&& component_inds) -> ArrayOwner< char >
 {
     const auto n_fields = std::ranges::size(component_inds);
-    if (n_fields == 0 or n_fields > 3)
-        throw std::runtime_error{"Field groupings must have size 1 (scalar), 2 (2D), or 3 (3D)"};
+    util::throwingAssert(n_fields != 0 and n_fields <= 3,
+                         "Field groupings must have size 1 (scalar), 2 (2D), or 3 (3D)");
 
     if (n_fields == 1) // Directly encode nodal values
     {
@@ -489,7 +496,8 @@ inline auto openVtuFile(std::string_view name, const MpiComm& comm)
 }
 } // namespace detail::vtk
 
-PvtuExporter::PvtuExporter(const MeshPartition& mesh) : m_n_nodes{mesh.getAllNodes().size()}
+template < el_o_t... orders >
+PvtuExporter::PvtuExporter(const MeshPartition< orders... >& mesh) : m_n_nodes{mesh.getAllNodes().size()}
 {
     L3STER_PROFILE_FUNCTION;
     updateNodeCoords(mesh);
@@ -503,8 +511,8 @@ void PvtuExporter::exportSolution(std::string_view                              
                                   SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds)
 {
     L3STER_PROFILE_FUNCTION;
-    if (std::ranges::size(field_names) != std::ranges::size(field_component_inds))
-        throw std::runtime_error{"exportSolution: field names and groupings must have the same size"};
+    util::throwingAssert(std::ranges::size(field_names) == std::ranges::size(field_component_inds),
+                         "Field names and groupings must have the same size");
 
     flushWriteQueue();
     if (comm.getRank() == 0)
@@ -516,13 +524,15 @@ void PvtuExporter::exportSolution(std::string_view                              
                         std::forward< decltype(field_component_inds) >(field_component_inds));
 }
 
-void PvtuExporter::updateNodeCoords(const MeshPartition& mesh)
+template < el_o_t... orders >
+void PvtuExporter::updateNodeCoords(const MeshPartition< orders... >& mesh)
 {
     flushWriteQueue(); // Async write of previous coords may be in flight
     m_encoded_coords = detail::vtk::makeCoordsSerialized(mesh);
 }
 
-void PvtuExporter::initTopo(const MeshPartition& mesh)
+template < el_o_t... orders >
+void PvtuExporter::initTopo(const MeshPartition< orders... >& mesh)
 {
     auto topo_serialization                                       = detail::vtk::serializeTopology(mesh);
     auto& [sizes, data]                                           = topo_serialization;

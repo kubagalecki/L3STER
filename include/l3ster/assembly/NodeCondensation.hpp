@@ -61,9 +61,10 @@ consteval auto getNumPrimaryNodes(ValuePack< CP, ET, EO > = {}) -> size_t
         std::decay_t< decltype(getPrimaryNodesArray< CP >(std::declval< Element< ET, EO > >())) > >;
 };
 
-template < CondensationPolicy CP, ProblemDef_c auto problem_def >
-auto getActiveNodes(const MeshPartition& mesh, ConstexprValue< problem_def >, CondensationPolicyTag< CP > = {})
-    -> std::vector< n_id_t >
+template < CondensationPolicy CP, ProblemDef_c auto problem_def, el_o_t... orders >
+auto getActiveNodes(const MeshPartition< orders... >& mesh,
+                    ConstexprValue< problem_def >,
+                    CondensationPolicyTag< CP > = {}) -> std::vector< n_id_t >
 {
     auto active_nodes_set = robin_hood::unordered_flat_set< n_id_t >{};
     mesh.visit(
@@ -99,10 +100,10 @@ auto unpackRangeFromComm(ArrayOwner< T >& message)
     return message | std::views::drop(1) | std::views::take(static_cast< size_t >(message.front()));
 }
 
-inline auto computeCondensedActiveNodeIds(const MpiComm&               comm,
-                                          const MeshPartition&         mesh,
-                                          const std::vector< n_id_t >& uncondensed_active_nodes)
-    -> std::vector< n_id_t >
+template < el_o_t... orders >
+auto computeCondensedActiveNodeIds(const MpiComm&                    comm,
+                                   const MeshPartition< orders... >& mesh,
+                                   const std::vector< n_id_t >&      uncondensed_active_nodes) -> std::vector< n_id_t >
 {
     const int my_rank   = comm.getRank();
     const int comm_size = comm.getSize();
@@ -154,7 +155,8 @@ inline auto computeCondensedActiveNodeIds(const MpiComm&               comm,
     return retval;
 }
 
-inline void activateOwned(const MpiComm& comm, const MeshPartition& mesh, std::vector< n_id_t >& my_active_nodes)
+template < el_o_t... orders >
+void activateOwned(const MpiComm& comm, const MeshPartition< orders... >& mesh, std::vector< n_id_t >& my_active_nodes)
 {
     const int my_rank     = comm.getRank();
     const int comm_size   = comm.getSize();
@@ -216,11 +218,11 @@ private:
     robin_hood::unordered_flat_map< n_id_t, n_id_t > m_forward_map, m_inverse_map;
 };
 
-template < CondensationPolicy CP, ProblemDef_c auto problem_def >
-auto makeCondensationMap(const MpiComm&                comm,
-                         const MeshPartition&          mesh,
-                         ConstexprValue< problem_def > probdef_ctwrpr,
-                         CondensationPolicyTag< CP >   cp_tag = {}) -> NodeCondensationMap< CP >
+template < CondensationPolicy CP, ProblemDef_c auto problem_def, el_o_t... orders >
+auto makeCondensationMap(const MpiComm&                    comm,
+                         const MeshPartition< orders... >& mesh,
+                         ConstexprValue< problem_def >     probdef_ctwrpr,
+                         CondensationPolicyTag< CP >       cp_tag = {}) -> NodeCondensationMap< CP >
 {
     auto active_nodes = getActiveNodes(mesh, probdef_ctwrpr, cp_tag);
     activateOwned(comm, mesh, active_nodes);
@@ -236,15 +238,15 @@ inline auto getLocalCondensedId(const NodeCondensationMap< CP >& cond_map, n_id_
                       std::ranges::lower_bound(cond_map.getCondensedIds(), cond_map.getCondensedId(node))));
 }
 
-template < CondensationPolicy CP >
-auto getCondensedOwnedNodesView(const MeshPartition& mesh, const NodeCondensationMap< CP >& cond_map)
+template < CondensationPolicy CP, el_o_t... orders >
+auto getCondensedOwnedNodesView(const MeshPartition< orders... >& mesh, const NodeCondensationMap< CP >& cond_map)
 {
     return cond_map.getCondensedIds() |
            std::views::filter([&](n_id_t node) { return mesh.isOwnedNode(cond_map.getUncondensedId(node)); });
 }
 
-template < CondensationPolicy CP >
-auto getCondensedGhostNodesView(const MeshPartition& mesh, const NodeCondensationMap< CP >& cond_map)
+template < CondensationPolicy CP, el_o_t... orders >
+auto getCondensedGhostNodesView(const MeshPartition< orders... >& mesh, const NodeCondensationMap< CP >& cond_map)
 {
     return cond_map.getCondensedIds() |
            std::views::filter([&](n_id_t node) { return mesh.isGhostNode(cond_map.getUncondensedId(node)); });

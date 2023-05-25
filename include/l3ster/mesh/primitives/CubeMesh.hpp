@@ -1,14 +1,14 @@
 #ifndef L3STER_CUBEMESH_HPP
 #define L3STER_CUBEMESH_HPP
 
-#include "l3ster/mesh/Mesh.hpp"
+#include "l3ster/mesh/MeshPartition.hpp"
 
 namespace lstr
 {
 template < std::ranges::random_access_range Rx,
            std::ranges::random_access_range Ry,
            std::ranges::random_access_range Rz >
-inline Mesh makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz)
+auto makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz) -> MeshPartition< 1 >
     requires std::convertible_to< std::ranges::range_value_t< std::decay_t< Rx > >, val_t > and
              std::convertible_to< std::ranges::range_value_t< std::decay_t< Ry > >, val_t > and
              std::convertible_to< std::ranges::range_value_t< std::decay_t< Rz > >, val_t >
@@ -20,7 +20,7 @@ inline Mesh makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz)
     const size_t e_dy = n_dy - 1;
     const size_t e_dz = n_dz - 1;
 
-    MeshPartition::domain_map_t domains;
+    auto domains = MeshPartition< 1 >::domain_map_t{};
     domains[0].reserve< ElementTypes::Hex, 1 >(e_dx * e_dy * e_dz);
     domains[1].reserve< ElementTypes::Quad, 1 >(e_dx * e_dy);
     domains[2].reserve< ElementTypes::Quad, 1 >(e_dx * e_dy);
@@ -131,11 +131,11 @@ inline Mesh makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz)
 
     std::vector< n_id_t > nodes(n_dx * n_dy * n_dz);
     std::iota(begin(nodes), end(nodes), 0u);
-    return Mesh{{MeshPartition{std::move(domains), std::move(nodes), std::vector< n_id_t >{}}}};
+    return {std::move(domains), std::move(nodes), std::vector< n_id_t >{}};
 }
 
 template < std::ranges::random_access_range R >
-inline Mesh makeCubeMesh(R&& dist)
+auto makeCubeMesh(R&& dist) -> MeshPartition< 1 >
     requires std::convertible_to< std::ranges::range_value_t< std::decay_t< R > >, val_t >
 {
     return makeCubeMesh(dist, dist, dist);

@@ -236,6 +236,19 @@ void sortRemoveDup(std::vector< T >& vec)
     vec.erase(erase_range.begin(), erase_range.end());
     vec.shrink_to_fit();
 }
+
+template < std::array array >
+constexpr auto sortedUniqueElements()
+{
+    const auto n_unique = std::invoke([] {
+        auto a = array;
+        std::ranges::sort(a);
+        return static_cast< std::size_t >(std::distance(a.begin(), std::ranges::unique(a).begin()));
+    });
+    auto       retval   = std::array< typename decltype(array)::value_type, n_unique >{};
+    std::ranges::unique_copy(array, retval.begin());
+    return retval;
+}
 } // namespace util
 } // namespace lstr
 #endif // L3STER_UTIL_ALGORITHM_HPP
