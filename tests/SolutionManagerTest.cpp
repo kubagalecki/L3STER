@@ -14,9 +14,10 @@ TEST_CASE("Solution Manager", "[sol_man]")
     const auto       partitions = partitionMesh(mesh, n_parts, {});
     constexpr size_t n_fields   = 3;
     auto             sol_mans   = std::vector< SolutionManager >{};
-    std::ranges::transform(partitions, std::back_inserter(sol_mans), [&, i = 0](const MeshPartition& part) mutable {
-        return SolutionManager{part, n_fields, static_cast< val_t >(i++)};
-    });
+    std::ranges::transform(
+        partitions, std::back_inserter(sol_mans), [&, i = 0](const MeshPartition< 1 >& part) mutable {
+            return SolutionManager{part, n_fields, static_cast< val_t >(i++)};
+        });
 
     REQUIRE(std::ranges::all_of(sol_mans, [&](const SolutionManager& sm) { return sm.nFields() == n_fields; }));
     for (size_t i = 0; const auto& sm : sol_mans)

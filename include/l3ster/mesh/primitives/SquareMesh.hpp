@@ -6,7 +6,7 @@
 namespace lstr
 {
 template < std::ranges::random_access_range Rx, std::ranges::random_access_range Ry >
-auto makeSquareMesh(Rx&& distx, Ry&& disty) -> MeshPartition
+auto makeSquareMesh(Rx&& distx, Ry&& disty) -> MeshPartition< 1 >
     requires std::convertible_to< std::ranges::range_value_t< std::decay_t< Rx > >, val_t > and
              std::convertible_to< std::ranges::range_value_t< std::decay_t< Ry > >, val_t >
 {
@@ -15,7 +15,7 @@ auto makeSquareMesh(Rx&& distx, Ry&& disty) -> MeshPartition
     const size_t e_dx = n_dx - 1;
     const size_t e_dy = n_dy - 1;
 
-    MeshPartition::domain_map_t domains;
+    auto domains = MeshPartition< 1 >::domain_map_t{};
     domains[0].reserve< ElementTypes::Quad, 1 >(e_dx * e_dy);
     domains[1].reserve< ElementTypes::Line, 1 >(e_dx);
     domains[2].reserve< ElementTypes::Line, 1 >(e_dx);
@@ -75,7 +75,7 @@ auto makeSquareMesh(Rx&& distx, Ry&& disty) -> MeshPartition
 }
 
 template < std::ranges::random_access_range R >
-auto makeSquareMesh(R&& dist) -> MeshPartition
+auto makeSquareMesh(R&& dist) -> MeshPartition< 1 >
     requires std::convertible_to< std::ranges::range_value_t< std::decay_t< R > >, val_t >
 {
     return makeSquareMesh(dist, dist);

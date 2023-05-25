@@ -11,9 +11,9 @@
 
 using namespace lstr;
 
-template < CondensationPolicy CP, detail::ProblemDef_c auto problem_def >
-static auto makeLocalCondensationMap(const MeshPartition&          mesh,
-                                     ConstexprValue< problem_def > probdef_ctwrpr,
+template < el_o_t... orders, CondensationPolicy CP, detail::ProblemDef_c auto problem_def >
+static auto makeLocalCondensationMap(const MeshPartition< orders... >& mesh,
+                                     ConstexprValue< problem_def >     probdef_ctwrpr,
                                      CondensationPolicyTag< CP > = {}) -> detail::NodeCondensationMap< CP >
 {
     const auto active_nodes    = detail::getActiveNodes< CP >(mesh, probdef_ctwrpr);

@@ -38,7 +38,8 @@ inline void logErrorAndTerminate(std::string_view err_msg)
         {}                                                                                                             \
     })
 
-inline void describeMesh(const lstr::MpiComm& comm, const lstr::MeshPartition& mesh)
+template < lstr::el_o_t... orders >
+void describeMesh(const lstr::MpiComm& comm, const lstr::MeshPartition< orders... >& mesh)
 {
     for (int rank = 0; rank < comm.getSize(); ++rank)
     {

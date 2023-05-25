@@ -6,11 +6,12 @@
 
 using namespace lstr;
 
-bool compareEqual(const MeshPartition& p1, const MeshPartition& p2)
+template < el_o_t... orders >
+bool compareEqual(const MeshPartition< orders... >& p1, const MeshPartition< orders... >& p2)
 {
     bool result = true;
 
-    p1.visit([&]< ElementTypes T1, el_o_t O1 >(const Element< T1, O1 >& el1, DomainView dv) {
+    p1.visit([&]< ElementTypes T1, el_o_t O1 >(const Element< T1, O1 >& el1, DomainView< orders... > dv) {
         const auto matched = p2.find(el1.getId());
 
         if (not matched or dv.getID() != matched->second)
@@ -36,7 +37,7 @@ TEST_CASE("Mesh serialization", "[mesh-serial]")
 {
     const auto mesh              = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::gmsh_tag);
     const auto serialized_mesh   = SerializedPartition{mesh};
-    const auto deserialized_mesh = deserializePartition(serialized_mesh);
+    const auto deserialized_mesh = deserializePartition< 1 >(serialized_mesh);
 
     CHECK(std::ranges::equal(deserialized_mesh.getOwnedNodes(), mesh.getOwnedNodes()));
     CHECK(std::ranges::equal(deserialized_mesh.getGhostNodes(), mesh.getGhostNodes()));

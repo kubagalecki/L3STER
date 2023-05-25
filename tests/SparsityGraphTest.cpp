@@ -12,8 +12,8 @@ using namespace lstr;
 class DenseGraph
 {
 public:
-    template < auto problem_def, CondensationPolicy CP >
-    DenseGraph(const MeshPartition&                                                        mesh,
+    template < el_o_t... orders, auto problem_def, CondensationPolicy CP >
+    DenseGraph(const MeshPartition< orders... >&                                           mesh,
                ConstexprValue< problem_def >                                               problemdef_ctwrpr,
                const detail::node_interval_vector_t< detail::deduceNFields(problem_def) >& dof_intervals,
                const detail::NodeCondensationMap< CP >&                                    cond_map)
@@ -71,25 +71,14 @@ private:
 template < CondensationPolicy CP >
 void test()
 {
-    const auto    comm = MpiComm{MPI_COMM_WORLD};
-    MeshPartition mesh, full_mesh;
-    if (comm.getRank() == 0)
-    {
+    const auto comm         = MpiComm{MPI_COMM_WORLD};
+    const auto full_mesh    = std::invoke([] {
         constexpr auto node_dist = std::array{0., 1., 2., 3., 4.};
-        mesh                     = makeCubeMesh(node_dist);
+        auto           mesh      = makeCubeMesh(node_dist);
         mesh.initDualGraph();
-        full_mesh                   = convertMeshToOrder< 2 >(mesh);
-        const auto full_mesh_serial = SerializedPartition{full_mesh};
-        for (int dest_rank = 1; dest_rank < comm.getSize(); ++dest_rank)
-            sendPartition(comm, full_mesh_serial, dest_rank);
-        mesh = full_mesh;
-    }
-    else
-    {
-        const auto full_mesh_serial = receivePartition(comm, 0);
-        full_mesh                   = deserializePartition(full_mesh_serial);
-    }
-    const auto my_partition = distributeMesh(comm, mesh, {1, 3});
+        return convertMeshToOrder< 2 >(mesh);
+    });
+    const auto my_partition = distributeMesh(comm, full_mesh, {1, 3});
 
     constexpr auto problem_def    = std::array{Pair{d_id_t{0}, std::array{false, true}},
                                             Pair{d_id_t{1}, std::array{true, false}},

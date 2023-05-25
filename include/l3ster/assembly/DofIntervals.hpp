@@ -39,9 +39,9 @@ auto computeDofIntervalsFromNodeData(const NodeCondensationMap< CP >&           
     return retval;
 }
 
-template < CondensationPolicy CP, ProblemDef_c auto problem_def >
-auto makeFieldCoverageVector(const MeshPartition&             mesh,
-                             const NodeCondensationMap< CP >& cond_map,
+template < CondensationPolicy CP, ProblemDef_c auto problem_def, el_o_t... orders >
+auto makeFieldCoverageVector(const MeshPartition< orders... >& mesh,
+                             const NodeCondensationMap< CP >&  cond_map,
                              ConstexprValue< problem_def >) -> std::vector< std::bitset< deduceNFields(problem_def) > >
 {
     auto retval = std::vector< std::bitset< deduceNFields(problem_def) > >(cond_map.getCondensedIds().size());
@@ -61,10 +61,10 @@ auto makeFieldCoverageVector(const MeshPartition&             mesh,
     return retval;
 }
 
-template < CondensationPolicy CP, ProblemDef_c auto problem_def >
-auto computeLocalDofIntervals(const MeshPartition&             mesh,
-                              const NodeCondensationMap< CP >& cond_map,
-                              ConstexprValue< problem_def >    problemdef_ctwrapper)
+template < CondensationPolicy CP, ProblemDef_c auto problem_def, el_o_t... orders >
+auto computeLocalDofIntervals(const MeshPartition< orders... >& mesh,
+                              const NodeCondensationMap< CP >&  cond_map,
+                              ConstexprValue< problem_def >     problemdef_ctwrapper)
     -> node_interval_vector_t< deduceNFields(problem_def) >
 {
     const auto field_coverage = makeFieldCoverageVector(mesh, cond_map, problemdef_ctwrapper);
@@ -291,9 +291,9 @@ I findNodeInterval(I begin, S end, n_id_t node)
 }
 } // namespace detail
 
-template < CondensationPolicy CP, detail::ProblemDef_c auto problem_def >
+template < CondensationPolicy CP, detail::ProblemDef_c auto problem_def, el_o_t... orders >
 auto computeDofIntervals(const MpiComm&                           comm,
-                         const MeshPartition&                     mesh,
+                         const MeshPartition< orders... >&        mesh,
                          const detail::NodeCondensationMap< CP >& cond_map,
                          ConstexprValue< problem_def >            problemdef_ctwrapper)
     -> detail::node_interval_vector_t< detail::deduceNFields(problem_def) >

@@ -12,13 +12,6 @@
 
 using namespace lstr;
 
-TEST_CASE("Declare element orders", "[mesh]")
-{
-    REQUIRE(element_orders.size() == 2);
-    CHECK(element_orders.front() == 1);
-    CHECK(element_orders.back() == 2);
-}
-
 TEST_CASE("2D mesh import", "[mesh]")
 {
     auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag);
@@ -38,7 +31,7 @@ TEST_CASE("2D mesh import", "[mesh]")
 
     // BoundaryView
     mesh.initDualGraph();
-    std::vector< BoundaryView > boundaries;
+    std::vector< BoundaryView< 1 > > boundaries;
     boundaries.reserve(4);
     for (d_id_t i = 2; i <= 5; ++i)
         boundaries.push_back(mesh.getBoundaryView(i));
@@ -75,16 +68,16 @@ TEST_CASE("Unsupported mesh formats, mesh I/O error handling", "[mesh]")
 
 TEST_CASE("Incorrect domain dim handling", "[mesh]")
 {
-    Domain d;
+    auto domain = Domain< 1 >{};
 
     ElementData< ElementTypes::Line, 1 > data{{Point{0., 0., 0.}, Point{0., 0., 0.}}};
     std::array< n_id_t, 2 >              nodes{1, 2};
     el_id_t                              id = 1;
-    d.reserve< ElementTypes::Line, 1 >(1);
-    d.emplaceBack< ElementTypes::Line, 1 >(nodes, data, id++);
-    d.reserve< ElementTypes::Line, 1 >(1);
-    CHECK_THROWS(d.reserve< ElementTypes::Quad, 1 >(1));
-    CHECK_THROWS(d.getElementVector< ElementTypes::Quad, 1 >());
+    domain.reserve< ElementTypes::Line, 1 >(1);
+    domain.emplaceBack< ElementTypes::Line, 1 >(nodes, data, id++);
+    domain.reserve< ElementTypes::Line, 1 >(1);
+    CHECK_THROWS(domain.reserve< ElementTypes::Quad, 1 >(1));
+    CHECK_THROWS(domain.getElementVector< ElementTypes::Quad, 1 >());
 }
 
 TEMPLATE_TEST_CASE("Iteration over elements",
@@ -116,40 +109,40 @@ TEMPLATE_TEST_CASE("Iteration over elements",
     CHECK(count == n_faces + n_vols);
     count = 0;
 
-    mesh.visit([&count](const auto&, DomainView) { ++std::atomic_ref{count}; }, policy);
+    mesh.visit([&count](const auto&, DomainView< 1 >) { ++std::atomic_ref{count}; }, policy);
     CHECK(count == n_faces + n_vols);
     count = 0;
 
-    std::as_const(mesh).visit([&count](const auto&, DomainView) { ++std::atomic_ref{count}; }, policy);
+    std::as_const(mesh).visit([&count](const auto&, DomainView< 1 >) { ++std::atomic_ref{count}; }, policy);
     CHECK(count == n_faces + n_vols);
     count = 0;
 
     mesh.visit(
-        element_counter, [](const DomainView& dv) { return dv.getDim() == 2; }, policy);
+        element_counter, [](DomainView< 1 > dv) { return dv.getDim() == 2; }, policy);
     CHECK(count == n_faces);
     count = 0;
 
     std::as_const(mesh).visit(
-        element_counter, [](const DomainView& dv) { return dv.getDim() == 2; }, policy);
+        element_counter, [](DomainView< 1 > dv) { return dv.getDim() == 2; }, policy);
     CHECK(count == n_faces);
     count = 0;
 
     mesh.visit(
-        [&count](const auto&, DomainView dv) {
+        [&count](const auto&, DomainView< 1 > dv) {
             ++std::atomic_ref{count};
             CHECK(dv.getDim() == 2);
         },
-        [](const DomainView& dv) { return dv.getDim() == 2; },
+        [](DomainView< 1 > dv) { return dv.getDim() == 2; },
         policy);
     CHECK(count == n_faces);
     count = 0;
 
     std::as_const(mesh).visit(
-        [&count](const auto&, DomainView dv) {
+        [&count](const auto&, DomainView< 1 > dv) {
             ++std::atomic_ref{count};
             CHECK(dv.getDim() == 2);
         },
-        [](const DomainView& dv) { return dv.getDim() == 2; },
+        [](DomainView< 1 > dv) { return dv.getDim() == 2; },
         policy);
     CHECK(count == n_faces);
     count = 0;
@@ -163,7 +156,7 @@ TEMPLATE_TEST_CASE("Iteration over elements",
     count = 0;
 
     mesh.visit(
-        [&count](const auto&, DomainView dv) {
+        [&count](const auto&, DomainView< 1 > dv) {
             ++std::atomic_ref{count};
             CHECK(dv.getDim() == 2);
         },
@@ -173,7 +166,7 @@ TEMPLATE_TEST_CASE("Iteration over elements",
     count = 0;
 
     std::as_const(mesh).visit(
-        [&count](const auto&, DomainView dv) {
+        [&count](const auto&, DomainView< 1 > dv) {
             ++std::atomic_ref{count};
             CHECK(dv.getDim() == 2);
         },
@@ -205,7 +198,7 @@ TEMPLATE_TEST_CASE("Element lookup", "[mesh]", std::execution::sequenced_policy,
             std::ranges::sort(element_nodes);
             return std::ranges::equal(element_nodes, existing_nodes);
         },
-        [](DomainView dv) { return dv.getDim() == 2; },
+        [](DomainView< 1 > dv) { return dv.getDim() == 2; },
         policy));
     CHECK_FALSE(mesh.find(
         [&](const auto& element) {
@@ -214,24 +207,24 @@ TEMPLATE_TEST_CASE("Element lookup", "[mesh]", std::execution::sequenced_policy,
             return std::ranges::equal(element_nodes, fake_nodes);
         },
         policy));
-    CHECK_FALSE(MeshPartition{}.find([](const auto&) { return true; }, policy));
-    CHECK_FALSE(MeshPartition{}.find(0));
+    CHECK_FALSE(MeshPartition< 1 >{}.find([](const auto&) { return true; }, policy));
+    CHECK_FALSE(MeshPartition< 1 >{}.find(0));
 }
 
 TEST_CASE("Element lookup by ID", "[mesh]")
 {
-    Domain d;
-    CHECK_FALSE(d.find(1));
-    CHECK_FALSE(std::as_const(d).find(1));
+    auto domain = Domain< 1 >{};
+    CHECK_FALSE(domain.find(1));
+    CHECK_FALSE(std::as_const(domain).find(1));
 
     ElementData< ElementTypes::Line, 1 > data{{Point{0., 0., 0.}, Point{0., 0., 0.}}};
     std::array< n_id_t, 2 >              nodes{1, 2};
     el_id_t                              id = 1;
-    d.reserve< ElementTypes::Line, 1 >(1);
-    CHECK_FALSE(d.find(1));
-    d.emplaceBack< ElementTypes::Line, 1 >(nodes, data, id++);
-    CHECK(d.find(1));
-    CHECK_FALSE(d.find(0));
+    domain.reserve< ElementTypes::Line, 1 >(1);
+    CHECK_FALSE(domain.find(1));
+    domain.emplaceBack< ElementTypes::Line, 1 >(nodes, data, id++);
+    CHECK(domain.find(1));
+    CHECK_FALSE(domain.find(0));
 
     const auto next = [&]() -> std::array< n_id_t, 2 >& {
         std::ranges::for_each(nodes, [](auto& n) { ++n; });
@@ -239,15 +232,15 @@ TEST_CASE("Element lookup by ID", "[mesh]")
     };
 
     for (size_t i = 0; i < 10; ++i)
-        d.emplaceBack< ElementTypes::Line, 1 >(next(), data, id++);
-    CHECK(d.find(10));
+        domain.emplaceBack< ElementTypes::Line, 1 >(next(), data, id++);
+    CHECK(domain.find(10));
 
-    d.emplaceBack< ElementTypes::Line, 1 >(next(), data, 0);
-    CHECK(d.find(0));
+    domain.emplaceBack< ElementTypes::Line, 1 >(next(), data, 0);
+    CHECK(domain.find(0));
 
-    d.emplaceBack< ElementTypes::Line, 1 >(next(), data, id *= 2);
-    CHECK(d.find(id));
-    CHECK_FALSE(d.find(id + 1));
+    domain.emplaceBack< ElementTypes::Line, 1 >(next(), data, id *= 2);
+    CHECK(domain.find(id));
+    CHECK_FALSE(domain.find(id + 1));
 }
 
 TEST_CASE("Serial mesh partitioning", "[mesh]")
@@ -258,9 +251,10 @@ TEST_CASE("Serial mesh partitioning", "[mesh]")
     REQUIRE_NOTHROW(partitionMesh(mesh, 1, {}));
     const auto partitions = partitionMesh(mesh, n_parts, {2, 3, 4, 5});
     REQUIRE(partitions.size() == n_parts);
-    REQUIRE(std::transform_reduce(partitions.cbegin(), partitions.cend(), 0u, std::plus{}, [](const MeshPartition& p) {
-                return p.getNElements();
-            }) == n_elements);
+    REQUIRE(
+        std::transform_reduce(partitions.cbegin(), partitions.cend(), 0u, std::plus{}, [](const MeshPartition< 1 >& p) {
+            return p.getNElements();
+        }) == n_elements);
     CHECK(partitions.front().getNElements() == Approx(partitions.back().getNElements()).epsilon(.1));
     std::vector< n_id_t > intersects;
     std::ranges::set_intersection(
@@ -279,7 +273,7 @@ TEST_CASE("Boundary views in partitioned meshes", "[mesh]")
     constexpr auto n_parts          = 8u;
     constexpr auto node_dist        = std::array{0., 1., 2., 3., 4., 5., 6., 7., 8.};
     const auto     mesh             = makeCubeMesh(node_dist);
-    auto           partitions       = std::vector< MeshPartition >{};
+    auto           partitions       = std::vector< MeshPartition< 1 > >{};
     const auto     check_boundaries = [&] {
         for (auto&& part : partitions)
         {
@@ -314,13 +308,13 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
     SECTION("mesh imported from gmsh")
     {
         constexpr el_o_t order      = 2;
-        auto             mesh       = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), gmsh_tag);
-        const auto       n_elements = mesh.getNElements();
+        auto             mesh1      = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), gmsh_tag);
+        const auto       n_elements = mesh1.getNElements();
 
-        CHECK_THROWS(convertMeshToOrder< order >(mesh));
+        CHECK_THROWS(convertMeshToOrder< order >(mesh1));
 
-        mesh.initDualGraph();
-        mesh = convertMeshToOrder< order >(mesh);
+        mesh1.initDualGraph();
+        auto mesh = convertMeshToOrder< order >(mesh1);
         CHECK(n_elements == mesh.getNElements());
         const auto validate_elorder = [&]< ElementTypes T, el_o_t O >(const Element< T, O >&) {
             if constexpr (O != 2)
@@ -337,23 +331,18 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
         constexpr el_o_t     order = 2;
         constexpr std::array dist{0., .2, .4, .6, .8, 10.};
         constexpr auto       n_edge_els = dist.size() - 1;
-        auto                 mesh       = makeCubeMesh(dist);
-        mesh.initDualGraph();
-        const auto n_elements = mesh.getNElements();
-        const auto n_nodes_o1 = mesh.getOwnedNodes().size();
+        auto                 mesh1      = makeCubeMesh(dist);
+        mesh1.initDualGraph();
+        const auto n_elements = mesh1.getNElements();
+        const auto n_nodes_o1 = mesh1.getOwnedNodes().size();
         REQUIRE(n_elements == n_edge_els * n_edge_els * n_edge_els + 6 * n_edge_els * n_edge_els);
         REQUIRE(n_nodes_o1 == dist.size() * dist.size() * dist.size());
 
-        mesh = convertMeshToOrder< order >(mesh);
+        auto mesh = convertMeshToOrder< order >(mesh1);
         CHECK(mesh.getNElements() == n_elements);
         const auto expected_edge_nodes = (dist.size() - 1) * order + 1;
         const auto expected_n_nodes    = expected_edge_nodes * expected_edge_nodes * expected_edge_nodes;
         CHECK(mesh.getOwnedNodes().size() == expected_n_nodes);
-        const auto validate_elorder = [&]< ElementTypes T, el_o_t O >(const Element< T, O >&) {
-            if constexpr (O != 2)
-                throw std::logic_error{"Incorrect element order"};
-        };
-        CHECK_NOTHROW(mesh.visit(validate_elorder));
         for (size_t i = 0; i < mesh.getOwnedNodes().size() - 1; ++i)
             CHECK(mesh.getOwnedNodes()[i] + 1 == mesh.getOwnedNodes()[i + 1]);
     }

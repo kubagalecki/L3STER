@@ -24,7 +24,7 @@ public:
     static constexpr size_t n_nodes    = ElementTraits< Element< T, O > >::nodes_per_element;
     static constexpr auto   native_dim = ElementTraits< Element< T, O > >::native_dim;
     using node_array_t                 = std::array< n_id_t, n_nodes >;
-    using element_data_t               = ElementData< T, O >::ElementData;
+    using element_data_t               = ElementData< T, O >;
 
     Element(const node_array_t& nodes_, const element_data_t& data_, el_id_t id_) noexcept
         : nodes{nodes_}, data{data_}, id{id_}

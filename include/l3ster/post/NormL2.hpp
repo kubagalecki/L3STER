@@ -19,10 +19,10 @@ consteval auto doubleQuadratureOrder(ConstexprValue< opts >)
 }
 } // namespace detail
 
-template < size_t n_fields = 0, AssemblyOptions opts = {} >
+template < size_t n_fields = 0, AssemblyOptions opts = {}, el_o_t... orders >
 auto computeNormL2(const MpiComm&                                       comm,
                    auto&&                                               eval_residual,
-                   const MeshPartition&                                 mesh,
+                   const MeshPartition< orders... >&                    mesh,
                    detail::DomainIdRange_c auto&&                       domain_ids,
                    const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
                    ConstexprValue< opts >                               options_ctwrpr   = {},
@@ -50,10 +50,10 @@ auto computeNormL2(const MpiComm&                                       comm,
     return ret_t{squared_norm.cwiseSqrt()};
 }
 
-template < size_t n_fields = 0, AssemblyOptions opts = {} >
+template < size_t n_fields = 0, AssemblyOptions opts = {}, el_o_t... orders >
 auto computeBoundaryNormL2(const MpiComm&                                       comm,
                            auto&&                                               eval_residual,
-                           const BoundaryView&                                  boundary,
+                           const BoundaryView< orders... >&                     boundary,
                            const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
                            ConstexprValue< opts >                               options_ctwrpr   = {},
                            val_t                                                time             = 0.)

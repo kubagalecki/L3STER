@@ -43,7 +43,7 @@ concept ValueAtNodeBoundaryKernel_c =
                            SpaceTimePoint,
                            Eigen::Vector< val_t, dim > >::RowsAtCompileTime == result_size);
 
-template < typename Kernel, size_t n_fields, size_t results_size >
+template < typename Kernel, size_t n_fields, size_t results_size, el_o_t... orders >
 struct PotentiallyValidNodalKernelDeductionHelper
 {
     template < ElementTypes T, el_o_t O >
@@ -52,7 +52,8 @@ struct PotentiallyValidNodalKernelDeductionHelper
         static constexpr bool value =
             ValueAtNodeKernel_c< Kernel, n_fields, Element< T, O >::native_dim, results_size >;
     };
-    static constexpr bool domain = assert_any_element< DeductionHelperDomain >;
+    static constexpr bool domain =
+        ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
 
     template < ElementTypes T, el_o_t O >
     struct DeductionHelperBoundary
@@ -60,17 +61,18 @@ struct PotentiallyValidNodalKernelDeductionHelper
         static constexpr bool value =
             ValueAtNodeBoundaryKernel_c< Kernel, n_fields, Element< T, O >::native_dim, results_size >;
     };
-    static constexpr bool boundary = assert_any_element< DeductionHelperBoundary >;
+    static constexpr bool boundary =
+        ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperBoundary >;
 };
-template < typename Kernel, size_t n_fields, size_t results_size >
+template < typename Kernel, size_t n_fields, size_t results_size, el_o_t... orders >
 concept PotentiallyValidNodalKernel_c =
-    PotentiallyValidNodalKernelDeductionHelper< Kernel, n_fields, results_size >::domain;
-template < typename Kernel, size_t n_fields, size_t results_size >
+    PotentiallyValidNodalKernelDeductionHelper< Kernel, n_fields, results_size, orders... >::domain;
+template < typename Kernel, size_t n_fields, size_t results_size, el_o_t... orders >
 concept PotentiallyValidBoundaryNodalKernel_c =
-    PotentiallyValidNodalKernelDeductionHelper< Kernel, n_fields, results_size >::boundary;
+    PotentiallyValidNodalKernelDeductionHelper< Kernel, n_fields, results_size, orders... >::boundary;
 
-template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
-auto initValsAndParents(const MeshPartition&                                    mesh,
+template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
+auto initValsAndParents(const MeshPartition< orders... >&                       mesh,
                         detail::DomainIdRange_c auto&&                          domain_ids,
                         const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                         ConstexprValue< dof_inds >                              dofinds_ctwrpr,
@@ -96,8 +98,8 @@ auto initValsAndParents(const MeshPartition&                                    
         return {};
 }
 
-template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
-auto initValsAndParents(const BoundaryView&                                     boundary,
+template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
+auto initValsAndParents(const BoundaryView< orders... >&                        boundary,
                         const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                         ConstexprValue< dof_inds >                              dofinds_ctwrpr,
                         const SolutionManager::FieldValueGetter< n_fields >&,
@@ -119,8 +121,8 @@ auto initValsAndParents(const BoundaryView&                                     
 }
 } // namespace detail
 
-template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps >
-void computeValuesAtNodes(const MeshPartition&                                    mesh,
+template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps >
+void computeValuesAtNodes(const MeshPartition< orders... >&                       mesh,
                           detail::DomainIdRange_c auto&&                          domain_ids,
                           const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                           ConstexprValue< dof_inds >                              dofinds_ctwrpr,
@@ -142,16 +144,17 @@ void computeValuesAtNodes(const MeshPartition&                                  
     mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
 }
 
-template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
+template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
 void computeValuesAtNodes(auto&&                                                  kernel,
-                          const MeshPartition&                                    mesh,
+                          const MeshPartition< orders... >&                       mesh,
                           detail::DomainIdRange_c auto&&                          domain_ids,
                           const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                           ConstexprValue< dof_inds >                              dofinds_ctwrpr,
                           const SolutionManager::FieldValueGetter< n_fields >&    field_val_getter,
                           std::span< val_t >                                      values,
                           val_t                                                   time = 0.)
-    requires detail::PotentiallyValidNodalKernel_c< decltype(kernel), n_fields, std::ranges::size(dof_inds) > and
+    requires detail::
+                 PotentiallyValidNodalKernel_c< decltype(kernel), n_fields, std::ranges::size(dof_inds), orders... > and
              (std::ranges::all_of(dof_inds, [](size_t dof) { return dof < max_dofs_per_node; }))
 {
     L3STER_PROFILE_FUNCTION;
@@ -202,16 +205,18 @@ void computeValuesAtNodes(auto&&                                                
     mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
 }
 
-template < size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
+template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
 void computeValuesAtBoundaryNodes(auto&&                                                  kernel,
-                                  const BoundaryView&                                     boundary,
+                                  const BoundaryView< orders... >&                        boundary,
                                   const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                                   ConstexprValue< dof_inds >                              dofinds_ctwrpr,
                                   const SolutionManager::FieldValueGetter< n_fields >&    field_val_getter,
                                   std::span< val_t >                                      values,
                                   val_t                                                   time = 0.)
-    requires detail::
-                 PotentiallyValidBoundaryNodalKernel_c< decltype(kernel), n_fields, std::ranges::size(dof_inds) > and
+    requires detail::PotentiallyValidBoundaryNodalKernel_c< decltype(kernel),
+                                                            n_fields,
+                                                            std::ranges::size(dof_inds),
+                                                            orders... > and
              (std::ranges::all_of(dof_inds, [](size_t dof) { return dof < max_dofs_per_node; }))
 {
     L3STER_PROFILE_FUNCTION;

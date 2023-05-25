@@ -8,7 +8,7 @@ namespace lstr
 template < std::ranges::random_access_range Rx,
            std::ranges::random_access_range Ry,
            std::ranges::random_access_range Rz >
-auto makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz) -> MeshPartition
+auto makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz) -> MeshPartition< 1 >
     requires std::convertible_to< std::ranges::range_value_t< std::decay_t< Rx > >, val_t > and
              std::convertible_to< std::ranges::range_value_t< std::decay_t< Ry > >, val_t > and
              std::convertible_to< std::ranges::range_value_t< std::decay_t< Rz > >, val_t >
@@ -20,7 +20,7 @@ auto makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz) -> MeshPartition
     const size_t e_dy = n_dy - 1;
     const size_t e_dz = n_dz - 1;
 
-    MeshPartition::domain_map_t domains;
+    auto domains = MeshPartition< 1 >::domain_map_t{};
     domains[0].reserve< ElementTypes::Hex, 1 >(e_dx * e_dy * e_dz);
     domains[1].reserve< ElementTypes::Quad, 1 >(e_dx * e_dy);
     domains[2].reserve< ElementTypes::Quad, 1 >(e_dx * e_dy);
@@ -135,7 +135,7 @@ auto makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz) -> MeshPartition
 }
 
 template < std::ranges::random_access_range R >
-auto makeCubeMesh(R&& dist) -> MeshPartition
+auto makeCubeMesh(R&& dist) -> MeshPartition< 1 >
     requires std::convertible_to< std::ranges::range_value_t< std::decay_t< R > >, val_t >
 {
     return makeCubeMesh(dist, dist, dist);

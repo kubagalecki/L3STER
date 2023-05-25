@@ -415,7 +415,8 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
     constexpr q_o_t QO = 5;
     constexpr auto  BT = BasisTypes::Lagrange;
 
-    constexpr auto check_all_in_plane = [](const BoundaryView& view, Space normal, val_t offs) {
+    constexpr auto check_all_in_plane = []< el_o_t... orders >(
+                                            const BoundaryView< orders... >& view, Space normal, val_t offs) {
         const auto space_ind = std::invoke(
             [](Space s) {
                 int retval{};

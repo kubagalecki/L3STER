@@ -9,8 +9,8 @@ namespace lstr
 namespace detail
 {
 template < ElementTypes T, el_o_t O >
-std::vector< Element< T, O > >
-deserializeElementVector(const n_id_t*& nodes, const val_t*& data, const el_id_t*& ids, size_t size)
+auto deserializeElementVector(const n_id_t*& nodes, const val_t*& data, const el_id_t*& ids, size_t size)
+    -> std::vector< Element< T, O > >
 {
     using node_array_t             = Element< T, O >::node_array_t;
     using data_array_t             = Element< T, O >::element_data_t;
@@ -32,10 +32,10 @@ deserializeElementVector(const n_id_t*& nodes, const val_t*& data, const el_id_t
     return retval;
 }
 
-inline auto initElementVectorVariant(ElementTypes T, el_o_t O)
+template < el_o_t... orders >
+auto initElementVectorVariant(ElementTypes T, el_o_t O) -> Domain< orders... >::element_vector_variant_t
 {
-    using ret_t = Domain::element_vector_variant_t;
-    ret_t      retval;
+    auto       retval  = typename Domain< orders... >::element_vector_variant_t{};
     const auto init_if = [&]< ElementTypes TYPE, el_o_t ORDER >(ValuePack< TYPE, ORDER >) {
         if (T == TYPE and O == ORDER)
         {
@@ -49,13 +49,14 @@ inline auto initElementVectorVariant(ElementTypes T, el_o_t O)
     const auto deduce = [&]< typename... Types >(TypePack< Types... >) {
         (init_if(Types{}) or ...);
     };
-    deduce(type_order_combinations{});
+    deduce(type_order_combinations< orders... >{});
     return retval;
 }
 
-inline Domain deserializeDomain(const SerializedDomain& domain)
+template < el_o_t... orders >
+auto deserializeDomain(const SerializedDomain& domain) -> Domain< orders... >
 {
-    Domain::element_vector_variant_vector_t elements;
+    auto elements = typename Domain< orders... >::element_vector_variant_vector_t{};
 
     auto node_ptr = domain.element_nodes.data();
     auto data_ptr = domain.element_data.data();
@@ -65,7 +66,7 @@ inline Domain deserializeDomain(const SerializedDomain& domain)
     for (auto&& offset : domain.type_order_offsets)
     {
         auto& current_vec = elements.emplace_back(
-            initElementVectorVariant(static_cast< ElementTypes >(domain.types[i]), domain.orders[i]));
+            initElementVectorVariant< orders... >(static_cast< ElementTypes >(domain.types[i]), domain.orders[i]));
         std::visit(
             [&]< ElementTypes T, el_o_t O >(std::vector< Element< T, O > >& v) {
                 v = deserializeElementVector< T, O >(node_ptr, data_ptr, id_ptr, offset);
@@ -78,25 +79,27 @@ inline Domain deserializeDomain(const SerializedDomain& domain)
     if (i > 0u)
         std::visit([&]< ElementTypes T, el_o_t O >(
                        const std::vector< Element< T, O > >&) { domain_dim = Element< T, O >::native_dim; },
-                   elements[0]);
+                   elements.front());
 
-    return Domain{std::move(elements), domain_dim};
+    return {std::move(elements), domain_dim};
 }
 } // namespace detail
 
-inline MeshPartition deserializePartition(const SerializedPartition& partition)
+template < el_o_t... orders >
+auto deserializePartition(const SerializedPartition& partition) -> MeshPartition< orders... >
 {
-    MeshPartition::domain_map_t domain_map;
+    auto domain_map = typename MeshPartition< orders... >::domain_map_t{};
     for (const auto& [id, domain] : partition.m_domains)
-        domain_map.emplace(id, detail::deserializeDomain(domain));
+        domain_map.emplace(id, detail::deserializeDomain< orders... >(domain));
     return MeshPartition{std::move(domain_map), partition.m_nodes, partition.m_n_owned_nodes};
 }
 
-inline MeshPartition deserializePartition(SerializedPartition&& partition)
+template < el_o_t... orders >
+auto deserializePartition(SerializedPartition&& partition) -> MeshPartition< orders... >
 {
-    MeshPartition::domain_map_t domain_map;
+    auto domain_map = typename MeshPartition< orders... >::domain_map_t{};
     for (const auto& [id, domain] : partition.m_domains)
-        domain_map.emplace(id, detail::deserializeDomain(domain));
+        domain_map.emplace(id, detail::deserializeDomain< orders... >(domain));
     return MeshPartition{std::move(domain_map), std::move(partition.m_nodes), partition.m_n_owned_nodes};
 }
 } // namespace lstr

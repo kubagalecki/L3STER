@@ -15,18 +15,10 @@ void test(CondensationPolicyTag< CP > = {})
     constexpr auto problem_def       = std::array{Pair{d_id_t{0}, std::array{true}}};
     constexpr auto problemdef_ctwrpr = ConstexprValue< problem_def >{};
 
-    constexpr auto        mesh_order = 2;
-    constexpr std::array  node_dist{0., 1., 2., 3., 4.};
-    std::vector< d_id_t > boundaries(6);
-    std::iota(boundaries.begin(), boundaries.end(), 1);
-    const auto dist_mesh = comm.getRank() == 0 ? std::invoke([&] {
-        auto retval = makeCubeMesh(node_dist);
-        retval.initDualGraph();
-        retval = convertMeshToOrder< mesh_order >(retval);
-        return retval;
-    })
-                                               : MeshPartition{};
-    const auto mesh      = distributeMesh(comm, dist_mesh, boundaries, problemdef_ctwrpr);
+    constexpr auto       mesh_order = 2;
+    constexpr std::array node_dist{0., 1., 2., 3., 4.};
+    const auto           mesh = generateAndDistributeMesh< mesh_order >(
+        comm, [&] { return makeCubeMesh(node_dist); }, {1, 2, 3, 4, 5, 6}, {}, problemdef_ctwrpr);
 
     const auto  condensation_map         = detail::makeCondensationMap< CP >(comm, mesh, problemdef_ctwrpr);
     const auto& global_nodes_to_condense = detail::getActiveNodes< CP >(mesh, problemdef_ctwrpr);

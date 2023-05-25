@@ -14,7 +14,8 @@ class SolutionManager
 public:
     using node_map_t = robin_hood::unordered_flat_map< n_id_t, ptrdiff_t >;
 
-    inline SolutionManager(const MeshPartition& mesh, size_t n_fields, val_t initial = 0.);
+    template < el_o_t... orders >
+    inline SolutionManager(const MeshPartition< orders... >& mesh, size_t n_fields, val_t initial = 0.);
 
     [[nodiscard]] auto        nFields() const -> size_t { return m_n_fields; }
     [[nodiscard]] auto        nNodes() const -> size_t { return m_n_nodes; }
@@ -82,7 +83,8 @@ auto SolutionManager::FieldValueGetter< n_fields >::operator()(const std::array<
     return retval;
 }
 
-SolutionManager::SolutionManager(const MeshPartition& mesh, size_t n_fields, val_t initial)
+template < el_o_t... orders >
+SolutionManager::SolutionManager(const MeshPartition< orders... >& mesh, size_t n_fields, val_t initial)
     : m_n_nodes{mesh.getAllNodes().size()},
       m_n_fields{n_fields},
       m_nodal_values{std::make_unique_for_overwrite< val_t[] >(m_n_nodes * m_n_fields)},

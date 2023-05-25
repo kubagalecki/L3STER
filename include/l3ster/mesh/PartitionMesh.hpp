@@ -28,8 +28,8 @@ inline auto convertPartWeights(std::vector< real_t > wgts) -> std::vector< real_
     return wgts;
 }
 
-template < ProblemDef_c auto problem_def >
-auto computeNodeWeights(const MeshPartition& mesh, ConstexprValue< problem_def > probdef_ctwrapper)
+template < el_o_t... orders, ProblemDef_c auto problem_def >
+auto computeNodeWeights(const MeshPartition< orders... >& mesh, ConstexprValue< problem_def > probdef_ctwrapper)
     -> std::vector< idx_t >
 {
     if constexpr (problem_def.size() == 0)
@@ -63,7 +63,9 @@ auto computeNodeWeights(const MeshPartition& mesh, ConstexprValue< problem_def >
     return retval;
 }
 
-inline auto getDomainIds(const MeshPartition& mesh, const std::vector< d_id_t >& boundary_ids) -> std::vector< d_id_t >
+template < el_o_t... orders >
+auto getDomainIds(const MeshPartition< orders... >& mesh, const std::vector< d_id_t >& boundary_ids)
+    -> std::vector< d_id_t >
 {
     std::vector< d_id_t > retval;
     std::ranges::copy(mesh.getDomainIds() | std::views::filter([&](auto id) {
@@ -78,7 +80,8 @@ struct DomainData
 {
     idx_t n_elements, topology_size;
 };
-inline auto getDomainData(const MeshPartition& mesh, const std::vector< d_id_t >& domain_ids) -> DomainData
+template < el_o_t... orders >
+auto getDomainData(const MeshPartition< orders... >& mesh, const std::vector< d_id_t >& domain_ids) -> DomainData
 {
     size_t n_elements = 0, topology_size = 0;
     mesh.visit(
@@ -94,10 +97,11 @@ struct MetisInput
 {
     std::vector< idx_t > e_ind, e_ptr;
 };
-inline auto prepMetisInput(const MeshPartition&         part,
-                           const DomainData&            domain_data,
-                           const std::vector< n_id_t >& cond_map,
-                           const std::vector< d_id_t >& domain_ids) -> MetisInput
+template < el_o_t... orders >
+auto prepMetisInput(const MeshPartition< orders... >& part,
+                    const DomainData&                 domain_data,
+                    const std::vector< n_id_t >&      cond_map,
+                    const std::vector< d_id_t >&      domain_ids) -> MetisInput
 {
     MetisInput retval;
     auto& [e_ind, e_ptr] = retval;
@@ -115,7 +119,8 @@ inline auto prepMetisInput(const MeshPartition&         part,
     return retval;
 }
 
-inline auto makeNodeCondensationMaps(const MeshPartition& mesh) -> std::array< std::vector< n_id_t >, 2 >
+template < el_o_t... orders >
+auto makeNodeCondensationMaps(const MeshPartition< orders... >& mesh) -> std::array< std::vector< n_id_t >, 2 >
 {
     std::vector< n_id_t > forward_map(mesh.getAllNodes().size()), reverse_map;
     mesh.visit(
@@ -191,11 +196,12 @@ inline auto invokeMetisPartitioner(idx_t                 n_elements,
     return retval;
 }
 
-inline auto uncondenseNodes(const std::vector< idx_t >&  epart,
-                            const std::vector< idx_t >&  npart_cond,
-                            const std::vector< n_id_t >& reverse_map,
-                            const MeshPartition&         mesh,
-                            const std::vector< d_id_t >& domain_ids) -> std::vector< idx_t >
+template < el_o_t... orders >
+auto uncondenseNodes(const std::vector< idx_t >&       epart,
+                     const std::vector< idx_t >&       npart_cond,
+                     const std::vector< n_id_t >&      reverse_map,
+                     const MeshPartition< orders... >& mesh,
+                     const std::vector< d_id_t >&      domain_ids) -> std::vector< idx_t >
 {
     std::vector< idx_t > retval(mesh.getAllNodes().size());
     for (size_t i = 0; auto node_uncond : reverse_map)
@@ -212,12 +218,13 @@ inline auto uncondenseNodes(const std::vector< idx_t >&  epart,
     return retval;
 }
 
-inline auto partitionCondensedMesh(const MeshPartition&         mesh,
-                                   const std::vector< d_id_t >& domain_ids,
-                                   DomainData                   domain_data,
-                                   idx_t                        n_parts,
-                                   std::vector< real_t >        part_weights,
-                                   std::vector< idx_t >         node_weights) -> MetisOutput
+template < el_o_t... orders >
+auto partitionCondensedMesh(const MeshPartition< orders... >& mesh,
+                            const std::vector< d_id_t >&      domain_ids,
+                            DomainData                        domain_data,
+                            idx_t                             n_parts,
+                            std::vector< real_t >             part_weights,
+                            std::vector< idx_t >              node_weights) -> MetisOutput
 {
     const auto [forward_map, reverse_map] = makeNodeCondensationMaps(mesh);
     node_weights                          = condenseNodeWeights(std::move(node_weights), reverse_map);
@@ -231,12 +238,13 @@ inline auto partitionCondensedMesh(const MeshPartition&         mesh,
     return retval;
 }
 
-inline auto makeDomainMaps(const MeshPartition&         part,
-                           idx_t                        n_parts,
-                           const std::vector< idx_t >&  epart,
-                           const std::vector< d_id_t >& domain_ids)
+template < el_o_t... orders >
+auto makeDomainMaps(const MeshPartition< orders... >& part,
+                    idx_t                             n_parts,
+                    const std::vector< idx_t >&       epart,
+                    const std::vector< d_id_t >&      domain_ids)
 {
-    auto   retval = std::vector< MeshPartition::domain_map_t >(n_parts);
+    auto   retval = std::vector< typename MeshPartition< orders... >::domain_map_t >(n_parts);
     size_t index  = 0;
     for (auto id : domain_ids)
         part.visit([&](const auto& element) { retval[epart[index++]][id].push(element); }, id);
@@ -251,7 +259,8 @@ std::vector< T > getPermutedVector(const std::vector< size_t >& perm, const std:
     return ret;
 }
 
-inline auto getElementIds(const MeshPartition& part, size_t n_elements, const std::vector< d_id_t >& domain_ids)
+template < el_o_t... orders >
+auto getElementIds(const MeshPartition< orders... >& part, size_t n_elements, const std::vector< d_id_t >& domain_ids)
     -> std::vector< el_id_t >
 {
     std::vector< el_id_t > element_ids;
@@ -267,12 +276,13 @@ inline void sortElementsById(std::vector< el_id_t >& element_ids, std::vector< i
     epart               = getPermutedVector(sort_ind, epart);
 }
 
-inline void assignBoundaryElements(const MeshPartition&                        part,
-                                   std::vector< idx_t >&                       epart,
-                                   std::vector< MeshPartition::domain_map_t >& new_domain_maps,
-                                   const std::vector< d_id_t >&                domain_ids,
-                                   const std::vector< d_id_t >&                boundary_ids,
-                                   size_t                                      n_elements)
+template < el_o_t... orders >
+void assignBoundaryElements(const MeshPartition< orders... >&                                 part,
+                            std::vector< idx_t >&                                             epart,
+                            std::vector< typename MeshPartition< orders... >::domain_map_t >& new_domain_maps,
+                            const std::vector< d_id_t >&                                      domain_ids,
+                            const std::vector< d_id_t >&                                      boundary_ids,
+                            size_t                                                            n_elements)
 {
     auto element_ids = getElementIds(part, n_elements, domain_ids);
     sortElementsById(element_ids, epart);
@@ -281,7 +291,7 @@ inline void assignBoundaryElements(const MeshPartition&                        p
                                    std::lower_bound(cbegin(element_ids), cend(element_ids), el_id))];
     };
     part.visit(
-        [&](const auto& boundary_el, const DomainView& dv) {
+        [&](const auto& boundary_el, DomainView< orders... > dv) {
             const auto domain_el   = part.getElementBoundaryView(boundary_el, dv.getID()).first->first;
             const auto domain_part = lookup_el_part(std::visit([](const auto& el) { return el->getId(); }, domain_el));
             new_domain_maps[domain_part][dv.getID()].push(boundary_el);
@@ -317,9 +327,10 @@ inline void reassignDisjointNodes(std::vector< std::pair< std::vector< n_id_t >,
     util::throwingAssert(disjoint_nodes.empty(), "At least one node in the mesh does not belong to any element");
 }
 
-inline auto assignNodes(idx_t                                             n_parts,
-                        const std::vector< idx_t >&                       npart,
-                        const std::vector< MeshPartition::domain_map_t >& domain_maps)
+template < el_o_t... orders >
+auto assignNodes(idx_t                                                         n_parts,
+                 const std::vector< idx_t >&                                   npart,
+                 const std::vector< std::map< d_id_t, Domain< orders... > > >& domain_maps)
 {
     std::vector< std::pair< std::vector< n_id_t >, std::vector< n_id_t > > > new_node_vecs;
     std::vector< idx_t >                                                     disjoint_nodes;
@@ -359,23 +370,25 @@ inline auto assignNodes(idx_t                                             n_part
     return new_node_vecs;
 }
 
-inline auto
-makeMeshFromPartitionComponents(std::vector< MeshPartition::domain_map_t >&&                               dom_maps,
-                                std::vector< std::pair< std::vector< n_id_t >, std::vector< n_id_t > > >&& node_vecs)
-    -> std::vector< MeshPartition >
+template < el_o_t... orders >
+auto makeMeshFromPartitionComponents(
+    std::vector< std::map< d_id_t, Domain< orders... > > >&&                   dom_maps,
+    std::vector< std::pair< std::vector< n_id_t >, std::vector< n_id_t > > >&& node_vecs)
+    -> std::vector< MeshPartition< orders... > >
 {
-    std::vector< MeshPartition > retval;
+    std::vector< MeshPartition< orders... > > retval;
     retval.reserve(dom_maps.size());
     for (size_t i = 0; auto& [owned, ghost] : node_vecs)
         retval.emplace_back(std::move(dom_maps[i++]), std::move(owned), std::move(ghost));
     return retval;
 }
 
-inline auto partitionMeshImpl(const MeshPartition&         mesh,
-                              idx_t                        n_parts,
-                              const std::vector< d_id_t >& boundary_ids,
-                              std::vector< real_t >        part_weights,
-                              std::vector< idx_t >         node_weights) -> std::vector< MeshPartition >
+template < el_o_t... orders >
+auto partitionMeshImpl(const MeshPartition< orders... >& mesh,
+                       idx_t                             n_parts,
+                       const std::vector< d_id_t >&      boundary_ids,
+                       std::vector< real_t >             part_weights,
+                       std::vector< idx_t >              node_weights) -> std::vector< MeshPartition< orders... > >
 {
     const auto domain_ids  = getDomainIds(mesh, boundary_ids);
     const auto domain_data = getDomainData(mesh, domain_ids);
@@ -388,13 +401,14 @@ inline auto partitionMeshImpl(const MeshPartition&         mesh,
 }
 } // namespace detail::part
 
-template < RangeOfConvertibleTo_c< real_t > PartWgtRange = std::array< real_t, 0 >,
+template < el_o_t... orders,
+           RangeOfConvertibleTo_c< real_t > PartWgtRange = std::array< real_t, 0 >,
            detail::ProblemDef_c auto        problem_def  = detail::empty_problem_def_t{} >
-auto partitionMesh(const MeshPartition&          mesh,
-                   idx_t                         n_parts,
-                   const std::vector< d_id_t >&  boundary_ids,
-                   PartWgtRange&&                part_weights   = {},
-                   ConstexprValue< problem_def > probdef_ctwrpr = {}) -> std::vector< MeshPartition >
+auto partitionMesh(const MeshPartition< orders... >& mesh,
+                   idx_t                             n_parts,
+                   const std::vector< d_id_t >&      boundary_ids,
+                   PartWgtRange&&                    part_weights   = {},
+                   ConstexprValue< problem_def >     probdef_ctwrpr = {}) -> std::vector< MeshPartition< orders... > >
 {
     L3STER_PROFILE_FUNCTION;
     util::throwingAssert(mesh.getGhostNodes().empty() and

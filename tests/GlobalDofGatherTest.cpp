@@ -15,7 +15,7 @@ using namespace lstr;
 template < CondensationPolicy CP >
 void test(CondensationPolicyTag< CP > = {})
 {
-    MpiComm comm{MPI_COMM_WORLD};
+    const auto comm = MpiComm{MPI_COMM_WORLD};
 
     constexpr auto problem_def       = std::array{Pair{d_id_t{1}, std::array{false, true, false}},
                                             Pair{d_id_t{2}, std::array{false, true, true}},
@@ -25,15 +25,14 @@ void test(CondensationPolicyTag< CP > = {})
                                             Pair{d_id_t{6}, std::array{true, true, true}}};
     constexpr auto problemdef_ctwrpr = ConstexprValue< problem_def >{};
 
-    const auto mesh_full   = comm.getRank() == 0 ? std::invoke([] {
-        constexpr auto       order = 2;
+    static constexpr el_o_t mesh_order = 2;
+    const auto              mesh_full  = comm.getRank() == 0 ? std::invoke([] {
         constexpr std::array dist{0., 1., 2.};
         auto                 retval = makeCubeMesh(dist);
         retval.initDualGraph();
-        retval = convertMeshToOrder< order >(retval);
-        return retval;
+        return convertMeshToOrder< mesh_order >(retval);
     })
-                                                 : MeshPartition{};
+                                                             : MeshPartition< mesh_order >{};
     const auto mesh_parted = std::invoke([&] { return distributeMesh(comm, mesh_full, {}, problemdef_ctwrpr); });
 
     const auto cond_map                = detail::makeCondensationMap< CP >(comm, mesh_parted, problemdef_ctwrpr);

@@ -59,7 +59,7 @@ template < typename IntKernel, dim_t dim, size_t n_fields >
     requires IntegralKernel_c< IntKernel, dim, n_fields > or BoundaryIntegralKernel_c< IntKernel, dim, n_fields >
 inline constexpr auto deduce_n_integral_components =
     integral_kernel_eval_result_t< IntKernel, dim, n_fields >::RowsAtCompileTime;
-template < typename IntKernel, size_t n_fields >
+template < typename IntKernel, size_t n_fields, el_o_t... orders >
 inline constexpr auto n_integral_components = std::invoke(
     []< typename... TypeOrderPair >(TypePack< TypeOrderPair... >) {
         constexpr auto invalid_nic = std::numeric_limits< int >::max();
@@ -81,9 +81,9 @@ inline constexpr auto n_integral_components = std::invoke(
             std::ranges::all_of(int_comps_for_els, [](int nic) { return nic == n_int_comps or nic == invalid_nic; }));
         return n_int_comps;
     },
-    type_order_combinations{});
+    type_order_combinations< orders... >{});
 
-template < typename Kernel, size_t n_fields >
+template < typename Kernel, size_t n_fields, el_o_t... orders >
 struct PotentiallyValidIntegralKernelDeductionHelper
 {
     template < ElementTypes T, el_o_t O >
@@ -91,20 +91,23 @@ struct PotentiallyValidIntegralKernelDeductionHelper
     {
         static constexpr bool value = IntegralKernel_c< Kernel, Element< T, O >::native_dim, n_fields >;
     };
-    static constexpr bool domain = assert_any_element< DeductionHelperDomain >;
+    static constexpr bool domain =
+        ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
 
     template < ElementTypes T, el_o_t O >
     struct DeductionHelperBoundary
     {
         static constexpr bool value = BoundaryIntegralKernel_c< Kernel, Element< T, O >::native_dim, n_fields >;
     };
-    static constexpr bool boundary = assert_any_element< DeductionHelperBoundary >;
+    static constexpr bool boundary =
+        ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperBoundary >;
 };
-template < typename Kernel, size_t n_fields >
-concept PotentiallyValidIntegralKernel_c = PotentiallyValidIntegralKernelDeductionHelper< Kernel, n_fields >::domain;
-template < typename Kernel, size_t n_fields >
+template < typename Kernel, size_t n_fields, el_o_t... orders >
+concept PotentiallyValidIntegralKernel_c =
+    PotentiallyValidIntegralKernelDeductionHelper< Kernel, n_fields, orders... >::domain;
+template < typename Kernel, size_t n_fields, el_o_t... orders >
 concept PotentiallyValidBoundaryIntegralKernel_c =
-    PotentiallyValidIntegralKernelDeductionHelper< Kernel, n_fields >::boundary;
+    PotentiallyValidIntegralKernelDeductionHelper< Kernel, n_fields, orders... >::boundary;
 
 template < ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
 auto evalElementIntegral(auto&&                                                                      kernel,
@@ -150,16 +153,16 @@ auto evalElementBoundaryIntegral(auto&&                                         
     return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, result_t{result_t::Zero()});
 }
 
-template < size_t n_fields, AssemblyOptions options >
+template < el_o_t... orders, size_t n_fields, AssemblyOptions options >
 auto evalLocalIntegral(auto&&                                               kernel,
-                       const MeshPartition&                                 mesh,
+                       const MeshPartition< orders... >&                    mesh,
                        DomainIdRange_c auto&&                               domain_ids,
                        const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
                        ConstexprValue< options >,
                        val_t time)
-    requires PotentiallyValidIntegralKernel_c< decltype(kernel), n_fields >
+    requires PotentiallyValidIntegralKernel_c< decltype(kernel), n_fields, orders... >
 {
-    constexpr auto n_components = n_integral_components< decltype(kernel), n_fields >;
+    constexpr auto n_components = n_integral_components< decltype(kernel), n_fields, orders... >;
     using integral_t            = Eigen::Vector< val_t, n_components >;
     const auto reduce_element   = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) -> integral_t {
         constexpr auto el_dim = Element< ET, EO >::native_dim;
@@ -188,15 +191,15 @@ auto evalLocalIntegral(auto&&                                               kern
                                 std::execution::par);
 }
 
-template < size_t n_fields, AssemblyOptions options >
+template < el_o_t... orders, size_t n_fields, AssemblyOptions options >
 auto evalLocalBoundaryIntegral(auto&&                                               kernel,
-                               const BoundaryView&                                  boundary,
+                               const BoundaryView< orders... >&                     boundary,
                                const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
                                ConstexprValue< options >,
                                val_t time)
-    requires PotentiallyValidBoundaryIntegralKernel_c< decltype(kernel), n_fields >
+    requires PotentiallyValidBoundaryIntegralKernel_c< decltype(kernel), n_fields, orders... >
 {
-    constexpr auto n_components = n_integral_components< decltype(kernel), n_fields >;
+    constexpr auto n_components = n_integral_components< decltype(kernel), n_fields, orders... >;
     using integral_t            = Eigen::Vector< val_t, n_components >;
     const auto reduce_element =
         [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) -> integral_t {
@@ -223,10 +226,10 @@ auto evalLocalBoundaryIntegral(auto&&                                           
 }
 } // namespace detail
 
-template < size_t n_fields = 0, AssemblyOptions opts = {} >
+template < el_o_t... orders, size_t n_fields = 0, AssemblyOptions opts = {} >
 auto evalIntegral(const MpiComm&                                       comm,
                   auto&&                                               kernel,
-                  const MeshPartition&                                 mesh,
+                  const MeshPartition< orders... >&                    mesh,
                   detail::DomainIdRange_c auto&&                       domain_ids,
                   const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
                   ConstexprValue< opts >                               opts_ctwrpr      = {},
@@ -246,10 +249,10 @@ auto evalIntegral(const MpiComm&                                       comm,
     return global_integral;
 }
 
-template < size_t n_fields = 0, AssemblyOptions opts = {} >
+template < el_o_t... orders, size_t n_fields = 0, AssemblyOptions opts = {} >
 auto evalBoundaryIntegral(const MpiComm&                                       comm,
                           auto&&                                               kernel,
-                          const BoundaryView&                                  boundary,
+                          const BoundaryView< orders... >&                     boundary,
                           const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
                           ConstexprValue< opts >                               opts_ctwrpr      = {},
                           val_t                                                time             = 0.)
