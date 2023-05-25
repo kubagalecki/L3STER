@@ -34,10 +34,9 @@ class MeshPartition
 
 public:
     using domain_map_t              = std::map< d_id_t, Domain< orders... > >;
-    using node_vec_t                = std::vector< n_id_t >;
     using find_result_t             = std::optional< std::pair< element_ptr_variant_t< orders... >, d_id_t > >;
-    using cfind_result_t            = std::optional< std::pair< element_cptr_variant_t< orders... >, d_id_t > >;
-    using el_boundary_view_result_t = std::pair< cfind_result_t, el_side_t >;
+    using const_find_result_t       = std::optional< std::pair< element_cptr_variant_t< orders... >, d_id_t > >;
+    using el_boundary_view_result_t = std::pair< const_find_result_t, el_side_t >;
     using node_span_t               = std::span< const n_id_t >;
 
     friend struct SerializedPartition;
@@ -129,7 +128,7 @@ public:
     auto find(F&& predicate, ExecPolicy&& policy = {}) -> find_result_t
         requires(Constraint::template invocable_on_const_elements_return< bool, F >);
     template < typename F, SimpleExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    auto find(F&& predicate, ExecPolicy&& policy = {}) const -> cfind_result_t
+    auto find(F&& predicate, ExecPolicy&& policy = {}) const -> const_find_result_t
         requires(Constraint::template invocable_on_const_elements_return< bool, F >);
     template < typename F, SimpleExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
     auto find(F&& predicate, detail::DomainPredicate_c< orders... > auto&& domain_predicate, ExecPolicy&& policy = {})
@@ -137,10 +136,10 @@ public:
         requires(Constraint::template invocable_on_const_elements_return< bool, F >);
     template < typename F, SimpleExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
     auto find(F&& predicate, detail::DomainPredicate_c< orders... > auto&& domain_ids, ExecPolicy&& policy = {}) const
-        -> cfind_result_t
+        -> const_find_result_t
         requires(Constraint::template invocable_on_const_elements_return< bool, F >);
-    inline find_result_t  find(el_id_t id);
-    inline cfind_result_t find(el_id_t id) const;
+    inline find_result_t       find(el_id_t id);
+    inline const_find_result_t find(el_id_t id) const;
 
     // boundary views
     template < ElementTypes T, el_o_t O >
@@ -152,27 +151,27 @@ public:
     }
 
     // observers
-    [[nodiscard]] DomainView< orders... > getDomainView(d_id_t id) const { return DomainView{m_domains.at(id), id}; }
-    [[nodiscard]] inline size_t           getNElements() const;
-    [[nodiscard]] auto                    getNDomains() const { return m_domains.size(); }
-    [[nodiscard]] auto                    getDomainIds() const { return m_domains | std::views::keys; }
-    [[nodiscard]] auto        getDomain(d_id_t id) const -> const Domain< orders... >& { return m_domains.at(id); }
-    [[nodiscard]] node_span_t getOwnedNodes() const { return m_nodes | std::views::take(m_n_owned_nodes); }
-    [[nodiscard]] node_span_t getGhostNodes() const { return m_nodes | std::views::drop(m_n_owned_nodes); }
-    [[nodiscard]] node_span_t getAllNodes() const { return m_nodes; }
+    auto          getDomainView(d_id_t id) const -> DomainView< orders... > { return DomainView{m_domains.at(id), id}; }
+    inline size_t getNElements() const;
+    auto          getNDomains() const { return m_domains.size(); }
+    auto          getDomainIds() const { return m_domains | std::views::keys; }
+    auto          getDomain(d_id_t id) const -> const Domain< orders... >& { return m_domains.at(id); }
+    auto          getOwnedNodes() const -> node_span_t { return m_nodes | std::views::take(m_n_owned_nodes); }
+    auto          getGhostNodes() const -> node_span_t { return m_nodes | std::views::drop(m_n_owned_nodes); }
+    auto          getAllNodes() const -> node_span_t { return m_nodes; }
 
-    [[nodiscard]] inline size_t computeTopoHash() const;
-    [[nodiscard]] bool isGhostNode(n_id_t node) const { return std::ranges::binary_search(getGhostNodes(), node); }
-    [[nodiscard]] bool isOwnedNode(n_id_t node) const { return std::ranges::binary_search(getOwnedNodes(), node); }
+    inline size_t computeTopoHash() const;
+    bool          isGhostNode(n_id_t node) const { return std::ranges::binary_search(getGhostNodes(), node); }
+    bool          isOwnedNode(n_id_t node) const { return std::ranges::binary_search(getOwnedNodes(), node); }
 
     template < el_o_t O >
-    [[nodiscard]] MeshPartition< O >::domain_map_t getConversionAlloc() const;
+    auto getConversionAlloc() const -> MeshPartition< O >::domain_map_t;
 
 private:
-    [[nodiscard]] inline auto convertToMetisFormat() const;
-    [[nodiscard]] inline auto makeMetisDualGraph() const -> util::metis::GraphWrapper;
+    inline auto convertToMetisFormat() const;
+    inline auto makeMetisDualGraph() const -> util::metis::GraphWrapper;
 
-    static inline auto constifyFindResult(find_result_t found) -> cfind_result_t;
+    static inline auto constifyFindResult(find_result_t found) -> const_find_result_t;
 
     static auto filterExistingDomainIds(const auto& domain_map, detail::DomainIdRange_c auto&& ids)
         -> std::vector< d_id_t >;
@@ -180,12 +179,12 @@ private:
     static void visitImpl(auto&& visitor, auto&& domain_map, auto&& domain_ids, SimpleExecutionPolicy_c auto&& policy);
 
     template < ElementTypes T, el_o_t O >
-    el_boundary_view_result_t getElementBoundaryViewImpl(const Element< T, O >& el) const;
+    auto getElementBoundaryViewImpl(const Element< T, O >& el) const -> el_boundary_view_result_t;
     template < ElementTypes T, el_o_t O >
-    el_boundary_view_result_t getElementBoundaryViewFallback(const Element< T, O >& el, d_id_t d) const;
+    auto getElementBoundaryViewFallback(const Element< T, O >& el, d_id_t d) const -> el_boundary_view_result_t;
 
     domain_map_t                               m_domains;
-    node_vec_t                                 m_nodes;
+    std::vector< n_id_t >                      m_nodes;
     size_t                                     m_n_owned_nodes;
     std::optional< util::metis::GraphWrapper > m_dual_graph;
 };
@@ -217,7 +216,7 @@ MeshPartition< orders... >::MeshPartition(domain_map_t                          
 
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
-auto MeshPartition< orders... >::constifyFindResult(find_result_t found) -> cfind_result_t
+auto MeshPartition< orders... >::constifyFindResult(find_result_t found) -> const_find_result_t
 {
     if (found)
         return std::make_pair(constifyVariant(found->first), found->second);
@@ -491,7 +490,7 @@ auto MeshPartition< orders... >::find(F&& predicate, ExecPolicy&& policy) -> fin
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 template < typename F, SimpleExecutionPolicy_c ExecPolicy >
-auto MeshPartition< orders... >::find(F&& predicate, ExecPolicy&& policy) const -> cfind_result_t
+auto MeshPartition< orders... >::find(F&& predicate, ExecPolicy&& policy) const -> const_find_result_t
     requires(Constraint::template invocable_on_const_elements_return< bool, F >)
 {
     return constifyFindResult(const_cast< MeshPartition* >(this)->find(std::forward< decltype(predicate) >(predicate),
@@ -528,7 +527,7 @@ template < el_o_t... orders >
 template < typename F, SimpleExecutionPolicy_c ExecPolicy >
 auto MeshPartition< orders... >::find(F&&                                           predicate,
                                       detail::DomainPredicate_c< orders... > auto&& domain_ids,
-                                      ExecPolicy&&                                  policy) const -> cfind_result_t
+                                      ExecPolicy&&                                  policy) const -> const_find_result_t
     requires(Constraint::template invocable_on_const_elements_return< bool, F >)
 {
     return constifyFindResult(const_cast< MeshPartition* >(this)->find(std::forward< decltype(predicate) >(predicate),
@@ -551,7 +550,7 @@ auto MeshPartition< orders... >::find(el_id_t id) -> find_result_t
 
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
-auto MeshPartition< orders... >::find(el_id_t id) const -> cfind_result_t
+auto MeshPartition< orders... >::find(el_id_t id) const -> const_find_result_t
 {
     return constifyFindResult(const_cast< MeshPartition* >(this)->find(id));
 }
@@ -675,7 +674,7 @@ size_t MeshPartition< orders... >::getNElements() const
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 template < el_o_t O >
-MeshPartition< O >::domain_map_t MeshPartition< orders... >::getConversionAlloc() const
+auto MeshPartition< orders... >::getConversionAlloc() const -> MeshPartition< O >::domain_map_t
 {
     auto retval = typename MeshPartition< O >::domain_map_t{};
     for (const auto& [id, dom] : m_domains)

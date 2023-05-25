@@ -84,10 +84,10 @@ public:
     [[nodiscard]] inline size_t getNElements() const;
 
     template < el_o_t O_CONV >
-    [[nodiscard]] Domain< O_CONV > getConversionAlloc() const;
+    auto getConversionAlloc() const -> Domain< O_CONV >;
 
     template < ElementTypes ET, el_o_t EO >
-    std::vector< Element< ET, EO > >& getElementVector();
+    auto getElementVector() -> std::vector< Element< ET, EO > >&;
 
 private:
     inline static auto constifyFound(const find_result_t& f) -> const_find_result_t
@@ -110,7 +110,7 @@ namespace detail
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 template < ElementTypes ET, el_o_t EO >
-std::vector< Element< ET, EO > >& Domain< orders... >::getElementVector()
+auto Domain< orders... >::getElementVector() -> std::vector< Element< ET, EO > >&
 {
     using el_vec_t = element_vector_t< ET, EO >;
     if (not m_element_vectors.empty())
@@ -374,7 +374,7 @@ size_t Domain< orders... >::getNElements() const
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 template < el_o_t O_CONV >
-Domain< O_CONV > Domain< orders... >::getConversionAlloc() const
+auto Domain< orders... >::getConversionAlloc() const -> Domain< O_CONV >
 {
     Domain< O_CONV > retval;
     retval.m_element_vectors.reserve(m_element_vectors.size());
