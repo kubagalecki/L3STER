@@ -15,11 +15,11 @@
 #include <immintrin.h>
 #endif
 
-namespace lstr
+namespace lstr::util
 {
-namespace detail::b64
+namespace b64
 {
-inline constexpr auto conv_table = std::invoke([] {
+inline constexpr auto conversion_table = std::invoke([] {
     std::array< char, 64 > table;
     std::iota(begin(table), std::next(begin(table), 26), 'A');
     std::iota(std::next(begin(table), 26), std::next(begin(table), 52), 'a');
@@ -31,19 +31,23 @@ inline constexpr auto conv_table = std::invoke([] {
 
 inline char enc0(std::byte b0)
 {
-    return conv_table[std::to_integer< unsigned char >(b0 >> 2)];
+    const auto code_point = std::to_integer< unsigned char >(b0 >> 2);
+    return conversion_table[code_point];
 }
 inline char enc1(std::byte b0, std::byte b1)
 {
-    return conv_table[std::to_integer< unsigned char >(((b0 & std::byte{0x3}) << 4) | (b1 >> 4))];
+    const auto code_point = std::to_integer< unsigned char >(((b0 & std::byte{0x3}) << 4) | (b1 >> 4));
+    return conversion_table[code_point];
 }
 inline char enc2(std::byte b1, std::byte b2)
 {
-    return conv_table[std::to_integer< unsigned char >(((b1 & std::byte{0xf}) << 2) | (b2 >> 6))];
+    const auto code_point = std::to_integer< unsigned char >(((b1 & std::byte{0xf}) << 2) | (b2 >> 6));
+    return conversion_table[code_point];
 }
 inline char enc3(std::byte b2)
 {
-    return conv_table[std::to_integer< unsigned char >(b2 & std::byte{0x3f})];
+    const auto code_point = std::to_integer< unsigned char >(b2 & std::byte{0x3f});
+    return conversion_table[code_point];
 }
 
 inline std::size_t encB64SerialImpl(std::span< const std::byte > data, char*& out)
@@ -190,7 +194,7 @@ inline std::size_t alignForSimd(std::span< const std::byte > data, char*& out)
     else
         return 0;
 }
-} // namespace detail::b64
+} // namespace b64
 
 template < std::ranges::contiguous_range R, std::contiguous_iterator I >
 std::size_t encodeAsBase64(R&& data, I out_it)
@@ -204,12 +208,12 @@ std::size_t encodeAsBase64(R&& data, I out_it)
 #if defined(__AVX2__)
     // Note: it is unclear whether `vpmaskmov` supports unaligned access, better to err on the side of caution
     if constexpr (alignof(std::ranges::range_value_t< R >) < alignof(int))
-        bytes_processed += detail::b64::alignForSimd(byte_span, out_ptr);
+        bytes_processed += util::b64::alignForSimd(byte_span, out_ptr);
 #endif
 
-    bytes_processed += detail::b64::encB64SimdImpl(byte_span.subspan(bytes_processed), out_ptr);
-    bytes_processed += detail::b64::encB64SerialImpl(byte_span.subspan(bytes_processed), out_ptr);
-    detail::b64::encB64Remainder(byte_span.subspan(bytes_processed), out_ptr);
+    bytes_processed += util::b64::encB64SimdImpl(byte_span.subspan(bytes_processed), out_ptr);
+    bytes_processed += util::b64::encB64SerialImpl(byte_span.subspan(bytes_processed), out_ptr);
+    util::b64::encB64Remainder(byte_span.subspan(bytes_processed), out_ptr);
     const auto bytes_written = std::distance(std::addressof(*out_it), out_ptr);
     return bytes_written;
 }
@@ -222,5 +226,5 @@ std::size_t getBase64EncodingSize(std::size_t size)
     const auto remainder       = bytes % 3;
     return (n_full_triplets + (remainder > 0)) * 4;
 }
-} // namespace lstr
+} // namespace lstr::util
 #endif // L3STER_UTIL_BASE64_HPP

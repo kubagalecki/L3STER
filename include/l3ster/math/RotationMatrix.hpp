@@ -6,7 +6,7 @@
 #include <cmath>
 #include <concepts>
 
-namespace lstr
+namespace lstr::math
 {
 template < auto maj = Eigen::ColMajor, std::floating_point T >
 auto makeRotationMatrix3DX(T ang_rad) -> Eigen::Matrix< T, 3, 3, maj >
@@ -74,5 +74,5 @@ auto makeRotationMatrix2D(T ang_rad) -> Eigen::Matrix< T, 2, 2, maj >
     retval(1, 1) = cos;
     return retval;
 }
-} // namespace lstr
+} // namespace lstr::math
 #endif // L3STER_UTIL_ROTATIONMATRIX_HPP

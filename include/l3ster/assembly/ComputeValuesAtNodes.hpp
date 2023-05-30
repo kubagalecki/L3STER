@@ -83,13 +83,13 @@ auto initValsAndParents(const MeshPartition< orders... >&                       
     {
         std::vector< std::uint8_t > retval(values.size(), 0);
         const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
-            for (auto node : element.getNodes())
-                if (not mesh.isGhostNode(node))
-                    for (auto dof : getValuesAtInds(map(node).front(), dofinds_ctwrpr))
-                    {
-                        std::atomic_ref{retval[dof]}.fetch_add(1, std::memory_order_relaxed);
-                        std::atomic_ref{values[dof]}.store(0., std::memory_order_relaxed);
-                    }
+            for (auto node :
+                 element.getNodes() | std::views::filter([&](auto node) { return not mesh.isGhostNode(node); }))
+                for (auto dof : getValuesAtInds(map(node).front(), dofinds_ctwrpr))
+                {
+                    std::atomic_ref{retval[dof]}.fetch_add(1, std::memory_order_relaxed);
+                    std::atomic_ref{values[dof]}.store(0., std::memory_order_relaxed);
+                }
         };
         mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
         return retval;
@@ -110,7 +110,7 @@ auto initValsAndParents(const BoundaryView< orders... >&                        
         for (auto node :
              el_view.getSideNodeInds() | std::views::transform([&](auto ind) { return el_view->getNodes()[ind]; }))
             if (not boundary.getParent()->isGhostNode(node))
-                for (auto dof : getValuesAtInds(map(node).front(), dofinds_ctwrpr))
+                for (auto dof : util::getValuesAtInds(map(node).front(), dofinds_ctwrpr))
                 {
                     std::atomic_ref{retval[dof]}.fetch_add(1, std::memory_order_relaxed);
                     std::atomic_ref{values[dof]}.store(0., std::memory_order_relaxed);
@@ -134,7 +134,7 @@ void computeValuesAtNodes(const MeshPartition< orders... >&                     
     const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
         const auto& el_nodes     = element.getNodes();
         const auto  process_node = [&](size_t node_ind) {
-            for (size_t dof_ind = 0; auto dof : getValuesAtInds(map(el_nodes[node_ind]).front(), dofinds_ctwrpr))
+            for (size_t dof_ind = 0; auto dof : util::getValuesAtInds(map(el_nodes[node_ind]).front(), dofinds_ctwrpr))
                 std::atomic_ref{values_out[dof]}.store(values_in[dof_ind++], std::memory_order_relaxed);
         };
         for (size_t node_ind = 0; node_ind < el_nodes.size(); ++node_ind)
@@ -167,24 +167,29 @@ void computeValuesAtNodes(auto&&                                                
                                                    std::ranges::size(dof_inds) >)
         {
             const auto& el_nodes       = element.getNodes();
-            const auto& basis_at_nodes = getBasisAtNodes< ET, EO >();
+            const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
             const auto& node_locations = getNodeLocations< ET, EO >();
 
             const auto node_vals            = field_val_getter(el_nodes);
-            const auto jacobi_mat_generator = getNatJacobiMatGenerator(element);
+            const auto jacobi_mat_generator = map::getNatJacobiMatGenerator(element);
 
             const auto process_node = [&](size_t node_ind) {
-                const auto ref_coords      = node_locations[node_ind];
-                const auto jacobi_mat      = jacobi_mat_generator(ref_coords);
-                const auto phys_coords     = mapToPhysicalSpace(element, ref_coords);
-                const auto phys_basis_ders = computePhysBasisDers(jacobi_mat, basis_at_nodes.derivatives[node_ind]);
-                const auto field_vals      = detail::computeFieldVals(basis_at_nodes.values[node_ind], node_vals);
-                const auto field_ders      = detail::computeFieldDers(phys_basis_ders, node_vals);
-                const auto ker_res = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time});
-                for (size_t dof_ind = 0; auto dof : getValuesAtInds(map(el_nodes[node_ind]).front(), dofinds_ctwrpr))
+                const auto ref_coords  = node_locations[node_ind];
+                const auto jacobi_mat  = jacobi_mat_generator(ref_coords);
+                const auto phys_coords = map::mapToPhysicalSpace(element, ref_coords);
+                const auto phys_basis_ders =
+                    map::computePhysBasisDers(jacobi_mat, basis_at_nodes.derivatives[node_ind]);
+                const auto field_vals = detail::computeFieldVals(basis_at_nodes.values[node_ind], node_vals);
+                const auto field_ders = detail::computeFieldDers(phys_basis_ders, node_vals);
+                const auto ker_res    = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time});
+                const auto node_dofs  = map(el_nodes[node_ind]).front();
+                for (size_t dof_ind = 0; auto dof : util::getValuesAtInds(node_dofs, dofinds_ctwrpr))
                     if constexpr (n_fields != 0)
-                        std::atomic_ref{values[dof]}.fetch_add(
-                            ker_res[dof_ind++] / static_cast< double >(num_parents[dof]), std::memory_order_relaxed);
+                    {
+                        const auto np_fp        = static_cast< double >(num_parents[dof]);
+                        const auto update_value = ker_res[dof_ind++] / np_fp;
+                        std::atomic_ref{values[dof]}.fetch_add(update_value, std::memory_order_relaxed);
+                    }
                     else
                         std::atomic_ref{values[dof]}.store(ker_res[dof_ind++], std::memory_order_relaxed);
             };
@@ -228,25 +233,30 @@ void computeValuesAtBoundaryNodes(auto&&                                        
                                                            std::ranges::size(dof_inds) >)
         {
             const auto& el_nodes       = el_view->getNodes();
-            const auto& basis_at_nodes = getBasisAtNodes< ET, EO >();
+            const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
             const auto& node_locations = getNodeLocations< ET, EO >();
 
             const auto node_vals            = field_val_getter(el_nodes);
-            const auto jacobi_mat_generator = getNatJacobiMatGenerator(*el_view);
+            const auto jacobi_mat_generator = map::getNatJacobiMatGenerator(*el_view);
 
             const auto process_node = [&](size_t node_ind) {
-                const auto ref_coords      = node_locations[node_ind];
-                const auto jacobi_mat      = jacobi_mat_generator(ref_coords);
-                const auto phys_coords     = mapToPhysicalSpace(*el_view, ref_coords);
-                const auto normal          = computeBoundaryNormal(el_view, jacobi_mat);
-                const auto phys_basis_ders = computePhysBasisDers(jacobi_mat, basis_at_nodes.derivatives[node_ind]);
-                const auto field_vals      = detail::computeFieldVals(basis_at_nodes.values[node_ind], node_vals);
-                const auto field_ders      = detail::computeFieldDers(phys_basis_ders, node_vals);
+                const auto ref_coords  = node_locations[node_ind];
+                const auto jacobi_mat  = jacobi_mat_generator(ref_coords);
+                const auto phys_coords = map::mapToPhysicalSpace(*el_view, ref_coords);
+                const auto normal      = map::computeBoundaryNormal(el_view, jacobi_mat);
+                const auto phys_basis_ders =
+                    map::computePhysBasisDers(jacobi_mat, basis_at_nodes.derivatives[node_ind]);
+                const auto field_vals = detail::computeFieldVals(basis_at_nodes.values[node_ind], node_vals);
+                const auto field_ders = detail::computeFieldDers(phys_basis_ders, node_vals);
                 const auto ker_res =
                     std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time}, normal);
-                for (size_t dof_ind = 0; auto dof : getValuesAtInds(map(el_nodes[node_ind]).front(), dofinds_ctwrpr))
-                    std::atomic_ref{values[dof]}.fetch_add(ker_res[dof_ind++] / static_cast< double >(num_parents[dof]),
-                                                           std::memory_order_relaxed);
+                const auto node_dofs = map(el_nodes[node_ind]).front();
+                for (size_t dof_ind = 0; auto dof : util::getValuesAtInds(node_dofs, dofinds_ctwrpr))
+                {
+                    const auto np_fp        = static_cast< double >(num_parents[dof]);
+                    const auto update_value = ker_res[dof_ind++] / np_fp;
+                    std::atomic_ref{values[dof]}.fetch_add(update_value, std::memory_order_relaxed);
+                }
             };
             for (auto node_ind : el_view.getSideNodeInds())
                 if (not boundary.getParent()->isGhostNode(el_nodes[node_ind]))

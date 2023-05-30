@@ -39,7 +39,7 @@ template < ElementTypes T, el_o_t O, size_t N >
 constexpr el_side_t matchBoundaryNodesToElement(const Element< T, O >&         element,
                                                 const std::array< n_id_t, N >& srt_boundary_nodes)
 {
-    const auto              srt_element_nodes = getSortedArray(element.getNodes());
+    const auto              srt_element_nodes = util::getSortedArray(element.getNodes());
     std::array< n_id_t, N > common;
     const auto common_end = std::ranges::set_intersection(srt_element_nodes, srt_boundary_nodes, begin(common)).out;
     if (common_end == begin(common)) [[likely]]

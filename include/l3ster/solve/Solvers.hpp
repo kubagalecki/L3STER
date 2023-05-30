@@ -53,7 +53,7 @@ class CG : public SolverInterface< CG >
 
 public:
     CG(double tol = 1e-6, int max_iters = 10'000, Belos::MsgType verbosity = Belos::Warnings, int print_freq = 100)
-        : m_solver_params{makeTeuchosRCP< Teuchos::ParameterList >()}
+        : m_solver_params{util::makeTeuchosRCP< Teuchos::ParameterList >()}
     {
         m_solver_params->set("Block Size", 1);
         m_solver_params->set("Maximum Iterations", max_iters);
@@ -68,7 +68,7 @@ public:
     {
         auto precond_factory = Ifpack2::Factory{};
         m_precond            = precond_factory.create("CHEBYSHEV", A);
-        auto precond_params  = makeTeuchosRCP< Teuchos::ParameterList >();
+        auto precond_params  = util::makeTeuchosRCP< Teuchos::ParameterList >();
         precond_params->set("chebyshev: degree", 3);
         m_precond->setParameters(*precond_params);
         m_precond->initialize();
@@ -76,7 +76,7 @@ public:
         m_precond->compute();
 
         m_linear_problem =
-            makeTeuchosRCP< Belos::LinearProblem< val_t, tpetra_multivector_t, tpetra_operator_t > >(A, x, b);
+            util::makeTeuchosRCP< Belos::LinearProblem< val_t, tpetra_multivector_t, tpetra_operator_t > >(A, x, b);
         m_linear_problem->setLeftPrec(m_precond);
         util::throwingAssert(m_linear_problem->setProblem(), "Failed to set up Belos::LinearProblem");
 

@@ -113,15 +113,15 @@ template < ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
 auto evalElementIntegral(auto&&                                                                      kernel,
                          const Element< ET, EO >&                                                    element,
                          const eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
-                         const ReferenceBasisAtQuadrature< ET, EO, QL >&                             basis_at_qps,
+                         const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                      basis_at_qps,
                          val_t                                                                       time)
     requires IntegralKernel_c< decltype(kernel), Element< ET, EO >::native_dim, n_fields >
 {
-    const auto jacobi_mat_generator = getNatJacobiMatGenerator(element);
+    const auto jacobi_mat_generator = map::getNatJacobiMatGenerator(element);
     using result_t = integral_kernel_eval_result_t< decltype(kernel), Element< ET, EO >::native_dim, n_fields >;
     const auto compute_value_at_qp = [&](ptrdiff_t qp_ind, auto ref_coords) noexcept -> result_t {
         const auto jacobi_mat    = jacobi_mat_generator(ref_coords);
-        const auto phys_coords   = mapToPhysicalSpace(element, ref_coords);
+        const auto phys_coords   = map::mapToPhysicalSpace(element, ref_coords);
         const auto field_vals    = computeFieldVals(basis_at_qps.basis.values[qp_ind], node_vals);
         const auto field_ders    = computeFieldDers(basis_at_qps.basis.derivatives[qp_ind], node_vals);
         const auto kernel_result = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time});
@@ -134,20 +134,20 @@ template < ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
 auto evalElementBoundaryIntegral(auto&&                                                                      kernel,
                                  const BoundaryElementView< ET, EO >&                                        el_view,
                                  const eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
-                                 const ReferenceBasisAtQuadrature< ET, EO, QL >& basis_at_qps,
-                                 val_t                                           time)
+                                 const basis::ReferenceBasisAtQuadrature< ET, EO, QL >& basis_at_qps,
+                                 val_t                                                  time)
     requires BoundaryIntegralKernel_c< decltype(kernel), Element< ET, EO >::native_dim, n_fields >
 {
-    const auto jacobi_mat_generator = getNatJacobiMatGenerator(*el_view);
+    const auto jacobi_mat_generator = map::getNatJacobiMatGenerator(*el_view);
     using result_t = integral_kernel_eval_result_t< decltype(kernel), Element< ET, EO >::native_dim, n_fields >;
     const auto compute_value_at_qp = [&](ptrdiff_t qp_ind, auto ref_coords) noexcept -> result_t {
         const auto jacobi_mat  = jacobi_mat_generator(ref_coords);
-        const auto phys_coords = mapToPhysicalSpace(*el_view, ref_coords);
-        const auto normal      = computeBoundaryNormal(el_view, jacobi_mat);
+        const auto phys_coords = map::mapToPhysicalSpace(*el_view, ref_coords);
+        const auto normal      = map::computeBoundaryNormal(el_view, jacobi_mat);
         const auto field_vals  = computeFieldVals(basis_at_qps.basis.values[qp_ind], node_vals);
         const auto field_ders  = computeFieldDers(basis_at_qps.basis.derivatives[qp_ind], node_vals);
         const auto ker_res     = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time}, normal);
-        const auto bound_jac   = computeBoundaryIntegralJacobian(el_view, jacobi_mat);
+        const auto bound_jac   = map::computeBoundaryIntegralJacobian(el_view, jacobi_mat);
         return bound_jac * ker_res;
     };
     return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, result_t{result_t::Zero()});
@@ -172,7 +172,7 @@ auto evalLocalIntegral(auto&&                                               kern
             constexpr auto QT         = options.quad_type;
             constexpr auto QO         = options.order(EO);
             const auto     field_vals = field_val_getter(element.getNodes());
-            const auto&    qbv        = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
+            const auto&    qbv        = basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
             return evalElementIntegral(kernel, element, field_vals, qbv, time);
         }
         else
@@ -210,7 +210,7 @@ auto evalLocalBoundaryIntegral(auto&&                                           
             constexpr auto QT         = options.quad_type;
             constexpr auto QO         = options.order(EO);
             const auto     field_vals = field_val_getter(el_view->getNodes());
-            const auto&    qbv        = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
+            const auto&    qbv        = basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
             return evalElementBoundaryIntegral(kernel, el_view, field_vals, qbv, time);
         }
         else

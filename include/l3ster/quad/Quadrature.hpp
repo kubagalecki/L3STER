@@ -5,8 +5,13 @@
 
 #include <array>
 
-namespace lstr
+namespace lstr::quad
 {
+enum class QuadratureType
+{
+    GaussLegendre,
+};
+
 template < q_l_t q_size, dim_t q_dim >
 struct Quadrature
 {
@@ -21,5 +26,5 @@ struct Quadrature
 };
 template < size_t dim, size_t len >
 Quadrature(std::array< std::array< val_t, dim >, len >, std::array< val_t, len >) -> Quadrature< len, dim >;
-} // namespace lstr
+} // namespace lstr::quad
 #endif // L3STER_QUAD_QUADRATURE_HPP

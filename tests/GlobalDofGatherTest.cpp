@@ -65,7 +65,7 @@ void test(CondensationPolicyTag< CP > = {})
 
 int main(int argc, char* argv[])
 {
-    const auto max_par_guard = detail::MaxParallelismGuard{4};
+    const auto max_par_guard = util::MaxParallelismGuard{4};
     const auto scope_guard   = L3sterScopeGuard{argc, argv};
     test< CondensationPolicy::None >();
     test< CondensationPolicy::ElementBoundary >();

@@ -3,7 +3,7 @@
 
 #include "l3ster/basisfun/ReferenceBasisFunction.hpp"
 
-namespace lstr
+namespace lstr::basis
 {
 template < ElementTypes ET, el_o_t EO, size_t n_points >
 struct ReferenceBasisAtPoints
@@ -19,7 +19,7 @@ struct ReferenceBasisAtPoints
 
 namespace detail
 {
-template < BasisTypes                                                    BT,
+template < BasisType                                                     BT,
            ElementTypes                                                  ET,
            el_o_t                                                        EO,
            std::convertible_to< Point< Element< ET, EO >::native_dim > > Point_t,
@@ -33,5 +33,5 @@ auto evalRefBasisAtPoints(const std::array< Point_t, n_points >& points) -> Refe
     return {*basis_vals, *basis_ders};
 }
 } // namespace detail
-} // namespace lstr
+} // namespace lstr::basis
 #endif // L3STER_BASISFUN_REFERENCEBASISATPOINTS_HPP

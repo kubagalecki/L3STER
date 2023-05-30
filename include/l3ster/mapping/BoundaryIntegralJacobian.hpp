@@ -4,7 +4,7 @@
 #include "l3ster/mapping/ReferenceBoundaryToSideMapping.hpp"
 #include "l3ster/mesh/BoundaryElementView.hpp"
 
-namespace lstr
+namespace lstr::map
 {
 template < ElementTypes ET, el_o_t EO >
 val_t computeBoundaryIntegralJacobian(
@@ -28,5 +28,5 @@ val_t computeBoundaryIntegralJacobian(
             static_assert(ET != ET, "Only dimensions 1, 2, and 3 are currently supported");
     }
 }
-} // namespace lstr
+} // namespace lstr::map
 #endif // L3STER_MAPPING_BOUNDARYINTEGRALJACOBIAN_HPP

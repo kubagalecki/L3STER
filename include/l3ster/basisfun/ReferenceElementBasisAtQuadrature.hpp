@@ -5,13 +5,13 @@
 #include "l3ster/basisfun/ReferenceBasisFunction.hpp"
 #include "l3ster/mapping/ReferenceBoundaryToSideMapping.hpp"
 
-namespace lstr
+namespace lstr::basis
 {
-template < BasisTypes BT, ElementTypes ET, el_o_t EO, QuadratureTypes QT, q_o_t QO >
+template < BasisType BT, ElementTypes ET, el_o_t EO, quad::QuadratureType QT, q_o_t QO >
 const auto& getReferenceBasisAtDomainQuadrature()
 {
     static const auto value = std::invoke([] {
-        const auto quadrature = getQuadrature< QT, QO, ET >();
+        const auto quadrature = quad::getQuadrature< QT, QO, ET >();
         return ReferenceBasisAtQuadrature< ET, EO, quadrature.size >{
             .quadrature = quadrature, .basis = detail::evalRefBasisAtPoints< BT, ET, EO >(quadrature.points)};
     });
@@ -21,7 +21,7 @@ const auto& getReferenceBasisAtDomainQuadrature()
 namespace detail
 {
 template < q_l_t QL, dim_t QD >
-auto getReferenceBoundaryQpCoords(const Quadrature< QL, QD >& ref_qp)
+auto getReferenceBoundaryQpCoords(const quad::Quadrature< QL, QD >& ref_qp)
 {
     using retval_t = Eigen::Matrix< val_t, QD + 1, QL >;
     retval_t retval;
@@ -46,17 +46,15 @@ void translate(Eigen::Matrix< val_t, R, C >& mat, const Eigen::Vector< val_t, R 
 template < int R, int C >
 auto makeQuadratureFromCoordsMat(const Eigen::Matrix< val_t, R, C >& coords, const auto& weights)
 {
-    // Note: there's possibly a smarter way of doing this, since the layout of `points` and `coords` is the same, but
-    // perf is irrelevant here
-    typename Quadrature< C, R >::q_points_t points;
+    auto points = typename quad::Quadrature< C, R >::q_points_t{};
     for (int c = 0; c < C; ++c)
         for (int r = 0; r < R; ++r)
             points[c][r] = coords(r, c);
-    return Quadrature< C, R >{points, weights};
+    return quad::Quadrature< C, R >{points, weights};
 }
 } // namespace detail
 
-template < BasisTypes BT, ElementTypes ET, el_o_t EO, QuadratureTypes QT, q_o_t QO >
+template < BasisType BT, ElementTypes ET, el_o_t EO, quad::QuadratureType QT, q_o_t QO >
 const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t el_side)
     requires(ET == ElementTypes::Hex or ET == ElementTypes::Quad or ET == ElementTypes::Line)
 {
@@ -69,7 +67,7 @@ const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t el_side)
             if constexpr (Element< ET, EO >::native_dim > 1)
             {
                 constexpr auto boundary_type = ET == ElementTypes::Hex ? ElementTypes::Quad : ElementTypes::Line;
-                const auto     ref_quad      = getQuadrature< QT, QO, boundary_type >();
+                const auto     ref_quad      = quad::getQuadrature< QT, QO, boundary_type >();
                 return std::make_pair(detail::getReferenceBoundaryQpCoords(ref_quad), ref_quad.weights);
             }
             else
@@ -83,7 +81,7 @@ const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t el_side)
         std::array< ref_basis_t, ElementTraits< Element< ET, EO > >::n_sides > retval;
         for (el_side_t side = 0; auto& side_quadrature : retval)
         {
-            const auto [rot_mat, trans_vec] = getReferenceBoundaryToSideMapping< ET >(side);
+            const auto [rot_mat, trans_vec] = map::getReferenceBoundaryToSideMapping< ET >(side);
             std::remove_const_t< decltype(ref_quad_coords) > side_quad_coords = rot_mat * ref_quad_coords;
             detail::translate(side_quad_coords, trans_vec);
             const auto quadrature = detail::makeQuadratureFromCoordsMat(side_quad_coords, weights);
@@ -95,5 +93,5 @@ const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t el_side)
     });
     return lookup_table[el_side];
 }
-} // namespace lstr
+} // namespace lstr::basis
 #endif // L3STER_BASISFUN_REFERENCEELEMENTBASISATQUADRATURE_HPP

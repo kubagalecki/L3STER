@@ -59,7 +59,7 @@ auto convertMeshToOrder(const MeshPartition< 1 >& mesh, std::integral_constant< 
     for (auto domain_id : mesh.getDomainIds())
         convert_domain(mesh.getDomain(domain_id), new_domains[domain_id]);
 
-    return {std::move(new_domains), consecutiveIndices(max_node), max_node};
+    return {std::move(new_domains), util::consecutiveIndices(max_node), max_node};
 }
 } // namespace lstr
 #endif // L3STER_MESH_CONVERTMESHTOORDER_HPP

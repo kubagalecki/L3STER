@@ -566,7 +566,7 @@ auto MeshPartition< orders... >::getElementBoundaryViewImpl(const Element< T, O 
         return Element< T_, O_ >::native_dim - 1 == Element< T, O >::native_dim;
     };
 
-    const auto boundary_nodes = getSortedArray(el.getNodes());
+    const auto boundary_nodes = util::getSortedArray(el.getNodes());
     const auto match_side     = [&]< ElementTypes T_, el_o_t O_ >(const Element< T_, O_ >* domain_element) {
         return detail::matchBoundaryNodesToElement(*domain_element, boundary_nodes);
     };
@@ -591,7 +591,7 @@ template < ElementTypes T, el_o_t O >
 auto MeshPartition< orders... >::getElementBoundaryViewFallback(const Element< T, O >& el, d_id_t d) const
     -> el_boundary_view_result_t
 {
-    const auto boundary_nodes = getSortedArray(el.getNodes());
+    const auto boundary_nodes = util::getSortedArray(el.getNodes());
     el_side_t  side_index     = 0;
 
     const auto is_domain_element = [&]< ElementTypes T_, el_o_t O_ >(const Element< T_, O_ >& domain_element) {

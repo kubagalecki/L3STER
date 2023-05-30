@@ -30,7 +30,7 @@ TEST_CASE("Solution Manager", "[sol_man]")
             CHECK(sm.getFieldView(i).size() == std::as_const(sm).getFieldView(i).size());
         }
 
-    constexpr auto field_inds = makeIotaArray< size_t, n_fields >();
+    constexpr auto field_inds = util::makeIotaArray< size_t, n_fields >();
     for (size_t i = 0; const auto& sm : sol_mans)
     {
         const auto& part = partitions.at(i);

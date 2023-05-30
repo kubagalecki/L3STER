@@ -33,11 +33,11 @@ void test()
     const auto sparsity_graph =
         detail::makeSparsityGraph(comm, my_partition, global_node_dof_map, cond_map, probdef_ctwrpr);
 
-    const auto [owned_bcdofs, shared_bcdofs] = detail::getDirichletDofs(
+    const auto [owned_bcdofs, shared_bcdofs] = bcs::getDirichletDofs(
         my_partition, sparsity_graph, global_node_dof_map, cond_map, probdef_ctwrpr, dirdef_ctwrpr);
-    const auto dirichlet_bc = DirichletBCAlgebraic{sparsity_graph, owned_bcdofs, shared_bcdofs};
+    const auto dirichlet_bc = bcs::DirichletBCAlgebraic{sparsity_graph, owned_bcdofs, shared_bcdofs};
 
-    auto matrix         = makeTeuchosRCP< tpetra_fecrsmatrix_t >(sparsity_graph);
+    auto matrix         = util::makeTeuchosRCP< tpetra_fecrsmatrix_t >(sparsity_graph);
     auto input_vectors  = tpetra_femultivector_t{sparsity_graph->getRowMap(), sparsity_graph->getImporter(), 2};
     auto result_vectors = tpetra_multivector_t{sparsity_graph->getRowMap(), 2};
 
@@ -123,7 +123,7 @@ void test()
 
 int main(int argc, char* argv[])
 {
-    const auto max_par_guard = detail::MaxParallelismGuard{4};
+    const auto max_par_guard = util::MaxParallelismGuard{4};
     const auto scope_guard   = L3sterScopeGuard{argc, argv};
     test< CondensationPolicy::None >();
     test< CondensationPolicy::ElementBoundary >();

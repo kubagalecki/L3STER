@@ -13,6 +13,7 @@
 #include "catch2/catch.hpp"
 
 using namespace lstr;
+using namespace lstr::map;
 
 static auto getLineElement()
 {
@@ -205,7 +206,8 @@ TEST_CASE("Boundary normal computation", "[mapping]")
 
 TEST_CASE("Basis function values", "[mapping]")
 {
-    constexpr auto LB = BasisTypes::Lagrange;
+    using namespace basis;
+    constexpr auto LB = BasisType::Lagrange;
     SECTION("Line")
     {
         constexpr auto   ET = ElementTypes::Line;
@@ -314,7 +316,8 @@ TEST_CASE("Basis function values", "[mapping]")
 
 TEST_CASE("Basis function derivatives", "[mapping]")
 {
-    constexpr auto LB = BasisTypes::Lagrange;
+    using namespace basis;
+    constexpr auto LB = BasisType::Lagrange;
     SECTION("Line")
     {
         const auto element    = getLineElement();
@@ -388,11 +391,12 @@ TEST_CASE("Basis function derivatives", "[mapping]")
 
 TEST_CASE("Reference basis at domain QPs", "[mapping]")
 {
+    using namespace basis;
     constexpr auto   ET            = ElementTypes::Hex;
     constexpr el_o_t EO            = 4;
-    constexpr auto   QT            = QuadratureTypes::GLeg;
+    constexpr auto   QT            = quad::QuadratureType::GaussLegendre;
     constexpr el_o_t QO            = 4;
-    constexpr auto   BT            = BasisTypes::Lagrange;
+    constexpr auto   BT            = BasisType::Lagrange;
     const auto       ref_bas_at_qp = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
 
     SECTION("Values")
@@ -411,9 +415,9 @@ TEST_CASE("Reference basis at domain QPs", "[mapping]")
 
 TEST_CASE("Reference basis at boundary QPs", "[mapping]")
 {
-    constexpr auto  QT = QuadratureTypes::GLeg;
+    constexpr auto  QT = quad::QuadratureType::GaussLegendre;
     constexpr q_o_t QO = 5;
-    constexpr auto  BT = BasisTypes::Lagrange;
+    constexpr auto  BT = basis::BasisType::Lagrange;
 
     constexpr auto check_all_in_plane = []< el_o_t... orders >(
                                             const BoundaryView< orders... >& view, Space normal, val_t offs) {
@@ -437,7 +441,7 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
             normal);
         const auto element_checker = [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
             const auto& ref_q =
-                getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide()).quadrature;
+                basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide()).quadrature;
             for (auto qp : ref_q.points)
                 CHECK(mapToPhysicalSpace(*el_view, qp)[space_ind] == Approx{offs}.margin(1.e-15));
         };
@@ -459,7 +463,7 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
                 0};
 
             const auto check_pos = [&](el_side_t side, val_t x_pos) {
-                const auto& ref_q  = getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QLO >(side);
+                const auto& ref_q  = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QLO >(side);
                 const auto& ref_p  = ref_q.quadrature.points.front();
                 const auto  phys_p = mapToPhysicalSpace(el, Point{ref_p});
                 CHECK(phys_p[0] == Approx{x_pos}.margin(1e-15));
@@ -541,8 +545,8 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
 
 TEST_CASE("Boundary integration", "[mapping]")
 {
-    constexpr auto  BT        = BasisTypes::Lagrange;
-    constexpr auto  QT        = QuadratureTypes::GLeg;
+    constexpr auto  BT        = basis::BasisType::Lagrange;
+    constexpr auto  QT        = quad::QuadratureType::GaussLegendre;
     constexpr q_o_t QO        = 10;
     constexpr auto  integrand = [](const auto&, const auto&, const auto&, const auto&) noexcept {
         return Eigen::Vector< val_t, 1 >(1.); // Compute boundary area/length
@@ -550,7 +554,7 @@ TEST_CASE("Boundary integration", "[mapping]")
     const auto check_side_area =
         [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element, el_side_t side, val_t expected_area) {
             const auto el_view    = BoundaryElementView{element, side};
-            const auto basis_vals = getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(side);
+            const auto basis_vals = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(side);
             const auto node_vals  = eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, 0 >{};
             const auto area = detail::evalElementBoundaryIntegral(integrand, el_view, node_vals, basis_vals, 0.)[0];
             CHECK(area == Approx(expected_area).margin(1e-15));

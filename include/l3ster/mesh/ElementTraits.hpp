@@ -21,7 +21,7 @@ namespace detail::elem
 consteval auto getBoundaryInds(const auto& boundary_table) -> ConstexprVector< el_locind_t >
 {
     ConstexprVector< el_locind_t > retval;
-    forEachTuple(boundary_table, [&retval](const auto& side_boundary_inds) {
+    util::forEachTuple(boundary_table, [&retval](const auto& side_boundary_inds) {
         for (auto i : side_boundary_inds)
             retval.pushBack(i);
     });

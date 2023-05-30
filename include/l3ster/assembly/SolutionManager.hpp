@@ -34,7 +34,7 @@ public:
     {
         friend class SolutionManager;
         FieldValueGetter(const SolutionManager*                parent,
-                         const std::array< size_t, n_fields >& field_inds = makeIotaArray< size_t, n_fields >())
+                         const std::array< size_t, n_fields >& field_inds = util::makeIotaArray< size_t, n_fields >())
             : m_parent{parent}, m_field_inds{field_inds}
         {}
 

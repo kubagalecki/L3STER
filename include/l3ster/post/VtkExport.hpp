@@ -32,7 +32,7 @@ private:
         size_t topology, offsets, cell_types;
     };
 
-    using payload_t = std::variant< std::monostate /* for writing borrowed data */, std::string, ArrayOwner< char > >;
+    using payload_t = std::variant< std::monostate, std::string, util::ArrayOwner< char > >;
     struct AsyncWrite
     {
         // Member declaration order ensures correct behavior on destruction: 1) block 2) dealloc payload 3) close file
@@ -55,13 +55,13 @@ private:
                              SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds);
     auto makeDataDescription(RangeOfConvertibleTo_c< std::string_view > auto&&               names,
                              SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds,
-                             const std::vector< ArrayOwner< char > >& encoded_fields) const -> std::string;
+                             const std::vector< util::ArrayOwner< char > >& encoded_fields) const -> std::string;
 
     MPI_Offset enqueueWrite(std::shared_ptr< MpiComm::FileHandle > file,
                             MPI_Offset                             pos,
                             ContiguousSizedRangeOf< char > auto&&  text)
         requires std::ranges::borrowed_range< decltype(text) > or std::same_as< std::string&&, decltype(text) > or
-                 std::same_as< ArrayOwner< char >&&, decltype(text) >;
+                 std::same_as< util::ArrayOwner< char >&&, decltype(text) >;
     inline void flushWriteQueue();
 
     size_t                    m_n_cells, m_n_nodes;
@@ -327,7 +327,7 @@ auto serializeTopology(const MeshPartition< orders... >& mesh)
     mesh.visit(process_element);
 
     constexpr auto get_b64_alloc_size = []< typename T >(const std::vector< T >& v) {
-        return getBase64EncodingSize< T >(v.size());
+        return util::getBase64EncodingSize< T >(v.size());
     };
     std::string b64_data;
     b64_data.reserve(get_b64_alloc_size(cell_types) + get_b64_alloc_size(topo_data) + get_b64_alloc_size(offsets));
@@ -335,7 +335,7 @@ auto serializeTopology(const MeshPartition< orders... >& mesh)
         const auto enc_size = get_b64_alloc_size(v);
         const auto old_size = b64_data.size();
         b64_data.resize(old_size + enc_size);
-        encodeAsBase64(v, std::next(begin(b64_data), static_cast< ptrdiff_t >(old_size)));
+        util::encodeAsBase64(v, std::next(begin(b64_data), static_cast< ptrdiff_t >(old_size)));
         return enc_size;
     };
 
@@ -355,7 +355,7 @@ std::string makeCoordsSerialized(const MeshPartition< orders... >& mesh)
     constexpr size_t space_dim        = 3;
     const auto       n_nodes          = mesh.getAllNodes().size();
     const size_t     n_vals_to_encode = n_nodes * space_dim + 1;
-    auto             alloc_to_encode  = ArrayOwner< val_t >(n_vals_to_encode);
+    auto             alloc_to_encode  = util::ArrayOwner< val_t >(n_vals_to_encode);
     const auto       data_to_encode   = std::span{alloc_to_encode};
     const auto       coords           = data_to_encode.subspan(1);
 
@@ -376,16 +376,16 @@ std::string makeCoordsSerialized(const MeshPartition< orders... >& mesh)
     mesh.visit(process_element, std::execution::par);
 
     std::string retval;
-    retval.resize(getBase64EncodingSize< val_t >(n_vals_to_encode));
-    encodeAsBase64(std::as_const(alloc_to_encode), retval.begin());
+    retval.resize(util::getBase64EncodingSize< val_t >(n_vals_to_encode));
+    util::encodeAsBase64(std::as_const(alloc_to_encode), retval.begin());
     return retval;
 }
 
-inline auto encodeFieldImpl(std::span< const val_t > field_vals) -> ArrayOwner< char >
+inline auto encodeFieldImpl(std::span< const val_t > field_vals) -> util::ArrayOwner< char >
 {
     const auto n_vals_to_encode = field_vals.size() + 1;
-    const auto bytes_encoded    = getBase64EncodingSize< val_t >(n_vals_to_encode);
-    auto       retval           = ArrayOwner< char >{bytes_encoded};
+    const auto bytes_encoded    = util::getBase64EncodingSize< val_t >(n_vals_to_encode);
+    auto       retval           = util::ArrayOwner< char >{bytes_encoded};
     auto       output_it        = retval.begin();
 
     // Prepend the size of the results in bytes. We need to create a prefix of size divisible by 3
@@ -394,15 +394,15 @@ inline auto encodeFieldImpl(std::span< const val_t > field_vals) -> ArrayOwner< 
     std::ranges::copy(field_vals | std::views::take(2), std::next(begin(prefix)));
 
     // Encode prefix (case when field_vals.size() < 2 handled correctly)
-    const auto prefix_bytes_written = encodeAsBase64(prefix | std::views::take(n_vals_to_encode), output_it);
+    const auto prefix_bytes_written = util::encodeAsBase64(prefix | std::views::take(n_vals_to_encode), output_it);
     std::advance(output_it, prefix_bytes_written);
 
     // Encode remaining values
-    encodeAsBase64(field_vals | std::views::drop(2), output_it);
+    util::encodeAsBase64(field_vals | std::views::drop(2), output_it);
     return retval;
 }
 
-auto encodeFieldImpl(SizedRangeOfConvertibleTo_c< std::span< const val_t > > auto&& fields) -> ArrayOwner< char >
+auto encodeFieldImpl(SizedRangeOfConvertibleTo_c< std::span< const val_t > > auto&& fields) -> util::ArrayOwner< char >
 {
     // Move the node value spans into an array for easy random access
     const auto                                n_fields = std::ranges::size(fields);
@@ -415,7 +415,7 @@ auto encodeFieldImpl(SizedRangeOfConvertibleTo_c< std::span< const val_t > > aut
     const size_t     n_field_vals       = n_fields_to_export * n_nodes;
     const size_t     n_vals_to_encode   = n_field_vals + 1;
 
-    auto alloc_to_encode = ArrayOwner< val_t >{n_vals_to_encode};
+    auto alloc_to_encode = util::ArrayOwner< val_t >{n_vals_to_encode};
     alloc_to_encode[0]   = std::bit_cast< val_t >(n_field_vals * sizeof(val_t));
     const auto node_vals = std::span{alloc_to_encode}.subspan(1);
 
@@ -428,13 +428,14 @@ auto encodeFieldImpl(SizedRangeOfConvertibleTo_c< std::span< const val_t > > aut
             *output_iter = 0.;
     });
 
-    const auto bytes_encoded = getBase64EncodingSize< val_t >(n_vals_to_encode);
-    auto       retval        = ArrayOwner< char >{bytes_encoded};
-    encodeAsBase64(std::as_const(alloc_to_encode), retval.begin());
+    const auto bytes_encoded = util::getBase64EncodingSize< val_t >(n_vals_to_encode);
+    auto       retval        = util::ArrayOwner< char >{bytes_encoded};
+    util::encodeAsBase64(std::as_const(alloc_to_encode), retval.begin());
     return retval;
 }
 
-auto encodeField(const SolutionManager& solution_manager, IndexRange_c auto&& component_inds) -> ArrayOwner< char >
+auto encodeField(const SolutionManager& solution_manager, IndexRange_c auto&& component_inds)
+    -> util::ArrayOwner< char >
 {
     const auto n_fields = std::ranges::size(component_inds);
     util::throwingAssert(n_fields != 0 and n_fields <= 3,
@@ -454,9 +455,9 @@ auto encodeField(const SolutionManager& solution_manager, IndexRange_c auto&& co
 
 auto encodeSolution(const SolutionManager&                                          solution_manager,
                     SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_components)
-    -> std::vector< ArrayOwner< char > >
+    -> std::vector< util::ArrayOwner< char > >
 {
-    auto   retval         = std::vector< ArrayOwner< char > >(std::ranges::size(field_components));
+    auto   retval         = std::vector< util::ArrayOwner< char > >(std::ranges::size(field_components));
     auto&& grouping_range = std::forward< decltype(field_components) >(field_components) | std::views::common;
     util::tbb::parallelTransform(grouping_range, begin(retval), [&](std::span< const size_t > component_inds) {
         return detail::vtk::encodeField(solution_manager, component_inds);
@@ -469,7 +470,7 @@ auto makeNumFieldComponentsView(SizedRangeOfConvertibleTo_c< std::span< const si
     return field_component_inds | std::views::transform([](auto cmps) -> size_t { return cmps.size() == 1 ? 1 : 3; });
 }
 
-inline auto makeEncodedFieldSizeView(const std::vector< ArrayOwner< char > >& encoded_fields)
+inline auto makeEncodedFieldSizeView(const std::vector< util::ArrayOwner< char > >& encoded_fields)
 {
     return encoded_fields | std::views::transform([](const auto& enc) { return enc.size(); });
 }
@@ -586,7 +587,7 @@ void PvtuExporter::enqueueVtuFileWrite(
 auto PvtuExporter::makeDataDescription(
     RangeOfConvertibleTo_c< std::string_view > auto&&               names,
     SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds,
-    const std::vector< ArrayOwner< char > >&                        encoded_fields) const -> std::string
+    const std::vector< util::ArrayOwner< char > >&                  encoded_fields) const -> std::string
 {
     auto&& n_field_components  = detail::vtk::makeNumFieldComponentsView(field_component_inds);
     auto&& encoded_field_sizes = detail::vtk::makeEncodedFieldSizeView(encoded_fields);
@@ -662,7 +663,7 @@ MPI_Offset PvtuExporter::enqueueWrite(std::shared_ptr< MpiComm::FileHandle > fil
                                       MPI_Offset                             pos,
                                       ContiguousSizedRangeOf< char > auto&&  text)
     requires std::ranges::borrowed_range< decltype(text) > or std::same_as< std::string&&, decltype(text) > or
-             std::same_as< ArrayOwner< char >&&, decltype(text) >
+             std::same_as< util::ArrayOwner< char >&&, decltype(text) >
 {
     const MPI_Offset write_length = std::ranges::ssize(text);
     if constexpr (std::ranges::borrowed_range< decltype(text) >)

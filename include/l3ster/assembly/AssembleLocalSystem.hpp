@@ -8,6 +8,7 @@
 #include "l3ster/mapping/ComputePhysBasisDer.hpp"
 #include "l3ster/mapping/JacobiMat.hpp"
 #include "l3ster/mapping/MapReferenceToPhysical.hpp"
+#include "l3ster/math/IntegerMath.hpp"
 #include "l3ster/mesh/BoundaryElementView.hpp"
 #include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/SetStackSize.hpp"
@@ -107,7 +108,7 @@ template < size_t problem_size, size_t update_size >
 class LocalSystemManager
 {
     static constexpr size_t target_update_size = 128;
-    static constexpr size_t updates_per_batch  = intDivRoundUp(target_update_size, update_size);
+    static constexpr size_t updates_per_batch  = math::intDivRoundUp(target_update_size, update_size);
     static constexpr size_t batch_update_size  = update_size * updates_per_batch;
     using batch_update_matrix_t = Eigen::Matrix< val_t, problem_size, batch_update_size, Eigen::ColMajor >;
 
@@ -250,19 +251,19 @@ template < ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
 const auto& assembleLocalSystem(auto&&                                                                      kernel,
                                 const Element< ET, EO >&                                                    element,
                                 const eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
-                                const ReferenceBasisAtQuadrature< ET, EO, QL >& basis_at_qps,
-                                val_t                                           time)
+                                const basis::ReferenceBasisAtQuadrature< ET, EO, QL >& basis_at_qps,
+                                val_t                                                  time)
     requires detail::Kernel_c< decltype(kernel), Element< ET, EO >::native_dim, n_fields >
 {
     L3STER_PROFILE_FUNCTION;
-    const auto jacobi_mat_generator = getNatJacobiMatGenerator(element);
+    const auto jacobi_mat_generator = map::getNatJacobiMatGenerator(element);
     auto&      local_system_manager = detail::getLocalSystemManager< decltype(kernel), ET, EO, n_fields >();
     const auto process_qp           = [&](auto point, val_t weight, const auto& bas_vals, const auto& ref_bas_ders) {
         const auto jacobi_mat         = jacobi_mat_generator(point);
-        const auto phys_basis_ders    = computePhysBasisDers(jacobi_mat, ref_bas_ders);
+        const auto phys_basis_ders    = map::computePhysBasisDers(jacobi_mat, ref_bas_ders);
         const auto field_vals         = detail::computeFieldVals(bas_vals, node_vals);
         const auto field_ders         = detail::computeFieldDers(ref_bas_ders, node_vals);
-        const auto phys_coords        = mapToPhysicalSpace(element, point);
+        const auto phys_coords        = map::mapToPhysicalSpace(element, point);
         const auto [A, F]             = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time});
         const auto rank_update_weight = jacobi_mat.determinant() * weight;
         local_system_manager.update(A, F, bas_vals, phys_basis_ders, rank_update_weight);
@@ -280,22 +281,22 @@ const auto&
 assembleLocalBoundarySystem(Kernel&&                                                                    kernel,
                             BoundaryElementView< ET, EO >                                               el_view,
                             const eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
-                            const ReferenceBasisAtQuadrature< ET, EO, QL >&                             basis_at_qps,
+                            const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                      basis_at_qps,
                             val_t                                                                       time)
     requires detail::BoundaryKernel_c< Kernel, Element< ET, EO >::native_dim, n_fields >
 {
     L3STER_PROFILE_FUNCTION;
-    const auto jacobi_mat_generator = getNatJacobiMatGenerator(*el_view);
+    const auto jacobi_mat_generator = map::getNatJacobiMatGenerator(*el_view);
     auto&      local_system_manager = detail::getLocalSystemManager< decltype(kernel), ET, EO, n_fields >();
     const auto process_qp           = [&](auto point, val_t weight, const auto& bas_vals, const auto& ref_bas_ders) {
         const auto jacobi_mat      = jacobi_mat_generator(point);
-        const auto phys_basis_ders = computePhysBasisDers(jacobi_mat, ref_bas_ders);
+        const auto phys_basis_ders = map::computePhysBasisDers(jacobi_mat, ref_bas_ders);
         const auto field_vals      = detail::computeFieldVals(bas_vals, node_vals);
         const auto field_ders      = detail::computeFieldDers(ref_bas_ders, node_vals);
-        const auto phys_coords     = mapToPhysicalSpace(*el_view, point);
-        const auto normal          = computeBoundaryNormal(el_view, jacobi_mat);
+        const auto phys_coords     = map::mapToPhysicalSpace(*el_view, point);
+        const auto normal          = map::computeBoundaryNormal(el_view, jacobi_mat);
         const auto [A, F]    = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time}, normal);
-        const auto bound_jac = computeBoundaryIntegralJacobian(el_view, jacobi_mat);
+        const auto bound_jac = map::computeBoundaryIntegralJacobian(el_view, jacobi_mat);
         const auto rank_update_weight = bound_jac * weight;
         local_system_manager.update(A, F, bas_vals, phys_basis_ders, rank_update_weight);
     };

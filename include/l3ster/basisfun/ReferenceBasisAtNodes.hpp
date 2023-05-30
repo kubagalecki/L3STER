@@ -4,9 +4,9 @@
 #include "l3ster/basisfun/ReferenceBasisFunction.hpp"
 #include "l3ster/mesh/NodeReferenceLocation.hpp"
 
-namespace lstr
+namespace lstr::basis
 {
-template < ElementTypes ET, el_o_t EO, BasisTypes BT = BasisTypes::Lagrange >
+template < ElementTypes ET, el_o_t EO, BasisType BT = BasisType::Lagrange >
 const auto& getBasisAtNodes()
 {
     static const ReferenceBasisAtPoints< ET, EO, Element< ET, EO >::n_nodes > retval = std::invoke([] {
@@ -15,5 +15,5 @@ const auto& getBasisAtNodes()
     });
     return retval;
 }
-} // namespace lstr
+} // namespace lstr::basis
 #endif // L3STER_BASISFUN_REFERENCEBASISATNODES_HPP

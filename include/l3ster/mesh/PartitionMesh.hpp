@@ -37,7 +37,7 @@ auto computeNodeWeights(const MeshPartition< orders... >& mesh, ConstexprValue< 
 
     constexpr auto n_fields      = deduceNFields(problem_def);
     auto           node_dof_inds = DynamicBitset{n_fields * mesh.getAllNodes().size()};
-    forConstexpr(
+    util::forConstexpr(
         [&]< auto dom_def >(ConstexprValue< dom_def >) {
             constexpr auto dom_id   = dom_def.first;
             constexpr auto dom_dofs = getTrueInds< dom_def.second >();
@@ -255,7 +255,7 @@ template < typename T >
 std::vector< T > getPermutedVector(const std::vector< size_t >& perm, const std::vector< T >& input)
 {
     std::vector< T > ret(input.size());
-    copyPermuted(input.cbegin(), input.cend(), perm.cbegin(), ret.begin());
+    util::copyPermuted(input.cbegin(), input.cend(), perm.cbegin(), ret.begin());
     return ret;
 }
 
@@ -271,7 +271,7 @@ auto getElementIds(const MeshPartition< orders... >& part, size_t n_elements, co
 
 inline void sortElementsById(std::vector< el_id_t >& element_ids, std::vector< idx_t >& epart)
 {
-    const auto sort_ind = sortingPermutation(element_ids.cbegin(), element_ids.cend());
+    const auto sort_ind = util::sortingPermutation(element_ids.cbegin(), element_ids.cend());
     element_ids         = getPermutedVector(sort_ind, element_ids);
     epart               = getPermutedVector(sort_ind, epart);
 }

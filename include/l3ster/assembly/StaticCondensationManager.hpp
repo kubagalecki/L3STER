@@ -287,7 +287,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemb
     tpetra_crsmatrix_t&                              matrix,
     std::span< val_t >                               rhs)
 {
-    const auto max_par_guard = detail::MaxParallelismGuard{};
+    const auto max_par_guard = util::MaxParallelismGuard{};
     util::tbb::parallelFor(m_element_ids, [&](el_id_t id) {
         auto&      elem_data           = m_elem_data_map.at(id);
         const auto element_ptr_variant = mesh.find(id)->first;

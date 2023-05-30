@@ -249,15 +249,15 @@ inline auto readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
                 });
             };
 
-            const auto srt_ind = sortingPermutation(node_ids.cbegin(), node_ids.cend());
+            const auto srt_ind = util::sortingPermutation(node_ids.cbegin(), node_ids.cend());
             {
                 auto temp = std::vector< size_t >(n_nodes);
-                copyPermuted(node_ids.cbegin(), node_ids.cend(), srt_ind.cbegin(), begin(temp));
+                util::copyPermuted(node_ids.cbegin(), node_ids.cend(), srt_ind.cbegin(), begin(temp));
                 node_ids = std::move(temp);
             }
             {
                 auto temp = std::vector< Point< 3 > >(n_nodes);
-                copyPermuted(node_coords.cbegin(), node_coords.cend(), srt_ind.cbegin(), begin(temp));
+                util::copyPermuted(node_coords.cbegin(), node_coords.cend(), srt_ind.cbegin(), begin(temp));
                 node_coords = std::move(temp);
             }
 

@@ -44,7 +44,7 @@ public:
             };
             mesh.visit(process_element, domain_id);
         };
-        forConstexpr(process_domain, problemdef_ctwrpr);
+        util::forConstexpr(process_domain, problemdef_ctwrpr);
     }
 
     [[nodiscard]] auto getRow(size_t row) { return m_entries.getSubView(row * m_dim, (row + 1) * m_dim); }
@@ -115,7 +115,7 @@ void test()
 
 int main(int argc, char* argv[])
 {
-    const auto max_par_guard = detail::MaxParallelismGuard{4};
+    const auto max_par_guard = util::MaxParallelismGuard{4};
     const auto scope_guard   = L3sterScopeGuard{argc, argv};
     test< CondensationPolicy::None >();
     test< CondensationPolicy::ElementBoundary >();

@@ -110,7 +110,7 @@ void test()
         CHECK_THROWS(fake_problem->applyDirichletBCs());
     }
 
-    constexpr auto dof_inds = makeIotaArray< size_t, 3 >();
+    constexpr auto dof_inds = util::makeIotaArray< size_t, 3 >();
 
     auto solver   = solvers::Lapack{};
     auto solution = alg_sys->makeSolutionVector();
@@ -162,7 +162,7 @@ void test()
 // Solve 2D diffusion problem
 int main(int argc, char* argv[])
 {
-    const auto max_par_guard = detail::MaxParallelismGuard{4};
+    const auto max_par_guard = util::MaxParallelismGuard{4};
     const auto scope_guard   = L3sterScopeGuard{argc, argv};
     test< CondensationPolicy::None >();
     test< CondensationPolicy::ElementBoundary >();

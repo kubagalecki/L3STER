@@ -3,12 +3,12 @@
 
 #include "Legendre.hpp"
 
-namespace lstr
+namespace lstr::math
 {
 template < std::floating_point T, size_t N >
 constexpr auto getLobattoPolynomial()
 {
     return getLegendrePolynomial< T, N + 1 >().derivative();
 }
-} // namespace lstr
+} // namespace lstr::math
 #endif // L3STER_MESH_LOBATTO_HPP

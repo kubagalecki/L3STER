@@ -45,7 +45,7 @@ void vtkExportTest2D()
     constexpr auto n_fields          = detail::deduceNFields(problem_def);
     constexpr auto scalar_inds       = std::array< size_t, 2 >{0, 2};
     constexpr auto vec_inds          = std::array< size_t, 2 >{1, 3};
-    constexpr auto all_field_inds    = makeIotaArray< size_t, n_fields >();
+    constexpr auto all_field_inds    = util::makeIotaArray< size_t, n_fields >();
 
     const auto system_manager   = makeAlgebraicSystem(comm, my_partition, no_condensation, problemdef_ctwrpr);
     auto       solution_manager = SolutionManager{my_partition, n_fields};
@@ -107,7 +107,7 @@ void vtkExportTest3D()
     constexpr auto mesh_order = 2;
     const auto     my_partition =
         generateAndDistributeMesh< mesh_order >(comm, [&] { return makeCubeMesh(node_dist); }, {1, 2, 3, 4, 5, 6});
-    const auto boundary = my_partition.getBoundaryView(makeIotaArray< d_id_t, 6 >(1));
+    const auto boundary = my_partition.getBoundaryView(util::makeIotaArray< d_id_t, 6 >(1));
 
     constexpr d_id_t domain_id = 0;
     constexpr auto problem_def = std::array{Pair{d_id_t{domain_id}, std::array{true, true, true, false, false, false}},
@@ -158,7 +158,7 @@ void vtkExportTest3D()
         solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);
         solution->switchActiveMultiVector();
     }
-    constexpr auto field_inds = makeIotaArray< size_t, n_fields >();
+    constexpr auto field_inds = util::makeIotaArray< size_t, n_fields >();
     system_manager->updateSolution(my_partition, solution, field_inds, solution_manager, field_inds);
 
     auto       exporter    = PvtuExporter{my_partition};
@@ -182,7 +182,7 @@ void vtkExportTest3D()
 
 int main(int argc, char* argv[])
 {
-    const auto max_par_guard = detail::MaxParallelismGuard{4};
+    const auto max_par_guard = util::MaxParallelismGuard{4};
     const auto scope_guard   = L3sterScopeGuard{argc, argv};
 
     vtkExportTest2D();

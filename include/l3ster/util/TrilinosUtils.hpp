@@ -7,7 +7,7 @@
 #include <ranges>
 #include <span>
 
-namespace lstr
+namespace lstr::util
 {
 auto asTeuchosView(std::ranges::contiguous_range auto&& range)
     requires std::ranges::sized_range< decltype(range) > and std::ranges::borrowed_range< decltype(range) >
@@ -96,5 +96,5 @@ auto getSubgraph(const Teuchos::RCP< const tpetra_crsgraph_t >& full_graph,
     subgraph->fillComplete();
     return subgraph;
 }
-} // namespace lstr
+} // namespace lstr::util
 #endif // L3STER_UTILS_TRILINOSUTILS_HPP

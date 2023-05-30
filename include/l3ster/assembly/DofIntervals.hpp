@@ -47,7 +47,7 @@ auto makeFieldCoverageVector(const MeshPartition< orders... >& mesh,
     auto retval = std::vector< std::bitset< deduceNFields(problem_def) > >(cond_map.getCondensedIds().size());
     for (const auto& [dom_id, field_array] : problem_def)
     {
-        const auto fields = toBitset(field_array);
+        const auto fields = util::toBitset(field_array);
         mesh.visit(
             [&](const auto& element) {
                 for (auto node : getPrimaryNodesView< CP >(element))
@@ -78,7 +78,7 @@ void serializeDofIntervals(const node_interval_vector_t< n_fields >&       inter
     for (const auto& [delims, field_cov] : intervals)
     {
         out_it = std::ranges::copy(delims, out_it).out;
-        out_it = std::ranges::copy(serializeBitset(field_cov), out_it).out;
+        out_it = std::ranges::copy(util::serializeBitset(field_cov), out_it).out;
     }
 }
 
@@ -87,14 +87,14 @@ void deserializeDofIntervals(const std::ranges::sized_range auto& serial_data, a
     requires std::same_as< std::ranges::range_value_t< std::decay_t< decltype(serial_data) > >, unsigned long long > and
              std::output_iterator< decltype(out_it), node_interval_t< n_fields > >
 {
-    constexpr auto n_ulls = bitsetNUllongs< n_fields >();
+    constexpr auto n_ulls = util::bitsetNUllongs< n_fields >();
     for (auto data_it = std::ranges::begin(serial_data); data_it != std::ranges::end(serial_data);)
     {
         auto delims          = std::array< n_id_t, 2 >{};
         auto serial_fieldcov = std::array< unsigned long long, n_ulls >{};
         data_it              = std::ranges::copy_n(data_it, delims.size(), delims.begin()).in;
         data_it              = std::ranges::copy_n(data_it, n_ulls, serial_fieldcov.begin()).in;
-        *out_it++            = std::make_pair(delims, trimBitset< n_fields >(deserializeBitset(serial_fieldcov)));
+        *out_it++ = std::make_pair(delims, util::trimBitset< n_fields >(util::deserializeBitset(serial_fieldcov)));
     }
 }
 
@@ -102,7 +102,7 @@ template < size_t n_fields >
 auto gatherGlobalDofIntervals(const MpiComm& comm, const node_interval_vector_t< n_fields >& local_intervals)
     -> node_interval_vector_t< n_fields >
 {
-    constexpr size_t serial_interval_size = bitsetNUllongs< n_fields >() + 2;
+    constexpr size_t serial_interval_size = util::bitsetNUllongs< n_fields >() + 2;
     const size_t     n_intervals_local    = local_intervals.size();
     const auto       comm_size            = comm.getSize();
     const auto       my_rank              = comm.getRank();
@@ -114,7 +114,7 @@ auto gatherGlobalDofIntervals(const MpiComm& comm, const node_interval_vector_t<
     });
     const size_t max_msg_size           = max_n_intervals_global * serial_interval_size + 1u;
     auto         serial_local_intervals = std::invoke([&] {
-        auto retval    = ArrayOwner< unsigned long long >{max_msg_size};
+        auto retval    = util::ArrayOwner< unsigned long long >{max_msg_size};
         retval.front() = n_intervals_local;
         serializeDofIntervals(local_intervals, std::next(retval.begin()));
         return retval;
@@ -122,7 +122,7 @@ auto gatherGlobalDofIntervals(const MpiComm& comm, const node_interval_vector_t<
 
     node_interval_vector_t< n_fields > retval;
     retval.reserve(comm_size * max_n_intervals_global);
-    auto       proc_buf     = ArrayOwner< unsigned long long >{max_msg_size};
+    auto       proc_buf     = util::ArrayOwner< unsigned long long >{max_msg_size};
     const auto process_data = [&](int sender_rank) {
         if (sender_rank != my_rank)
         {
@@ -134,7 +134,8 @@ auto gatherGlobalDofIntervals(const MpiComm& comm, const node_interval_vector_t<
             std::ranges::copy(local_intervals, std::back_inserter(retval));
     };
 
-    auto msg_buf = my_rank == 0 ? std::move(serial_local_intervals) : ArrayOwner< unsigned long long >{max_msg_size};
+    auto msg_buf =
+        my_rank == 0 ? std::move(serial_local_intervals) : util::ArrayOwner< unsigned long long >{max_msg_size};
     auto request = comm.broadcastAsync(msg_buf, 0);
     for (int root_rank = 1; root_rank < comm_size; ++root_rank)
     {
@@ -160,10 +161,10 @@ void consolidateDofIntervals(node_interval_vector_t< n_fields >& intervals)
         std::ranges::sort(intervals, std::less<>{}, std::forward< F >(proj));
     };
     constexpr auto by_dof = [](const interval_t& interval) {
-        return std::make_pair(serializeBitset(interval.second), interval.first);
+        return std::make_pair(util::serializeBitset(interval.second), interval.first);
     };
     constexpr auto by_delim = [](const interval_t& interval) {
-        return std::make_pair(interval.first, serializeBitset(interval.second));
+        return std::make_pair(interval.first, util::serializeBitset(interval.second));
     };
     const auto consolidate_samedof_overlappingdelim = [&intervals] {
         constexpr auto same_dof_overlapping = [](const auto& i1, const auto& i2) {
@@ -176,7 +177,7 @@ void consolidateDofIntervals(node_interval_vector_t< n_fields >& intervals)
             const auto [lo2, hi2] = i2.first;
             return std::make_pair(std::array{lo1, std::max(hi1, hi2)}, i1.second);
         };
-        const auto erase_range = reduceConsecutive(intervals, same_dof_overlapping, consolidate);
+        const auto erase_range = util::reduceConsecutive(intervals, same_dof_overlapping, consolidate);
         intervals.erase(erase_range.begin(), erase_range.end());
     };
     const auto consolidate_same_delim = [&intervals] {
@@ -186,7 +187,7 @@ void consolidateDofIntervals(node_interval_vector_t< n_fields >& intervals)
         constexpr auto consolidate = [](const auto& i1, const auto& i2) {
             return std::make_pair(i1.first, i1.second | i2.second);
         };
-        intervals.erase(begin(reduceConsecutive(intervals, same_interval_delim, consolidate)), intervals.end());
+        intervals.erase(begin(util::reduceConsecutive(intervals, same_interval_delim, consolidate)), intervals.end());
     };
     const auto resolve_overlapping = [&intervals] {
         // TODO: Optimize this function so that `overlap_range` only covers the intervals which *end* before it

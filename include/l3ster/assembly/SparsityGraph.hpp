@@ -18,7 +18,7 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&       nodes,
 {
     std::array< global_dof_t, std::ranges::size(dof_inds) * n_nodes > retval;
     std::ranges::copy(nodes | std::views::transform([&](n_id_t node) {
-                          return getValuesAtInds(node_dof_map(cond_map.getCondensedId(node)), dofinds_ctwrpr);
+                          return util::getValuesAtInds(node_dof_map(cond_map.getCondensedId(node)), dofinds_ctwrpr);
                       }) | std::views::join,
                       begin(retval));
     return retval;
@@ -53,7 +53,7 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                nodes,
         const auto& all_dof_arrays = node_dof_map(node);
         for (size_t i = 0; const auto& all_dofs : all_dof_arrays)
         {
-            iters[i] = copyValuesAtInds(all_dofs, iters[i], dofinds_ctwrpr);
+            iters[i] = util::copyValuesAtInds(all_dofs, iters[i], dofinds_ctwrpr);
             ++i;
         }
     }
@@ -169,7 +169,7 @@ auto computeDofGraph(const MeshPartition< orders... >&                       mes
     L3STER_PROFILE_REGION_END("Compute global to local DOF map");
 
     const auto iterate_over_mesh = [&](auto&& element_kernel) {
-        forEachConstexprParallel(
+        util::forEachConstexprParallel(
             [&]< auto dom_def >(ConstexprValue< dom_def >) {
                 constexpr auto domain_id        = dom_def.first;
                 constexpr auto covered_dof_inds = getTrueInds< dom_def.second >();
@@ -187,7 +187,7 @@ auto computeDofGraph(const MeshPartition< orders... >&                       mes
         "CRS graph row sizes", owned_plus_shared_dofs.size()};
     auto crs_row_sizes_host_view = crs_row_sizes_dual_view.view_host();
     crs_row_sizes_dual_view.modify_host();
-    const auto crs_row_sizes = asSpan(crs_row_sizes_host_view);
+    const auto crs_row_sizes = util::asSpan(crs_row_sizes_host_view);
     std::ranges::fill(crs_row_sizes, size_t{});
 
     const auto get_element_dofs = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element,
@@ -257,7 +257,7 @@ inline auto initCrsGraph(const MpiComm&                                         
 {
     auto owned_map             = makeTpetraMap(owned_dofs, comm);
     auto owned_plus_shared_map = makeTpetraMap(owned_plus_shared_dofs, comm);
-    return makeTeuchosRCP< tpetra_fecrsgraph_t >(
+    return util::makeTeuchosRCP< tpetra_fecrsgraph_t >(
         std::move(owned_map), std::move(owned_plus_shared_map), std::move(row_sizes));
 }
 
@@ -283,7 +283,7 @@ makeSparsityGraph(const MpiComm&                                          comm,
     {
         const auto row_allocation = dof_graph(row_dof_ind);
         const auto row_entries    = row_allocation.subspan(0, row_sizes_host_view[row_dof_ind]);
-        retval->insertGlobalIndices(row_dof, asTeuchosView(row_entries));
+        retval->insertGlobalIndices(row_dof, util::asTeuchosView(row_entries));
         ++row_dof_ind;
     }
     L3STER_PROFILE_REGION_END("Insert into Tpetra::FECrsGraph");

@@ -9,7 +9,7 @@
 #include <cmath>
 #include <utility>
 
-namespace lstr
+namespace lstr::math
 {
 /*
 usage: const auto [qp, w] = computeGaussRule<N>(a, b, c)
@@ -61,6 +61,6 @@ auto computeGaussRule(Mapping_c< size_t, val_t > auto&& a,
 
     return std::make_pair(points, weights);
 }
-} // namespace lstr
+} // namespace lstr::math
 
 #endif // L3STER_MATH_COMPUTEGAUSSRULE_HPP

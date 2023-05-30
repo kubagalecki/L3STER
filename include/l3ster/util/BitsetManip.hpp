@@ -6,7 +6,7 @@
 #include <bitset>
 #include <limits>
 
-namespace lstr
+namespace lstr::util
 {
 template < std::size_t n_bits >
 constexpr std::size_t bitsetNUllongs()
@@ -66,5 +66,5 @@ std::bitset< N > toBitset(const std::array< bool, N >& in)
         retval[i++] = val;
     return retval;
 }
-} // namespace lstr
+} // namespace lstr::util
 #endif // L3STER_UTIL_BITSETMANIP_HPP

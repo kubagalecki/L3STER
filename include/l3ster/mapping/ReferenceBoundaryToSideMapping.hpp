@@ -1,13 +1,13 @@
 #ifndef L3STER_MAPPING_REFERENCEBOUNDARYTOSIDEMAPPING_HPP
 #define L3STER_MAPPING_REFERENCEBOUNDARYTOSIDEMAPPING_HPP
 
+#include "l3ster/math/RotationMatrix.hpp"
 #include "l3ster/mesh/ElementTraits.hpp"
-#include "l3ster/util/RotationMatrix.hpp"
 
 #include <numbers>
 #include <utility>
 
-namespace lstr
+namespace lstr::map
 {
 // Get the mapping from the reference boundary element to the reference element side. E.g. map the 2D reference quad
 // onto the side of the 3D reference hex. This mapping is linear and can be broken down into a rotation and translation.
@@ -23,19 +23,19 @@ const auto& getReferenceBoundaryToSideMapping(el_side_t side)
         constexpr auto                                             pi = std::numbers::pi_v< val_t >;
         if constexpr (ET == ElementTypes::Hex)
         {
-            table[0] = std::make_pair(makeRotationMatrix3DX(pi), trans_vec_t(0., 0., -1.));
+            table[0] = std::make_pair(math::makeRotationMatrix3DX(pi), trans_vec_t(0., 0., -1.));
             table[1] = std::make_pair(rot_mat_t::Identity(), trans_vec_t(0., 0., 1.));
-            table[2] = std::make_pair(makeRotationMatrix3DX(-pi / 2.), trans_vec_t(0., -1., 0.));
-            table[3] = std::make_pair(makeRotationMatrix3DX(pi / 2.), trans_vec_t(0., 1., 0.));
-            table[4] = std::make_pair(makeRotationMatrix3DY(pi / 2.), trans_vec_t(-1., 0., 0.));
-            table[5] = std::make_pair(makeRotationMatrix3DY(-pi / 2.), trans_vec_t(1., 0., 0.));
+            table[2] = std::make_pair(math::makeRotationMatrix3DX(-pi / 2.), trans_vec_t(0., -1., 0.));
+            table[3] = std::make_pair(math::makeRotationMatrix3DX(pi / 2.), trans_vec_t(0., 1., 0.));
+            table[4] = std::make_pair(math::makeRotationMatrix3DY(pi / 2.), trans_vec_t(-1., 0., 0.));
+            table[5] = std::make_pair(math::makeRotationMatrix3DY(-pi / 2.), trans_vec_t(1., 0., 0.));
         }
         else if constexpr (ET == ElementTypes::Quad)
         {
-            table[0] = std::make_pair(makeRotationMatrix2D(pi), trans_vec_t(0., -1.));
+            table[0] = std::make_pair(math::makeRotationMatrix2D(pi), trans_vec_t(0., -1.));
             table[1] = std::make_pair(rot_mat_t::Identity(), trans_vec_t(0., 1.));
-            table[2] = std::make_pair(makeRotationMatrix2D(pi / 2), trans_vec_t(-1., 0.));
-            table[3] = std::make_pair(makeRotationMatrix2D(-pi / 2), trans_vec_t(1., 0.));
+            table[2] = std::make_pair(math::makeRotationMatrix2D(pi / 2), trans_vec_t(-1., 0.));
+            table[3] = std::make_pair(math::makeRotationMatrix2D(-pi / 2), trans_vec_t(1., 0.));
         }
         else
         {
@@ -46,5 +46,5 @@ const auto& getReferenceBoundaryToSideMapping(el_side_t side)
     });
     return mapping_lookup_table[side];
 }
-} // namespace lstr
+} // namespace lstr::map
 #endif // L3STER_MAPPING_REFERENCEBOUNDARYTOSIDEMAPPING_HPP

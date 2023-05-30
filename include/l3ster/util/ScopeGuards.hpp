@@ -9,7 +9,7 @@
 
 namespace lstr
 {
-namespace detail
+namespace util
 {
 class MpiScopeGuard
 {
@@ -38,14 +38,14 @@ MpiScopeGuard::MpiScopeGuard(int& argc, char**& argv)
 {
     int        initialized{};
     const auto init_check_err = MPI_Initialized(&initialized);
-    detail::mpi::handleMPIError(init_check_err, "Failed to check MPI initialization status");
+    lstr::detail::mpi::handleMPIError(init_check_err, "Failed to check MPI initialization status");
     if (initialized)
         return;
 
     constexpr auto required_mode = MPI_THREAD_FUNNELED;
     int            provided_mode{};
     int            mpi_status = MPI_Init_thread(&argc, &argv, required_mode, &provided_mode);
-    detail::mpi::handleMPIError(mpi_status, "Failed to initialize MPI");
+    lstr::detail::mpi::handleMPIError(mpi_status, "Failed to initialize MPI");
     m_is_owning = true;
     util::throwingAssert(
         provided_mode >= required_mode,
@@ -89,7 +89,7 @@ public:
 private:
     bool m_is_owning;
 };
-} // namespace detail
+} // namespace util
 
 class L3sterScopeGuard
 {
@@ -103,12 +103,12 @@ public:
     }
 
 private:
-    detail::MpiScopeGuard    m_mpi_guard;
-    detail::KokkosScopeGuard m_kokkos_guard;
-    util::StackSizeGuard     m_stack_size_guard;
+    util::MpiScopeGuard    m_mpi_guard;
+    util::KokkosScopeGuard m_kokkos_guard;
+    util::StackSizeGuard   m_stack_size_guard;
 };
 
-namespace detail
+namespace util
 {
 class MaxParallelismGuard
 {
@@ -145,6 +145,6 @@ private:
     int m_prev_omp_threads;
 #endif
 };
-} // namespace detail
+} // namespace util
 } // namespace lstr
 #endif // L3STER_UTIL_KOKKOSSCOPEGUARD_HPP

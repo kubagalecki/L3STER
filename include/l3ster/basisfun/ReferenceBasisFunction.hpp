@@ -8,9 +8,9 @@
 #include "l3ster/mesh/Point.hpp"
 #include "l3ster/util/Algorithm.hpp"
 
-namespace lstr
+namespace lstr::basis
 {
-enum struct BasisTypes
+enum struct BasisType
 {
     Lagrange
 };
@@ -33,7 +33,7 @@ auto computeLagrangeLineBasisPolynomial()
         retval[I] = 1.;
         return retval;
     });
-    return lagrangeInterp(getLobattoRuleAbsc< val_t, O + 1 >(), vals);
+    return math::lagrangeInterp(math::getLobattoRuleAbsc< val_t, O + 1 >(), vals);
 }
 
 template < el_o_t O, el_locind_t I >
@@ -56,22 +56,22 @@ val_t evaluateLagrangeLineBasisFunDer(const Point< 1 >& point)
     return der.evaluate(point.x());
 }
 
-template < el_o_t O, el_locind_t I, BasisTypes BT >
+template < el_o_t O, el_locind_t I, BasisType BT >
 val_t evaluateLineBasisFun(const Point< 1 >& point)
 {
-    if constexpr (BT == BasisTypes::Lagrange)
+    if constexpr (BT == BasisType::Lagrange)
         return evaluateLagrangeLineBasisFun< O, I >(point);
 }
 
-template < el_o_t O, el_locind_t I, BasisTypes BT >
+template < el_o_t O, el_locind_t I, BasisType BT >
 val_t evaluateLineBasisFunDer(const Point< 1 >& point)
 {
-    if constexpr (BT == BasisTypes::Lagrange)
+    if constexpr (BT == BasisType::Lagrange)
         return evaluateLagrangeLineBasisFunDer< O, I >(point);
 }
 
 // based on standard tensor product expansion
-template < el_o_t O, el_locind_t I, BasisTypes BT >
+template < el_o_t O, el_locind_t I, BasisType BT >
 val_t evaluateQuadBasisFun(const Point< 2 >& point)
 {
     constexpr auto nodes_per_edge = O + 1;
@@ -82,7 +82,7 @@ val_t evaluateQuadBasisFun(const Point< 2 >& point)
            evaluateLineBasisFun< O, eta_ind, BT >(Point{point.y()});
 }
 
-template < el_o_t O, el_locind_t I, BasisTypes BT >
+template < el_o_t O, el_locind_t I, BasisType BT >
 val_t evaluateQuadBasisFunDerXi(const Point< 2 >& point)
 {
     constexpr auto nodes_per_edge = O + 1;
@@ -93,7 +93,7 @@ val_t evaluateQuadBasisFunDerXi(const Point< 2 >& point)
            evaluateLineBasisFun< O, eta_ind, BT >(Point{point.y()});
 }
 
-template < el_o_t O, el_locind_t I, BasisTypes BT >
+template < el_o_t O, el_locind_t I, BasisType BT >
 val_t evaluateQuadBasisFunDerEta(const Point< 2 >& point)
 {
     constexpr auto nodes_per_edge = O + 1;
@@ -104,7 +104,7 @@ val_t evaluateQuadBasisFunDerEta(const Point< 2 >& point)
            evaluateLineBasisFunDer< O, eta_ind, BT >(Point{point.y()});
 }
 
-template < el_o_t O, el_locind_t I, BasisTypes BT >
+template < el_o_t O, el_locind_t I, BasisType BT >
 val_t evaluateHexBasisFun(const Point< 3 >& point)
 {
     constexpr auto nodes_per_edge = O + 1;
@@ -116,7 +116,7 @@ val_t evaluateHexBasisFun(const Point< 3 >& point)
            evaluateLineBasisFun< O, zeta_ind, BT >(Point{point.z()});
 }
 
-template < el_o_t O, el_locind_t I, BasisTypes BT >
+template < el_o_t O, el_locind_t I, BasisType BT >
 val_t evaluateHexBasisFunDerXi(const Point< 3 >& point)
 {
     constexpr auto nodes_per_edge = O + 1;
@@ -128,7 +128,7 @@ val_t evaluateHexBasisFunDerXi(const Point< 3 >& point)
            evaluateLineBasisFun< O, zeta_ind, BT >(Point{point.z()});
 }
 
-template < el_o_t O, el_locind_t I, BasisTypes BT >
+template < el_o_t O, el_locind_t I, BasisType BT >
 val_t evaluateHexBasisFunDerEta(const Point< 3 >& point)
 {
     constexpr auto nodes_per_edge = O + 1;
@@ -140,7 +140,7 @@ val_t evaluateHexBasisFunDerEta(const Point< 3 >& point)
            evaluateLineBasisFun< O, zeta_ind, BT >(Point{point.z()});
 }
 
-template < el_o_t O, el_locind_t I, BasisTypes BT >
+template < el_o_t O, el_locind_t I, BasisType BT >
 val_t evaluateHexBasisFunDerZeta(const Point< 3 >& point)
 {
     constexpr auto nodes_per_edge = O + 1;
@@ -153,7 +153,7 @@ val_t evaluateHexBasisFunDerZeta(const Point< 3 >& point)
 }
 } // namespace detail
 
-template < ElementTypes T, el_o_t O, el_locind_t I, BasisTypes BT, DerDim DER_DIM = DerDim::NoDer >
+template < ElementTypes T, el_o_t O, el_locind_t I, BasisType BT, DerDim DER_DIM = DerDim::NoDer >
     requires(I < Element< T, O >::n_nodes and static_cast< dim_t >(DER_DIM) <= Element< T, O >::native_dim)
 struct ReferenceBasisFunction
 {
@@ -196,12 +196,12 @@ struct ReferenceBasisFunction
     }
 };
 
-template < ElementTypes T, el_o_t O, BasisTypes BT >
+template < ElementTypes T, el_o_t O, BasisType BT >
 auto computeRefBasis(const Point< Element< T, O >::native_dim >& point)
 {
     constexpr el_locind_t               n_basis_fun = Element< T, O >::n_nodes;
     Eigen::Vector< val_t, n_basis_fun > retval; // NOLINT we want raw memory to be written to below
-    forConstexpr(
+    util::forConstexpr(
         [&]< el_locind_t I >(std::integral_constant< el_locind_t, I >) {
             const auto val = ReferenceBasisFunction< T, O, I, BT >{}(point);
             retval[I]      = val;
@@ -218,15 +218,15 @@ constexpr DerDim derivativeByIndex(dim_t d)
 }
 } // namespace detail
 
-template < ElementTypes T, el_o_t O, BasisTypes BT >
+template < ElementTypes T, el_o_t O, BasisType BT >
 auto computeRefBasisDers(const Point< Element< T, O >::native_dim >& point)
 {
     constexpr dim_t                                      nat_dim     = Element< T, O >::native_dim;
     constexpr el_locind_t                                n_basis_fun = Element< T, O >::n_nodes;
     eigen::RowMajorMatrix< val_t, nat_dim, n_basis_fun > retval;
-    forConstexpr(
+    util::forConstexpr(
         [&]< el_locind_t I >(std::integral_constant< el_locind_t, I >) {
-            forConstexpr(
+            util::forConstexpr(
                 [&]< dim_t D >(std::integral_constant< dim_t, D >) {
                     retval(D, I) = ReferenceBasisFunction< T, O, I, BT, detail::derivativeByIndex(D) >{}(point);
                 },
@@ -235,5 +235,5 @@ auto computeRefBasisDers(const Point< Element< T, O >::native_dim >& point)
         std::make_integer_sequence< el_locind_t, n_basis_fun >{});
     return retval;
 }
-} // namespace lstr
+} // namespace lstr::basis
 #endif // L3STER_BASISFUN_REFERENCEBASISFUNCTION_HPP

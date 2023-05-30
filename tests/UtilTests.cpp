@@ -162,7 +162,7 @@ TEMPLATE_TEST_CASE("Bitset (de-)serialization",
     for (int i = 0; i < n_runs; ++i)
     {
         const auto test_data = make_random_bitset();
-        const auto result    = trimBitset< size >(deserializeBitset(serializeBitset(test_data)));
+        const auto result    = util::trimBitset< size >(util::deserializeBitset(util::serializeBitset(test_data)));
         CHECK(test_data == result);
     }
 }
@@ -207,7 +207,7 @@ TEST_CASE("Consecutive reduce algo", "[util]")
     SECTION("Default args")
     {
         std::vector v{1, 1, 1, 2, 3, 3, 4, 5, 5, 5};
-        v.erase(reduceConsecutive(v).begin(), v.end());
+        v.erase(util::reduceConsecutive(v).begin(), v.end());
         REQUIRE(v.size() == 5);
         CHECK(v[0] == 3);
         CHECK(v[1] == 2);
@@ -229,12 +229,12 @@ TEST_CASE("Consecutive reduce algo", "[util]")
         const auto  cmp = [](const auto& p1, const auto& p2) {
             return p1.first + p1.second == p2.first + p2.second;
         };
-        v.erase(reduceConsecutive(v,
-                                  cmp,
-                                  [](const auto& p1, const auto& p2) {
-                                      return std::make_pair(std::abs(p1.first) + std::abs(p2.first),
-                                                            std::abs(p1.second) + std::abs(p2.second));
-                                  })
+        v.erase(util::reduceConsecutive(v,
+                                        cmp,
+                                        [](const auto& p1, const auto& p2) {
+                                            return std::make_pair(std::abs(p1.first) + std::abs(p2.first),
+                                                                  std::abs(p1.second) + std::abs(p2.second));
+                                        })
                     .begin(),
                 v.end());
         REQUIRE(v.size() == 4);
@@ -251,7 +251,7 @@ TEST_CASE("Consecutive reduce algo", "[util]")
     SECTION("Algebraic sequence")
     {
         std::vector v{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 42};
-        v.erase(reduceConsecutive(
+        v.erase(util::reduceConsecutive(
                     v, [](int e1, int e2) { return e1 + 1 == e2; }, [](int e1, int e2) { return std::max(e1, e2); })
                     .begin(),
                 v.end());
@@ -270,7 +270,7 @@ TEST_CASE("Consecutive reduce algo", "[util]")
                       std::pair{6, 7},
                       std::pair{7, 8},
                       std::pair{8, 9}};
-        v.erase(reduceConsecutive(
+        v.erase(util::reduceConsecutive(
                     v,
                     [](const auto& p1, const auto& p2) { return p1.second == p2.first; },
                     [](const auto& p1, const auto& p2) { return std::make_pair(p1.first, p2.second); })
@@ -284,7 +284,7 @@ TEST_CASE("Consecutive reduce algo", "[util]")
     SECTION("Empty")
     {
         std::vector< int > v;
-        v.erase(reduceConsecutive(v).begin(), v.end());
+        v.erase(util::reduceConsecutive(v).begin(), v.end());
         REQUIRE(v.size() == 0);
     }
 }
@@ -538,7 +538,7 @@ TEST_CASE("Base64 encoding", "[util]")
 
     std::vector< char > alloc(text_sv.size() * 4u / 3u + 3u);
     const auto          test = [&alloc](auto&& txt, std::string_view expected_b64) {
-        const auto bytes_written = encodeAsBase64(txt, alloc.begin());
+        const auto bytes_written = util::encodeAsBase64(txt, alloc.begin());
         const auto encoded       = std::string_view{alloc.data(), bytes_written};
         REQUIRE(std::ranges::size(encoded) == expected_b64.size());
         CHECK(std::ranges::equal(encoded, expected_b64));
@@ -561,11 +561,11 @@ TEST_CASE("Base64 encoding", "[util]")
         });
     std::string long_text_b64_par(long_text_size * 4 / 3 + 4, '\0');
     std::string long_text_b64_seq(long_text_size * 4 / 3 + 4, '\0');
-    encodeAsBase64(long_text, long_text_b64_par.begin());
+    util::encodeAsBase64(long_text, long_text_b64_par.begin());
     auto       seq_ptr        = long_text_b64_seq.data();
     const auto long_byte_span = std::as_bytes(std::span{long_text});
-    const auto lp             = detail::b64::encB64SerialImpl(long_byte_span, seq_ptr);
-    detail::b64::encB64Remainder(long_byte_span.subspan(lp), seq_ptr);
+    const auto lp             = util::b64::encB64SerialImpl(long_byte_span, seq_ptr);
+    util::b64::encB64Remainder(long_byte_span.subspan(lp), seq_ptr);
     CHECK(long_text_b64_seq == long_text_b64_par);
 }
 
@@ -649,7 +649,7 @@ TEST_CASE("OpenMP num threads control", "[util]")
 {
     const auto max_threads_initial = omp_get_max_threads();
     {
-        const auto max_par_guard = detail::MaxParallelismGuard{1};
+        const auto max_par_guard = util::MaxParallelismGuard{1};
         CHECK(omp_get_max_threads() == 1);
     }
     CHECK(omp_get_max_threads() == max_threads_initial);

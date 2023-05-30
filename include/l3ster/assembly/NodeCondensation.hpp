@@ -4,6 +4,7 @@
 #include "l3ster/assembly/ProblemDefinition.hpp"
 #include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
+#include "l3ster/util/ArrayOwner.hpp"
 #include "l3ster/util/RobinHoodHashTables.hpp"
 
 namespace lstr
@@ -81,21 +82,21 @@ auto getActiveNodes(const MeshPartition< orders... >& mesh,
 }
 
 auto packRangeWithSizeForComm(std::ranges::range auto&& range, size_t alloc_size)
-    -> ArrayOwner< std::ranges::range_value_t< decltype(range) > >
+    -> util::ArrayOwner< std::ranges::range_value_t< decltype(range) > >
     requires mpi::MpiType_c< std::ranges::range_value_t< decltype(range) > > and
              std::integral< std::ranges::range_value_t< decltype(range) > >
 {
     using range_value_t             = std::ranges::range_value_t< decltype(range) >;
     const size_t range_size         = std::ranges::distance(range);
     const auto   range_size_to_pack = exactIntegerCast< range_value_t >(range_size);
-    auto         retval             = ArrayOwner< range_value_t >(alloc_size);
+    auto         retval             = util::ArrayOwner< range_value_t >(alloc_size);
     retval.front()                  = range_size_to_pack;
     std::ranges::copy(std::forward< decltype(range) >(range), std::next(retval.begin()));
     return retval;
 }
 
 template < std::integral T >
-auto unpackRangeFromComm(ArrayOwner< T >& message)
+auto unpackRangeFromComm(util::ArrayOwner< T >& message)
 {
     return message | std::views::drop(1) | std::views::take(static_cast< size_t >(message.front()));
 }
@@ -133,8 +134,8 @@ auto computeCondensedActiveNodeIds(const MpiComm&                    comm,
         std::iota(retval.begin(), retval.end(), 0ul);
         return retval;
     }
-    ArrayOwner< n_id_t > proc_buf(max_msg_size), comm_buf(max_msg_size);
-    const auto           process_received_active_ids = [&](int sender_rank) {
+    util::ArrayOwner< n_id_t > proc_buf(max_msg_size), comm_buf(max_msg_size);
+    const auto                 process_received_active_ids = [&](int sender_rank) {
         const auto off_rank_nodes = unpackRangeFromComm(sender_rank == my_rank ? owned_active_nodes_msg : proc_buf);
         for (size_t i = 0; auto& cond_id : retval)
             cond_id += std::distance(off_rank_nodes.begin(),
@@ -170,14 +171,15 @@ void activateOwned(const MpiComm& comm, const MeshPartition< orders... >& mesh, 
         comm.allReduce(std::views::single(ghost_nodes.size()), &retval, MPI_MAX);
         return retval;
     });
-    const auto process_offrank_active_nodes = [&](ArrayOwner< n_id_t >& active_nodes) {
+    const auto process_offrank_active_nodes = [&](util::ArrayOwner< n_id_t >& active_nodes) {
         for (auto active : unpackRangeFromComm(active_nodes))
             if (mesh.isOwnedNode(active) and not std::ranges::binary_search(my_active_nodes, active))
                 my_active_nodes.insert(std::ranges::lower_bound(my_active_nodes, active), active);
     };
     auto my_active_ghost_nodes = packRangeWithSizeForComm(ghost_nodes, max_ghost_nodes + 1);
-    auto comm_buf = ArrayOwner< n_id_t >(max_ghost_nodes + 1), proc_buf = ArrayOwner< n_id_t >(max_ghost_nodes + 1);
-    auto request = comm.broadcastAsync(my_rank == 0 ? my_active_ghost_nodes : comm_buf, 0);
+    auto comm_buf              = util::ArrayOwner< n_id_t >(max_ghost_nodes + 1),
+         proc_buf              = util::ArrayOwner< n_id_t >(max_ghost_nodes + 1);
+    auto request               = comm.broadcastAsync(my_rank == 0 ? my_active_ghost_nodes : comm_buf, 0);
     for (int send_rank = 1; send_rank != comm_size; ++send_rank)
     {
         request.wait();

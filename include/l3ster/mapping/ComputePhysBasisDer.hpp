@@ -4,7 +4,7 @@
 #include "l3ster/defs/Typedefs.h"
 #include "l3ster/util/EigenUtils.hpp"
 
-namespace lstr
+namespace lstr::map
 {
 template < int native_dim, int n_bases >
 auto computePhysBasisDers(const Eigen::Matrix< val_t, native_dim, native_dim >&      jacobi_mat,
@@ -12,5 +12,5 @@ auto computePhysBasisDers(const Eigen::Matrix< val_t, native_dim, native_dim >& 
 {
     return Eigen::Matrix< val_t, native_dim, n_bases >{jacobi_mat.inverse() * ref_ders};
 }
-} // namespace lstr
+} // namespace lstr::map
 #endif // L3STER_MAPPING_COMPUTEPHYSBASISDER_HPP

@@ -99,7 +99,7 @@ TEMPLATE_TEST_CASE("Node DOF interval (de-)serialization", "[dof]", ConstexprVal
     auto deserialized_intervals = original_intervals;
     deserialized_intervals.clear();
     std::vector< unsigned long long > serial;
-    serial.reserve((bitsetNUllongs< n_fields >() + 2) * original_intervals.size());
+    serial.reserve((util::bitsetNUllongs< n_fields >() + 2) * original_intervals.size());
     detail::serializeDofIntervals(original_intervals, std::back_inserter(serial));
     detail::deserializeDofIntervals< n_fields >(serial, std::back_inserter(deserialized_intervals));
     CHECK(original_intervals == deserialized_intervals);
@@ -121,11 +121,11 @@ TEMPLATE_TEST_CASE("Node DOF interval consolidation", "[dof]", ConstexprValue< 1
         delims[0] = std::uniform_int_distribution< n_id_t >{d_min, d_max}(prng);
         delims[1] = std::uniform_int_distribution< n_id_t >{d_min, d_max}(prng);
         std::ranges::sort(delims);
-        std::array< unsigned long long, bitsetNUllongs< n_fields >() > cov_serial{};
+        std::array< unsigned long long, util::bitsetNUllongs< n_fields >() > cov_serial{};
         std::generate_n(begin(cov_serial), cov_serial.size(), [&] {
             return std::uniform_int_distribution< unsigned long long >{}(prng);
         });
-        const auto cov = trimBitset< n_fields >(deserializeBitset(cov_serial));
+        const auto cov = util::trimBitset< n_fields >(util::deserializeBitset(cov_serial));
         return std::make_pair(delims, cov);
     };
 

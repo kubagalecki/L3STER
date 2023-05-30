@@ -9,7 +9,7 @@ using namespace lstr;
 
 TEST_CASE("1D Gauss-Legendre quadrature, 1 point", "[quadrature]")
 {
-    const auto& ref_quad = getReferenceQuadrature< QuadratureTypes::GLeg, 0 >();
+    const auto& ref_quad = quad::getReferenceQuadrature< quad::QuadratureType::GaussLegendre, 0 >();
 
     REQUIRE(ref_quad.size == 1);
     REQUIRE(ref_quad.dim == 1);
@@ -23,7 +23,7 @@ TEST_CASE("1D Gauss-Legendre quadrature, 1 point", "[quadrature]")
 
 TEST_CASE("1D Gauss-Legendre quadrature, 2 point", "[quadrature]")
 {
-    const auto& ref_quad = getReferenceQuadrature< QuadratureTypes::GLeg, 2 >();
+    const auto& ref_quad = quad::getReferenceQuadrature< quad::QuadratureType::GaussLegendre, 2 >();
 
     REQUIRE(ref_quad.size == 2);
     REQUIRE(ref_quad.dim == 1);
@@ -40,7 +40,7 @@ TEST_CASE("1D Gauss-Legendre quadrature, 2 point", "[quadrature]")
 
 TEST_CASE("1D Gauss-Legendre quadrature, 3 point", "[quadrature]")
 {
-    const auto& ref_quad = getReferenceQuadrature< QuadratureTypes::GLeg, 4 >();
+    const auto& ref_quad = quad::getReferenceQuadrature< quad::QuadratureType::GaussLegendre, 4 >();
 
     REQUIRE(ref_quad.size == 3);
     REQUIRE(ref_quad.dim == 1);
@@ -64,7 +64,7 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 {
     SECTION("1 point quadrature")
     {
-        const auto& quadrature = getQuadrature< QuadratureTypes::GLeg, 1, ElementTypes::Line >();
+        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 1, ElementTypes::Line >();
 
         REQUIRE(quadrature.size == 1);
         REQUIRE(quadrature.dim == 1);
@@ -78,7 +78,7 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 
     SECTION("2 point quadrature")
     {
-        const auto& quadrature = getQuadrature< QuadratureTypes::GLeg, 3, ElementTypes::Line >();
+        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 3, ElementTypes::Line >();
 
         REQUIRE(quadrature.size == 2);
         REQUIRE(quadrature.dim == 1);
@@ -95,7 +95,7 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 
     SECTION("3 point quadrature")
     {
-        const auto& quadrature = getQuadrature< QuadratureTypes::GLeg, 5, ElementTypes::Line >();
+        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 5, ElementTypes::Line >();
 
         REQUIRE(quadrature.size == 3);
         REQUIRE(quadrature.dim == 1);
@@ -160,7 +160,7 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
     SECTION("1 point quadrature")
     {
-        const auto& quadrature = getQuadrature< QuadratureTypes::GLeg, 1, ElementTypes::Quad >();
+        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 1, ElementTypes::Quad >();
 
         REQUIRE(quadrature.size == 1);
         REQUIRE(quadrature.dim == 2);
@@ -174,7 +174,7 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
     SECTION("4 point quadrature")
     {
-        const auto& quadrature = getQuadrature< QuadratureTypes::GLeg, 3, ElementTypes::Quad >();
+        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 3, ElementTypes::Quad >();
 
         REQUIRE(quadrature.size == 4);
         REQUIRE(quadrature.dim == 2);
@@ -192,7 +192,7 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
     SECTION("9 point quadrature")
     {
-        const auto& quadrature = getQuadrature< QuadratureTypes::GLeg, 5, ElementTypes::Quad >();
+        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 5, ElementTypes::Quad >();
 
         REQUIRE(quadrature.size == 9);
         REQUIRE(quadrature.dim == 2);
@@ -242,7 +242,7 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
 
     SECTION("1 point quadrature")
     {
-        const auto& quadrature = getQuadrature< QuadratureTypes::GLeg, 1, ElementTypes::Hex >();
+        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 1, ElementTypes::Hex >();
 
         REQUIRE(quadrature.size == 1);
         REQUIRE(quadrature.dim == 3);
@@ -257,7 +257,7 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
 
     SECTION("8 point quadrature")
     {
-        const auto& quadrature = getQuadrature< QuadratureTypes::GLeg, 3, ElementTypes::Hex >();
+        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 3, ElementTypes::Hex >();
 
         REQUIRE(quadrature.size == 8);
         REQUIRE(quadrature.dim == 3);
@@ -275,7 +275,7 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
 
     SECTION("512 point quadrature")
     {
-        const auto& quadrature = getQuadrature< QuadratureTypes::GLeg, 15, ElementTypes::Hex >();
+        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 15, ElementTypes::Hex >();
 
         REQUIRE(quadrature.size == 512);
         REQUIRE(quadrature.dim == 3);

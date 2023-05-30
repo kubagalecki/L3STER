@@ -7,7 +7,7 @@
 #include <numeric>
 #include <tuple>
 
-namespace lstr
+namespace lstr::quad
 {
 namespace detail
 {
@@ -77,5 +77,5 @@ auto evalQuadrature(auto&& integrator, const Quadrature< quad_length, quad_dim >
     }
     return zero;
 }
-} // namespace lstr
+} // namespace lstr::quad
 #endif // L3STER_QUAD_EVALQUADRATURE_HPP

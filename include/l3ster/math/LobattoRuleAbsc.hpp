@@ -3,7 +3,7 @@
 
 #include "Lobatto.hpp"
 
-namespace lstr
+namespace lstr::math
 {
 namespace detail
 {
@@ -33,5 +33,5 @@ const auto& getLobattoRuleAbsc()
     static const auto val = detail::computeLobattoRuleAbsc< T, N >();
     return val;
 }
-} // namespace lstr
+} // namespace lstr::math
 #endif // L3STER_MATH_LOBATTORULEABSC_HPP

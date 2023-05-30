@@ -12,10 +12,10 @@ namespace lstr
 {
 struct AssemblyOptions
 {
-    q_o_t           value_order      = 1;
-    q_o_t           derivative_order = 0;
-    BasisTypes      basis_type       = BasisTypes::Lagrange;
-    QuadratureTypes quad_type        = QuadratureTypes::GLeg;
+    q_o_t                value_order      = 1;
+    q_o_t                derivative_order = 0;
+    basis::BasisType     basis_type       = basis::BasisType::Lagrange;
+    quad::QuadratureType quad_type        = quad::QuadratureType::GaussLegendre;
 
     [[nodiscard]] constexpr q_o_t order(el_o_t elem_order) const
     {
@@ -137,7 +137,7 @@ void assembleGlobalSystem(auto&&                                               k
             constexpr auto  QT             = asm_opts.quad_type;
             constexpr q_o_t QO             = 2 * asm_opts.order(EO);
             const auto      field_vals     = fval_getter(element.getNodes());
-            const auto&     qbv            = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
+            const auto&     qbv            = basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
             const auto& [loc_mat, loc_rhs] = assembleLocalSystem(kernel, element, field_vals, qbv, time);
             condensation_manager.condenseSystem(
                 dof_map, global_mat, global_rhs, loc_mat, loc_rhs, element, field_inds_ctwrpr);
@@ -155,7 +155,7 @@ void assembleGlobalSystem(auto&&                                               k
     constexpr auto required_stack_size =
         util::default_stack_size + detail::deduceRequiredStackSizeDomain< decltype(kernel), n_fields, orders... >();
     util::requestStackSize< required_stack_size >();
-    const auto max_par_guard = detail::MaxParallelismGuard{};
+    const auto max_par_guard = util::MaxParallelismGuard{};
     mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
 }
 
@@ -186,7 +186,7 @@ void assembleGlobalBoundarySystem(auto&&                                        
             constexpr auto  QT         = asm_opts.quad_type;
             constexpr q_o_t QO         = 2 * asm_opts.order(EO);
             const auto      field_vals = fval_getter(el_view->getNodes());
-            const auto&     qbv        = getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
+            const auto&     qbv = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
             const auto& [loc_mat, loc_rhs] = assembleLocalBoundarySystem(kernel, el_view, field_vals, qbv, time);
             condensation_manager.condenseSystem(
                 dof_map, global_mat, global_rhs, loc_mat, loc_rhs, *el_view, field_inds_ctwrpr);
@@ -205,7 +205,7 @@ void assembleGlobalBoundarySystem(auto&&                                        
     constexpr auto required_stack_size =
         util::default_stack_size + detail::deduceRequiredStackSizeBoundary< decltype(kernel), n_fields, orders... >();
     util::requestStackSize< required_stack_size >();
-    const auto max_par_guard = detail::MaxParallelismGuard{};
+    const auto max_par_guard = util::MaxParallelismGuard{};
     boundary.visit(process_element, std::execution::par);
 }
 } // namespace lstr

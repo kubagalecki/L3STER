@@ -6,7 +6,7 @@
 #include <memory>
 #include <unordered_map>
 
-namespace lstr
+namespace lstr::util
 {
 template < typename Key, typename Value, typename Hash = std::hash< Key >, typename Equal = std::equal_to< Key > >
     requires Mapping_c< Hash, Key, size_t > and std::predicate< Equal, Key, Key >
@@ -23,6 +23,7 @@ private:
 };
 
 template < typename Key, typename Value, typename Hash, typename Equal >
+    requires Mapping_c< Hash, Key, size_t > and std::predicate< Equal, Key, Key >
 auto WeakCache< Key, Value, Hash, Equal >::get(const Key& key) const -> std::shared_ptr< Value >
 {
     const auto it = m_cache.find(key);
@@ -30,13 +31,15 @@ auto WeakCache< Key, Value, Hash, Equal >::get(const Key& key) const -> std::sha
 }
 
 template < typename Key, typename Value, typename Hash, typename Equal >
-auto WeakCache< Key, Value, Hash, Equal >::emplace(DecaysTo_c< Key > auto&& key, auto&&... args)
-    -> std::shared_ptr< Value >
-    requires std::constructible_from< Value, decltype(args)... >
+    requires Mapping_c< Hash, Key, size_t > and
+             std::predicate< Equal, Key, Key >
+             auto WeakCache< Key, Value, Hash, Equal >::emplace(DecaysTo_c< Key > auto&& key, auto&&... args)
+                 -> std::shared_ptr< Value >
+                 requires std::constructible_from< Value, decltype(args)... >
 {
     auto shared_ptr = std::make_shared< Value >(std::forward< decltype(args) >(args)...);
     m_cache.insert_or_assign(std::forward< decltype(key) >(key), shared_ptr);
     return shared_ptr;
 }
-} // namespace lstr
+} // namespace lstr::util
 #endif // L3STER_UTIL_WEAKCACHE_HPP

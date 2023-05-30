@@ -12,7 +12,7 @@ int main(int argc, char* argv[])
     const MpiComm    comm{MPI_COMM_WORLD};
 
     constexpr d_id_t      domain_id           = 0;
-    static constexpr auto boundary_ids        = makeIotaArray< d_id_t, 6 >(1);
+    static constexpr auto boundary_ids        = util::makeIotaArray< d_id_t, 6 >(1);
     constexpr auto        problem_def         = std::array{Pair{domain_id, std::array{true, true, true, true}}};
     constexpr auto        dirichlet_def       = std::invoke([] {
         std::array< Pair< d_id_t, std::array< bool, 4 > >, boundary_ids.size() > retval{};
@@ -45,7 +45,7 @@ int main(int argc, char* argv[])
     const auto boundary_view = my_partition.getBoundaryView(boundary_ids);
 
     constexpr auto n_fields    = detail::deduceNFields(problem_def);
-    constexpr auto field_inds  = makeIotaArray< size_t, n_fields >();
+    constexpr auto field_inds  = util::makeIotaArray< size_t, n_fields >();
     constexpr auto T_inds      = std::array< size_t, 1 >{0};
     constexpr auto T_grad_inds = std::array< size_t, 3 >{1, 2, 3};
     const auto field_inds_view = std::array{std::span< const size_t >{T_inds}, std::span< const size_t >{T_grad_inds}};

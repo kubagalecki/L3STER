@@ -36,9 +36,14 @@ void scatterLocalSystem(const eigen::RowMajorSquareMatrix< val_t, local_size >& 
     });
     for (ptrdiff_t loc_row = 0; loc_row != size; ++loc_row)
     {
-        const auto row_vals = std::span{std::next(local_matrix.data(), loc_row * size), static_cast< size_t >(size)};
-        global_matrix.sumIntoLocalValues(row_dofs[loc_row], asTeuchosView(col_dofs), asTeuchosView(row_vals));
-        std::atomic_ref{global_vector[rhs_dofs[loc_row]]}.fetch_add(local_vector[loc_row], std::memory_order_relaxed);
+        const auto mat_row  = row_dofs[loc_row];
+        const auto mat_cols = util::asTeuchosView(col_dofs);
+        const auto mat_vals = Teuchos::ArrayView{std::next(local_matrix.data(), loc_row * size), size};
+        global_matrix.sumIntoLocalValues(mat_row, mat_cols, mat_vals);
+
+        const auto rhs_ind = rhs_dofs[loc_row];
+        const auto rhs_val = local_vector[loc_row];
+        std::atomic_ref{global_vector[rhs_ind]}.fetch_add(rhs_val, std::memory_order_relaxed);
     }
 }
 } // namespace lstr::detail

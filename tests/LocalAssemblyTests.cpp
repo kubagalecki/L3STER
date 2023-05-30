@@ -16,14 +16,14 @@ TEST_CASE("Local system assembly", "[local_asm]")
     {
         constexpr auto        ET       = ElementTypes::Quad;
         constexpr el_o_t      EO       = 4;
-        constexpr auto        QT       = QuadratureTypes::GLeg;
+        constexpr auto        QT       = quad::QuadratureType::GaussLegendre;
         constexpr q_o_t       QO       = 11; // Needs to be large enough for the local system buffer to overflow
-        constexpr auto        BT       = BasisTypes::Lagrange;
+        constexpr auto        BT       = basis::BasisType::Lagrange;
         constexpr auto        el_nodes = typename Element< ET, EO >::node_array_t{};
         ElementData< ET, EO > data{{Point{1., -1., 0.}, Point{2., -1., 0.}, Point{1., 1., 1.}, Point{2., 1., 1.}}};
         const auto            element = Element< ET, EO >{el_nodes, data, 0};
 
-        const auto& basis_at_q = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
+        const auto& basis_at_q = basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
 
         constexpr size_t nf                  = 3;
         constexpr size_t ne                  = 4;

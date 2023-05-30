@@ -3,17 +3,17 @@
 template < q_o_t QO, el_o_t EO >
 static void BM_PhysBasisDersComputation(benchmark::State& state)
 {
-    constexpr auto QT          = QuadratureTypes::GLeg;
-    constexpr auto BT          = BasisTypes::Lagrange;
+    constexpr auto QT          = quad::QuadratureType::GaussLegendre;
+    constexpr auto BT          = basis::BasisType::Lagrange;
     const auto     element     = getExampleHexElement< EO >();
-    const auto&    ref_basis   = getReferenceBasisAtDomainQuadrature< BT, ElementTypes::Hex, EO, QT, QO >();
-    const auto     jac_mat_gen = getNatJacobiMatGenerator(element);
+    const auto&    ref_basis   = basis::getReferenceBasisAtDomainQuadrature< BT, ElementTypes::Hex, EO, QT, QO >();
+    const auto     jac_mat_gen = map::getNatJacobiMatGenerator(element);
     for (auto _ : state)
         for (size_t qp_ind = 0; qp_ind < ref_basis.quadrature.size; ++qp_ind)
         {
             const auto  jac_mat  = jac_mat_gen(ref_basis.quadrature.points[qp_ind]);
             const auto& ref_ders = ref_basis.basis.derivatives[qp_ind];
-            benchmark::DoNotOptimize(computePhysBasisDers(jac_mat, ref_ders));
+            benchmark::DoNotOptimize(map::computePhysBasisDers(jac_mat, ref_ders));
         }
 
     constexpr auto n_nodes = Element< ElementTypes::Hex, EO >::n_nodes;
@@ -40,8 +40,8 @@ DEF_PHYS_BAS_BENCH_SUITE(6)
 template < el_o_t EO >
 static void BM_NS3DLocalAssembly(benchmark::State& state)
 {
-    constexpr auto  QT = QuadratureTypes::GLeg;
-    constexpr auto  BT = BasisTypes::Lagrange;
+    constexpr auto  QT = quad::QuadratureType::GaussLegendre;
+    constexpr auto  BT = basis::BasisType::Lagrange;
     constexpr q_o_t QO = 4 * EO - 1;
 
     const auto element = getExampleHexElement< EO >();
@@ -54,7 +54,7 @@ static void BM_NS3DLocalAssembly(benchmark::State& state)
     constexpr auto n_nodes      = Element< ElementTypes ::Hex, EO >::n_nodes;
     constexpr auto loc_mat_rows = n_nodes * n_fields;
 
-    const auto& ref_bas_at_quad = getReferenceBasisAtDomainQuadrature< BT, ElementTypes::Hex, EO, QT, QO >();
+    const auto& ref_bas_at_quad = basis::getReferenceBasisAtDomainQuadrature< BT, ElementTypes::Hex, EO, QT, QO >();
 
     constexpr auto ns3d_kernel =
         []< typename T >(const auto& vals, const std::array< T, 3 >& ders, const auto&) noexcept {

@@ -3,7 +3,7 @@
 
 #include "l3ster/mesh/BoundaryElementView.hpp"
 
-namespace lstr
+namespace lstr::map
 {
 template < ElementTypes ET, el_o_t EO >
 auto computeBoundaryNormal(
@@ -62,5 +62,5 @@ auto computeBoundaryNormal(
     }
     return retval;
 }
-} // namespace lstr
+} // namespace lstr::map
 #endif // L3STER_MAPPING_BOUNDARYNORMAL_HPP

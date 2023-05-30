@@ -9,7 +9,7 @@
 #include <numeric>
 #include <vector>
 
-namespace lstr
+namespace lstr::util
 {
 template < std::random_access_iterator It, typename F >
 std::vector< size_t > sortingPermutation(It first, It last, F&& compare)
@@ -226,8 +226,6 @@ constexpr auto makeIotaArray(const T& first = T{})
     return retval;
 }
 
-namespace util
-{
 template < typename T >
 void sortRemoveDup(std::vector< T >& vec)
 {
@@ -249,6 +247,24 @@ constexpr auto sortedUniqueElements()
     std::ranges::unique_copy(array, retval.begin());
     return retval;
 }
-} // namespace util
-} // namespace lstr
+
+template < IndexRange_c auto inds, typename T, size_t N, std::indirectly_writable< T > Iter >
+Iter copyValuesAtInds(const std::array< T, N >& array, Iter out_iter, ConstexprValue< inds > = {})
+    requires(std::ranges::all_of(inds, [](size_t i) { return i < N; }))
+{
+    for (auto i : inds)
+        *out_iter++ = array[i];
+    return out_iter;
+}
+
+template < IndexRange_c auto inds, typename T, size_t N >
+std::array< T, std::ranges::size(inds) > getValuesAtInds(const std::array< T, N >& array,
+                                                         ConstexprValue< inds >    inds_ctwrpr = {})
+    requires(std::ranges::all_of(inds, [](size_t i) { return i < N; }))
+{
+    std::array< T, std::ranges::size(inds) > retval;
+    copyValuesAtInds(array, begin(retval), inds_ctwrpr);
+    return retval;
+}
+} // namespace lstr::util
 #endif // L3STER_UTIL_ALGORITHM_HPP

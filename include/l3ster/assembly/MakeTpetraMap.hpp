@@ -41,7 +41,7 @@ auto getNodeDofs(RangeOfConvertibleTo_c< n_id_t > auto&&   sorted_nodes,
 
 inline Teuchos::RCP< const Teuchos::MpiComm< int > > makeTeuchosMpiComm(const MpiComm& comm)
 {
-    return makeTeuchosRCP< const Teuchos::MpiComm< int > >(comm.get());
+    return util::makeTeuchosRCP< const Teuchos::MpiComm< int > >(comm.get());
 }
 
 inline Tpetra::global_size_t getInvalidSize()
@@ -54,8 +54,8 @@ inline Teuchos::RCP< const tpetra_map_t > makeTpetraMap(std::span< const global_
 {
     auto       teuchos_comm      = detail::makeTeuchosMpiComm(comm);
     const auto compute_size      = detail::getInvalidSize();
-    const auto dofs_teuchos_view = asTeuchosView(dofs);
-    return makeTeuchosRCP< const tpetra_map_t >(compute_size, dofs_teuchos_view, 0, std::move(teuchos_comm));
+    const auto dofs_teuchos_view = util::asTeuchosView(dofs);
+    return util::makeTeuchosRCP< const tpetra_map_t >(compute_size, dofs_teuchos_view, 0, std::move(teuchos_comm));
 }
 
 template < size_t n_fields >

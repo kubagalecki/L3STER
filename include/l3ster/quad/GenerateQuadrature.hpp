@@ -6,16 +6,16 @@
 #include "l3ster/mesh/Element.hpp"
 #include "l3ster/quad/ReferenceQuadrature.hpp"
 
-namespace lstr
+namespace lstr::quad
 {
-template < QuadratureTypes QT, q_o_t QO, ElementTypes ET >
+template < QuadratureType QT, q_o_t QO, ElementTypes ET >
 const auto& getQuadrature()
     requires(ET == ElementTypes::Line)
 {
     return getReferenceQuadrature< QT, QO >();
 }
 
-template < QuadratureTypes QT, q_o_t QO, ElementTypes ET >
+template < QuadratureType QT, q_o_t QO, ElementTypes ET >
 const auto& getQuadrature()
     requires(ET == ElementTypes::Quad)
 {
@@ -45,7 +45,7 @@ const auto& getQuadrature()
     return value;
 }
 
-template < QuadratureTypes QT, q_o_t QO, ElementTypes ET >
+template < QuadratureType QT, q_o_t QO, ElementTypes ET >
 const auto& getQuadrature()
     requires(ET == ElementTypes::Hex)
 {
@@ -76,5 +76,5 @@ const auto& getQuadrature()
     });
     return value;
 }
-} // namespace lstr
+} // namespace lstr::quad
 #endif // L3STER_QUAD_GENERATEQUADRATURE_HPP

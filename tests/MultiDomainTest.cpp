@@ -74,7 +74,7 @@ void test()
     auto solution_manager = SolutionManager{mesh, detail::deduceNFields(problem_def)};
     for (size_t i = 0; i != detail::deduceNFields(problem_def); ++i)
         solution_manager.setField(i, static_cast< double >(i + 1));
-    constexpr auto dof_inds = makeIotaArray< size_t, detail::deduceNFields(problem_def) >();
+    constexpr auto dof_inds = util::makeIotaArray< size_t, detail::deduceNFields(problem_def) >();
     alg_sys->updateSolution(mesh, solution, dof_inds, solution_manager, dof_inds);
 
     for (size_t i = 0; i != detail::deduceNFields(problem_def); ++i)
@@ -87,7 +87,7 @@ void test()
 
 int main(int argc, char* argv[])
 {
-    const auto max_par_guard = detail::MaxParallelismGuard{4};
+    const auto max_par_guard = util::MaxParallelismGuard{4};
     const auto scope_guard   = L3sterScopeGuard{argc, argv};
     test< CondensationPolicy::None >();
     test< CondensationPolicy::ElementBoundary >();

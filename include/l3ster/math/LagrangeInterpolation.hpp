@@ -7,7 +7,7 @@
 #include <array>
 #include <concepts>
 
-namespace lstr
+namespace lstr::math
 {
 template < std::floating_point T, size_t N >
 constexpr Polynomial< T, N - 1 > lagrangeInterp(const std::array< T, N >& x, const std::array< T, N >& y)
@@ -39,5 +39,5 @@ constexpr Polynomial< T, N - 1 > lagrangeInterp(const std::array< T, N >& x, con
     }
     return Polynomial{lag_coefs};
 }
-} // namespace lstr
+} // namespace lstr::math
 #endif // L3STER_MATH_LAGRANGEINTERPOLATION_HPP

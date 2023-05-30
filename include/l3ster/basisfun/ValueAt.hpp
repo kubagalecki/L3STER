@@ -5,14 +5,14 @@
 
 namespace lstr
 {
-template < BasisTypes BT, ElementTypes T, el_o_t O, RandomAccessRangeOf< val_t > R >
+template < basis::BasisType BT, ElementTypes T, el_o_t O, RandomAccessRangeOf< val_t > R >
 val_t valueAt(const Element< T, O >&, R&& node_vals, const Point< Element< T, O >::native_dim >& point)
 {
     return std::invoke(
         [&]< el_locind_t... I >(std::integer_sequence< el_locind_t, I... >) {
             return (std::invoke(
                         [&]< el_locind_t Ind >(std::integral_constant< el_locind_t, Ind >) {
-                            return node_vals[Ind] * ReferenceBasisFunction< T, O, Ind, BT >{}(point);
+                            return node_vals[Ind] * basis::ReferenceBasisFunction< T, O, Ind, BT >{}(point);
                         },
                         std::integral_constant< el_locind_t, I >{}) +
                     ...);
