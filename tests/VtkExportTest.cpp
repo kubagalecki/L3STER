@@ -38,10 +38,10 @@ void vtkExportTest2D()
                                                 [&] { return makeSquareMesh(node_distx, node_disty); },
                                                 {bot_boundary, top_boundary, left_boundary, right_boundary});
 
-    constexpr auto problem_def       = std::array{Pair{domain_id, std::array{false, true, false, true}},
-                                            Pair{bot_boundary, std::array{true, false, true, false}},
-                                            Pair{top_boundary, std::array{true, false, true, false}}};
-    constexpr auto problemdef_ctwrpr = ConstexprValue< problem_def >{};
+    constexpr auto problem_def       = std::array{util::Pair{domain_id, std::array{false, true, false, true}},
+                                            util::Pair{bot_boundary, std::array{true, false, true, false}},
+                                            util::Pair{top_boundary, std::array{true, false, true, false}}};
+    constexpr auto problemdef_ctwrpr = util::ConstexprValue< problem_def >{};
     constexpr auto n_fields          = detail::deduceNFields(problem_def);
     constexpr auto scalar_inds       = std::array< size_t, 2 >{0, 2};
     constexpr auto vec_inds          = std::array< size_t, 2 >{1, 3};
@@ -59,7 +59,7 @@ void vtkExportTest2D()
         computeValuesAtNodes(my_partition,
                              std::array{bot_boundary, top_boundary},
                              system_manager->getDofMap(),
-                             ConstexprValue< scalar_inds >{},
+                             util::ConstexprValue< scalar_inds >{},
                              bot_top_vals,
                              solution_view);
         computeValuesAtNodes(
@@ -73,7 +73,7 @@ void vtkExportTest2D()
             my_partition,
             std::views::single(domain_id),
             system_manager->getDofMap(),
-            ConstexprValue< vec_inds >{},
+            util::ConstexprValue< vec_inds >{},
             empty_field_val_getter,
             solution_view);
     }
@@ -110,14 +110,15 @@ void vtkExportTest3D()
     const auto boundary = my_partition.getBoundaryView(util::makeIotaArray< d_id_t, 6 >(1));
 
     constexpr d_id_t domain_id = 0;
-    constexpr auto problem_def = std::array{Pair{d_id_t{domain_id}, std::array{true, true, true, false, false, false}},
-                                            Pair{d_id_t{1}, std::array{false, false, false, true, true, true}},
-                                            Pair{d_id_t{2}, std::array{false, false, false, true, true, true}},
-                                            Pair{d_id_t{3}, std::array{false, false, false, true, true, true}},
-                                            Pair{d_id_t{4}, std::array{false, false, false, true, true, true}},
-                                            Pair{d_id_t{5}, std::array{false, false, false, true, true, true}},
-                                            Pair{d_id_t{6}, std::array{false, false, false, true, true, true}}};
-    constexpr auto problemdef_ctwrpr   = ConstexprValue< problem_def >{};
+    constexpr auto   problem_def =
+        std::array{util::Pair{d_id_t{domain_id}, std::array{true, true, true, false, false, false}},
+                   util::Pair{d_id_t{1}, std::array{false, false, false, true, true, true}},
+                   util::Pair{d_id_t{2}, std::array{false, false, false, true, true, true}},
+                   util::Pair{d_id_t{3}, std::array{false, false, false, true, true, true}},
+                   util::Pair{d_id_t{4}, std::array{false, false, false, true, true, true}},
+                   util::Pair{d_id_t{5}, std::array{false, false, false, true, true, true}},
+                   util::Pair{d_id_t{6}, std::array{false, false, false, true, true, true}}};
+    constexpr auto problemdef_ctwrpr   = util::ConstexprValue< problem_def >{};
     constexpr auto n_fields            = detail::deduceNFields(problem_def);
     constexpr auto domain_field_inds   = std::array< size_t, 3 >{0, 1, 2};
     constexpr auto boundary_field_inds = std::array< size_t, 3 >{3, 4, 5};
@@ -141,7 +142,7 @@ void vtkExportTest3D()
             my_partition,
             std::views::single(domain_id),
             system_manager->getDofMap(),
-            ConstexprValue< domain_field_inds >{},
+            util::ConstexprValue< domain_field_inds >{},
             empty_field_val_getter,
             solution_view);
         computeValuesAtBoundaryNodes([&](const auto&,
@@ -150,7 +151,7 @@ void vtkExportTest3D()
                                          const Eigen::Vector3d& normal) -> Eigen::Vector3d { return normal; },
                                      boundary,
                                      system_manager->getDofMap(),
-                                     ConstexprValue< boundary_field_inds >{},
+                                     util::ConstexprValue< boundary_field_inds >{},
                                      empty_field_val_getter,
                                      solution_view);
 

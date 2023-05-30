@@ -12,8 +12,8 @@ void test(CondensationPolicyTag< CP > = {})
 {
     MpiComm comm{MPI_COMM_WORLD};
 
-    constexpr auto problem_def       = std::array{Pair{d_id_t{0}, std::array{true}}};
-    constexpr auto problemdef_ctwrpr = ConstexprValue< problem_def >{};
+    constexpr auto problem_def       = std::array{util::Pair{d_id_t{0}, std::array{true}}};
+    constexpr auto problemdef_ctwrpr = util::ConstexprValue< problem_def >{};
 
     constexpr auto       mesh_order = 2;
     constexpr std::array node_dist{0., 1., 2., 3., 4.};

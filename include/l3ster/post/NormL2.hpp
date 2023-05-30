@@ -8,9 +8,9 @@ namespace lstr
 namespace detail
 {
 template < AssemblyOptions opts >
-consteval auto doubleQuadratureOrder(ConstexprValue< opts >)
+consteval auto doubleQuadratureOrder(util::ConstexprValue< opts >)
 {
-    return ConstexprValue< std::invoke([] {
+    return util::ConstexprValue< std::invoke([] {
         auto retval = opts;
         retval.value_order *= 2;
         retval.derivative_order *= 2;
@@ -25,7 +25,7 @@ auto computeNormL2(const MpiComm&                                       comm,
                    const MeshPartition< orders... >&                    mesh,
                    detail::DomainIdRange_c auto&&                       domain_ids,
                    const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
-                   ConstexprValue< opts >                               options_ctwrpr   = {},
+                   util::ConstexprValue< opts >                         options_ctwrpr   = {},
                    val_t                                                time             = 0.)
 {
     const auto compute_squared_norm = [&eval_residual](const auto& vals, const auto& ders, const auto& point) noexcept
@@ -55,7 +55,7 @@ auto computeBoundaryNormL2(const MpiComm&                                       
                            auto&&                                               eval_residual,
                            const BoundaryView< orders... >&                     boundary,
                            const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
-                           ConstexprValue< opts >                               options_ctwrpr   = {},
+                           util::ConstexprValue< opts >                         options_ctwrpr   = {},
                            val_t                                                time             = 0.)
 {
     const auto compute_squared_norm = [&eval_residual](

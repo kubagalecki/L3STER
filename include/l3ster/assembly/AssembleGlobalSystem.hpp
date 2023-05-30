@@ -76,9 +76,9 @@ struct KernelStackSizeDeductionHelper
                 return 0;
         });
     };
-    static constexpr size_t domain =
-        std::invoke([]< typename... DH >(TypePack< DH... >) { return std::ranges::max(std::array{DH::value...}); },
-                    parametrize_type_over_element_types_and_orders_t< TypePack, DeductionHelperDomain, orders... >{});
+    static constexpr size_t domain = std::invoke(
+        []< typename... DH >(util::TypePack< DH... >) { return std::ranges::max(std::array{DH::value...}); },
+        parametrize_type_over_element_types_and_orders_t< util::TypePack, DeductionHelperDomain, orders... >{});
 
     template < ElementTypes ET, el_o_t EO >
     struct DeductionHelperBoundary
@@ -91,9 +91,9 @@ struct KernelStackSizeDeductionHelper
                 return 0;
         });
     };
-    static constexpr size_t boundary =
-        std::invoke([]< typename... DH >(TypePack< DH... >) { return std::ranges::max(std::array{DH::value...}); },
-                    parametrize_type_over_element_types_and_orders_t< TypePack, DeductionHelperBoundary, orders... >{});
+    static constexpr size_t boundary = std::invoke(
+        []< typename... DH >(util::TypePack< DH... >) { return std::ranges::max(std::array{DH::value...}); },
+        parametrize_type_over_element_types_and_orders_t< util::TypePack, DeductionHelperBoundary, orders... >{});
 };
 
 template < typename Kernel, size_t n_fields, el_o_t... orders >
@@ -123,8 +123,8 @@ void assembleGlobalSystem(auto&&                                               k
                           std::span< val_t >                                   global_rhs,
                           const NodeToLocalDofMap< dofs_per_node, 3 >&         dof_map,
                           detail::StaticCondensationManager< CP >&             condensation_manager,
-                          ConstexprValue< field_inds >                         field_inds_ctwrpr,
-                          ConstexprValue< asm_opts >,
+                          util::ConstexprValue< field_inds >                   field_inds_ctwrpr,
+                          util::ConstexprValue< asm_opts >,
                           val_t time = 0.)
     requires detail::PotentiallyValidKernel_c< decltype(kernel), n_fields, orders... >
 {
@@ -172,8 +172,8 @@ void assembleGlobalBoundarySystem(auto&&                                        
                                   std::span< val_t >                                   global_rhs,
                                   const NodeToLocalDofMap< dofs_per_node, 3 >&         dof_map,
                                   detail::StaticCondensationManager< CP >&             condensation_manager,
-                                  ConstexprValue< field_inds >                         field_inds_ctwrpr,
-                                  ConstexprValue< asm_opts >,
+                                  util::ConstexprValue< field_inds >                   field_inds_ctwrpr,
+                                  util::ConstexprValue< asm_opts >,
                                   val_t time = 0.)
     requires detail::PotentiallyValidBoundaryKernel_c< decltype(kernel), n_fields, orders... >
 {

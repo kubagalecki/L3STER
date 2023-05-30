@@ -15,7 +15,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace lstr
+namespace lstr::util
 {
 template < auto V >
 struct ConstexprValue
@@ -92,5 +92,5 @@ T& getThreadLocal()
     thread_local T value;
     return value;
 }
-} // namespace lstr
+} // namespace lstr::util
 #endif // L3STER_UTIL_COMMON_HPP

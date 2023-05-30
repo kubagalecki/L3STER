@@ -12,7 +12,7 @@
 #include <utility>
 #include <variant>
 
-namespace lstr
+namespace lstr::util
 {
 namespace detail
 {
@@ -223,5 +223,5 @@ constexpr auto getTrueInds(ConstexprValue< A > = {})
     std::ranges::copy(true_inds_sv, retval.begin());
     return retval;
 }
-} // namespace lstr
+} // namespace lstr::util
 #endif // L3STER_UTIL_META_HPP

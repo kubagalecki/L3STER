@@ -95,7 +95,7 @@ private:
     {
         if (not f)
             return {};
-        return constifyVariant(*f);
+        return util::constifyVariant(*f);
     }
 
     template < Access access >

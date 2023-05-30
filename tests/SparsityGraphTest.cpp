@@ -14,7 +14,7 @@ class DenseGraph
 public:
     template < el_o_t... orders, auto problem_def, CondensationPolicy CP >
     DenseGraph(const MeshPartition< orders... >&                                           mesh,
-               ConstexprValue< problem_def >                                               problemdef_ctwrpr,
+               util::ConstexprValue< problem_def >                                         problemdef_ctwrpr,
                const detail::node_interval_vector_t< detail::deduceNFields(problem_def) >& dof_intervals,
                const detail::NodeCondensationMap< CP >&                                    cond_map)
     {
@@ -26,10 +26,10 @@ public:
             1;
         m_entries = DynamicBitset{m_dim * m_dim};
 
-        const auto process_domain = [&]< auto dom_def >(ConstexprValue< dom_def >) {
+        const auto process_domain = [&]< auto dom_def >(util::ConstexprValue< dom_def >) {
             constexpr auto  domain_id        = dom_def.first;
             constexpr auto& coverage         = dom_def.second;
-            constexpr auto  covered_dof_inds = getTrueInds< coverage >();
+            constexpr auto  covered_dof_inds = util::getTrueInds< coverage >();
 
             const auto process_element = [&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
                 const auto element_dofs = std::invoke([&] {
@@ -80,10 +80,10 @@ void test()
     });
     const auto my_partition = distributeMesh(comm, full_mesh, {1, 3});
 
-    constexpr auto problem_def    = std::array{Pair{d_id_t{0}, std::array{false, true}},
-                                            Pair{d_id_t{1}, std::array{true, false}},
-                                            Pair{d_id_t{3}, std::array{true, true}}};
-    constexpr auto probdef_ctwrpr = ConstexprValue< problem_def >{};
+    constexpr auto problem_def    = std::array{util::Pair{d_id_t{0}, std::array{false, true}},
+                                            util::Pair{d_id_t{1}, std::array{true, false}},
+                                            util::Pair{d_id_t{3}, std::array{true, true}}};
+    constexpr auto probdef_ctwrpr = util::ConstexprValue< problem_def >{};
 
     const auto cond_map       = detail::makeCondensationMap< CP >(comm, my_partition, probdef_ctwrpr);
     const auto cond_map_full  = detail::makeCondensationMap< CP >(MpiComm{MPI_COMM_SELF}, full_mesh, probdef_ctwrpr);

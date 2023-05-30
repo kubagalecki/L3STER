@@ -224,7 +224,7 @@ auto MpiComm::FileHandle::writeAtAsync(detail::mpi::MpiBorrowedBuf_c auto&& writ
     detail::mpi::handleMPIError(MPI_File_iwrite_at(m_file,
                                                    offset,
                                                    std::ranges::data(write_range),
-                                                   exactIntegerCast< int >(std::ranges::size(write_range)),
+                                                   util::exactIntegerCast< int >(std::ranges::size(write_range)),
                                                    datatype,
                                                    &request.m_request),
                                 "MPI_File_iwrite_at failed");

@@ -8,7 +8,7 @@
 namespace lstr::detail
 {
 template < size_t n_fields, size_t n_domains >
-using problem_def_t = std::array< Pair< d_id_t, std::array< bool, n_fields > >, n_domains >;
+using problem_def_t = std::array< util::Pair< d_id_t, std::array< bool, n_fields > >, n_domains >;
 
 template < typename T >
 inline constexpr bool is_problem_def = false;
@@ -29,6 +29,6 @@ consteval size_t deduceNDomains(const problem_def_t< n_fields, n_domains >&)
     return n_domains;
 }
 
-using empty_problem_def_t = std::array< Pair< d_id_t, std::array< bool, 0 > >, 0 >;
+using empty_problem_def_t = std::array< util::Pair< d_id_t, std::array< bool, 0 > >, 0 >;
 } // namespace lstr::detail
 #endif // L3STER_ASSEMBLY_PROBLEMDEFINITION_HPP

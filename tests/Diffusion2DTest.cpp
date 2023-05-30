@@ -15,11 +15,11 @@ void test()
     const auto comm = MpiComm{MPI_COMM_WORLD};
 
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
-    constexpr auto   problem_def         = std::array{Pair{domain_id, std::array{true, true, true}}};
-    constexpr auto   probdef_ctwrpr      = ConstexprValue< problem_def >{};
-    constexpr auto   dirichlet_def       = std::array{Pair{left_boundary, std::array{true, false, false}},
-                                              Pair{right_boundary, std::array{true, false, false}}};
-    constexpr auto   dirichletdef_ctwrpr = ConstexprValue< dirichlet_def >{};
+    constexpr auto   problem_def         = std::array{util::Pair{domain_id, std::array{true, true, true}}};
+    constexpr auto   probdef_ctwrpr      = util::ConstexprValue< problem_def >{};
+    constexpr auto   dirichlet_def       = std::array{util::Pair{left_boundary, std::array{true, false, false}},
+                                              util::Pair{right_boundary, std::array{true, false, false}}};
+    constexpr auto   dirichletdef_ctwrpr = util::ConstexprValue< dirichlet_def >{};
 
     constexpr auto node_dist  = std::array{0., 1., 2., 3., 4., 5., 6.};
     constexpr auto mesh_order = 2;
@@ -101,7 +101,7 @@ void test()
     CHECK_THROWS(alg_sys->endAssembly(mesh));
 
     alg_sys->setDirichletBCValues(
-        dirichlet_bc_val_def, mesh, std::array{left_boundary, right_boundary}, ConstexprValue< std::array{0} >{});
+        dirichlet_bc_val_def, mesh, std::array{left_boundary, right_boundary}, util::ConstexprValue< std::array{0} >{});
     alg_sys->applyDirichletBCs();
 
     {

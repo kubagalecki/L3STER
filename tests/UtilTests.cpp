@@ -143,11 +143,11 @@ TEST_CASE("Stack size manipulation", "[util]")
 
 TEMPLATE_TEST_CASE("Bitset (de-)serialization",
                    "[util]",
-                   ConstexprValue< 10u >,
-                   ConstexprValue< 64u >,
-                   ConstexprValue< 100u >,
-                   ConstexprValue< 128u >,
-                   ConstexprValue< 257u >)
+                   util::ConstexprValue< 10u >,
+                   util::ConstexprValue< 64u >,
+                   util::ConstexprValue< 100u >,
+                   util::ConstexprValue< 128u >,
+                   util::ConstexprValue< 257u >)
 {
     constexpr static auto size               = TestType::value;
     constexpr auto        n_runs             = 1 << 8;
@@ -601,7 +601,7 @@ TEST_CASE("StaticVector", "[util]")
 TEST_CASE("getTrueInds", "[util]")
 {
     constexpr auto in  = std::array{false, false, false, true};
-    constexpr auto out = getTrueInds< in >();
+    constexpr auto out = util::getTrueInds< in >();
     static_assert(std::ranges::equal(out, std::views::single(3)));
 }
 

@@ -13,17 +13,17 @@ auto getDirichletDofs(const MeshPartition< orders... >&                         
                       const Teuchos::RCP< const tpetra_fecrsgraph_t >&                sparsity_graph,
                       const NodeToGlobalDofMap< detail::deduceNFields(problem_def) >& node_to_dof_map,
                       const detail::NodeCondensationMap< CP >&                        cond_map,
-                      ConstexprValue< problem_def >,
-                      ConstexprValue< dirichlet_def > dirichletdef_ctwrpr)
+                      util::ConstexprValue< problem_def >,
+                      util::ConstexprValue< dirichlet_def > dirichletdef_ctwrpr)
 {
     const auto mark_owned_dirichlet_dofs = [&] {
         const auto dirichlet_dofs = util::makeTeuchosRCP< tpetra_femultivector_t >(
             sparsity_graph->getColMap(), sparsity_graph->getImporter(), 1u);
         dirichlet_dofs->beginAssembly();
-        const auto process_domain = [&]< auto domain_def >(ConstexprValue< domain_def >) {
+        const auto process_domain = [&]< auto domain_def >(util::ConstexprValue< domain_def >) {
             constexpr auto  domain_id        = domain_def.first;
             constexpr auto& coverage         = domain_def.second;
-            constexpr auto  covered_dof_inds = getTrueInds< coverage >();
+            constexpr auto  covered_dof_inds = util::getTrueInds< coverage >();
             const auto      process_element  = [&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
                 const auto element_dirichlet_dofs =
                     detail::getUnsortedPrimaryDofs< covered_dof_inds >(element, node_to_dof_map, cond_map);

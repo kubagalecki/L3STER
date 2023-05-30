@@ -19,7 +19,7 @@ inline constexpr auto element_orders_array = util::sortedUniqueElements< std::ar
 }
 template < template < typename... > typename T, template < ElementTypes, el_o_t > typename U, el_o_t... orders >
 using parametrize_type_over_element_types_and_orders_t =
-    cart_prod_t< U, T, element_types, detail::element_orders_array< orders... > >;
+    util::cart_prod_t< U, T, element_types, detail::element_orders_array< orders... > >;
 
 template < ElementTypes ET, el_o_t EO >
 class Element;
@@ -37,9 +37,10 @@ template < ElementTypes ET, el_o_t EO >
 class BoundaryElementView;
 
 template < ElementTypes ET, el_o_t EO >
-using type_order_set = ValuePack< ET, EO >;
+using type_order_set = util::ValuePack< ET, EO >;
 template < el_o_t... orders >
-using type_order_combinations = parametrize_type_over_element_types_and_orders_t< TypePack, type_order_set, orders... >;
+using type_order_combinations =
+    parametrize_type_over_element_types_and_orders_t< util::TypePack, type_order_set, orders... >;
 
 namespace detail
 {

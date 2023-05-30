@@ -29,7 +29,7 @@ inline auto convertPartWeights(std::vector< real_t > wgts) -> std::vector< real_
 }
 
 template < el_o_t... orders, ProblemDef_c auto problem_def >
-auto computeNodeWeights(const MeshPartition< orders... >& mesh, ConstexprValue< problem_def > probdef_ctwrapper)
+auto computeNodeWeights(const MeshPartition< orders... >& mesh, util::ConstexprValue< problem_def > probdef_ctwrapper)
     -> std::vector< idx_t >
 {
     if constexpr (problem_def.size() == 0)
@@ -38,9 +38,9 @@ auto computeNodeWeights(const MeshPartition< orders... >& mesh, ConstexprValue< 
     constexpr auto n_fields      = deduceNFields(problem_def);
     auto           node_dof_inds = DynamicBitset{n_fields * mesh.getAllNodes().size()};
     util::forConstexpr(
-        [&]< auto dom_def >(ConstexprValue< dom_def >) {
+        [&]< auto dom_def >(util::ConstexprValue< dom_def >) {
             constexpr auto dom_id   = dom_def.first;
-            constexpr auto dom_dofs = getTrueInds< dom_def.second >();
+            constexpr auto dom_dofs = util::getTrueInds< dom_def.second >();
             mesh.visit(
                 [&](const auto& element) {
                     for (auto node : element.getNodes())
@@ -90,7 +90,7 @@ auto getDomainData(const MeshPartition< orders... >& mesh, const std::vector< d_
             topology_size += ElementTraits< Element< ET, EO > >::boundary_node_inds.size();
         },
         domain_ids);
-    return {exactIntegerCast< idx_t >(n_elements), exactIntegerCast< idx_t >(topology_size)};
+    return {util::exactIntegerCast< idx_t >(n_elements), util::exactIntegerCast< idx_t >(topology_size)};
 }
 
 struct MetisInput
@@ -229,7 +229,7 @@ auto partitionCondensedMesh(const MeshPartition< orders... >& mesh,
     const auto [forward_map, reverse_map] = makeNodeCondensationMaps(mesh);
     node_weights                          = condenseNodeWeights(std::move(node_weights), reverse_map);
     auto retval                           = invokeMetisPartitioner(domain_data.n_elements,
-                                         exactIntegerCast< idx_t >(reverse_map.size()),
+                                         util::exactIntegerCast< idx_t >(reverse_map.size()),
                                          prepMetisInput(mesh, domain_data, forward_map, domain_ids),
                                          std::move(node_weights),
                                          std::move(part_weights),
@@ -404,11 +404,11 @@ auto partitionMeshImpl(const MeshPartition< orders... >& mesh,
 template < el_o_t... orders,
            RangeOfConvertibleTo_c< real_t > PartWgtRange = std::array< real_t, 0 >,
            detail::ProblemDef_c auto        problem_def  = detail::empty_problem_def_t{} >
-auto partitionMesh(const MeshPartition< orders... >& mesh,
-                   idx_t                             n_parts,
-                   const std::vector< d_id_t >&      boundary_ids,
-                   PartWgtRange&&                    part_weights   = {},
-                   ConstexprValue< problem_def >     probdef_ctwrpr = {}) -> std::vector< MeshPartition< orders... > >
+auto partitionMesh(const MeshPartition< orders... >&   mesh,
+                   idx_t                               n_parts,
+                   const std::vector< d_id_t >&        boundary_ids,
+                   PartWgtRange&&                      part_weights   = {},
+                   util::ConstexprValue< problem_def > probdef_ctwrpr = {}) -> std::vector< MeshPartition< orders... > >
 {
     L3STER_PROFILE_FUNCTION;
     util::throwingAssert(mesh.getGhostNodes().empty() and

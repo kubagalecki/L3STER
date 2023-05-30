@@ -17,10 +17,10 @@ void test()
 
     constexpr auto   boundary       = 3;
     constexpr d_id_t domain_id      = 0;
-    constexpr auto   problem_def    = std::array{Pair{d_id_t{domain_id}, std::array{true}}};
-    constexpr auto   dirichlet_def  = std::array{Pair{d_id_t{boundary}, std::array{true}}};
-    constexpr auto   probdef_ctwrpr = ConstexprValue< problem_def >{};
-    constexpr auto   dirdef_ctwrpr  = ConstexprValue< dirichlet_def >{};
+    constexpr auto   problem_def    = std::array{util::Pair{d_id_t{domain_id}, std::array{true}}};
+    constexpr auto   dirichlet_def  = std::array{util::Pair{d_id_t{boundary}, std::array{true}}};
+    constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
+    constexpr auto   dirdef_ctwrpr  = util::ConstexprValue< dirichlet_def >{};
 
     constexpr auto node_dist     = std::array{0., 1., 2., 3., 4., 5.};
     const auto     mesh          = makeCubeMesh(node_dist);
@@ -61,7 +61,7 @@ void test()
                     local_mat = local_mat.template selfadjointView< Eigen::Lower >();
                     local_vec.setRandom();
 
-                    constexpr auto dof_inds_wrpr = ConstexprValue< std::array{size_t{0}} >{};
+                    constexpr auto dof_inds_wrpr = util::ConstexprValue< std::array{size_t{0}} >{};
                     const auto [row_dofs, col_dofs, rhs_dofs] =
                         detail::getUnsortedPrimaryDofs(element, dof_map, CondensationPolicyTag< CP >{}, dof_inds_wrpr);
                     detail::scatterLocalSystem(local_mat, local_vec, *matrix, rhs_view, row_dofs, col_dofs, rhs_dofs);

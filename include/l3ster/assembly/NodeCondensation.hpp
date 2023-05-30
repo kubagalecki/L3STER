@@ -56,7 +56,7 @@ constexpr decltype(auto) getPrimaryNodesArray(const Element< ET, EO >& element, 
     }
 }
 template < CondensationPolicy CP, ElementTypes ET, el_o_t EO >
-consteval auto getNumPrimaryNodes(ValuePack< CP, ET, EO > = {}) -> size_t
+consteval auto getNumPrimaryNodes(util::ValuePack< CP, ET, EO > = {}) -> size_t
 {
     return std::tuple_size_v<
         std::decay_t< decltype(getPrimaryNodesArray< CP >(std::declval< Element< ET, EO > >())) > >;
@@ -64,7 +64,7 @@ consteval auto getNumPrimaryNodes(ValuePack< CP, ET, EO > = {}) -> size_t
 
 template < CondensationPolicy CP, ProblemDef_c auto problem_def, el_o_t... orders >
 auto getActiveNodes(const MeshPartition< orders... >& mesh,
-                    ConstexprValue< problem_def >,
+                    util::ConstexprValue< problem_def >,
                     CondensationPolicyTag< CP > = {}) -> std::vector< n_id_t >
 {
     auto active_nodes_set = robin_hood::unordered_flat_set< n_id_t >{};
@@ -88,7 +88,7 @@ auto packRangeWithSizeForComm(std::ranges::range auto&& range, size_t alloc_size
 {
     using range_value_t             = std::ranges::range_value_t< decltype(range) >;
     const size_t range_size         = std::ranges::distance(range);
-    const auto   range_size_to_pack = exactIntegerCast< range_value_t >(range_size);
+    const auto   range_size_to_pack = util::exactIntegerCast< range_value_t >(range_size);
     auto         retval             = util::ArrayOwner< range_value_t >(alloc_size);
     retval.front()                  = range_size_to_pack;
     std::ranges::copy(std::forward< decltype(range) >(range), std::next(retval.begin()));
@@ -221,10 +221,10 @@ private:
 };
 
 template < CondensationPolicy CP, ProblemDef_c auto problem_def, el_o_t... orders >
-auto makeCondensationMap(const MpiComm&                    comm,
-                         const MeshPartition< orders... >& mesh,
-                         ConstexprValue< problem_def >     probdef_ctwrpr,
-                         CondensationPolicyTag< CP >       cp_tag = {}) -> NodeCondensationMap< CP >
+auto makeCondensationMap(const MpiComm&                      comm,
+                         const MeshPartition< orders... >&   mesh,
+                         util::ConstexprValue< problem_def > probdef_ctwrpr,
+                         CondensationPolicyTag< CP >         cp_tag = {}) -> NodeCondensationMap< CP >
 {
     auto active_nodes = getActiveNodes(mesh, probdef_ctwrpr, cp_tag);
     activateOwned(comm, mesh, active_nodes);

@@ -61,9 +61,9 @@ inline constexpr auto deduce_n_integral_components =
     integral_kernel_eval_result_t< IntKernel, dim, n_fields >::RowsAtCompileTime;
 template < typename IntKernel, size_t n_fields, el_o_t... orders >
 inline constexpr auto n_integral_components = std::invoke(
-    []< typename... TypeOrderPair >(TypePack< TypeOrderPair... >) {
+    []< typename... TypeOrderPair >(util::TypePack< TypeOrderPair... >) {
         constexpr auto invalid_nic = std::numeric_limits< int >::max();
-        constexpr auto deduce_nc   = []< ElementTypes ET, el_o_t EO >(ValuePack< ET, EO >) -> int {
+        constexpr auto deduce_nc   = []< ElementTypes ET, el_o_t EO >(util::ValuePack< ET, EO >) -> int {
             constexpr auto dim = Element< ET, EO >::native_dim;
             if constexpr (IntegralKernel_c< IntKernel, dim, n_fields > or
                           BoundaryIntegralKernel_c< IntKernel, dim, n_fields >)
@@ -158,7 +158,7 @@ auto evalLocalIntegral(auto&&                                               kern
                        const MeshPartition< orders... >&                    mesh,
                        DomainIdRange_c auto&&                               domain_ids,
                        const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
-                       ConstexprValue< options >,
+                       util::ConstexprValue< options >,
                        val_t time)
     requires PotentiallyValidIntegralKernel_c< decltype(kernel), n_fields, orders... >
 {
@@ -195,7 +195,7 @@ template < el_o_t... orders, size_t n_fields, AssemblyOptions options >
 auto evalLocalBoundaryIntegral(auto&&                                               kernel,
                                const BoundaryView< orders... >&                     boundary,
                                const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
-                               ConstexprValue< options >,
+                               util::ConstexprValue< options >,
                                val_t time)
     requires PotentiallyValidBoundaryIntegralKernel_c< decltype(kernel), n_fields, orders... >
 {
@@ -232,7 +232,7 @@ auto evalIntegral(const MpiComm&                                       comm,
                   const MeshPartition< orders... >&                    mesh,
                   detail::DomainIdRange_c auto&&                       domain_ids,
                   const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
-                  ConstexprValue< opts >                               opts_ctwrpr      = {},
+                  util::ConstexprValue< opts >                         opts_ctwrpr      = {},
                   val_t                                                time             = 0.)
 {
     const eigen::Vector_c auto local_integral =
@@ -254,7 +254,7 @@ auto evalBoundaryIntegral(const MpiComm&                                       c
                           auto&&                                               kernel,
                           const BoundaryView< orders... >&                     boundary,
                           const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
-                          ConstexprValue< opts >                               opts_ctwrpr      = {},
+                          util::ConstexprValue< opts >                         opts_ctwrpr      = {},
                           val_t                                                time             = 0.)
 {
     const eigen::Vector_c auto local_integral = detail::evalLocalBoundaryIntegral(

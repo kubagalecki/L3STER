@@ -54,7 +54,7 @@ consteval auto intersectSideWithSubseqSides()
 {
     constexpr el_side_t max_side_ind = ElementTraits< Element< T, O > >::n_sides - 1;
     if constexpr (S < max_side_ind)
-        return intersectSideWith< T, O, S >(int_seq_interval< el_side_t, S + el_side_t{1}, max_side_ind >{});
+        return intersectSideWith< T, O, S >(util::int_seq_interval< el_side_t, S + el_side_t{1}, max_side_ind >{});
     else
         return std::tuple<>{};
 }

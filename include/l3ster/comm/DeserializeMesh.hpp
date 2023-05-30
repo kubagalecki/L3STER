@@ -36,7 +36,7 @@ template < el_o_t... orders >
 auto initElementVectorVariant(ElementTypes T, el_o_t O) -> Domain< orders... >::element_vector_variant_t
 {
     auto       retval  = typename Domain< orders... >::element_vector_variant_t{};
-    const auto init_if = [&]< ElementTypes TYPE, el_o_t ORDER >(ValuePack< TYPE, ORDER >) {
+    const auto init_if = [&]< ElementTypes TYPE, el_o_t ORDER >(util::ValuePack< TYPE, ORDER >) {
         if (T == TYPE and O == ORDER)
         {
             retval.template emplace< std::vector< Element< TYPE, ORDER > > >();
@@ -46,7 +46,7 @@ auto initElementVectorVariant(ElementTypes T, el_o_t O) -> Domain< orders... >::
             return false;
     };
 
-    const auto deduce = [&]< typename... Types >(TypePack< Types... >) {
+    const auto deduce = [&]< typename... Types >(util::TypePack< Types... >) {
         (init_if(Types{}) or ...);
     };
     deduce(type_order_combinations< orders... >{});

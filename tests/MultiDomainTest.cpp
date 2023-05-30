@@ -15,7 +15,7 @@ void test()
 {
     static constexpr auto domains        = std::array< d_id_t, 4 >{13, 14, 15, 16};
     constexpr auto        problem_def    = std::invoke([] {
-        auto retval = std::array< Pair< d_id_t, std::array< bool, domains.size() > >, domains.size() >{};
+        auto retval = std::array< util::Pair< d_id_t, std::array< bool, domains.size() > >, domains.size() >{};
         for (auto& a : retval)
             a.second.fill(false);
         for (size_t i = 0; auto& [dom, cov] : retval)
@@ -25,14 +25,14 @@ void test()
         }
         return retval;
     });
-    constexpr auto        probdef_ctwrpr = ConstexprValue< problem_def >{};
+    constexpr auto        probdef_ctwrpr = util::ConstexprValue< problem_def >{};
 
     const auto comm = MpiComm{MPI_COMM_WORLD};
     const auto mesh = readAndDistributeMesh(comm,
                                             L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square_multidom.msh),
                                             gmsh_tag,
                                             {},
-                                            ConstexprValue< el_o_t{2} >{},
+                                            util::ConstexprValue< el_o_t{2} >{},
                                             probdef_ctwrpr);
 
     auto alg_sys = makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr);
@@ -51,20 +51,20 @@ void test()
         };
     static_assert(detail::Kernel_c< decltype(const_kernel), 2, 0 >);
 
-    const auto assemble_problem_in_dom = [&]< auto dom_ind >(ConstexprValue< dom_ind >) {
+    const auto assemble_problem_in_dom = [&]< auto dom_ind >(util::ConstexprValue< dom_ind >) {
         set_value = static_cast< double >(dom_ind + 1);
         alg_sys->assembleDomainProblem(const_kernel,
                                        mesh,
                                        std::views::single(domains[dom_ind]),
                                        empty_field_val_getter,
-                                       ConstexprValue< std::array{size_t{dom_ind}} >{});
+                                       util::ConstexprValue< std::array{size_t{dom_ind}} >{});
     };
 
     alg_sys->beginAssembly();
-    assemble_problem_in_dom(ConstexprValue< 0 >{});
-    assemble_problem_in_dom(ConstexprValue< 1 >{});
-    assemble_problem_in_dom(ConstexprValue< 2 >{});
-    assemble_problem_in_dom(ConstexprValue< 3 >{});
+    assemble_problem_in_dom(util::ConstexprValue< 0 >{});
+    assemble_problem_in_dom(util::ConstexprValue< 1 >{});
+    assemble_problem_in_dom(util::ConstexprValue< 2 >{});
+    assemble_problem_in_dom(util::ConstexprValue< 3 >{});
     alg_sys->endAssembly(mesh);
 
     auto solver   = solvers::Lapack{};

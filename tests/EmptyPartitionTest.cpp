@@ -13,8 +13,8 @@ template < CondensationPolicy CP >
 void test()
 {
     constexpr d_id_t domain_id      = 0;
-    constexpr auto   problem_def    = std::array{Pair{domain_id, std::array{true}}};
-    constexpr auto   probdef_ctwrpr = ConstexprValue< problem_def >{};
+    constexpr auto   problem_def    = std::array{util::Pair{domain_id, std::array{true}}};
+    constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
 
     const auto     comm       = MpiComm{MPI_COMM_WORLD};
     constexpr auto mesh_order = 2;

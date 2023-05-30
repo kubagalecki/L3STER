@@ -199,7 +199,7 @@ auto& getLocalSystemManager()
     constexpr auto dim                = Element< ET, EO >::native_dim;
     constexpr auto local_problem_size = Element< ET, EO >::n_nodes * n_unknowns< Kernel, dim, n_fields >;
     constexpr auto update_size        = n_equations< Kernel, dim, n_fields >;
-    auto&          retval             = getThreadLocal< LocalSystemManager< local_problem_size, update_size > >();
+    auto&          retval             = util::getThreadLocal< LocalSystemManager< local_problem_size, update_size > >();
     retval.setZero();
     return retval;
 }

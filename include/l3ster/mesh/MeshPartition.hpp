@@ -219,7 +219,7 @@ template < el_o_t... orders >
 auto MeshPartition< orders... >::constifyFindResult(find_result_t found) -> const_find_result_t
 {
     if (found)
-        return std::make_pair(constifyVariant(found->first), found->second);
+        return std::make_pair(util::constifyVariant(found->first), found->second);
     else
         return {};
 }
@@ -698,9 +698,9 @@ auto MeshPartition< orders... >::convertToMetisFormat() const
         std::visit(
             [&]< ElementTypes T, el_o_t O >(const Element< T, O >* element) {
                 std::ranges::copy(element->getNodes() |
-                                      std::views::transform([](auto n) { return exactIntegerCast< idx_t >(n); }),
+                                      std::views::transform([](auto n) { return util::exactIntegerCast< idx_t >(n); }),
                                   std::back_inserter(eind));
-                eptr.push_back(exactIntegerCast< idx_t >(eptr.back() + element->getNodes().size()));
+                eptr.push_back(util::exactIntegerCast< idx_t >(eptr.back() + element->getNodes().size()));
             },
             el_ptr);
     };
@@ -712,8 +712,8 @@ template < el_o_t... orders >
 util::metis::GraphWrapper MeshPartition< orders... >::makeMetisDualGraph() const
 {
     auto [eptr, eind] = convertToMetisFormat();
-    auto  ne          = exactIntegerCast< idx_t >(getNElements());
-    auto  nn          = exactIntegerCast< idx_t >(getOwnedNodes().size());
+    auto  ne          = util::exactIntegerCast< idx_t >(getNElements());
+    auto  nn          = util::exactIntegerCast< idx_t >(getOwnedNodes().size());
     idx_t ncommon     = 2;
     idx_t numflag     = 0;
 
