@@ -115,10 +115,13 @@ TEST_CASE("Stack size manipulation", "[util]")
     SECTION("Increase stack size by 1")
     {
         const auto [initial, max] = util::detail::getStackSize();
-        CHECK(initial <= max);
-        util::detail::setMinStackSize(initial + 1);
-        const auto [current, ignore] = util::detail::getStackSize();
-        CHECK(initial + 1 == current);
+        REQUIRE(initial <= max);
+        if (initial < std::numeric_limits< std::decay_t< decltype(initial) > >::max() and initial < max)
+        {
+            util::detail::setMinStackSize(initial + 1);
+            const auto [current, ignore] = util::detail::getStackSize();
+            CHECK(initial + 1 == current);
+        }
     }
 
     SECTION("Increse beyond limit")
@@ -126,7 +129,7 @@ TEST_CASE("Stack size manipulation", "[util]")
         const auto [initial, max] = util::detail::getStackSize();
         if (max < std::numeric_limits< std::decay_t< decltype(max) > >::max())
         {
-            CHECK_THROWS(util::detail::setMinStackSize(max + 1ul));
+            CHECK_THROWS(util::detail::setMinStackSize(max + 1));
             const auto [current, ignore] = util::detail::getStackSize();
             CHECK(initial == current);
         }
@@ -639,9 +642,12 @@ TEST_CASE("Hwloc topology info", "[util, hwloc]")
 {
     const auto topology = util::hwloc::Topology{};
     REQUIRE_FALSE(topology.isEmpty());
-    REQUIRE(L3STER_N_NUMA_NODES == topology.getNNodes());
-    REQUIRE(L3STER_N_CORES == topology.getNCores());
-    REQUIRE(L3STER_N_HWTHREADS == topology.getNHwThreads());
+    const auto numa_expected    = L3STER_N_NUMA_NODES;
+    const auto cores_expected   = L3STER_N_CORES;
+    const auto threads_expected = L3STER_N_HWTHREADS;
+    CHECK(numa_expected == topology.getNNodes());
+    CHECK(cores_expected == topology.getNCores());
+    CHECK(threads_expected == topology.getNHwThreads());
 }
 
 #ifdef _OPENMP
