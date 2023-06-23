@@ -22,13 +22,13 @@ public:
         static_cast< Derived* >(this)->endAssemblyImpl(mesh, node_dof_map, global_matrix, global_rhs);
     }
     template < ElementTypes ET, el_o_t EO, int system_size, size_t max_dofs_per_node, IndexRange_c auto field_inds >
-    void condenseSystem(const NodeToLocalDofMap< max_dofs_per_node, 3 >&         node_dof_map,
-                        tpetra_crsmatrix_t&                                      global_mat,
-                        std::span< val_t >                                       global_rhs,
-                        const eigen::RowMajorSquareMatrix< val_t, system_size >& local_matrix,
-                        const Eigen::Vector< val_t, system_size >&               local_vector,
-                        const Element< ET, EO >&                                 element,
-                        util::ConstexprValue< field_inds >                       field_inds_ctwrpr)
+    void condenseSystem(const NodeToLocalDofMap< max_dofs_per_node, 3 >&               node_dof_map,
+                        tpetra_crsmatrix_t&                                            global_mat,
+                        std::span< val_t >                                             global_rhs,
+                        const util::eigen::RowMajorSquareMatrix< val_t, system_size >& local_matrix,
+                        const Eigen::Vector< val_t, system_size >&                     local_vector,
+                        const Element< ET, EO >&                                       element,
+                        util::ConstexprValue< field_inds >                             field_inds_ctwrpr)
     {
         static_cast< Derived* >(this)->condenseSystemImpl(
             node_dof_map, global_mat, global_rhs, local_matrix, local_vector, element, field_inds_ctwrpr);
@@ -85,13 +85,13 @@ public:
                          std::span< val_t >)
     {}
     template < ElementTypes ET, el_o_t EO, int system_size, size_t max_dofs_per_node, IndexRange_c auto field_inds >
-    void condenseSystemImpl(const NodeToLocalDofMap< max_dofs_per_node, 3 >&         node_dof_map,
-                            tpetra_crsmatrix_t&                                      global_mat,
-                            std::span< val_t >                                       global_rhs,
-                            const eigen::RowMajorSquareMatrix< val_t, system_size >& local_mat,
-                            const Eigen::Vector< val_t, system_size >&               local_vec,
-                            const Element< ET, EO >&                                 element,
-                            util::ConstexprValue< field_inds >                       field_inds_ctwrpr)
+    void condenseSystemImpl(const NodeToLocalDofMap< max_dofs_per_node, 3 >&               node_dof_map,
+                            tpetra_crsmatrix_t&                                            global_mat,
+                            std::span< val_t >                                             global_rhs,
+                            const util::eigen::RowMajorSquareMatrix< val_t, system_size >& local_mat,
+                            const Eigen::Vector< val_t, system_size >&                     local_vec,
+                            const Element< ET, EO >&                                       element,
+                            util::ConstexprValue< field_inds >                             field_inds_ctwrpr)
     {
         const auto [row_dofs, col_dofs, rhs_dofs] =
             detail::getUnsortedPrimaryDofs(element, node_dof_map, no_condensation, field_inds_ctwrpr);
@@ -128,9 +128,9 @@ class StaticCondensationManager< CondensationPolicy::ElementBoundary > :
 
     struct ElementCondData
     {
-        size_t                                                  internal_dofs_offs, internal_dofs_size;
-        eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > diag_block, diag_block_inv, upper_block;
-        Eigen::Vector< val_t, Eigen::Dynamic >                  rhs;
+        size_t                                                        internal_dofs_offs, internal_dofs_size;
+        util::eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > diag_block, diag_block_inv, upper_block;
+        Eigen::Vector< val_t, Eigen::Dynamic >                        rhs;
     };
 
 public:
@@ -147,13 +147,13 @@ public:
                          tpetra_crsmatrix_t&                              matrix,
                          std::span< val_t >                               rhs);
     template < ElementTypes ET, el_o_t EO, int system_size, size_t max_dofs_per_node, IndexRange_c auto field_inds >
-    void condenseSystemImpl(const NodeToLocalDofMap< max_dofs_per_node, 3 >&         node_dof_map,
-                            tpetra_crsmatrix_t&                                      global_mat,
-                            std::span< val_t >                                       global_rhs,
-                            const eigen::RowMajorSquareMatrix< val_t, system_size >& local_mat,
-                            const Eigen::Vector< val_t, system_size >&               local_vec,
-                            const Element< ET, EO >&                                 element,
-                            util::ConstexprValue< field_inds >                       field_inds_ctwrpr);
+    void condenseSystemImpl(const NodeToLocalDofMap< max_dofs_per_node, 3 >&               node_dof_map,
+                            tpetra_crsmatrix_t&                                            global_mat,
+                            std::span< val_t >                                             global_rhs,
+                            const util::eigen::RowMajorSquareMatrix< val_t, system_size >& local_mat,
+                            const Eigen::Vector< val_t, system_size >&                     local_vec,
+                            const Element< ET, EO >&                                       element,
+                            util::ConstexprValue< field_inds >                             field_inds_ctwrpr);
     template < el_o_t... orders, size_t max_dofs_per_node >
     void recoverSolutionImpl(const MeshPartition< orders... >&,
                              const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
@@ -294,8 +294,8 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemb
         std::visit(
             [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >* element_ptr) {
                 elem_data.diag_block_inv = elem_data.diag_block.inverse();
-                thread_local eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > primary_upd_mat;
-                thread_local Eigen::Vector< val_t, Eigen::Dynamic >                  primary_upd_rhs;
+                thread_local util::eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > primary_upd_mat;
+                thread_local Eigen::Vector< val_t, Eigen::Dynamic >                        primary_upd_rhs;
                 primary_upd_mat =
                     -(elem_data.upper_block * elem_data.diag_block_inv * elem_data.upper_block.transpose());
                 primary_upd_rhs = -(elem_data.upper_block * elem_data.diag_block_inv * elem_data.rhs);
@@ -309,13 +309,13 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemb
 
 template < ElementTypes ET, el_o_t EO, int system_size, size_t max_dofs_per_node, IndexRange_c auto field_inds >
 void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseSystemImpl(
-    const NodeToLocalDofMap< max_dofs_per_node, 3 >&               node_dof_map,
-    tpetra_crsmatrix_t&                                            global_mat,
-    std::span< val_t >                                             global_rhs,
-    const eigen::RowMajorSquareMatrix< lstr::val_t, system_size >& local_mat,
-    const Eigen::Vector< lstr::val_t, system_size >&               local_vec,
-    const Element< ET, EO >&                                       element,
-    util::ConstexprValue< field_inds >                             field_inds_ctwrpr)
+    const NodeToLocalDofMap< max_dofs_per_node, 3 >&                     node_dof_map,
+    tpetra_crsmatrix_t&                                                  global_mat,
+    std::span< val_t >                                                   global_rhs,
+    const util::eigen::RowMajorSquareMatrix< lstr::val_t, system_size >& local_mat,
+    const Eigen::Vector< lstr::val_t, system_size >&                     local_vec,
+    const Element< ET, EO >&                                             element,
+    util::ConstexprValue< field_inds >                                   field_inds_ctwrpr)
 {
     L3STER_PROFILE_FUNCTION;
     auto&      elem_data = m_elem_data_map.at(element.getId());
@@ -324,9 +324,10 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
         detail::getUnsortedPrimaryDofs(element, node_dof_map, element_boundary, field_inds_ctwrpr);
 
     // Primary diagonal block + RHS
-    constexpr int           n_prim_dofs     = std::tuple_size_v< decltype(dof_inds.primary_src_inds) >;
-    thread_local const auto primary_upd_mat = std::make_unique< eigen::RowMajorSquareMatrix< val_t, n_prim_dofs > >();
-    auto                    primary_upd_rhs = Eigen::Vector< val_t, n_prim_dofs >{};
+    constexpr int           n_prim_dofs = std::tuple_size_v< decltype(dof_inds.primary_src_inds) >;
+    thread_local const auto primary_upd_mat =
+        std::make_unique< util::eigen::RowMajorSquareMatrix< val_t, n_prim_dofs > >();
+    auto primary_upd_rhs = Eigen::Vector< val_t, n_prim_dofs >{};
     for (size_t row_ind = 0; auto src_row : dof_inds.primary_src_inds)
     {
         for (size_t col_ind = 0; auto src_col : dof_inds.primary_src_inds)

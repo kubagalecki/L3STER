@@ -7,7 +7,7 @@
 
 #include <concepts>
 
-namespace lstr::eigen
+namespace lstr::util::eigen
 {
 namespace detail
 {
@@ -50,5 +50,5 @@ using DynamicallySizedMatrix =
 
 template < typename T >
 concept StaticallySizedMatrix_c = Matrix_c< T > and detail::is_statically_sized_martix< T >;
-} // namespace lstr::eigen
+} // namespace lstr::util::eigen
 #endif // L3STER_UTIL_EIGENUTILS_HPP

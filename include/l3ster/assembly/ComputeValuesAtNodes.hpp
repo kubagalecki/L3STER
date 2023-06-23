@@ -19,7 +19,7 @@ concept ValueAtNodeKernel_c =
              SpaceTimePoint                                   p) {
         {
             std::invoke(kernel, vals, ders, p)
-        } -> eigen::Vector_c;
+        } -> util::eigen::Vector_c;
     } and
     (std::invoke_result_t< Kernel,
                            std::array< val_t, n_fields >,
@@ -35,7 +35,7 @@ concept ValueAtNodeBoundaryKernel_c =
              Eigen::Vector< val_t, dim >                      normal) {
         {
             std::invoke(kernel, vals, ders, p, normal)
-        } -> eigen::Vector_c;
+        } -> util::eigen::Vector_c;
     } and
     (std::invoke_result_t< Kernel,
                            std::array< val_t, n_fields >,

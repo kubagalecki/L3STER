@@ -7,7 +7,7 @@
 #include <ranges>
 #include <unordered_map>
 
-namespace lstr
+namespace lstr::util
 {
 template < typename T, std::integral Index = std::size_t >
 class IndexMap
@@ -29,5 +29,5 @@ private:
 
 template < std::ranges::sized_range R >
 IndexMap(R&&) -> IndexMap< std::ranges::range_value_t< R > >;
-} // namespace lstr
+} // namespace lstr::util
 #endif // L3STER_UTIL_INDEXMAP_HPP

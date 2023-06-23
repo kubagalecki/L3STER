@@ -19,13 +19,13 @@ consteval size_t eigenToSpanSize(int eigen_size)
 // allocation view (std::span) and perform the atomic update ourselves. Note that the sumIntoX member functions of
 // Tpetra::CrsMatrix work fine, since Tpetra::CrsMatrix assumes modification in host space
 template < int local_size >
-void scatterLocalSystem(const eigen::RowMajorSquareMatrix< val_t, local_size >&     local_matrix,
-                        const Eigen::Vector< val_t, local_size >&                   local_vector,
-                        tpetra_crsmatrix_t&                                         global_matrix,
-                        std::span< val_t >                                          global_vector,
-                        std::span< const local_dof_t, eigenToSpanSize(local_size) > row_dofs,
-                        std::span< const local_dof_t, eigenToSpanSize(local_size) > col_dofs,
-                        std::span< const local_dof_t, eigenToSpanSize(local_size) > rhs_dofs)
+void scatterLocalSystem(const util::eigen::RowMajorSquareMatrix< val_t, local_size >& local_matrix,
+                        const Eigen::Vector< val_t, local_size >&                     local_vector,
+                        tpetra_crsmatrix_t&                                           global_matrix,
+                        std::span< val_t >                                            global_vector,
+                        std::span< const local_dof_t, eigenToSpanSize(local_size) >   row_dofs,
+                        std::span< const local_dof_t, eigenToSpanSize(local_size) >   col_dofs,
+                        std::span< const local_dof_t, eigenToSpanSize(local_size) >   rhs_dofs)
 {
     L3STER_PROFILE_FUNCTION;
     const auto size = std::invoke([&] {

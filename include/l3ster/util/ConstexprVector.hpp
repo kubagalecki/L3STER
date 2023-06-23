@@ -5,7 +5,7 @@
 #include <memory>
 #include <utility>
 
-namespace lstr
+namespace lstr::util
 {
 template < typename T >
 class ConstexprVector
@@ -191,5 +191,5 @@ private:
         reallocate(m_capacity == 0u ? 1u : growth_ratio * m_capacity);
     }
 };
-} // namespace lstr
+} // namespace lstr::util
 #endif // L3STER_CONSTEXPRVECTOR_HPP

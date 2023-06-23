@@ -99,7 +99,7 @@ public:
           m_kokkos_guard{argc, argv},
           m_stack_size_guard{util::detail::MaxStackSizeTracker::get()}
     {
-        (void)GlobalResource< util::hwloc::Topology >::getMaybeUninitialized();
+        (void)util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized();
     }
 
 private:
@@ -114,7 +114,7 @@ class MaxParallelismGuard
 {
 public:
     MaxParallelismGuard(
-        size_t max_threads = GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNCores())
+        size_t max_threads = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNCores())
         : m_max_threads{max_threads},
           m_tbb_control{oneapi::tbb::global_control::max_allowed_parallelism, max_threads}
 #ifdef _OPENMP

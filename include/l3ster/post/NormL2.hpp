@@ -32,21 +32,21 @@ auto computeNormL2(const MpiComm&                                       comm,
         requires requires {
             {
                 std::invoke(eval_residual, vals, ders, point)
-            } -> eigen::Vector_c;
+            } -> util::eigen::Vector_c;
         }
     {
         const auto residual = std::invoke(eval_residual, vals, ders, point);
         using ret_t         = std::remove_const_t< decltype(residual) >;
         return ret_t{residual.unaryExpr([](val_t v) { return v * v; })};
     };
-    const eigen::Vector_c auto squared_norm = evalIntegral(comm,
-                                                           compute_squared_norm,
-                                                           mesh,
-                                                           std::forward< decltype(domain_ids) >(domain_ids),
-                                                           field_val_getter,
-                                                           detail::doubleQuadratureOrder(options_ctwrpr),
-                                                           time);
-    using ret_t                             = std::remove_const_t< decltype(squared_norm) >;
+    const util::eigen::Vector_c auto squared_norm = evalIntegral(comm,
+                                                                 compute_squared_norm,
+                                                                 mesh,
+                                                                 std::forward< decltype(domain_ids) >(domain_ids),
+                                                                 field_val_getter,
+                                                                 detail::doubleQuadratureOrder(options_ctwrpr),
+                                                                 time);
+    using ret_t                                   = std::remove_const_t< decltype(squared_norm) >;
     return ret_t{squared_norm.cwiseSqrt()};
 }
 
@@ -63,14 +63,14 @@ auto computeBoundaryNormL2(const MpiComm&                                       
         requires requires {
             {
                 std::invoke(eval_residual, vals, ders, point, normal)
-            } -> eigen::Vector_c;
+            } -> util::eigen::Vector_c;
         }
     {
         const auto residual = std::invoke(eval_residual, vals, ders, point, normal);
         using ret_t         = std::remove_const_t< decltype(residual) >;
         return ret_t{residual.unaryExpr([](val_t v) { return v * v; })};
     };
-    const eigen::Vector_c auto squared_norm = evalBoundaryIntegral(
+    const util::eigen::Vector_c auto squared_norm = evalBoundaryIntegral(
         comm, compute_squared_norm, boundary, field_val_getter, detail::doubleQuadratureOrder(options_ctwrpr), time);
     using ret_t = std::remove_const_t< decltype(squared_norm) >;
     return ret_t{squared_norm.cwiseSqrt()};

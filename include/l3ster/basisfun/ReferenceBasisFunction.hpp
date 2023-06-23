@@ -221,9 +221,9 @@ constexpr DerDim derivativeByIndex(dim_t d)
 template < ElementTypes T, el_o_t O, BasisType BT >
 auto computeRefBasisDers(const Point< Element< T, O >::native_dim >& point)
 {
-    constexpr dim_t                                      nat_dim     = Element< T, O >::native_dim;
-    constexpr el_locind_t                                n_basis_fun = Element< T, O >::n_nodes;
-    eigen::RowMajorMatrix< val_t, nat_dim, n_basis_fun > retval;
+    constexpr dim_t       nat_dim     = Element< T, O >::native_dim;
+    constexpr el_locind_t n_basis_fun = Element< T, O >::n_nodes;
+    auto                  retval      = util::eigen::RowMajorMatrix< val_t, nat_dim, n_basis_fun >{};
     util::forConstexpr(
         [&]< el_locind_t I >(std::integral_constant< el_locind_t, I >) {
             util::forConstexpr(

@@ -27,7 +27,7 @@ using namespace lstr;
 
 static consteval auto getConstexprVecParams(int size, int cap)
 {
-    ConstexprVector< int > v;
+    auto v = util::ConstexprVector< int >{};
     for (int i = 0; i < cap; ++i)
         v.pushBack(i);
     for (int i = cap; i > size; --i)
@@ -37,8 +37,8 @@ static consteval auto getConstexprVecParams(int size, int cap)
 
 static consteval bool checkConstexprVecStorage()
 {
-    ConstexprVector< ConstexprVector< int > > v(3, ConstexprVector< int >{0, 1, 2});
-    bool                                      ret = true;
+    auto v   = util::ConstexprVector< util::ConstexprVector< int > >(3, util::ConstexprVector< int >{0, 1, 2});
+    bool ret = true;
     for (int i = 0; i < 3; ++i)
         for (int j = 0; j < 3; ++j)
             ret &= v[i][j] == j;
@@ -47,15 +47,15 @@ static consteval bool checkConstexprVecStorage()
 
 static consteval auto checkConstexprVectorReserve(int cap)
 {
-    ConstexprVector< int > v;
+    auto v = util::ConstexprVector< int >{};
     v.reserve(cap);
     return std::make_pair(v.size(), v.capacity());
 }
 
 static consteval bool checkConstexprVectorIters()
 {
-    ConstexprVector< int > v;
-    constexpr int          size = 10;
+    auto          v    = util::ConstexprVector< int >{};
+    constexpr int size = 10;
     v.reserve(size);
     for (int i = 0; i < size; ++i)
         v.pushBack(i + 1);
@@ -98,7 +98,7 @@ TEST_CASE("Constexpr vector", "[util]")
 
 static consteval auto checkRSC()
 {
-    ConstexprRefStableCollection< size_t > nums;
+    util::ConstexprRefStableCollection< size_t > nums;
     for (size_t i = 1; i < nums.block_size * 2; ++i)
         nums.push(i);
     std::ranges::sort(nums | std::views::reverse);
@@ -307,8 +307,8 @@ TEST_CASE("Dynamic bitset", "[util]")
         return retval;
     };
 
-    constexpr auto check_are_set = [](const DynamicBitset& bitset, std::ranges::range auto&& inds) {
-        constexpr auto test_as_const = [](const DynamicBitset& bs, size_t pos) {
+    constexpr auto check_are_set = [](const util::DynamicBitset& bitset, std::ranges::range auto&& inds) {
+        constexpr auto test_as_const = [](const util::DynamicBitset& bs, size_t pos) {
             return bs[pos];
         };
         for (auto i : inds)
@@ -317,8 +317,8 @@ TEST_CASE("Dynamic bitset", "[util]")
             CHECK(test_as_const(bitset, i));
         }
     };
-    constexpr auto check_are_reset = [](const DynamicBitset& bitset, std::ranges::range auto&& inds) {
-        constexpr auto test_as_const = [](const DynamicBitset& bs, size_t pos) {
+    constexpr auto check_are_reset = [](const util::DynamicBitset& bitset, std::ranges::range auto&& inds) {
+        constexpr auto test_as_const = [](const util::DynamicBitset& bs, size_t pos) {
             return bs[pos];
         };
         for (auto i : inds)
@@ -332,7 +332,7 @@ TEST_CASE("Dynamic bitset", "[util]")
 
     SECTION("Single-threaded")
     {
-        DynamicBitset bitset;
+        util::DynamicBitset bitset;
         for (size_t size : sizes)
         {
             bitset.resize(size);
@@ -373,15 +373,15 @@ TEST_CASE("Dynamic bitset", "[util]")
         for (size_t size : sizes)
         {
             {
-                const DynamicBitset bitset{size};
-                const auto          subview = bitset.getSubView(1, size / 2);
+                const util::DynamicBitset bitset{size};
+                const auto                subview = bitset.getSubView(1, size / 2);
                 CHECK(subview.count() == 0);
                 CHECK(bitset.getSubView(0, 0).count() == 0);
                 CHECK_FALSE(subview[0]);
             }
             {
-                DynamicBitset bitset{size};
-                auto          subview = bitset.getSubView(1, size / 2);
+                util::DynamicBitset bitset{size};
+                auto                subview = bitset.getSubView(1, size / 2);
                 for (size_t i = 0; i < subview.size(); ++i)
                 {
                     subview.set(i);
@@ -405,10 +405,10 @@ TEST_CASE("Dynamic bitset", "[util]")
     {
         for (size_t size : sizes)
         {
-            DynamicBitset bitset{size};
-            auto          atomic_view = bitset.getAtomicView();
-            const auto    set_inds    = make_set_inds(size);
-            const auto    reset_inds  = make_reset_inds(size, set_inds);
+            util::DynamicBitset bitset{size};
+            auto                atomic_view = bitset.getAtomicView();
+            const auto          set_inds    = make_set_inds(size);
+            const auto          reset_inds  = make_reset_inds(size, set_inds);
 
             tbb::parallel_for(tbb::blocked_range< size_t >{0, set_inds.size()},
                               [&](const tbb::blocked_range< size_t >& range) {
@@ -449,7 +449,7 @@ TEST_CASE("Index map", "[util]")
     constexpr size_t           size = 42, base = 10;
     std::array< size_t, size > vals;
     std::ranges::generate(vals, [base = base]() mutable { return base++; });
-    const auto map = IndexMap{vals};
+    const auto map = util::IndexMap{vals};
     for (size_t i : std::views::iota(base, base + size))
         CHECK(map(i) == i - 10);
 }

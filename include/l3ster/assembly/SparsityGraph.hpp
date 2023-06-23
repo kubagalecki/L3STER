@@ -165,7 +165,7 @@ auto computeDofGraph(const MeshPartition< orders... >&                       mes
 {
     L3STER_PROFILE_FUNCTION;
     L3STER_PROFILE_REGION_BEGIN("Compute global to local DOF map");
-    const auto global_to_local_dof_map = IndexMap{owned_plus_shared_dofs};
+    const auto global_to_local_dof_map = util::IndexMap{owned_plus_shared_dofs};
     L3STER_PROFILE_REGION_END("Compute global to local DOF map");
 
     const auto iterate_over_mesh = [&](auto&& element_kernel) {

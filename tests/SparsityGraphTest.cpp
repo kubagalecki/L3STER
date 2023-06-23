@@ -24,7 +24,7 @@ public:
                                  return dof != NodeToGlobalDofMap< detail::deduceNFields(problem_def) >::invalid_dof;
                              })) +
             1;
-        m_entries = DynamicBitset{m_dim * m_dim};
+        m_entries = util::DynamicBitset{m_dim * m_dim};
 
         const auto process_domain = [&]< auto dom_def >(util::ConstexprValue< dom_def >) {
             constexpr auto  domain_id        = dom_def.first;
@@ -64,8 +64,8 @@ public:
     }
 
 private:
-    size_t        m_dim; // assume square
-    DynamicBitset m_entries;
+    size_t              m_dim; // assume square
+    util::DynamicBitset m_entries;
 };
 
 template < CondensationPolicy CP >

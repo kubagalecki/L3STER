@@ -36,7 +36,7 @@ auto computeNodeWeights(const MeshPartition< orders... >& mesh, util::ConstexprV
         return {};
 
     constexpr auto n_fields      = deduceNFields(problem_def);
-    auto           node_dof_inds = DynamicBitset{n_fields * mesh.getAllNodes().size()};
+    auto           node_dof_inds = util::DynamicBitset{n_fields * mesh.getAllNodes().size()};
     util::forConstexpr(
         [&]< auto dom_def >(util::ConstexprValue< dom_def >) {
             constexpr auto dom_id   = dom_def.first;
