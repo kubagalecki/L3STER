@@ -13,16 +13,16 @@ int main(int argc, char* argv[])
 
     constexpr d_id_t      domain_id           = 0;
     static constexpr auto boundary_ids        = util::makeIotaArray< d_id_t, 6 >(1);
-    constexpr auto        problem_def         = std::array{Pair{domain_id, std::array{true, true, true, true}}};
+    constexpr auto        problem_def         = std::array{util::Pair{domain_id, std::array{true, true, true, true}}};
     constexpr auto        dirichlet_def       = std::invoke([] {
-        std::array< Pair< d_id_t, std::array< bool, 4 > >, boundary_ids.size() > retval{};
+        std::array< util::Pair< d_id_t, std::array< bool, 4 > >, boundary_ids.size() > retval{};
         std::ranges::transform(boundary_ids, retval.begin(), [](auto d) {
-            return Pair{d, std::array{true, false, false, false}};
+            return util::Pair{d, std::array{true, false, false, false}};
         });
         return retval;
     });
-    constexpr auto        probdef_ctwrpr      = ConstexprValue< problem_def >{};
-    constexpr auto        dirichletdef_ctwrpr = ConstexprValue< dirichlet_def >{};
+    constexpr auto        probdef_ctwrpr      = util::ConstexprValue< problem_def >{};
+    constexpr auto        dirichletdef_ctwrpr = util::ConstexprValue< dirichlet_def >{};
 
     constexpr auto node_dist    = std::invoke([] {
         constexpr size_t                   edge_divs = 2;
@@ -128,7 +128,8 @@ int main(int argc, char* argv[])
 
     alg_system->describe(comm);
 
-    alg_system->setDirichletBCValues(dirichlet_bc_val_def, my_partition, boundary_ids, ConstexprValue< T_inds >{});
+    alg_system->setDirichletBCValues(
+        dirichlet_bc_val_def, my_partition, boundary_ids, util::ConstexprValue< T_inds >{});
     alg_system->applyDirichletBCs();
 
     solvers::CG solver{
