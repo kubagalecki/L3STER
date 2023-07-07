@@ -64,7 +64,8 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 {
     SECTION("1 point quadrature")
     {
-        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 1, ElementType::Line >();
+        const auto& quadrature =
+            quad::getQuadrature< quad::QuadratureType::GaussLegendre, 1, mesh::ElementType::Line >();
 
         REQUIRE(quadrature.size == 1);
         REQUIRE(quadrature.dim == 1);
@@ -78,7 +79,8 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 
     SECTION("2 point quadrature")
     {
-        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 3, ElementType::Line >();
+        const auto& quadrature =
+            quad::getQuadrature< quad::QuadratureType::GaussLegendre, 3, mesh::ElementType::Line >();
 
         REQUIRE(quadrature.size == 2);
         REQUIRE(quadrature.dim == 1);
@@ -95,7 +97,8 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 
     SECTION("3 point quadrature")
     {
-        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 5, ElementType::Line >();
+        const auto& quadrature =
+            quad::getQuadrature< quad::QuadratureType::GaussLegendre, 5, mesh::ElementType::Line >();
 
         REQUIRE(quadrature.size == 3);
         REQUIRE(quadrature.dim == 1);
@@ -160,7 +163,8 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
     SECTION("1 point quadrature")
     {
-        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 1, ElementType::Quad >();
+        const auto& quadrature =
+            quad::getQuadrature< quad::QuadratureType::GaussLegendre, 1, mesh::ElementType::Quad >();
 
         REQUIRE(quadrature.size == 1);
         REQUIRE(quadrature.dim == 2);
@@ -174,7 +178,8 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
     SECTION("4 point quadrature")
     {
-        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 3, ElementType::Quad >();
+        const auto& quadrature =
+            quad::getQuadrature< quad::QuadratureType::GaussLegendre, 3, mesh::ElementType::Quad >();
 
         REQUIRE(quadrature.size == 4);
         REQUIRE(quadrature.dim == 2);
@@ -192,7 +197,8 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
     SECTION("9 point quadrature")
     {
-        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 5, ElementType::Quad >();
+        const auto& quadrature =
+            quad::getQuadrature< quad::QuadratureType::GaussLegendre, 5, mesh::ElementType::Quad >();
 
         REQUIRE(quadrature.size == 9);
         REQUIRE(quadrature.dim == 2);
@@ -242,7 +248,8 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
 
     SECTION("1 point quadrature")
     {
-        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 1, ElementType::Hex >();
+        const auto& quadrature =
+            quad::getQuadrature< quad::QuadratureType::GaussLegendre, 1, mesh::ElementType::Hex >();
 
         REQUIRE(quadrature.size == 1);
         REQUIRE(quadrature.dim == 3);
@@ -257,7 +264,8 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
 
     SECTION("8 point quadrature")
     {
-        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 3, ElementType::Hex >();
+        const auto& quadrature =
+            quad::getQuadrature< quad::QuadratureType::GaussLegendre, 3, mesh::ElementType::Hex >();
 
         REQUIRE(quadrature.size == 8);
         REQUIRE(quadrature.dim == 3);
@@ -275,7 +283,8 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
 
     SECTION("512 point quadrature")
     {
-        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 15, ElementType::Hex >();
+        const auto& quadrature =
+            quad::getQuadrature< quad::QuadratureType::GaussLegendre, 15, mesh::ElementType::Hex >();
 
         REQUIRE(quadrature.size == 512);
         REQUIRE(quadrature.dim == 3);

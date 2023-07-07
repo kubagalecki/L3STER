@@ -14,7 +14,7 @@ void test()
     constexpr auto order = 2;
     const auto     mesh  = generateAndDistributeMesh< order >(comm,
                                                          [] {
-                                                             return makeCubeMesh(std::array{0., 1., 2., 3., 4.});
+                                                             return mesh::makeCubeMesh(std::array{0., 1., 2., 3., 4.});
                                                          },
                                                          {});
     constexpr auto probdef_ctwrpr =

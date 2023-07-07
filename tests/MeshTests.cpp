@@ -14,7 +14,7 @@ using namespace lstr;
 
 TEST_CASE("2D mesh import", "[mesh]")
 {
-    auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag);
+    auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), mesh::gmsh_tag);
 
     constexpr size_t expected_n_nodes = 121;
     size_t           max_node{};
@@ -31,7 +31,7 @@ TEST_CASE("2D mesh import", "[mesh]")
 
     // BoundaryView
     mesh.initDualGraph();
-    std::vector< BoundaryView< 1 > > boundaries;
+    std::vector< mesh::BoundaryView< 1 > > boundaries;
     boundaries.reserve(4);
     for (d_id_t i = 2; i <= 5; ++i)
         boundaries.push_back(mesh.getBoundaryView(i));
@@ -44,7 +44,7 @@ TEST_CASE("2D mesh import", "[mesh]")
 
 TEST_CASE("3D mesh import", "[mesh]")
 {
-    auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), gmsh_tag);
+    auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), mesh::gmsh_tag);
     mesh.initDualGraph();
 
     constexpr size_t expected_nvertices = 5885;
@@ -59,25 +59,25 @@ TEST_CASE("3D mesh import", "[mesh]")
 
 TEST_CASE("Unsupported mesh formats, mesh I/O error handling", "[mesh]")
 {
-    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii2.msh), gmsh_tag));
-    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_bin2.msh), gmsh_tag));
-    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_bin4.msh), gmsh_tag));
-    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(nonexistent.msh), gmsh_tag));
-    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_triangle_mesh.msh), gmsh_tag));
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii2.msh), mesh::gmsh_tag));
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_bin2.msh), mesh::gmsh_tag));
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_bin4.msh), mesh::gmsh_tag));
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(nonexistent.msh), mesh::gmsh_tag));
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_triangle_mesh.msh), mesh::gmsh_tag));
 }
 
 TEST_CASE("Incorrect domain dim handling", "[mesh]")
 {
-    auto domain = Domain< 1 >{};
+    auto domain = mesh::Domain< 1 >{};
 
-    ElementData< ElementType::Line, 1 > data{{Point{0., 0., 0.}, Point{0., 0., 0.}}};
-    std::array< n_id_t, 2 >              nodes{1, 2};
-    el_id_t                              id = 1;
-    domain.reserve< ElementType::Line, 1 >(1);
-    domain.emplaceBack< ElementType::Line, 1 >(nodes, data, id++);
-    domain.reserve< ElementType::Line, 1 >(1);
-    CHECK_THROWS(domain.reserve< ElementType::Quad, 1 >(1));
-    CHECK_THROWS(domain.getElementVector< ElementType::Quad, 1 >());
+    auto data = mesh::ElementData< mesh::ElementType::Line, 1 >{{mesh::Point{0., 0., 0.}, mesh::Point{0., 0., 0.}}};
+    std::array< n_id_t, 2 > nodes{1, 2};
+    el_id_t                 id = 1;
+    domain.reserve< mesh::ElementType::Line, 1 >(1);
+    domain.emplaceBack< mesh::ElementType::Line, 1 >(nodes, data, id++);
+    domain.reserve< mesh::ElementType::Line, 1 >(1);
+    CHECK_THROWS(domain.reserve< mesh::ElementType::Quad, 1 >(1));
+    CHECK_THROWS(domain.getElementVector< mesh::ElementType::Quad, 1 >());
 }
 
 TEMPLATE_TEST_CASE("Iteration over elements",
@@ -93,7 +93,7 @@ TEMPLATE_TEST_CASE("Iteration over elements",
     constexpr auto n_edges   = node_dist.size() - 1;
     constexpr auto n_faces   = n_edges * n_edges * 6;
     constexpr auto n_vols    = n_edges * n_edges * n_edges;
-    const auto     mesh      = makeCubeMesh(node_dist);
+    const auto     mesh      = mesh::makeCubeMesh(node_dist);
     const auto     policy    = TestType{};
 
     int        count           = 0;
@@ -109,40 +109,40 @@ TEMPLATE_TEST_CASE("Iteration over elements",
     CHECK(count == n_faces + n_vols);
     count = 0;
 
-    mesh.visit([&count](const auto&, DomainView< 1 >) { ++std::atomic_ref{count}; }, policy);
+    mesh.visit([&count](const auto&, mesh::DomainView< 1 >) { ++std::atomic_ref{count}; }, policy);
     CHECK(count == n_faces + n_vols);
     count = 0;
 
-    std::as_const(mesh).visit([&count](const auto&, DomainView< 1 >) { ++std::atomic_ref{count}; }, policy);
+    std::as_const(mesh).visit([&count](const auto&, mesh::DomainView< 1 >) { ++std::atomic_ref{count}; }, policy);
     CHECK(count == n_faces + n_vols);
     count = 0;
 
     mesh.visit(
-        element_counter, [](DomainView< 1 > dv) { return dv.getDim() == 2; }, policy);
+        element_counter, [](mesh::DomainView< 1 > dv) { return dv.getDim() == 2; }, policy);
     CHECK(count == n_faces);
     count = 0;
 
     std::as_const(mesh).visit(
-        element_counter, [](DomainView< 1 > dv) { return dv.getDim() == 2; }, policy);
+        element_counter, [](mesh::DomainView< 1 > dv) { return dv.getDim() == 2; }, policy);
     CHECK(count == n_faces);
     count = 0;
 
     mesh.visit(
-        [&count](const auto&, DomainView< 1 > dv) {
+        [&count](const auto&, mesh::DomainView< 1 > dv) {
             ++std::atomic_ref{count};
             CHECK(dv.getDim() == 2);
         },
-        [](DomainView< 1 > dv) { return dv.getDim() == 2; },
+        [](mesh::DomainView< 1 > dv) { return dv.getDim() == 2; },
         policy);
     CHECK(count == n_faces);
     count = 0;
 
     std::as_const(mesh).visit(
-        [&count](const auto&, DomainView< 1 > dv) {
+        [&count](const auto&, mesh::DomainView< 1 > dv) {
             ++std::atomic_ref{count};
             CHECK(dv.getDim() == 2);
         },
-        [](DomainView< 1 > dv) { return dv.getDim() == 2; },
+        [](mesh::DomainView< 1 > dv) { return dv.getDim() == 2; },
         policy);
     CHECK(count == n_faces);
     count = 0;
@@ -156,7 +156,7 @@ TEMPLATE_TEST_CASE("Iteration over elements",
     count = 0;
 
     mesh.visit(
-        [&count](const auto&, DomainView< 1 > dv) {
+        [&count](const auto&, mesh::DomainView< 1 > dv) {
             ++std::atomic_ref{count};
             CHECK(dv.getDim() == 2);
         },
@@ -166,7 +166,7 @@ TEMPLATE_TEST_CASE("Iteration over elements",
     count = 0;
 
     std::as_const(mesh).visit(
-        [&count](const auto&, DomainView< 1 > dv) {
+        [&count](const auto&, mesh::DomainView< 1 > dv) {
             ++std::atomic_ref{count};
             CHECK(dv.getDim() == 2);
         },
@@ -179,7 +179,7 @@ TEMPLATE_TEST_CASE("Iteration over elements",
 TEMPLATE_TEST_CASE("Element lookup", "[mesh]", std::execution::sequenced_policy, std::execution::parallel_policy)
 {
     const auto policy = TestType{};
-    const auto mesh   = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag);
+    const auto mesh   = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), mesh::gmsh_tag);
     CHECK_THROWS(mesh.getDualGraph());
 
     constexpr auto existing_nodes = std::array{54, 55, 63, 64};
@@ -198,7 +198,7 @@ TEMPLATE_TEST_CASE("Element lookup", "[mesh]", std::execution::sequenced_policy,
             std::ranges::sort(element_nodes);
             return std::ranges::equal(element_nodes, existing_nodes);
         },
-        [](DomainView< 1 > dv) { return dv.getDim() == 2; },
+        [](mesh::DomainView< 1 > dv) { return dv.getDim() == 2; },
         policy));
     CHECK_FALSE(mesh.find(
         [&](const auto& element) {
@@ -207,22 +207,22 @@ TEMPLATE_TEST_CASE("Element lookup", "[mesh]", std::execution::sequenced_policy,
             return std::ranges::equal(element_nodes, fake_nodes);
         },
         policy));
-    CHECK_FALSE(MeshPartition< 1 >{}.find([](const auto&) { return true; }, policy));
-    CHECK_FALSE(MeshPartition< 1 >{}.find(0));
+    CHECK_FALSE(mesh::MeshPartition< 1 >{}.find([](const auto&) { return true; }, policy));
+    CHECK_FALSE(mesh::MeshPartition< 1 >{}.find(0));
 }
 
 TEST_CASE("Element lookup by ID", "[mesh]")
 {
-    auto domain = Domain< 1 >{};
+    auto domain = mesh::Domain< 1 >{};
     CHECK_FALSE(domain.find(1));
     CHECK_FALSE(std::as_const(domain).find(1));
 
-    ElementData< ElementType::Line, 1 > data{{Point{0., 0., 0.}, Point{0., 0., 0.}}};
-    std::array< n_id_t, 2 >              nodes{1, 2};
-    el_id_t                              id = 1;
-    domain.reserve< ElementType::Line, 1 >(1);
+    auto data = mesh::ElementData< mesh::ElementType::Line, 1 >{{mesh::Point{0., 0., 0.}, mesh::Point{0., 0., 0.}}};
+    std::array< n_id_t, 2 > nodes{1, 2};
+    el_id_t                 id = 1;
+    domain.reserve< mesh::ElementType::Line, 1 >(1);
     CHECK_FALSE(domain.find(1));
-    domain.emplaceBack< ElementType::Line, 1 >(nodes, data, id++);
+    domain.emplaceBack< mesh::ElementType::Line, 1 >(nodes, data, id++);
     CHECK(domain.find(1));
     CHECK_FALSE(domain.find(0));
 
@@ -232,13 +232,13 @@ TEST_CASE("Element lookup by ID", "[mesh]")
     };
 
     for (size_t i = 0; i < 10; ++i)
-        domain.emplaceBack< ElementType::Line, 1 >(next(), data, id++);
+        domain.emplaceBack< mesh::ElementType::Line, 1 >(next(), data, id++);
     CHECK(domain.find(10));
 
-    domain.emplaceBack< ElementType::Line, 1 >(next(), data, 0);
+    domain.emplaceBack< mesh::ElementType::Line, 1 >(next(), data, 0);
     CHECK(domain.find(0));
 
-    domain.emplaceBack< ElementType::Line, 1 >(next(), data, id *= 2);
+    domain.emplaceBack< mesh::ElementType::Line, 1 >(next(), data, id *= 2);
     CHECK(domain.find(id));
     CHECK_FALSE(domain.find(id + 1));
 }
@@ -246,15 +246,15 @@ TEST_CASE("Element lookup by ID", "[mesh]")
 TEST_CASE("Serial mesh partitioning", "[mesh]")
 {
     constexpr auto n_parts    = 2u;
-    const auto     mesh       = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag);
+    const auto     mesh       = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), mesh::gmsh_tag);
     const auto     n_elements = mesh.getNElements();
-    REQUIRE_NOTHROW(partitionMesh(mesh, 1, {}));
+    REQUIRE_NOTHROW(mesh::partitionMesh(mesh, 1, {}));
     const auto partitions = partitionMesh(mesh, n_parts, {2, 3, 4, 5});
     REQUIRE(partitions.size() == n_parts);
-    REQUIRE(
-        std::transform_reduce(partitions.cbegin(), partitions.cend(), 0u, std::plus{}, [](const MeshPartition< 1 >& p) {
-            return p.getNElements();
-        }) == n_elements);
+    REQUIRE(std::transform_reduce(
+                partitions.cbegin(), partitions.cend(), 0u, std::plus{}, [](const mesh::MeshPartition< 1 >& p) {
+                    return p.getNElements();
+                }) == n_elements);
     CHECK(partitions.front().getNElements() == Approx(partitions.back().getNElements()).epsilon(.1));
     std::vector< n_id_t > intersects;
     std::ranges::set_intersection(
@@ -272,8 +272,8 @@ TEST_CASE("Boundary views in partitioned meshes", "[mesh]")
 {
     constexpr auto n_parts          = 8u;
     constexpr auto node_dist        = std::array{0., 1., 2., 3., 4., 5., 6., 7., 8.};
-    const auto     mesh             = makeCubeMesh(node_dist);
-    auto           partitions       = std::vector< MeshPartition< 1 > >{};
+    const auto     mesh             = mesh::makeCubeMesh(node_dist);
+    auto           partitions       = std::vector< mesh::MeshPartition< 1 > >{};
     const auto     check_boundaries = [&] {
         for (auto&& part : partitions)
         {
@@ -308,15 +308,15 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
     SECTION("mesh imported from gmsh")
     {
         constexpr el_o_t order      = 2;
-        auto             mesh1      = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), gmsh_tag);
+        auto             mesh1      = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), mesh::gmsh_tag);
         const auto       n_elements = mesh1.getNElements();
 
-        CHECK_THROWS(convertMeshToOrder< order >(mesh1));
+        CHECK_THROWS(mesh::convertMeshToOrder< order >(mesh1));
 
         mesh1.initDualGraph();
         auto mesh = convertMeshToOrder< order >(mesh1);
         CHECK(n_elements == mesh.getNElements());
-        const auto validate_elorder = [&]< ElementType T, el_o_t O >(const Element< T, O >&) {
+        const auto validate_elorder = [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >&) {
             if constexpr (O != 2)
                 throw std::logic_error{"Incorrect element order"};
         };
@@ -331,7 +331,7 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
         constexpr el_o_t     order = 2;
         constexpr std::array dist{0., .2, .4, .6, .8, 10.};
         constexpr auto       n_edge_els = dist.size() - 1;
-        auto                 mesh1      = makeCubeMesh(dist);
+        auto                 mesh1      = mesh::makeCubeMesh(dist);
         mesh1.initDualGraph();
         const auto n_elements = mesh1.getNElements();
         const auto n_nodes_o1 = mesh1.getOwnedNodes().size();

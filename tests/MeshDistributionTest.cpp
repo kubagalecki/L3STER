@@ -11,7 +11,8 @@ int main(int argc, char* argv[])
     L3sterScopeGuard scope_guard{argc, argv};
     MpiComm          comm{MPI_COMM_WORLD};
 
-    const auto   part = readAndDistributeMesh< 2 >(comm, L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag, {});
+    const auto part =
+        readAndDistributeMesh< 2 >(comm, L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), mesh::gmsh_tag, {});
     const size_t n_elems = part.getNElements();
 
     size_t sum_elems{};

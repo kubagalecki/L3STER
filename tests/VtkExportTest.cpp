@@ -35,7 +35,7 @@ void vtkExportTest2D()
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
     const auto       my_partition =
         generateAndDistributeMesh< mesh_order >(comm,
-                                                [&] { return makeSquareMesh(node_distx, node_disty); },
+                                                [&] { return mesh::makeSquareMesh(node_distx, node_disty); },
                                                 {bot_boundary, top_boundary, left_boundary, right_boundary});
 
     constexpr auto problem_def       = std::array{util::Pair{domain_id, std::array{false, true, false, true}},
@@ -104,9 +104,9 @@ void vtkExportTest3D()
             retval[i] = -1. + static_cast< double >(i) * 2. / (retval.size() - 1);
         return retval;
     }();
-    constexpr auto mesh_order = 2;
-    const auto     my_partition =
-        generateAndDistributeMesh< mesh_order >(comm, [&] { return makeCubeMesh(node_dist); }, {1, 2, 3, 4, 5, 6});
+    constexpr auto mesh_order   = 2;
+    const auto     my_partition = generateAndDistributeMesh< mesh_order >(
+        comm, [&] { return mesh::makeCubeMesh(node_dist); }, {1, 2, 3, 4, 5, 6});
     const auto boundary = my_partition.getBoundaryView(util::makeIotaArray< d_id_t, 6 >(1));
 
     constexpr d_id_t domain_id = 0;

@@ -14,14 +14,15 @@ TEST_CASE("Local system assembly", "[local_asm]")
 
     SECTION("Diffusion 2D")
     {
-        constexpr auto        ET       = ElementType::Quad;
-        constexpr el_o_t      EO       = 4;
-        constexpr auto        QT       = quad::QuadratureType::GaussLegendre;
-        constexpr q_o_t       QO       = 11; // Needs to be large enough for the local system buffer to overflow
-        constexpr auto        BT       = basis::BasisType::Lagrange;
-        constexpr auto        el_nodes = typename Element< ET, EO >::node_array_t{};
-        ElementData< ET, EO > data{{Point{1., -1., 0.}, Point{2., -1., 0.}, Point{1., 1., 1.}, Point{2., 1., 1.}}};
-        const auto            element = Element< ET, EO >{el_nodes, data, 0};
+        constexpr auto              ET       = mesh::ElementType::Quad;
+        constexpr el_o_t            EO       = 4;
+        constexpr auto              QT       = quad::QuadratureType::GaussLegendre;
+        constexpr q_o_t             QO       = 11; // Needs to be large enough for the local system buffer to overflow
+        constexpr auto              BT       = basis::BasisType::Lagrange;
+        constexpr auto              el_nodes = typename mesh::Element< ET, EO >::node_array_t{};
+        mesh::ElementData< ET, EO > data{
+            {mesh::Point{1., -1., 0.}, mesh::Point{2., -1., 0.}, mesh::Point{1., 1., 1.}, mesh::Point{2., 1., 1.}}};
+        const auto element = mesh::Element< ET, EO >{el_nodes, data, 0};
 
         const auto& basis_at_q = basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
 
@@ -55,7 +56,7 @@ TEST_CASE("Local system assembly", "[local_asm]")
             return retval;
         };
 
-        constexpr auto solution = [](const Point< 3 >& p) {
+        constexpr auto solution = [](const mesh::Point< 3 >& p) {
             return p.x();
         };
 
@@ -64,7 +65,7 @@ TEST_CASE("Local system assembly", "[local_asm]")
         auto u = F;
 
         constexpr auto boundary_nodes = std::invoke([] {
-            constexpr auto& boundary_table = ElementTraits< Element< ET, EO > >::boundary_table;
+            constexpr auto& boundary_table = mesh::ElementTraits< mesh::Element< ET, EO > >::boundary_table;
             constexpr auto  bn_packed      = std::invoke([] {
                 constexpr size_t max_nbn =
                     std::accumulate(begin(boundary_table), end(boundary_table), 0, [](size_t val, const auto& a) {
@@ -93,13 +94,14 @@ TEST_CASE("Local system assembly", "[local_asm]")
             return retval;
         });
         constexpr auto                            nonbc_inds = std::invoke([&] {
-            std::array< ptrdiff_t, Element< ET, EO >::n_nodes * nf - bc_inds.size() > retval{};
-            std::ranges::set_difference(std::views::iota(0u, Element< ET, EO >::n_nodes * nf), bc_inds, begin(retval));
+            std::array< ptrdiff_t, mesh::Element< ET, EO >::n_nodes * nf - bc_inds.size() > retval{};
+            std::ranges::set_difference(
+                std::views::iota(0u, mesh::Element< ET, EO >::n_nodes * nf), bc_inds, begin(retval));
             return retval;
         });
         Eigen::Matrix< val_t, bc_inds.size(), 1 > bc_vals{};
         for (ptrdiff_t i = 0; auto node : boundary_nodes)
-            bc_vals[i++] = solution(nodePhysicalLocation(element, node));
+            bc_vals[i++] = solution(mesh::nodePhysicalLocation(element, node));
 
         Eigen::Matrix< val_t, nonbc_inds.size(), nonbc_inds.size() > K_red = K(nonbc_inds, nonbc_inds);
         Eigen::Matrix< val_t, nonbc_inds.size(), 1 > F_red = F(nonbc_inds, 1) - K(nonbc_inds, bc_inds) * bc_vals;

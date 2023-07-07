@@ -8,7 +8,7 @@
 
 #include <vector>
 
-namespace lstr
+namespace lstr::mesh
 {
 template < ElementType ELTYPE, el_o_t ELORDER >
 class Element;

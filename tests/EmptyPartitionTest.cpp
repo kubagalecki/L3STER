@@ -21,7 +21,7 @@ void test()
     const auto     mesh       = generateAndDistributeMesh< mesh_order >(
         comm,
         [&] {
-            return makeSquareMesh(std::array{0., 1.});
+            return mesh::makeSquareMesh(std::array{0., 1.});
         },
         {1, 2, 3, 4},
         {},

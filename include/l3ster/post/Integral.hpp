@@ -63,8 +63,8 @@ template < typename IntKernel, size_t n_fields, el_o_t... orders >
 inline constexpr auto n_integral_components = std::invoke(
     []< typename... TypeOrderPair >(util::TypePack< TypeOrderPair... >) {
         constexpr auto invalid_nic = std::numeric_limits< int >::max();
-        constexpr auto deduce_nc   = []< ElementType ET, el_o_t EO >(util::ValuePack< ET, EO >) -> int {
-            constexpr auto dim = Element< ET, EO >::native_dim;
+        constexpr auto deduce_nc   = []< mesh::ElementType ET, el_o_t EO >(util::ValuePack< ET, EO >) -> int {
+            constexpr auto dim = mesh::Element< ET, EO >::native_dim;
             if constexpr (IntegralKernel_c< IntKernel, dim, n_fields > or
                           BoundaryIntegralKernel_c< IntKernel, dim, n_fields >)
                 return deduce_n_integral_components< IntKernel, dim, n_fields >;
@@ -81,26 +81,26 @@ inline constexpr auto n_integral_components = std::invoke(
             std::ranges::all_of(int_comps_for_els, [](int nic) { return nic == n_int_comps or nic == invalid_nic; }));
         return n_int_comps;
     },
-    type_order_combinations< orders... >{});
+    mesh::type_order_combinations< orders... >{});
 
 template < typename Kernel, size_t n_fields, el_o_t... orders >
 struct PotentiallyValidIntegralKernelDeductionHelper
 {
-    template < ElementType T, el_o_t O >
+    template < mesh::ElementType T, el_o_t O >
     struct DeductionHelperDomain
     {
-        static constexpr bool value = IntegralKernel_c< Kernel, Element< T, O >::native_dim, n_fields >;
+        static constexpr bool value = IntegralKernel_c< Kernel, mesh::Element< T, O >::native_dim, n_fields >;
     };
     static constexpr bool domain =
-        ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
+        mesh::detail::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
 
-    template < ElementType T, el_o_t O >
+    template < mesh::ElementType T, el_o_t O >
     struct DeductionHelperBoundary
     {
-        static constexpr bool value = BoundaryIntegralKernel_c< Kernel, Element< T, O >::native_dim, n_fields >;
+        static constexpr bool value = BoundaryIntegralKernel_c< Kernel, mesh::Element< T, O >::native_dim, n_fields >;
     };
     static constexpr bool boundary =
-        ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperBoundary >;
+        mesh::detail::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperBoundary >;
 };
 template < typename Kernel, size_t n_fields, el_o_t... orders >
 concept PotentiallyValidIntegralKernel_c =
@@ -109,16 +109,17 @@ template < typename Kernel, size_t n_fields, el_o_t... orders >
 concept PotentiallyValidBoundaryIntegralKernel_c =
     PotentiallyValidIntegralKernelDeductionHelper< Kernel, n_fields, orders... >::boundary;
 
-template < ElementType ET, el_o_t EO, q_l_t QL, int n_fields >
-auto evalElementIntegral(auto&&                                                                            kernel,
-                         const Element< ET, EO >&                                                          element,
-                         const util::eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
-                         const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                            basis_at_qps,
-                         val_t                                                                             time)
-    requires IntegralKernel_c< decltype(kernel), Element< ET, EO >::native_dim, n_fields >
+template < mesh::ElementType ET, el_o_t EO, q_l_t QL, int n_fields >
+auto evalElementIntegral(
+    auto&&                                                                                  kernel,
+    const mesh::Element< ET, EO >&                                                          element,
+    const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, n_fields >& node_vals,
+    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                  basis_at_qps,
+    val_t                                                                                   time)
+    requires IntegralKernel_c< decltype(kernel), mesh::Element< ET, EO >::native_dim, n_fields >
 {
     const auto jacobi_mat_generator = map::getNatJacobiMatGenerator(element);
-    using result_t = integral_kernel_eval_result_t< decltype(kernel), Element< ET, EO >::native_dim, n_fields >;
+    using result_t = integral_kernel_eval_result_t< decltype(kernel), mesh::Element< ET, EO >::native_dim, n_fields >;
     const auto compute_value_at_qp = [&](ptrdiff_t qp_ind, auto ref_coords) noexcept -> result_t {
         const auto jacobi_mat    = jacobi_mat_generator(ref_coords);
         const auto phys_coords   = map::mapToPhysicalSpace(element, ref_coords);
@@ -130,17 +131,17 @@ auto evalElementIntegral(auto&&                                                 
     return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, result_t{result_t::Zero()});
 }
 
-template < ElementType ET, el_o_t EO, q_l_t QL, int n_fields >
+template < mesh::ElementType ET, el_o_t EO, q_l_t QL, int n_fields >
 auto evalElementBoundaryIntegral(
-    auto&&                                                                            kernel,
-    const BoundaryElementView< ET, EO >&                                              el_view,
-    const util::eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
-    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                            basis_at_qps,
-    val_t                                                                             time)
-    requires BoundaryIntegralKernel_c< decltype(kernel), Element< ET, EO >::native_dim, n_fields >
+    auto&&                                                                                  kernel,
+    const mesh::BoundaryElementView< ET, EO >&                                              el_view,
+    const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, n_fields >& node_vals,
+    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                  basis_at_qps,
+    val_t                                                                                   time)
+    requires BoundaryIntegralKernel_c< decltype(kernel), mesh::Element< ET, EO >::native_dim, n_fields >
 {
     const auto jacobi_mat_generator = map::getNatJacobiMatGenerator(*el_view);
-    using result_t = integral_kernel_eval_result_t< decltype(kernel), Element< ET, EO >::native_dim, n_fields >;
+    using result_t = integral_kernel_eval_result_t< decltype(kernel), mesh::Element< ET, EO >::native_dim, n_fields >;
     const auto compute_value_at_qp = [&](ptrdiff_t qp_ind, auto ref_coords) noexcept -> result_t {
         const auto jacobi_mat  = jacobi_mat_generator(ref_coords);
         const auto phys_coords = map::mapToPhysicalSpace(*el_view, ref_coords);
@@ -156,8 +157,8 @@ auto evalElementBoundaryIntegral(
 
 template < el_o_t... orders, size_t n_fields, AssemblyOptions options >
 auto evalLocalIntegral(auto&&                                               kernel,
-                       const MeshPartition< orders... >&                    mesh,
-                       DomainIdRange_c auto&&                               domain_ids,
+                       const mesh::MeshPartition< orders... >&              mesh,
+                       mesh::detail::DomainIdRange_c auto&&                 domain_ids,
                        const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
                        util::ConstexprValue< options >,
                        val_t time)
@@ -165,8 +166,9 @@ auto evalLocalIntegral(auto&&                                               kern
 {
     constexpr auto n_components = n_integral_components< decltype(kernel), n_fields, orders... >;
     using integral_t            = Eigen::Vector< val_t, n_components >;
-    const auto reduce_element   = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) -> integral_t {
-        constexpr auto el_dim = Element< ET, EO >::native_dim;
+    const auto reduce_element =
+        [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) -> integral_t {
+        constexpr auto el_dim = mesh::Element< ET, EO >::native_dim;
         if constexpr (IntegralKernel_c< decltype(kernel), el_dim, n_fields >)
         {
             constexpr auto BT         = options.basis_type;
@@ -180,8 +182,8 @@ auto evalLocalIntegral(auto&&                                               kern
         {
             std::cerr
                 << "Attempting to integrate over an element for which the integration kernel is invalid. Please check "
-                     "the kernel was defined correctly, and that you are integrating over the correct domain (e.g. that "
-                     "you're not trying to evaluate a 2D kernel in a 3D domain). The program will now terminate.\n";
+                   "the kernel was defined correctly, and that you are integrating over the correct domain (e.g. that "
+                   "you're not trying to evaluate a 2D kernel in a 3D domain). The program will now terminate.\n";
             std::terminate();
         }
     };
@@ -194,7 +196,7 @@ auto evalLocalIntegral(auto&&                                               kern
 
 template < el_o_t... orders, size_t n_fields, AssemblyOptions options >
 auto evalLocalBoundaryIntegral(auto&&                                               kernel,
-                               const BoundaryView< orders... >&                     boundary,
+                               const mesh::BoundaryView< orders... >&               boundary,
                                const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
                                util::ConstexprValue< options >,
                                val_t time)
@@ -203,8 +205,8 @@ auto evalLocalBoundaryIntegral(auto&&                                           
     constexpr auto n_components = n_integral_components< decltype(kernel), n_fields, orders... >;
     using integral_t            = Eigen::Vector< val_t, n_components >;
     const auto reduce_element =
-        [&]< ElementType ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) -> integral_t {
-        constexpr auto el_dim = Element< ET, EO >::native_dim;
+        [&]< mesh::ElementType ET, el_o_t EO >(const mesh::BoundaryElementView< ET, EO >& el_view) -> integral_t {
+        constexpr auto el_dim = mesh::Element< ET, EO >::native_dim;
         if constexpr (BoundaryIntegralKernel_c< decltype(kernel), el_dim, n_fields >)
         {
             constexpr auto BT         = options.basis_type;
@@ -230,8 +232,8 @@ auto evalLocalBoundaryIntegral(auto&&                                           
 template < el_o_t... orders, size_t n_fields = 0, AssemblyOptions opts = {} >
 auto evalIntegral(const MpiComm&                                       comm,
                   auto&&                                               kernel,
-                  const MeshPartition< orders... >&                    mesh,
-                  detail::DomainIdRange_c auto&&                       domain_ids,
+                  const mesh::MeshPartition< orders... >&              mesh,
+                  mesh::detail::DomainIdRange_c auto&&                 domain_ids,
                   const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
                   util::ConstexprValue< opts >                         opts_ctwrpr      = {},
                   val_t                                                time             = 0.)
@@ -253,7 +255,7 @@ auto evalIntegral(const MpiComm&                                       comm,
 template < el_o_t... orders, size_t n_fields = 0, AssemblyOptions opts = {} >
 auto evalBoundaryIntegral(const MpiComm&                                       comm,
                           auto&&                                               kernel,
-                          const BoundaryView< orders... >&                     boundary,
+                          const mesh::BoundaryView< orders... >&               boundary,
                           const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
                           util::ConstexprValue< opts >                         opts_ctwrpr      = {},
                           val_t                                                time             = 0.)

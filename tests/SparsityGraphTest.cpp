@@ -13,7 +13,7 @@ class DenseGraph
 {
 public:
     template < el_o_t... orders, auto problem_def, CondensationPolicy CP >
-    DenseGraph(const MeshPartition< orders... >&                                           mesh,
+    DenseGraph(const mesh::MeshPartition< orders... >&                                     mesh,
                util::ConstexprValue< problem_def >                                         problemdef_ctwrpr,
                const detail::node_interval_vector_t< detail::deduceNFields(problem_def) >& dof_intervals,
                const detail::NodeCondensationMap< CP >&                                    cond_map)
@@ -31,7 +31,7 @@ public:
             constexpr auto& coverage         = dom_def.second;
             constexpr auto  covered_dof_inds = util::getTrueInds< coverage >();
 
-            const auto process_element = [&]< ElementType T, el_o_t O >(const Element< T, O >& element) {
+            const auto process_element = [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >& element) {
                 const auto element_dofs = std::invoke([&] {
                     if constexpr (CP == CondensationPolicy::None)
                         return detail::getUnsortedPrimaryDofs< covered_dof_inds >(element, node_to_dof_map, cond_map);
@@ -74,7 +74,7 @@ void test()
     const auto comm         = MpiComm{MPI_COMM_WORLD};
     const auto full_mesh    = std::invoke([] {
         constexpr auto node_dist = std::array{0., 1., 2., 3., 4.};
-        auto           mesh      = makeCubeMesh(node_dist);
+        auto           mesh      = mesh::makeCubeMesh(node_dist);
         mesh.initDualGraph();
         return convertMeshToOrder< 2 >(mesh);
     });

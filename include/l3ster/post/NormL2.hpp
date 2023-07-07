@@ -22,8 +22,8 @@ consteval auto doubleQuadratureOrder(util::ConstexprValue< opts >)
 template < size_t n_fields = 0, AssemblyOptions opts = {}, el_o_t... orders >
 auto computeNormL2(const MpiComm&                                       comm,
                    auto&&                                               eval_residual,
-                   const MeshPartition< orders... >&                    mesh,
-                   detail::DomainIdRange_c auto&&                       domain_ids,
+                   const mesh::MeshPartition< orders... >&              mesh,
+                   mesh::detail::DomainIdRange_c auto&&                 domain_ids,
                    const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
                    util::ConstexprValue< opts >                         options_ctwrpr   = {},
                    val_t                                                time             = 0.)
@@ -53,7 +53,7 @@ auto computeNormL2(const MpiComm&                                       comm,
 template < size_t n_fields = 0, AssemblyOptions opts = {}, el_o_t... orders >
 auto computeBoundaryNormL2(const MpiComm&                                       comm,
                            auto&&                                               eval_residual,
-                           const BoundaryView< orders... >&                     boundary,
+                           const mesh::BoundaryView< orders... >&               boundary,
                            const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
                            util::ConstexprValue< opts >                         options_ctwrpr   = {},
                            val_t                                                time             = 0.)

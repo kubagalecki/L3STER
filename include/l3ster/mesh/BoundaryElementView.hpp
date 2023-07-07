@@ -4,7 +4,7 @@
 #include "l3ster/mesh/Element.hpp"
 #include "l3ster/mesh/ElementMeta.hpp"
 
-namespace lstr
+namespace lstr::mesh
 {
 template < ElementType ET, el_o_t EO >
 class BoundaryElementView

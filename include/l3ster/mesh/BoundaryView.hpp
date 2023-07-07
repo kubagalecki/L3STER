@@ -6,7 +6,7 @@
 
 #include <utility>
 
-namespace lstr
+namespace lstr::mesh
 {
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)

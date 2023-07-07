@@ -5,16 +5,16 @@
 
 namespace lstr::map
 {
-template < ElementType ET, el_o_t EO >
+template < mesh::ElementType ET, el_o_t EO >
 auto computeBoundaryNormal(
-    BoundaryElementView< ET, EO >                                                               el_view,
-    const Eigen::Matrix< val_t, Element< ET, EO >::native_dim, Element< ET, EO >::native_dim >& jacobi_mat)
-    -> Eigen::Vector< val_t, Element< ET, EO >::native_dim >
+    mesh::BoundaryElementView< ET, EO >                                                                     el_view,
+    const Eigen::Matrix< val_t, mesh::Element< ET, EO >::native_dim, mesh::Element< ET, EO >::native_dim >& jacobi_mat)
+    -> Eigen::Vector< val_t, mesh::Element< ET, EO >::native_dim >
 {
-    Eigen::Vector< val_t, Element< ET, EO >::native_dim > retval;
-    if constexpr (ET == ElementType::Line)
+    Eigen::Vector< val_t, mesh::Element< ET, EO >::native_dim > retval;
+    if constexpr (ET == mesh::ElementType::Line)
         retval[0] = el_view.getSide() == 0 ? -1. : 1.;
-    else if constexpr (ET == ElementType::Quad)
+    else if constexpr (ET == mesh::ElementType::Quad)
     {
         switch (el_view.getSide())
         {
@@ -36,7 +36,7 @@ auto computeBoundaryNormal(
         }
         retval.normalize();
     }
-    else if constexpr (ET == ElementType::Hex)
+    else if constexpr (ET == mesh::ElementType::Hex)
     {
         switch (el_view.getSide())
         {

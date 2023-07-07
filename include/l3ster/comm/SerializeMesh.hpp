@@ -10,16 +10,16 @@ namespace lstr
 {
 namespace detail
 {
-template < ElementType T, el_o_t O >
-void serializeElementNodes(const Element< T, O >& el, n_id_t* dest) noexcept
+template < mesh::ElementType T, el_o_t O >
+void serializeElementNodes(const mesh::Element< T, O >& el, n_id_t* dest) noexcept
 {
     std::ranges::copy(el.getNodes(), dest);
 }
 
-template < ElementType T, el_o_t O >
-void serializeElementData(const Element< T, O >& el, val_t* dest) noexcept
+template < mesh::ElementType T, el_o_t O >
+void serializeElementData(const mesh::Element< T, O >& el, val_t* dest) noexcept
 {
-    constexpr auto n_verts = static_cast< ptrdiff_t >(ElementData< T, O >::n_verts);
+    constexpr auto n_verts = static_cast< ptrdiff_t >(mesh::ElementData< T, O >::n_verts);
     auto&          verts   = el.getData().vertices;
     for (ptrdiff_t vert_i = 0; vert_i < n_verts; ++vert_i)
         for (ptrdiff_t dim_i = 0; dim_i < 3; ++dim_i)
@@ -33,14 +33,14 @@ public:
         : node_offset(node_init_offset), data_offset(data_init_offset), id_offset(id_init_offset)
     {}
 
-    template < ElementType T, el_o_t O >
-    void operator()(const Element< T, O >& el) noexcept
+    template < mesh::ElementType T, el_o_t O >
+    void operator()(const mesh::Element< T, O >& el) noexcept
     {
         serializeElementNodes(el, node_offset);
-        std::advance(node_offset, Element< T, O >::n_nodes);
+        std::advance(node_offset, mesh::Element< T, O >::n_nodes);
 
         serializeElementData(el, data_offset);
-        std::advance(data_offset, ElementData< T, O >::n_verts * 3);
+        std::advance(data_offset, mesh::ElementData< T, O >::n_verts * 3);
 
         *id_offset = el.getId();
         std::advance(id_offset, 1);
@@ -57,7 +57,7 @@ struct SerializedDomain
 {
     SerializedDomain() = default;
     template < el_o_t... orders >
-    explicit SerializedDomain(const Domain< orders... >& domain);
+    explicit SerializedDomain(const mesh::Domain< orders... >& domain);
 
     std::vector< n_id_t >            element_nodes;
     std::vector< val_t >             element_data;
@@ -68,7 +68,7 @@ struct SerializedDomain
 };
 
 template < el_o_t... el_orders >
-SerializedDomain::SerializedDomain(const Domain< el_orders... >& domain)
+SerializedDomain::SerializedDomain(const mesh::Domain< el_orders... >& domain)
 {
     size_t       node_size{0u}, data_size{0u}, id_size{0u};
     const size_t offset_size{domain.m_element_vectors.size()};
@@ -76,9 +76,9 @@ SerializedDomain::SerializedDomain(const Domain< el_orders... >& domain)
     types.reserve(offset_size);
     orders.reserve(offset_size);
 
-    const auto update_sizes = [&]< ElementType T, el_o_t O >(const std::vector< Element< T, O > >& el_v) {
-        constexpr auto node_chunk_size = Element< T, O >::n_nodes;
-        constexpr auto data_chunk_size = ElementData< T, O >::n_verts * 3;
+    const auto update_sizes = [&]< mesh::ElementType T, el_o_t O >(const std::vector< mesh::Element< T, O > >& el_v) {
+        constexpr auto node_chunk_size = mesh::Element< T, O >::n_nodes;
+        constexpr auto data_chunk_size = mesh::ElementData< T, O >::n_verts * 3;
         const auto     vec_size        = el_v.size();
 
         node_size += vec_size * node_chunk_size;
@@ -105,14 +105,14 @@ struct SerializedPartition
 {
     SerializedPartition() = default;
     template < el_o_t... orders >
-    explicit SerializedPartition(const MeshPartition< orders... >& part)
+    explicit SerializedPartition(const mesh::MeshPartition< orders... >& part)
         : m_nodes{part.m_nodes}, m_n_owned_nodes{part.m_n_owned_nodes}
     {
         for (const auto& [id, dom] : part.m_domains)
             m_domains.emplace(id, dom);
     }
     template < el_o_t... orders >
-    explicit SerializedPartition(MeshPartition< orders... >&& part)
+    explicit SerializedPartition(mesh::MeshPartition< orders... >&& part)
         : m_nodes{std::move(part.m_nodes)}, m_n_owned_nodes{part.m_n_owned_nodes}
     {
         for (const auto& [id, dom] : part.m_domains)

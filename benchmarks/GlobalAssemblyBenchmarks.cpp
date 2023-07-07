@@ -3,7 +3,7 @@
 
 static void BM_OwnerOrSharedNodeDeterminationNotGhost(benchmark::State& state)
 {
-    auto       mesh            = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
+    auto       mesh            = mesh::readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), mesh::gmsh_tag);
     const auto n_nodes_visited = mesh.transformReduce(
         0ul,
         std::plus<>{},
@@ -37,7 +37,7 @@ BENCHMARK(BM_OwnerOrSharedNodeDeterminationNotGhost)
 
 static void BM_OwnerOrSharedNodeDeterminationShared(benchmark::State& state)
 {
-    auto       mesh            = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
+    auto       mesh            = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), mesh::gmsh_tag);
     const auto n_nodes_visited = mesh.transformReduce(
         0ul,
         std::plus<>{},

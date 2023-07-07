@@ -7,7 +7,7 @@
 #include "l3ster/util/Common.hpp"
 #include "l3ster/util/MetisUtils.hpp"
 
-namespace lstr
+namespace lstr::mesh
 {
 template < el_o_t O_CONV >
 auto convertMeshToOrder(const MeshPartition< 1 >& mesh, std::integral_constant< el_o_t, O_CONV > = {})

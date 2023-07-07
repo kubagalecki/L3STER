@@ -7,7 +7,7 @@
 
 namespace lstr::basis
 {
-template < BasisType BT, ElementType ET, el_o_t EO, quad::QuadratureType QT, q_o_t QO >
+template < BasisType BT, mesh::ElementType ET, el_o_t EO, quad::QuadratureType QT, q_o_t QO >
 const auto& getReferenceBasisAtDomainQuadrature()
 {
     static const auto value = std::invoke([] {
@@ -54,9 +54,9 @@ auto makeQuadratureFromCoordsMat(const Eigen::Matrix< val_t, R, C >& coords, con
 }
 } // namespace detail
 
-template < BasisType BT, ElementType ET, el_o_t EO, quad::QuadratureType QT, q_o_t QO >
+template < BasisType BT, mesh::ElementType ET, el_o_t EO, quad::QuadratureType QT, q_o_t QO >
 const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t el_side)
-    requires(ET == ElementType::Hex or ET == ElementType::Quad or ET == ElementType::Line)
+    requires(ET == mesh::ElementType::Hex or ET == mesh::ElementType::Quad or ET == mesh::ElementType::Line)
 {
     // Assumption: quadratures constructed for integration over all sides of the element have the same number of
     // points. If at some point in the future, e.g., pyramids are supported, this will not be true. In that event,
@@ -64,10 +64,11 @@ const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t el_side)
     // variant. Until then, an array + known return value is much simpler.
     static const auto lookup_table = std::invoke([] {
         const auto [ref_quad_coords, weights] = std::invoke([] {
-            if constexpr (Element< ET, EO >::native_dim > 1)
+            if constexpr (mesh::Element< ET, EO >::native_dim > 1)
             {
-                constexpr auto boundary_type = ET == ElementType::Hex ? ElementType::Quad : ElementType::Line;
-                const auto     ref_quad      = quad::getQuadrature< QT, QO, boundary_type >();
+                constexpr auto boundary_type =
+                    ET == mesh::ElementType::Hex ? mesh::ElementType::Quad : mesh::ElementType::Line;
+                const auto ref_quad = quad::getQuadrature< QT, QO, boundary_type >();
                 return std::make_pair(detail::getReferenceBoundaryQpCoords(ref_quad), ref_quad.weights);
             }
             else
@@ -78,7 +79,7 @@ const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t el_side)
         });
         constexpr auto boundary_quad_size     = std::remove_const_t< decltype(ref_quad_coords) >::ColsAtCompileTime;
         using ref_basis_t                     = ReferenceBasisAtQuadrature< ET, EO, boundary_quad_size >;
-        std::array< ref_basis_t, ElementTraits< Element< ET, EO > >::n_sides > retval;
+        std::array< ref_basis_t, mesh::ElementTraits< mesh::Element< ET, EO > >::n_sides > retval;
         for (el_side_t side = 0; auto& side_quadrature : retval)
         {
             const auto [rot_mat, trans_vec] = map::getReferenceBoundaryToSideMapping< ET >(side);

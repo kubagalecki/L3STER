@@ -39,7 +39,7 @@ inline void logErrorAndTerminate(std::string_view err_msg)
     })
 
 template < lstr::el_o_t... orders >
-void describeMesh(const lstr::MpiComm& comm, const lstr::MeshPartition< orders... >& mesh)
+void describeMesh(const lstr::MpiComm& comm, const lstr::mesh::MeshPartition< orders... >& mesh)
 {
     for (int rank = 0; rank < comm.getSize(); ++rank)
     {
@@ -56,7 +56,7 @@ void describeMesh(const lstr::MpiComm& comm, const lstr::MeshPartition< orders..
             {
                 std::cout << "Domain: " << dom << '\n';
                 mesh.visit(
-                    []< lstr::ElementType ET, lstr::el_o_t EO >(const lstr::Element< ET, EO >& element) {
+                    []< lstr::mesh::ElementType ET, lstr::el_o_t EO >(const lstr::mesh::Element< ET, EO >& element) {
                         std::cout << "Element ID: " << element.getId() << ", type: " << static_cast< int >(ET)
                                   << ", order: " << static_cast< int >(EO) << ", nodes: ";
                         for (auto n : element.getNodes())

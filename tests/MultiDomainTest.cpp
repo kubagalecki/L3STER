@@ -30,7 +30,7 @@ void test()
     const auto comm = MpiComm{MPI_COMM_WORLD};
     const auto mesh = readAndDistributeMesh(comm,
                                             L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square_multidom.msh),
-                                            gmsh_tag,
+                                            mesh::gmsh_tag,
                                             {},
                                             util::ConstexprValue< el_o_t{2} >{},
                                             probdef_ctwrpr);

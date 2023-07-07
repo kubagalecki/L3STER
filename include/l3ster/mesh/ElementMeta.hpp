@@ -9,7 +9,7 @@
 #include <functional>
 #include <variant>
 
-namespace lstr
+namespace lstr::mesh
 {
 namespace detail
 {

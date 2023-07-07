@@ -12,7 +12,7 @@
 #include <vector>
 
 // Note on naming: the uninformative names such as eptr, nparts, etc. are inherited from the METIS documentation
-namespace lstr
+namespace lstr::mesh
 {
 namespace detail::part
 {
@@ -28,14 +28,14 @@ inline auto convertPartWeights(std::vector< real_t > wgts) -> std::vector< real_
     return wgts;
 }
 
-template < el_o_t... orders, ProblemDef_c auto problem_def >
+template < el_o_t... orders, ::lstr::detail::ProblemDef_c auto problem_def > // TODO namespace
 auto computeNodeWeights(const MeshPartition< orders... >& mesh, util::ConstexprValue< problem_def > probdef_ctwrapper)
     -> std::vector< idx_t >
 {
     if constexpr (problem_def.size() == 0)
         return {};
 
-    constexpr auto n_fields      = deduceNFields(problem_def);
+    constexpr auto n_fields      = ::lstr::detail::deduceNFields(problem_def);
     auto           node_dof_inds = util::DynamicBitset{n_fields * mesh.getAllNodes().size()};
     util::forConstexpr(
         [&]< auto dom_def >(util::ConstexprValue< dom_def >) {
@@ -402,8 +402,8 @@ auto partitionMeshImpl(const MeshPartition< orders... >& mesh,
 } // namespace detail::part
 
 template < el_o_t... orders,
-           RangeOfConvertibleTo_c< real_t > PartWgtRange = std::array< real_t, 0 >,
-           detail::ProblemDef_c auto        problem_def  = detail::empty_problem_def_t{} >
+           RangeOfConvertibleTo_c< real_t >  PartWgtRange = std::array< real_t, 0 >,
+           ::lstr::detail::ProblemDef_c auto problem_def  = ::lstr::detail::empty_problem_def_t{} > // TODO
 auto partitionMesh(const MeshPartition< orders... >&   mesh,
                    idx_t                               n_parts,
                    const std::vector< d_id_t >&        boundary_ids,
@@ -424,5 +424,5 @@ auto partitionMesh(const MeshPartition< orders... >&   mesh,
                                            detail::part::convertPartWeights(std::forward< PartWgtRange >(part_weights)),
                                            detail::part::computeNodeWeights(mesh, probdef_ctwrpr));
 }
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_PARTITIONMESH_HPP

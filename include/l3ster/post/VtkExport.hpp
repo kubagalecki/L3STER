@@ -17,14 +17,14 @@ class PvtuExporter
 {
 public:
     template < el_o_t... orders >
-    explicit PvtuExporter(const MeshPartition< orders... >& mesh);
+    explicit PvtuExporter(const mesh::MeshPartition< orders... >& mesh);
     void exportSolution(std::string_view                                                file_name,
                         const MpiComm&                                                  comm,
                         const SolutionManager&                                          solution_manager,
                         SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
                         SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds);
     template < el_o_t... orders >
-    void updateNodeCoords(const MeshPartition< orders... >& mesh);
+    void updateNodeCoords(const mesh::MeshPartition< orders... >& mesh);
 
 private:
     struct SectionSizes
@@ -42,7 +42,7 @@ private:
     };
 
     template < el_o_t... orders >
-    void initTopo(const MeshPartition< orders... >& mesh);
+    void initTopo(const mesh::MeshPartition< orders... >& mesh);
 
     void enqueuePvtuFileWrite(std::string_view                                                file_name,
                               const MpiComm&                                                  comm,
@@ -165,59 +165,59 @@ inline constexpr std::string_view vtu_preamble  = R"(<?xml version="1.0"?>
 inline constexpr std::string_view vtu_postamble = "</AppendedData>\n</VTKFile>";
 
 // Data serialization
-template < ElementType ET, el_o_t EO >
+template < mesh::ElementType ET, el_o_t EO >
 consteval size_t numSubels()
 {
     constexpr auto el_o = static_cast< size_t >(EO);
-    if constexpr (ET == ElementType::Line)
+    if constexpr (ET == mesh::ElementType::Line)
         return el_o;
-    else if constexpr (ET == ElementType::Quad)
+    else if constexpr (ET == mesh::ElementType::Quad)
         return el_o * el_o;
-    else if constexpr (ET == ElementType::Hex)
+    else if constexpr (ET == mesh::ElementType::Hex)
         return el_o * el_o * el_o;
     else
         static_assert(ET != ET); // Assert every element type has a corresponding branch
 }
 
-template < ElementType ET, el_o_t EO >
+template < mesh::ElementType ET, el_o_t EO >
 consteval size_t numSubelNodes()
 {
-    if constexpr (ET == ElementType::Line)
+    if constexpr (ET == mesh::ElementType::Line)
         return 2;
-    else if constexpr (ET == ElementType::Quad)
+    else if constexpr (ET == mesh::ElementType::Quad)
         return 4;
-    else if constexpr (ET == ElementType::Hex)
+    else if constexpr (ET == mesh::ElementType::Hex)
         return 8;
     else
         static_assert(ET != ET); // Assert every element type has a corresponding branch
 }
 
-template < ElementType ET, el_o_t EO >
+template < mesh::ElementType ET, el_o_t EO >
 consteval size_t numSerialTopoEntries()
 {
     return numSubels< ET, EO >() * numSubelNodes< ET, EO >();
 }
 
-template < ElementType ET, el_o_t EO >
+template < mesh::ElementType ET, el_o_t EO >
 consteval unsigned char subelCellType()
 {
-    if constexpr (ET == ElementType::Line)
+    if constexpr (ET == mesh::ElementType::Line)
         return 3;
-    else if constexpr (ET == ElementType::Quad)
+    else if constexpr (ET == mesh::ElementType::Quad)
         return 9;
-    else if constexpr (ET == ElementType::Hex)
+    else if constexpr (ET == mesh::ElementType::Hex)
         return 12;
     else
         static_assert(ET != ET); // Assert every element type has a corresponding branch
 }
 
-template < ElementType ET, el_o_t EO >
-auto serializeElementSubtopo(const Element< ET, EO >& element)
+template < mesh::ElementType ET, el_o_t EO >
+auto serializeElementSubtopo(const mesh::Element< ET, EO >& element)
 {
     const auto&                                            nodes = element.getNodes();
     std::array< n_id_t, numSerialTopoEntries< ET, EO >() > retval;
     auto                                                   out_topo = retval.begin();
-    if constexpr (ET == ElementType::Line)
+    if constexpr (ET == mesh::ElementType::Line)
     {
         for (size_t i = 0; i < nodes.size() - 1; ++i)
         {
@@ -225,9 +225,10 @@ auto serializeElementSubtopo(const Element< ET, EO >& element)
             *out_topo++ = nodes[i + 1];
         }
     }
-    else if constexpr (ET == ElementType::Quad)
+    else if constexpr (ET == mesh::ElementType::Quad)
     {
-        constexpr auto node_per_side = ElementTraits< Element< ElementType::Line, EO > >::nodes_per_element;
+        constexpr auto node_per_side =
+            mesh::ElementTraits< mesh::Element< mesh::ElementType::Line, EO > >::nodes_per_element;
         for (size_t row = 0; row < node_per_side - 1; ++row)
             for (size_t col = 0; col < node_per_side - 1; ++col)
             {
@@ -238,9 +239,10 @@ auto serializeElementSubtopo(const Element< ET, EO >& element)
                 *out_topo++       = nodes[base + node_per_side];
             }
     }
-    else if constexpr (ET == ElementType::Hex)
+    else if constexpr (ET == mesh::ElementType::Hex)
     {
-        constexpr auto nodes_per_side  = ElementTraits< Element< ElementType::Line, EO > >::nodes_per_element;
+        constexpr auto nodes_per_side =
+            mesh::ElementTraits< mesh::Element< mesh::ElementType::Line, EO > >::nodes_per_element;
         constexpr auto nodes_per_layer = nodes_per_side * nodes_per_side;
         for (size_t layer = 0; layer < nodes_per_side - 1; ++layer)
             for (size_t row = 0; row < nodes_per_side - 1; ++row)
@@ -263,9 +265,9 @@ auto serializeElementSubtopo(const Element< ET, EO >& element)
 }
 
 template < el_o_t... orders >
-std::array< size_t, 2 > getLocalTopoSize(const MeshPartition< orders... >& mesh)
+std::array< size_t, 2 > getLocalTopoSize(const mesh::MeshPartition< orders... >& mesh)
 {
-    constexpr auto get_el_entries = []< ElementType ET, el_o_t EO >(const Element< ET, EO >&) {
+    constexpr auto get_el_entries = []< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >&) {
         return std::array{numSubels< ET, EO >(), numSerialTopoEntries< ET, EO >()};
     };
     return mesh.transformReduce(
@@ -278,7 +280,7 @@ std::array< size_t, 2 > getLocalTopoSize(const MeshPartition< orders... >& mesh)
 }
 
 template < el_o_t... orders >
-unsigned getLocalNodeIndex(const MeshPartition< orders... >& mesh, n_id_t node)
+unsigned getLocalNodeIndex(const mesh::MeshPartition< orders... >& mesh, n_id_t node)
 {
     const auto owned_find_result = std::ranges::lower_bound(mesh.getOwnedNodes(), node);
     if (owned_find_result != end(mesh.getOwnedNodes()) and *owned_find_result == node)
@@ -289,7 +291,7 @@ unsigned getLocalNodeIndex(const MeshPartition< orders... >& mesh, n_id_t node)
 }
 
 template < el_o_t... orders >
-auto serializeTopology(const MeshPartition< orders... >& mesh)
+auto serializeTopology(const mesh::MeshPartition< orders... >& mesh)
 {
     constexpr auto n_unsigned_chars = sizeof(std::uint64_t) / sizeof(unsigned char);
     constexpr auto n_unsigneds      = sizeof(std::uint64_t) / sizeof(unsigned);
@@ -313,7 +315,7 @@ auto serializeTopology(const MeshPartition< orders... >& mesh)
     std::memcpy(offsets.data(), &data_bytes, sizeof data_bytes);
 
     unsigned   offset          = 0;
-    const auto process_element = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
+    const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
         const auto serialized_subtopo = serializeElementSubtopo(element);
         std::ranges::transform(serialized_subtopo, std::back_inserter(topo_data), [&mesh](n_id_t node) {
             return getLocalNodeIndex(mesh, node);
@@ -350,7 +352,7 @@ auto serializeTopology(const MeshPartition< orders... >& mesh)
 }
 
 template < el_o_t... orders >
-std::string makeCoordsSerialized(const MeshPartition< orders... >& mesh)
+std::string makeCoordsSerialized(const mesh::MeshPartition< orders... >& mesh)
 {
     constexpr size_t space_dim        = 3;
     const auto       n_nodes          = mesh.getAllNodes().size();
@@ -498,7 +500,7 @@ inline auto openVtuFile(std::string_view name, const MpiComm& comm)
 } // namespace detail::vtk
 
 template < el_o_t... orders >
-PvtuExporter::PvtuExporter(const MeshPartition< orders... >& mesh) : m_n_nodes{mesh.getAllNodes().size()}
+PvtuExporter::PvtuExporter(const mesh::MeshPartition< orders... >& mesh) : m_n_nodes{mesh.getAllNodes().size()}
 {
     L3STER_PROFILE_FUNCTION;
     updateNodeCoords(mesh);
@@ -526,14 +528,14 @@ void PvtuExporter::exportSolution(std::string_view                              
 }
 
 template < el_o_t... orders >
-void PvtuExporter::updateNodeCoords(const MeshPartition< orders... >& mesh)
+void PvtuExporter::updateNodeCoords(const mesh::MeshPartition< orders... >& mesh)
 {
     flushWriteQueue(); // Async write of previous coords may be in flight
     m_encoded_coords = detail::vtk::makeCoordsSerialized(mesh);
 }
 
 template < el_o_t... orders >
-void PvtuExporter::initTopo(const MeshPartition< orders... >& mesh)
+void PvtuExporter::initTopo(const mesh::MeshPartition< orders... >& mesh)
 {
     auto topo_serialization                                       = detail::vtk::serializeTopology(mesh);
     auto& [sizes, data]                                           = topo_serialization;

@@ -5,8 +5,10 @@
 
 namespace lstr
 {
-template < basis::BasisType BT, ElementType T, el_o_t O, RandomAccessRangeOf< val_t > R >
-val_t valueAt(const Element< T, O >&, R&& node_vals, const Point< Element< T, O >::native_dim >& point)
+template < basis::BasisType BT, mesh::ElementType T, el_o_t O, RandomAccessRangeOf< val_t > R >
+val_t valueAt(const mesh::Element< T, O >&,
+              R&&                                                     node_vals,
+              const mesh::Point< mesh::Element< T, O >::native_dim >& point)
 {
     return std::invoke(
         [&]< el_locind_t... I >(std::integer_sequence< el_locind_t, I... >) {
@@ -17,7 +19,7 @@ val_t valueAt(const Element< T, O >&, R&& node_vals, const Point< Element< T, O 
                         std::integral_constant< el_locind_t, I >{}) +
                     ...);
         },
-        std::make_integer_sequence< el_locind_t, Element< T, O >::n_nodes >{});
+        std::make_integer_sequence< el_locind_t, mesh::Element< T, O >::n_nodes >{});
 }
 } // namespace lstr
 #endif // L3STER_BASISFUN_VALUEAT_HPP

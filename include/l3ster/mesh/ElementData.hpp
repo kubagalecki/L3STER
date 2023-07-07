@@ -4,7 +4,7 @@
 #include "l3ster/mesh/ElementTraits.hpp"
 #include "l3ster/mesh/Point.hpp"
 
-namespace lstr
+namespace lstr::mesh
 {
 template < ElementType T, el_o_t O >
 struct ElementData;

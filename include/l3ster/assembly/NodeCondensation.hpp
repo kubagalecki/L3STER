@@ -35,41 +35,41 @@ struct IsCondensationPolicyTag< CondensationPolicyTag< CP > > : std::true_type
 template < typename T >
 concept CondensationPolicyTag_c = IsCondensationPolicyTag< T >::value;
 
-template < CondensationPolicy CP, ElementType ET, el_o_t EO >
-constexpr decltype(auto) getPrimaryNodesView(const Element< ET, EO >& element, CondensationPolicyTag< CP > = {})
+template < CondensationPolicy CP, mesh::ElementType ET, el_o_t EO >
+constexpr decltype(auto) getPrimaryNodesView(const mesh::Element< ET, EO >& element, CondensationPolicyTag< CP > = {})
 {
     if constexpr (CP == CondensationPolicy::None)
         return element.getNodes();
     else if constexpr (CP == CondensationPolicy::ElementBoundary)
         return getBoundaryNodes(element);
 }
-template < CondensationPolicy CP, ElementType ET, el_o_t EO >
-constexpr decltype(auto) getPrimaryNodesArray(const Element< ET, EO >& element, CondensationPolicyTag< CP > = {})
+template < CondensationPolicy CP, mesh::ElementType ET, el_o_t EO >
+constexpr decltype(auto) getPrimaryNodesArray(const mesh::Element< ET, EO >& element, CondensationPolicyTag< CP > = {})
 {
     if constexpr (CP == CondensationPolicy::None)
         return element.getNodes();
     else if constexpr (CP == CondensationPolicy::ElementBoundary)
     {
-        std::array< n_id_t, ElementTraits< Element< ET, EO > >::boundary_node_inds.size() > retval;
+        std::array< n_id_t, mesh::ElementTraits< mesh::Element< ET, EO > >::boundary_node_inds.size() > retval;
         std::ranges::copy(getBoundaryNodes(element), retval.begin());
         return retval;
     }
 }
-template < CondensationPolicy CP, ElementType ET, el_o_t EO >
+template < CondensationPolicy CP, mesh::ElementType ET, el_o_t EO >
 consteval auto getNumPrimaryNodes(util::ValuePack< CP, ET, EO > = {}) -> size_t
 {
     return std::tuple_size_v<
-        std::decay_t< decltype(getPrimaryNodesArray< CP >(std::declval< Element< ET, EO > >())) > >;
+        std::decay_t< decltype(getPrimaryNodesArray< CP >(std::declval< mesh::Element< ET, EO > >())) > >;
 };
 
 template < CondensationPolicy CP, ProblemDef_c auto problem_def, el_o_t... orders >
-auto getActiveNodes(const MeshPartition< orders... >& mesh,
+auto getActiveNodes(const mesh::MeshPartition< orders... >& mesh,
                     util::ConstexprValue< problem_def >,
                     CondensationPolicyTag< CP > = {}) -> std::vector< n_id_t >
 {
     auto active_nodes_set = robin_hood::unordered_flat_set< n_id_t >{};
     mesh.visit(
-        [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
+        [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
             for (auto n : getPrimaryNodesView< CP >(element))
                 active_nodes_set.insert(n);
         },
@@ -102,9 +102,9 @@ auto unpackRangeFromComm(util::ArrayOwner< T >& message)
 }
 
 template < el_o_t... orders >
-auto computeCondensedActiveNodeIds(const MpiComm&                    comm,
-                                   const MeshPartition< orders... >& mesh,
-                                   const std::vector< n_id_t >&      uncondensed_active_nodes) -> std::vector< n_id_t >
+auto computeCondensedActiveNodeIds(const MpiComm&                          comm,
+                                   const mesh::MeshPartition< orders... >& mesh,
+                                   const std::vector< n_id_t >& uncondensed_active_nodes) -> std::vector< n_id_t >
 {
     const int my_rank   = comm.getRank();
     const int comm_size = comm.getSize();
@@ -157,7 +157,9 @@ auto computeCondensedActiveNodeIds(const MpiComm&                    comm,
 }
 
 template < el_o_t... orders >
-void activateOwned(const MpiComm& comm, const MeshPartition< orders... >& mesh, std::vector< n_id_t >& my_active_nodes)
+void activateOwned(const MpiComm&                          comm,
+                   const mesh::MeshPartition< orders... >& mesh,
+                   std::vector< n_id_t >&                  my_active_nodes)
 {
     const int my_rank     = comm.getRank();
     const int comm_size   = comm.getSize();
@@ -221,10 +223,10 @@ private:
 };
 
 template < CondensationPolicy CP, ProblemDef_c auto problem_def, el_o_t... orders >
-auto makeCondensationMap(const MpiComm&                      comm,
-                         const MeshPartition< orders... >&   mesh,
-                         util::ConstexprValue< problem_def > probdef_ctwrpr,
-                         CondensationPolicyTag< CP >         cp_tag = {}) -> NodeCondensationMap< CP >
+auto makeCondensationMap(const MpiComm&                          comm,
+                         const mesh::MeshPartition< orders... >& mesh,
+                         util::ConstexprValue< problem_def >     probdef_ctwrpr,
+                         CondensationPolicyTag< CP >             cp_tag = {}) -> NodeCondensationMap< CP >
 {
     auto active_nodes = getActiveNodes(mesh, probdef_ctwrpr, cp_tag);
     activateOwned(comm, mesh, active_nodes);
@@ -241,14 +243,14 @@ inline auto getLocalCondensedId(const NodeCondensationMap< CP >& cond_map, n_id_
 }
 
 template < CondensationPolicy CP, el_o_t... orders >
-auto getCondensedOwnedNodesView(const MeshPartition< orders... >& mesh, const NodeCondensationMap< CP >& cond_map)
+auto getCondensedOwnedNodesView(const mesh::MeshPartition< orders... >& mesh, const NodeCondensationMap< CP >& cond_map)
 {
     return cond_map.getCondensedIds() |
            std::views::filter([&](n_id_t node) { return mesh.isOwnedNode(cond_map.getUncondensedId(node)); });
 }
 
 template < CondensationPolicy CP, el_o_t... orders >
-auto getCondensedGhostNodesView(const MeshPartition< orders... >& mesh, const NodeCondensationMap< CP >& cond_map)
+auto getCondensedGhostNodesView(const mesh::MeshPartition< orders... >& mesh, const NodeCondensationMap< CP >& cond_map)
 {
     return cond_map.getCondensedIds() |
            std::views::filter([&](n_id_t node) { return mesh.isGhostNode(cond_map.getUncondensedId(node)); });

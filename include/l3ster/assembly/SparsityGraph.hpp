@@ -80,8 +80,8 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                nodes,
     return retval;
 }
 
-template < IndexRange_c auto dof_inds, ElementType ET, el_o_t EO >
-auto getSortedPrimaryDofs(const Element< ET, EO >&                               element,
+template < IndexRange_c auto dof_inds, mesh::ElementType ET, el_o_t EO >
+auto getSortedPrimaryDofs(const mesh::Element< ET, EO >&                         element,
                           const NodeToDofMap_c auto&                             node_dof_map,
                           const NodeCondensationMap< CondensationPolicy::None >& cond_map,
                           util::ConstexprValue< dof_inds >                       dofinds_ctwrpr = {})
@@ -91,8 +91,12 @@ auto getSortedPrimaryDofs(const Element< ET, EO >&                              
     return getDofsFromNodes(primary_nodes, node_dof_map, cond_map, dofinds_ctwrpr);
 }
 
-template < IndexRange_c auto dof_inds, ElementType ET, el_o_t EO, size_t max_dofs_per_node, CondensationPolicy CP >
-auto getUnsortedPrimaryDofs(const Element< ET, EO >&                       element,
+template < IndexRange_c auto  dof_inds,
+           mesh::ElementType  ET,
+           el_o_t             EO,
+           size_t             max_dofs_per_node,
+           CondensationPolicy CP >
+auto getUnsortedPrimaryDofs(const mesh::Element< ET, EO >&                 element,
                             const NodeToGlobalDofMap< max_dofs_per_node >& node_dof_map,
                             const NodeCondensationMap< CP >&               cond_map,
                             util::ConstexprValue< dof_inds >               dofinds_ctwrpr = {})
@@ -101,12 +105,12 @@ auto getUnsortedPrimaryDofs(const Element< ET, EO >&                       eleme
 }
 
 template < IndexRange_c auto  dof_inds,
-           ElementType        ET,
+           mesh::ElementType  ET,
            el_o_t             EO,
            size_t             max_dofs_per_node,
            size_t             num_maps,
            CondensationPolicy CP >
-auto getUnsortedPrimaryDofs(const Element< ET, EO >&                                element,
+auto getUnsortedPrimaryDofs(const mesh::Element< ET, EO >&                          element,
                             const NodeToLocalDofMap< max_dofs_per_node, num_maps >& node_dof_map,
                             CondensationPolicyTag< CP >                             cond_policy,
                             util::ConstexprValue< dof_inds >                        dofinds_ctwrpr = {})
@@ -114,16 +118,16 @@ auto getUnsortedPrimaryDofs(const Element< ET, EO >&                            
     return getDofsFromNodes(getPrimaryNodesArray< CP >(element), node_dof_map, cond_policy, dofinds_ctwrpr);
 }
 
-template < ElementType ET, el_o_t EO, size_t max_dofs_per_node, CondensationPolicy CP >
-auto getUnsortedPrimaryDofs(const Element< ET, EO >&                       element,
+template < mesh::ElementType ET, el_o_t EO, size_t max_dofs_per_node, CondensationPolicy CP >
+auto getUnsortedPrimaryDofs(const mesh::Element< ET, EO >&                 element,
                             const NodeToGlobalDofMap< max_dofs_per_node >& node_dof_map,
                             const NodeCondensationMap< CP >&               cond_map)
 {
     return getDofsFromNodes(getPrimaryNodesArray< CP >(element), node_dof_map, cond_map);
 }
 
-template < ElementType ET, el_o_t EO, size_t max_dofs_per_node, size_t num_maps, CondensationPolicy CP >
-auto getUnsortedPrimaryDofs(const Element< ET, EO >&                                element,
+template < mesh::ElementType ET, el_o_t EO, size_t max_dofs_per_node, size_t num_maps, CondensationPolicy CP >
+auto getUnsortedPrimaryDofs(const mesh::Element< ET, EO >&                          element,
                             const NodeToLocalDofMap< max_dofs_per_node, num_maps >& node_dof_map,
                             CondensationPolicyTag< CP >)
 {
@@ -137,7 +141,7 @@ struct NodeDofs
 };
 
 template < el_o_t... orders, size_t max_dofs_per_node, CondensationPolicy CP >
-auto computeNodeDofs(const MeshPartition< orders... >&              mesh,
+auto computeNodeDofs(const mesh::MeshPartition< orders... >&        mesh,
                      const NodeToGlobalDofMap< max_dofs_per_node >& node_to_dof_map,
                      const NodeCondensationMap< CP >&               cond_map) -> NodeDofs
 {
@@ -156,7 +160,7 @@ auto computeNodeDofs(const MeshPartition< orders... >&              mesh,
 }
 
 template < el_o_t... orders, auto problem_def, CondensationPolicy CP >
-auto computeDofGraph(const MeshPartition< orders... >&                       mesh,
+auto computeDofGraph(const mesh::MeshPartition< orders... >&                 mesh,
                      const NodeToGlobalDofMap< deduceNFields(problem_def) >& node_to_dof_map,
                      const NodeCondensationMap< CP >&                        cond_map,
                      std::span< const global_dof_t >                         owned_plus_shared_dofs,
@@ -190,16 +194,16 @@ auto computeDofGraph(const MeshPartition< orders... >&                       mes
     const auto crs_row_sizes = util::asSpan(crs_row_sizes_host_view);
     std::ranges::fill(crs_row_sizes, size_t{});
 
-    const auto get_element_dofs = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element,
-                                                                   auto                     dofinds_ctwrpr) {
+    const auto get_element_dofs = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element,
+                                                                         auto dofinds_ctwrpr) {
         if constexpr (CP == CondensationPolicy::None)
             return getUnsortedPrimaryDofs(element, node_to_dof_map, cond_map, dofinds_ctwrpr);
         else if constexpr ((CP == CondensationPolicy::ElementBoundary))
             return getUnsortedPrimaryDofs(element, node_to_dof_map, cond_map);
     };
 
-    const auto compute_max_row_sizes = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element,
-                                                                        auto                     dofinds_ctwrpr) {
+    const auto compute_max_row_sizes = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element,
+                                                                              auto dofinds_ctwrpr) {
         const auto element_dofs = get_element_dofs(element, dofinds_ctwrpr);
         for (auto global_dof : element_dofs)
         {
@@ -214,8 +218,8 @@ auto computeDofGraph(const MeshPartition< orders... >&                       mes
     auto graph = util::CrsGraph< global_dof_t >{crs_row_sizes};
     std::ranges::fill(crs_row_sizes, size_t{});
 
-    const auto fill_graph = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element,
-                                                             auto                     dof_inds_ctwrapper) {
+    const auto fill_graph = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element,
+                                                                   auto                           dof_inds_ctwrapper) {
         const auto element_dofs = get_element_dofs(element, dof_inds_ctwrapper);
         for (auto global_dof : element_dofs)
         {
@@ -264,7 +268,7 @@ inline auto initCrsGraph(const MpiComm&                                         
 template < el_o_t... orders, detail::ProblemDef_c auto problem_def, CondensationPolicy CP >
 Teuchos::RCP< const tpetra_fecrsgraph_t >
 makeSparsityGraph(const MpiComm&                                          comm,
-                  const MeshPartition< orders... >&                       mesh,
+                  const mesh::MeshPartition< orders... >&                 mesh,
                   const NodeToGlobalDofMap< deduceNFields(problem_def) >& node_to_dof_map,
                   const NodeCondensationMap< CP >&                        cond_map,
                   util::ConstexprValue< problem_def >                     problemdef_ctwrapper)

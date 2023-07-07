@@ -4,7 +4,7 @@
 #include "l3ster/mesh/ElementTraits.hpp"
 #include "l3ster/util/Algorithm.hpp"
 
-namespace lstr::detail
+namespace lstr::mesh::detail
 {
 template < el_side_t I, typename Element, size_t N >
 constexpr bool matchSide(const Element& element, const std::array< n_id_t, N >& sorted_side_nodes)

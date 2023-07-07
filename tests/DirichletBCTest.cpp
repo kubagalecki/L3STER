@@ -23,7 +23,7 @@ void test()
     constexpr auto   dirdef_ctwrpr  = util::ConstexprValue< dirichlet_def >{};
 
     constexpr auto node_dist     = std::array{0., 1., 2., 3., 4., 5.};
-    const auto     mesh          = makeCubeMesh(node_dist);
+    const auto     mesh          = mesh::makeCubeMesh(node_dist);
     auto           my_partition  = distributeMesh(comm, mesh, {boundary});
     const auto     boundary_view = my_partition.getBoundaryView(boundary);
 
@@ -51,8 +51,8 @@ void test()
         auto rhs      = input_vectors.getVectorNonConst(0)->getDataNonConst();
         auto rhs_view = std::span{rhs};
         my_partition.visit(
-            [&]< ElementType T, el_o_t O >(const Element< T, O >& element) {
-                if constexpr (T == ElementType::Hex and O == 1)
+            [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >& element) {
+                if constexpr (T == mesh::ElementType::Hex and O == 1)
                 {
                     constexpr int n_dofs    = detail::getNumPrimaryNodes< CP, T, O >() * /* dofs per node */ 1;
                     auto          local_mat = util::eigen::RowMajorSquareMatrix< val_t, n_dofs >{};

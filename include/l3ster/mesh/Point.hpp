@@ -6,7 +6,7 @@
 
 #include <concepts>
 
-namespace lstr
+namespace lstr::mesh
 {
 template < dim_t DIM >
     requires(DIM <= 3)

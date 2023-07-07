@@ -28,11 +28,11 @@ void test(CondensationPolicyTag< CP > = {})
     static constexpr el_o_t mesh_order = 2;
     const auto              mesh_full  = comm.getRank() == 0 ? std::invoke([] {
         constexpr std::array dist{0., 1., 2.};
-        auto                 retval = makeCubeMesh(dist);
+        auto                 retval = mesh::makeCubeMesh(dist);
         retval.initDualGraph();
-        return convertMeshToOrder< mesh_order >(retval);
+        return mesh::convertMeshToOrder< mesh_order >(retval);
     })
-                                                             : MeshPartition< mesh_order >{};
+                                                             : mesh::MeshPartition< mesh_order >{};
     const auto mesh_parted = std::invoke([&] { return distributeMesh(comm, mesh_full, {}, problemdef_ctwrpr); });
 
     const auto cond_map                = detail::makeCondensationMap< CP >(comm, mesh_parted, problemdef_ctwrpr);

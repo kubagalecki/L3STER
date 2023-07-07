@@ -6,11 +6,11 @@
 
 namespace lstr::basis
 {
-template < ElementType ET, el_o_t EO, BasisType BT = BasisType::Lagrange >
+template < mesh::ElementType ET, el_o_t EO, BasisType BT = BasisType::Lagrange >
 const auto& getBasisAtNodes()
 {
-    static const ReferenceBasisAtPoints< ET, EO, Element< ET, EO >::n_nodes > retval = std::invoke([] {
-        const auto& reference_locations = getNodeLocations< ET, EO, BT >();
+    static const ReferenceBasisAtPoints< ET, EO, mesh::Element< ET, EO >::n_nodes > retval = std::invoke([] {
+        const auto& reference_locations = mesh::getNodeLocations< ET, EO, BT >();
         return detail::evalRefBasisAtPoints< BT, ET, EO >(reference_locations);
     });
     return retval;

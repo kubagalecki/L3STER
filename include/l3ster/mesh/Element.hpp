@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-namespace lstr
+namespace lstr::mesh
 {
 template < ElementType T, el_o_t O >
 class Element

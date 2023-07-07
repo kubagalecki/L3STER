@@ -46,23 +46,23 @@ concept ValueAtNodeBoundaryKernel_c =
 template < typename Kernel, size_t n_fields, size_t results_size, el_o_t... orders >
 struct PotentiallyValidNodalKernelDeductionHelper
 {
-    template < ElementType T, el_o_t O >
+    template < mesh::ElementType T, el_o_t O >
     struct DeductionHelperDomain
     {
         static constexpr bool value =
-            ValueAtNodeKernel_c< Kernel, n_fields, Element< T, O >::native_dim, results_size >;
+            ValueAtNodeKernel_c< Kernel, n_fields, mesh::Element< T, O >::native_dim, results_size >;
     };
     static constexpr bool domain =
-        ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
+        mesh::detail::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
 
-    template < ElementType T, el_o_t O >
+    template < mesh::ElementType T, el_o_t O >
     struct DeductionHelperBoundary
     {
         static constexpr bool value =
-            ValueAtNodeBoundaryKernel_c< Kernel, n_fields, Element< T, O >::native_dim, results_size >;
+            ValueAtNodeBoundaryKernel_c< Kernel, n_fields, mesh::Element< T, O >::native_dim, results_size >;
     };
     static constexpr bool boundary =
-        ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperBoundary >;
+        mesh::detail::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperBoundary >;
 };
 template < typename Kernel, size_t n_fields, size_t results_size, el_o_t... orders >
 concept PotentiallyValidNodalKernel_c =
@@ -72,8 +72,8 @@ concept PotentiallyValidBoundaryNodalKernel_c =
     PotentiallyValidNodalKernelDeductionHelper< Kernel, n_fields, results_size, orders... >::boundary;
 
 template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
-auto initValsAndParents(const MeshPartition< orders... >&                       mesh,
-                        detail::DomainIdRange_c auto&&                          domain_ids,
+auto initValsAndParents(const mesh::MeshPartition< orders... >&                 mesh,
+                        mesh::detail::DomainIdRange_c auto&&                    domain_ids,
                         const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                         util::ConstexprValue< dof_inds >                        dofinds_ctwrpr,
                         const SolutionManager::FieldValueGetter< n_fields >&,
@@ -82,7 +82,7 @@ auto initValsAndParents(const MeshPartition< orders... >&                       
     if constexpr (n_fields != 0)
     {
         std::vector< std::uint8_t > retval(values.size(), 0);
-        const auto process_element = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
+        const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
             for (auto node :
                  element.getNodes() | std::views::filter([&](auto node) { return not mesh.isGhostNode(node); }))
                 for (auto dof : getValuesAtInds(map(node).front(), dofinds_ctwrpr))
@@ -99,31 +99,32 @@ auto initValsAndParents(const MeshPartition< orders... >&                       
 }
 
 template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
-auto initValsAndParents(const BoundaryView< orders... >&                        boundary,
+auto initValsAndParents(const mesh::BoundaryView< orders... >&                  boundary,
                         const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                         util::ConstexprValue< dof_inds >                        dofinds_ctwrpr,
                         const SolutionManager::FieldValueGetter< n_fields >&,
                         std::span< val_t > values) -> std::vector< std::uint8_t >
 {
     std::vector< std::uint8_t > retval(values.size(), 0);
-    const auto process_element = [&]< ElementType ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
-        for (auto node :
-             el_view.getSideNodeInds() | std::views::transform([&](auto ind) { return el_view->getNodes()[ind]; }))
-            if (not boundary.getParent()->isGhostNode(node))
-                for (auto dof : util::getValuesAtInds(map(node).front(), dofinds_ctwrpr))
-                {
-                    std::atomic_ref{retval[dof]}.fetch_add(1, std::memory_order_relaxed);
-                    std::atomic_ref{values[dof]}.store(0., std::memory_order_relaxed);
-                }
-    };
+    const auto                  process_element =
+        [&]< mesh::ElementType ET, el_o_t EO >(const mesh::BoundaryElementView< ET, EO >& el_view) {
+            for (auto node :
+                 el_view.getSideNodeInds() | std::views::transform([&](auto ind) { return el_view->getNodes()[ind]; }))
+                if (not boundary.getParent()->isGhostNode(node))
+                    for (auto dof : util::getValuesAtInds(map(node).front(), dofinds_ctwrpr))
+                    {
+                        std::atomic_ref{retval[dof]}.fetch_add(1, std::memory_order_relaxed);
+                        std::atomic_ref{values[dof]}.store(0., std::memory_order_relaxed);
+                    }
+        };
     boundary.visit(process_element, std::execution::par);
     return retval;
 }
 } // namespace detail
 
 template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps >
-void computeValuesAtNodes(const MeshPartition< orders... >&                       mesh,
-                          detail::DomainIdRange_c auto&&                          domain_ids,
+void computeValuesAtNodes(const mesh::MeshPartition< orders... >&                 mesh,
+                          mesh::detail::DomainIdRange_c auto&&                    domain_ids,
                           const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                           util::ConstexprValue< dof_inds >                        dofinds_ctwrpr,
                           std::span< const val_t, std::ranges::size(dof_inds) >   values_in,
@@ -131,7 +132,7 @@ void computeValuesAtNodes(const MeshPartition< orders... >&                     
     requires(std::ranges::all_of(dof_inds, [](size_t dof) { return dof < max_dofs_per_node; }))
 {
     L3STER_PROFILE_FUNCTION;
-    const auto process_element = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
+    const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
         const auto& el_nodes     = element.getNodes();
         const auto  process_node = [&](size_t node_ind) {
             for (size_t dof_ind = 0; auto dof : util::getValuesAtInds(map(el_nodes[node_ind]).front(), dofinds_ctwrpr))
@@ -146,8 +147,8 @@ void computeValuesAtNodes(const MeshPartition< orders... >&                     
 
 template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
 void computeValuesAtNodes(auto&&                                                  kernel,
-                          const MeshPartition< orders... >&                       mesh,
-                          detail::DomainIdRange_c auto&&                          domain_ids,
+                          const mesh::MeshPartition< orders... >&                 mesh,
+                          mesh::detail::DomainIdRange_c auto&&                    domain_ids,
                           const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                           util::ConstexprValue< dof_inds >                        dofinds_ctwrpr,
                           const SolutionManager::FieldValueGetter< n_fields >&    field_val_getter,
@@ -160,15 +161,15 @@ void computeValuesAtNodes(auto&&                                                
     L3STER_PROFILE_FUNCTION;
     const auto num_parents =
         detail::initValsAndParents(mesh, domain_ids, map, dofinds_ctwrpr, field_val_getter, values);
-    const auto process_element = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
+    const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
         if constexpr (detail::ValueAtNodeKernel_c< decltype(kernel),
                                                    n_fields,
-                                                   Element< ET, EO >::native_dim,
+                                                   mesh::Element< ET, EO >::native_dim,
                                                    std::ranges::size(dof_inds) >)
         {
             const auto& el_nodes       = element.getNodes();
             const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
-            const auto& node_locations = getNodeLocations< ET, EO >();
+            const auto& node_locations = mesh::getNodeLocations< ET, EO >();
 
             const auto node_vals            = field_val_getter(el_nodes);
             const auto jacobi_mat_generator = map::getNatJacobiMatGenerator(element);
@@ -212,7 +213,7 @@ void computeValuesAtNodes(auto&&                                                
 
 template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
 void computeValuesAtBoundaryNodes(auto&&                                                  kernel,
-                                  const BoundaryView< orders... >&                        boundary,
+                                  const mesh::BoundaryView< orders... >&                  boundary,
                                   const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                                   util::ConstexprValue< dof_inds >                        dofinds_ctwrpr,
                                   const SolutionManager::FieldValueGetter< n_fields >&    field_val_getter,
@@ -226,15 +227,15 @@ void computeValuesAtBoundaryNodes(auto&&                                        
 {
     L3STER_PROFILE_FUNCTION;
     const auto num_parents     = detail::initValsAndParents(boundary, map, dofinds_ctwrpr, field_val_getter, values);
-    const auto process_element = [&]< ElementType ET, el_o_t EO >(BoundaryElementView< ET, EO > el_view) {
+    const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(mesh::BoundaryElementView< ET, EO > el_view) {
         if constexpr (detail::ValueAtNodeBoundaryKernel_c< decltype(kernel),
                                                            n_fields,
-                                                           Element< ET, EO >::native_dim,
+                                                           mesh::Element< ET, EO >::native_dim,
                                                            std::ranges::size(dof_inds) >)
         {
             const auto& el_nodes       = el_view->getNodes();
             const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
-            const auto& node_locations = getNodeLocations< ET, EO >();
+            const auto& node_locations = mesh::getNodeLocations< ET, EO >();
 
             const auto node_vals            = field_val_getter(el_nodes);
             const auto jacobi_mat_generator = map::getNatJacobiMatGenerator(*el_view);

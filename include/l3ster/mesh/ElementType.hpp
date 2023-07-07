@@ -6,7 +6,7 @@
 #include <functional>
 #include <utility>
 
-namespace lstr
+namespace lstr::mesh
 {
 enum struct ElementType
 {

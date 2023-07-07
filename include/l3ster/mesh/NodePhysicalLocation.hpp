@@ -4,7 +4,7 @@
 #include "l3ster/mapping/MapReferenceToPhysical.hpp"
 #include "l3ster/mesh/NodeReferenceLocation.hpp"
 
-namespace lstr
+namespace lstr::mesh
 {
 template < ElementType T, el_o_t O >
 auto nodePhysicalLocation(const Element< T, O >& element)

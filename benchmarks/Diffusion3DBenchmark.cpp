@@ -38,7 +38,7 @@ int main(int argc, char* argv[])
     constexpr auto mesh_order   = L3STER_ELEMENT_ORDERS;
     const auto     my_partition = generateAndDistributeMesh< mesh_order >(
         comm,
-        [&] { return makeCubeMesh(node_dist); },
+        [&] { return mesh::makeCubeMesh(node_dist); },
         std::vector< d_id_t >(boundary_ids.begin(), boundary_ids.end()),
         {},
         probdef_ctwrpr);

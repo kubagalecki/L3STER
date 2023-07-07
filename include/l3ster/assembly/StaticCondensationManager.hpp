@@ -14,27 +14,31 @@ class StaticCondensationManagerInterface
 public:
     void beginAssembly() { static_cast< Derived* >(this)->beginAssemblyImpl(); }
     template < el_o_t... orders, size_t max_dofs_per_node >
-    void endAssembly(const MeshPartition< orders... >&                mesh,
+    void endAssembly(const mesh::MeshPartition< orders... >&          mesh,
                      const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
                      tpetra_crsmatrix_t&                              global_matrix,
                      std::span< val_t >                               global_rhs)
     {
         static_cast< Derived* >(this)->endAssemblyImpl(mesh, node_dof_map, global_matrix, global_rhs);
     }
-    template < ElementType ET, el_o_t EO, int system_size, size_t max_dofs_per_node, IndexRange_c auto field_inds >
+    template < mesh::ElementType ET,
+               el_o_t            EO,
+               int               system_size,
+               size_t            max_dofs_per_node,
+               IndexRange_c auto field_inds >
     void condenseSystem(const NodeToLocalDofMap< max_dofs_per_node, 3 >&               node_dof_map,
                         tpetra_crsmatrix_t&                                            global_mat,
                         std::span< val_t >                                             global_rhs,
                         const util::eigen::RowMajorSquareMatrix< val_t, system_size >& local_matrix,
                         const Eigen::Vector< val_t, system_size >&                     local_vector,
-                        const Element< ET, EO >&                                       element,
+                        const mesh::Element< ET, EO >&                                 element,
                         util::ConstexprValue< field_inds >                             field_inds_ctwrpr)
     {
         static_cast< Derived* >(this)->condenseSystemImpl(
             node_dof_map, global_mat, global_rhs, local_matrix, local_vector, element, field_inds_ctwrpr);
     }
     template < el_o_t... orders, size_t max_dofs_per_node >
-    void recoverSolution(const MeshPartition< orders... >&                mesh,
+    void recoverSolution(const mesh::MeshPartition< orders... >&          mesh,
                          const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
                          std::span< const val_t >                         condensed_solution,
                          IndexRange_c auto&&                              sol_inds,
@@ -72,25 +76,29 @@ class StaticCondensationManager< CondensationPolicy::None > :
 public:
     StaticCondensationManager() = default;
     template < el_o_t... orders, size_t max_dofs_per_node, ProblemDef_c auto problem_def >
-    StaticCondensationManager(const MeshPartition< orders... >&,
+    StaticCondensationManager(const mesh::MeshPartition< orders... >&,
                               const NodeToLocalDofMap< max_dofs_per_node, 3 >&,
                               util::ConstexprValue< problem_def >)
     {}
 
     void beginAssemblyImpl() {}
     template < el_o_t... orders, size_t max_dofs_per_node >
-    void endAssemblyImpl(const MeshPartition< orders... >&,
+    void endAssemblyImpl(const mesh::MeshPartition< orders... >&,
                          const NodeToLocalDofMap< max_dofs_per_node, 3 >&,
                          tpetra_crsmatrix_t&,
                          std::span< val_t >)
     {}
-    template < ElementType ET, el_o_t EO, int system_size, size_t max_dofs_per_node, IndexRange_c auto field_inds >
+    template < mesh::ElementType ET,
+               el_o_t            EO,
+               int               system_size,
+               size_t            max_dofs_per_node,
+               IndexRange_c auto field_inds >
     void condenseSystemImpl(const NodeToLocalDofMap< max_dofs_per_node, 3 >&               node_dof_map,
                             tpetra_crsmatrix_t&                                            global_mat,
                             std::span< val_t >                                             global_rhs,
                             const util::eigen::RowMajorSquareMatrix< val_t, system_size >& local_mat,
                             const Eigen::Vector< val_t, system_size >&                     local_vec,
-                            const Element< ET, EO >&                                       element,
+                            const mesh::Element< ET, EO >&                                 element,
                             util::ConstexprValue< field_inds >                             field_inds_ctwrpr)
     {
         const auto [row_dofs, col_dofs, rhs_dofs] =
@@ -98,7 +106,7 @@ public:
         detail::scatterLocalSystem(local_mat, local_vec, global_mat, global_rhs, row_dofs, col_dofs, rhs_dofs);
     }
     template < el_o_t... orders, size_t max_dofs_per_node >
-    void recoverSolutionImpl(const MeshPartition< orders... >&,
+    void recoverSolutionImpl(const mesh::MeshPartition< orders... >&,
                              const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
                              std::span< const val_t >                         condensed_solution,
                              IndexRange_c auto&&                              sol_inds,
@@ -114,13 +122,13 @@ template <>
 class StaticCondensationManager< CondensationPolicy::ElementBoundary > :
     public StaticCondensationManagerInterface< StaticCondensationManager< CondensationPolicy::ElementBoundary > >
 {
-    template < ElementType ET, el_o_t EO, size_t dofs_per_node >
+    template < mesh::ElementType ET, el_o_t EO, size_t dofs_per_node >
     struct LocalDofInds
     {
         static constexpr size_t n_primary_dofs =
-            dofs_per_node * ElementTraits< Element< ET, EO > >::boundary_node_inds.size();
+            dofs_per_node * mesh::ElementTraits< mesh::Element< ET, EO > >::boundary_node_inds.size();
         static constexpr size_t n_condensed_dofs =
-            dofs_per_node * ElementTraits< Element< ET, EO > >::internal_node_inds.size();
+            dofs_per_node * mesh::ElementTraits< mesh::Element< ET, EO > >::internal_node_inds.size();
 
         std::array< std::uint32_t, n_primary_dofs >   primary_src_inds, primary_dest_inds;
         std::array< std::uint32_t, n_condensed_dofs > cond_src_inds, cond_dest_inds;
@@ -136,26 +144,30 @@ class StaticCondensationManager< CondensationPolicy::ElementBoundary > :
 public:
     StaticCondensationManager() = default;
     template < el_o_t... orders, size_t max_dofs_per_node, ProblemDef_c auto problem_def >
-    StaticCondensationManager(const MeshPartition< orders... >&                mesh,
+    StaticCondensationManager(const mesh::MeshPartition< orders... >&          mesh,
                               const NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map,
                               util::ConstexprValue< problem_def >);
 
     inline void beginAssemblyImpl();
     template < el_o_t... orders, size_t max_dofs_per_node >
-    void endAssemblyImpl(const MeshPartition< orders... >&                mesh,
+    void endAssemblyImpl(const mesh::MeshPartition< orders... >&          mesh,
                          const NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map,
                          tpetra_crsmatrix_t&                              matrix,
                          std::span< val_t >                               rhs);
-    template < ElementType ET, el_o_t EO, int system_size, size_t max_dofs_per_node, IndexRange_c auto field_inds >
+    template < mesh::ElementType ET,
+               el_o_t            EO,
+               int               system_size,
+               size_t            max_dofs_per_node,
+               IndexRange_c auto field_inds >
     void condenseSystemImpl(const NodeToLocalDofMap< max_dofs_per_node, 3 >&               node_dof_map,
                             tpetra_crsmatrix_t&                                            global_mat,
                             std::span< val_t >                                             global_rhs,
                             const util::eigen::RowMajorSquareMatrix< val_t, system_size >& local_mat,
                             const Eigen::Vector< val_t, system_size >&                     local_vec,
-                            const Element< ET, EO >&                                       element,
+                            const mesh::Element< ET, EO >&                                 element,
                             util::ConstexprValue< field_inds >                             field_inds_ctwrpr);
     template < el_o_t... orders, size_t max_dofs_per_node >
-    void recoverSolutionImpl(const MeshPartition< orders... >&,
+    void recoverSolutionImpl(const mesh::MeshPartition< orders... >&,
                              const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
                              std::span< const val_t >                         condensed_solution,
                              IndexRange_c auto&&                              sol_inds,
@@ -165,8 +177,8 @@ public:
 private:
     inline auto getInternalDofInds(const ElementCondData& cond_data) const -> std::span< const std::uint8_t >;
 
-    template < ElementType ET, el_o_t EO, size_t max_dofs_per_node, ArrayOf_c< size_t > auto field_inds >
-    auto computeLocalDofInds(const Element< ET, EO >&                         element,
+    template < mesh::ElementType ET, el_o_t EO, size_t max_dofs_per_node, ArrayOf_c< size_t > auto field_inds >
+    auto computeLocalDofInds(const mesh::Element< ET, EO >&                   element,
                              const NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map,
                              const ElementCondData&                           cond_data,
                              util::ConstexprValue< field_inds >               field_inds_ctwrpr)
@@ -222,11 +234,12 @@ void StaticCondensationManagerInterface< Derived >::updateSolutionPrimaryDofs(
 
 template < el_o_t... orders, size_t max_dofs_per_node, ProblemDef_c auto problem_def >
 StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensationManager(
-    const MeshPartition< orders... >&                mesh,
+    const mesh::MeshPartition< orders... >&          mesh,
     const NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map,
     util::ConstexprValue< problem_def >)
 {
-    const auto compute_elem_dof_info = [&dof_map]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
+    const auto compute_elem_dof_info = [&dof_map]< mesh::ElementType ET, el_o_t EO >(
+                                           const mesh::Element< ET, EO >& element) {
         // Bitmap is initially inverted, i.e., 0 implies that the dof is active (avoids awkward all-true construction)
         using dof_bmp_t    = std::bitset< max_dofs_per_node >;
         auto dof_bmp_range = getBoundaryNodes(element) | std::views::transform(dof_map) | std::views::keys |
@@ -246,7 +259,7 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
         return std::make_pair(n_boundary_dofs, ~internal_dof_bmp);
     };
     mesh.visit(
-        [&compute_elem_dof_info, this]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
+        [&compute_elem_dof_info, this]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
             const auto [n_boundary_dofs, internal_dof_bmp] = compute_elem_dof_info(element);
             const auto el_int_dofs_offs                    = m_internal_dof_inds.size();
             const auto n_int_dofs_per_node                 = internal_dof_bmp.count();
@@ -254,7 +267,7 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
                 if (internal_dof_bmp[i])
                     m_internal_dof_inds.push_back(i);
             const auto n_internal_dofs =
-                ElementTraits< Element< ET, EO > >::internal_node_inds.size() * n_int_dofs_per_node;
+                mesh::ElementTraits< mesh::Element< ET, EO > >::internal_node_inds.size() * n_int_dofs_per_node;
             m_elem_data_map.emplace(element.getId(),
                                     ElementCondData{.internal_dofs_offs{el_int_dofs_offs},
                                                     .internal_dofs_size{n_int_dofs_per_node},
@@ -282,7 +295,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::beginAsse
 
 template < el_o_t... orders, size_t max_dofs_per_node >
 void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemblyImpl(
-    const MeshPartition< orders... >&                mesh,
+    const mesh::MeshPartition< orders... >&          mesh,
     const NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map,
     tpetra_crsmatrix_t&                              matrix,
     std::span< val_t >                               rhs)
@@ -292,7 +305,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemb
         auto&      elem_data           = m_elem_data_map.at(id);
         const auto element_ptr_variant = mesh.find(id)->first;
         std::visit(
-            [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >* element_ptr) {
+            [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >* element_ptr) {
                 elem_data.diag_block_inv = elem_data.diag_block.inverse();
                 thread_local util::eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > primary_upd_mat;
                 thread_local Eigen::Vector< val_t, Eigen::Dynamic >                        primary_upd_rhs;
@@ -307,14 +320,14 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemb
     });
 }
 
-template < ElementType ET, el_o_t EO, int system_size, size_t max_dofs_per_node, IndexRange_c auto field_inds >
+template < mesh::ElementType ET, el_o_t EO, int system_size, size_t max_dofs_per_node, IndexRange_c auto field_inds >
 void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseSystemImpl(
     const NodeToLocalDofMap< max_dofs_per_node, 3 >&                     node_dof_map,
     tpetra_crsmatrix_t&                                                  global_mat,
     std::span< val_t >                                                   global_rhs,
     const util::eigen::RowMajorSquareMatrix< lstr::val_t, system_size >& local_mat,
     const Eigen::Vector< lstr::val_t, system_size >&                     local_vec,
-    const Element< ET, EO >&                                             element,
+    const mesh::Element< ET, EO >&                                       element,
     util::ConstexprValue< field_inds >                                   field_inds_ctwrpr)
 {
     L3STER_PROFILE_FUNCTION;
@@ -362,7 +375,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
 
 template < el_o_t... orders, size_t max_dofs_per_node >
 void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSolutionImpl(
-    const MeshPartition< orders... >&                mesh,
+    const mesh::MeshPartition< orders... >&          mesh,
     const NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
     std::span< const val_t >                         condensed_solution,
     IndexRange_c auto&&                              sol_inds,
@@ -388,7 +401,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSo
         auto&      elem_data           = m_elem_data_map.at(id);
         const auto element_ptr_variant = mesh.find(id)->first;
         std::visit(
-            [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >* element_ptr) {
+            [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >* element_ptr) {
                 const auto [row_dofs, col_dofs, rhs_dofs] =
                     detail::getUnsortedPrimaryDofs(*element_ptr, node_dof_map, element_boundary);
                 primary_vals.resize(rhs_dofs.size());
@@ -427,9 +440,9 @@ auto StaticCondensationManager< CondensationPolicy::ElementBoundary >::getIntern
                                 cond_data.internal_dofs_size)};
 }
 
-template < ElementType ET, el_o_t EO, size_t max_dofs_per_node, ArrayOf_c< size_t > auto field_inds >
+template < mesh::ElementType ET, el_o_t EO, size_t max_dofs_per_node, ArrayOf_c< size_t > auto field_inds >
 auto StaticCondensationManager< CondensationPolicy::ElementBoundary >::computeLocalDofInds(
-    const Element< ET, EO >&                         element,
+    const mesh::Element< ET, EO >&                   element,
     const NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map,
     const ElementCondData&                           cond_data,
     util::ConstexprValue< field_inds >) -> LocalDofInds< ET, EO, field_inds.size() >
@@ -447,7 +460,7 @@ auto StaticCondensationManager< CondensationPolicy::ElementBoundary >::computeLo
     auto          retval            = LocalDofInds< ET, EO, field_inds.size() >{};
     size_t        primary_write_ind = 0, cond_write_ind = 0;
     std::uint32_t local_system_ind = 0, primary_ind = 0, cond_ind = 0;
-    auto          boundary_ind_iter = ElementTraits< Element< ET, EO > >::boundary_node_inds.cbegin();
+    auto          boundary_ind_iter = mesh::ElementTraits< mesh::Element< ET, EO > >::boundary_node_inds.cbegin();
     for (el_locind_t node_ind = 0; auto node : element.getNodes())
     {
         if (*boundary_ind_iter == node_ind++)

@@ -40,8 +40,8 @@ auto computeDofIntervalsFromNodeData(const NodeCondensationMap< CP >&           
 }
 
 template < CondensationPolicy CP, ProblemDef_c auto problem_def, el_o_t... orders >
-auto makeFieldCoverageVector(const MeshPartition< orders... >& mesh,
-                             const NodeCondensationMap< CP >&  cond_map,
+auto makeFieldCoverageVector(const mesh::MeshPartition< orders... >& mesh,
+                             const NodeCondensationMap< CP >&        cond_map,
                              util::ConstexprValue< problem_def >)
     -> std::vector< std::bitset< deduceNFields(problem_def) > >
 {
@@ -63,9 +63,9 @@ auto makeFieldCoverageVector(const MeshPartition< orders... >& mesh,
 }
 
 template < CondensationPolicy CP, ProblemDef_c auto problem_def, el_o_t... orders >
-auto computeLocalDofIntervals(const MeshPartition< orders... >&   mesh,
-                              const NodeCondensationMap< CP >&    cond_map,
-                              util::ConstexprValue< problem_def > problemdef_ctwrapper)
+auto computeLocalDofIntervals(const mesh::MeshPartition< orders... >& mesh,
+                              const NodeCondensationMap< CP >&        cond_map,
+                              util::ConstexprValue< problem_def >     problemdef_ctwrapper)
     -> node_interval_vector_t< deduceNFields(problem_def) >
 {
     const auto field_coverage = makeFieldCoverageVector(mesh, cond_map, problemdef_ctwrapper);
@@ -295,7 +295,7 @@ I findNodeInterval(I begin, S end, n_id_t node)
 
 template < CondensationPolicy CP, detail::ProblemDef_c auto problem_def, el_o_t... orders >
 auto computeDofIntervals(const MpiComm&                           comm,
-                         const MeshPartition< orders... >&        mesh,
+                         const mesh::MeshPartition< orders... >&  mesh,
                          const detail::NodeCondensationMap< CP >& cond_map,
                          util::ConstexprValue< problem_def >      problemdef_ctwrapper)
     -> detail::node_interval_vector_t< detail::deduceNFields(problem_def) >

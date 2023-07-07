@@ -3,7 +3,7 @@
 
 #include "l3ster/mesh/MeshPartition.hpp"
 
-namespace lstr
+namespace lstr::mesh
 {
 template < std::ranges::random_access_range Rx, std::ranges::random_access_range Ry >
 auto makeSquareMesh(Rx&& distx, Ry&& disty) -> MeshPartition< 1 >
@@ -80,5 +80,5 @@ auto makeSquareMesh(R&& dist) -> MeshPartition< 1 >
 {
     return makeSquareMesh(dist, dist);
 }
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_SQUAREMESH_HPP

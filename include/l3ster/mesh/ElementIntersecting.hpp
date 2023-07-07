@@ -9,7 +9,7 @@
 #include <bitset>
 #include <span>
 
-namespace lstr
+namespace lstr::mesh
 {
 namespace detail
 {

@@ -9,7 +9,7 @@ template < el_o_t... orders,
            CondensationPolicy        CP,
            detail::ProblemDef_c auto problem_def,
            detail::ProblemDef_c auto dirichlet_def >
-auto getDirichletDofs(const MeshPartition< orders... >&                               mesh,
+auto getDirichletDofs(const mesh::MeshPartition< orders... >&                         mesh,
                       const Teuchos::RCP< const tpetra_fecrsgraph_t >&                sparsity_graph,
                       const NodeToGlobalDofMap< detail::deduceNFields(problem_def) >& node_to_dof_map,
                       const detail::NodeCondensationMap< CP >&                        cond_map,
@@ -24,7 +24,7 @@ auto getDirichletDofs(const MeshPartition< orders... >&                         
             constexpr auto  domain_id        = domain_def.first;
             constexpr auto& coverage         = domain_def.second;
             constexpr auto  covered_dof_inds = util::getTrueInds< coverage >();
-            const auto      process_element  = [&]< ElementType T, el_o_t O >(const Element< T, O >& element) {
+            const auto process_element = [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >& element) {
                 const auto element_dirichlet_dofs =
                     detail::getUnsortedPrimaryDofs< covered_dof_inds >(element, node_to_dof_map, cond_map);
                 for (auto dof : element_dirichlet_dofs)

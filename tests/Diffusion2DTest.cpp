@@ -25,7 +25,7 @@ void test()
     constexpr auto mesh_order = 2;
     const auto     mesh       = generateAndDistributeMesh< mesh_order >(
         comm,
-        [&] { return makeSquareMesh(node_dist); },
+        [&] { return mesh::makeSquareMesh(node_dist); },
         {bot_boundary, top_boundary, left_boundary, right_boundary},
         {},
         probdef_ctwrpr);

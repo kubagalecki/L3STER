@@ -11,7 +11,12 @@
 
 #include <map>
 
-namespace lstr
+namespace lstr // TODO
+{
+struct SerializedPartition;
+}
+
+namespace lstr::mesh
 {
 namespace detail
 {
@@ -39,7 +44,7 @@ public:
     using el_boundary_view_result_t = std::pair< const_find_result_t, el_side_t >;
     using node_span_t               = std::span< const n_id_t >;
 
-    friend struct SerializedPartition;
+    friend struct ::lstr::SerializedPartition; // TODO
 
     MeshPartition() = default;
     inline MeshPartition(domain_map_t domains);
@@ -783,5 +788,5 @@ auto MeshPartition< orders... >::filterExistingDomainIds(const auto& domain_map,
                       std::back_inserter(retval));
     return retval;
 }
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_MESHPARTITION_HPP

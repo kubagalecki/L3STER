@@ -17,7 +17,7 @@
 #include <string_view>
 #include <utility>
 
-namespace lstr
+namespace lstr::mesh
 {
 enum class MeshFormat
 {

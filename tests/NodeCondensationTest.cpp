@@ -18,7 +18,7 @@ void test(CondensationPolicyTag< CP > = {})
     constexpr auto       mesh_order = 2;
     constexpr std::array node_dist{0., 1., 2., 3., 4.};
     const auto           mesh = generateAndDistributeMesh< mesh_order >(
-        comm, [&] { return makeCubeMesh(node_dist); }, {1, 2, 3, 4, 5, 6}, {}, problemdef_ctwrpr);
+        comm, [&] { return mesh::makeCubeMesh(node_dist); }, {1, 2, 3, 4, 5, 6}, {}, problemdef_ctwrpr);
 
     const auto  condensation_map         = detail::makeCondensationMap< CP >(comm, mesh, problemdef_ctwrpr);
     const auto& global_nodes_to_condense = detail::getActiveNodes< CP >(mesh, problemdef_ctwrpr);

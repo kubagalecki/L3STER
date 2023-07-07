@@ -19,6 +19,11 @@
 
 namespace lstr
 {
+struct SerializedDomain; // TODO
+}
+
+namespace lstr::mesh
+{
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 class Domain
@@ -29,7 +34,7 @@ public:
     template < el_o_t... friend_orders >
         requires(sizeof...(friend_orders) > 0)
     friend class Domain;
-    friend struct SerializedDomain;
+    friend struct ::lstr::SerializedDomain;
 
     template < ElementType ET, el_o_t EO >
     using element_vector_t = std::vector< Element< ET, EO > >;
@@ -406,5 +411,5 @@ private:
     const Domain< orders... >* domain{};
     d_id_t                     id{};
 };
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_DOMAIN_HPP

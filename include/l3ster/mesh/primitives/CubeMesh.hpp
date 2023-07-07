@@ -3,7 +3,7 @@
 
 #include "l3ster/mesh/MeshPartition.hpp"
 
-namespace lstr
+namespace lstr::mesh
 {
 template < std::ranges::random_access_range Rx,
            std::ranges::random_access_range Ry,

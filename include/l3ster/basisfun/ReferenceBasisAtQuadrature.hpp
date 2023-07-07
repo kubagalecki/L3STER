@@ -6,11 +6,11 @@
 
 namespace lstr::basis
 {
-template < ElementType ET, el_o_t EO, q_l_t QL >
+template < mesh::ElementType ET, el_o_t EO, q_l_t QL >
 struct ReferenceBasisAtQuadrature
 {
-    quad::Quadrature< QL, Element< ET, EO >::native_dim > quadrature;
-    ReferenceBasisAtPoints< ET, EO, QL >                  basis;
+    quad::Quadrature< QL, mesh::Element< ET, EO >::native_dim > quadrature;
+    ReferenceBasisAtPoints< ET, EO, QL >                        basis;
 };
 } // namespace lstr::basis
 #endif // L3STER_BASISFUN_REFERENCEBASISATQUADRATURE_HPP
