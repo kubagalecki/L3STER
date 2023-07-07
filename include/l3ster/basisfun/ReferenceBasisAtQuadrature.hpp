@@ -6,7 +6,7 @@
 
 namespace lstr::basis
 {
-template < ElementTypes ET, el_o_t EO, q_l_t QL >
+template < ElementType ET, el_o_t EO, q_l_t QL >
 struct ReferenceBasisAtQuadrature
 {
     quad::Quadrature< QL, Element< ET, EO >::native_dim > quadrature;

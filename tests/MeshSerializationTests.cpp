@@ -11,7 +11,7 @@ bool compareEqual(const MeshPartition< orders... >& p1, const MeshPartition< ord
 {
     bool result = true;
 
-    p1.visit([&]< ElementTypes T1, el_o_t O1 >(const Element< T1, O1 >& el1, DomainView< orders... > dv) {
+    p1.visit([&]< ElementType T1, el_o_t O1 >(const Element< T1, O1 >& el1, DomainView< orders... > dv) {
         const auto matched = p2.find(el1.getId());
 
         if (not matched or dv.getID() != matched->second)
@@ -21,7 +21,7 @@ bool compareEqual(const MeshPartition< orders... >& p1, const MeshPartition< ord
         }
 
         std::visit(
-            [&]< ElementTypes T2, el_o_t O2 >(const Element< T2, O2 >* el2) {
+            [&]< ElementType T2, el_o_t O2 >(const Element< T2, O2 >* el2) {
                 if constexpr (T1 != T2 or O1 != O2)
                     result = false;
                 else if (el1.getNodes() != el2->getNodes() or el1.getData().vertices != el2->getData().vertices)

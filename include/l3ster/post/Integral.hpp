@@ -63,7 +63,7 @@ template < typename IntKernel, size_t n_fields, el_o_t... orders >
 inline constexpr auto n_integral_components = std::invoke(
     []< typename... TypeOrderPair >(util::TypePack< TypeOrderPair... >) {
         constexpr auto invalid_nic = std::numeric_limits< int >::max();
-        constexpr auto deduce_nc   = []< ElementTypes ET, el_o_t EO >(util::ValuePack< ET, EO >) -> int {
+        constexpr auto deduce_nc   = []< ElementType ET, el_o_t EO >(util::ValuePack< ET, EO >) -> int {
             constexpr auto dim = Element< ET, EO >::native_dim;
             if constexpr (IntegralKernel_c< IntKernel, dim, n_fields > or
                           BoundaryIntegralKernel_c< IntKernel, dim, n_fields >)
@@ -86,7 +86,7 @@ inline constexpr auto n_integral_components = std::invoke(
 template < typename Kernel, size_t n_fields, el_o_t... orders >
 struct PotentiallyValidIntegralKernelDeductionHelper
 {
-    template < ElementTypes T, el_o_t O >
+    template < ElementType T, el_o_t O >
     struct DeductionHelperDomain
     {
         static constexpr bool value = IntegralKernel_c< Kernel, Element< T, O >::native_dim, n_fields >;
@@ -94,7 +94,7 @@ struct PotentiallyValidIntegralKernelDeductionHelper
     static constexpr bool domain =
         ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
 
-    template < ElementTypes T, el_o_t O >
+    template < ElementType T, el_o_t O >
     struct DeductionHelperBoundary
     {
         static constexpr bool value = BoundaryIntegralKernel_c< Kernel, Element< T, O >::native_dim, n_fields >;
@@ -109,7 +109,7 @@ template < typename Kernel, size_t n_fields, el_o_t... orders >
 concept PotentiallyValidBoundaryIntegralKernel_c =
     PotentiallyValidIntegralKernelDeductionHelper< Kernel, n_fields, orders... >::boundary;
 
-template < ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
+template < ElementType ET, el_o_t EO, q_l_t QL, int n_fields >
 auto evalElementIntegral(auto&&                                                                            kernel,
                          const Element< ET, EO >&                                                          element,
                          const util::eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, n_fields >& node_vals,
@@ -130,7 +130,7 @@ auto evalElementIntegral(auto&&                                                 
     return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, result_t{result_t::Zero()});
 }
 
-template < ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
+template < ElementType ET, el_o_t EO, q_l_t QL, int n_fields >
 auto evalElementBoundaryIntegral(
     auto&&                                                                            kernel,
     const BoundaryElementView< ET, EO >&                                              el_view,
@@ -165,7 +165,7 @@ auto evalLocalIntegral(auto&&                                               kern
 {
     constexpr auto n_components = n_integral_components< decltype(kernel), n_fields, orders... >;
     using integral_t            = Eigen::Vector< val_t, n_components >;
-    const auto reduce_element   = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) -> integral_t {
+    const auto reduce_element   = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) -> integral_t {
         constexpr auto el_dim = Element< ET, EO >::native_dim;
         if constexpr (IntegralKernel_c< decltype(kernel), el_dim, n_fields >)
         {
@@ -203,7 +203,7 @@ auto evalLocalBoundaryIntegral(auto&&                                           
     constexpr auto n_components = n_integral_components< decltype(kernel), n_fields, orders... >;
     using integral_t            = Eigen::Vector< val_t, n_components >;
     const auto reduce_element =
-        [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) -> integral_t {
+        [&]< ElementType ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) -> integral_t {
         constexpr auto el_dim = Element< ET, EO >::native_dim;
         if constexpr (BoundaryIntegralKernel_c< decltype(kernel), el_dim, n_fields >)
         {

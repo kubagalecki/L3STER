@@ -24,7 +24,7 @@ auto convertMeshToOrder(const MeshPartition< 1 >& mesh, std::integral_constant< 
 
     const auto convert_domain = [&](const Domain< 1 >& old_domain, Domain< O_CONV >& new_domain) {
         old_domain.visit(
-            [&]< ElementTypes T, el_o_t O >(const Element< T, O >& el) {
+            [&]< ElementType T, el_o_t O >(const Element< T, O >& el) {
                 constexpr size_t                  n_new_nodes = Element< T, O_CONV >::n_nodes;
                 std::bitset< n_new_nodes >        mask{};
                 std::array< n_id_t, n_new_nodes > new_nodes;
@@ -35,7 +35,7 @@ auto convertMeshToOrder(const MeshPartition< 1 >& mesh, std::integral_constant< 
                         return;
                     const auto [nbr_ptr_var, nbr_dom_id] = *mesh.find(nbr_id);
                     std::visit(
-                        [&]< ElementTypes T_N, el_o_t O_N >(const Element< T_N, O_N >* nbr_ptr) {
+                        [&]< ElementType T_N, el_o_t O_N >(const Element< T_N, O_N >* nbr_ptr) {
                             const Element< T_N, O_CONV >& converted_nbr = *std::ranges::lower_bound(
                                 new_domains.at(nbr_dom_id).template getElementVector< T_N, O_CONV >(),
                                 nbr_id,

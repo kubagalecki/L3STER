@@ -6,7 +6,7 @@
 
 namespace lstr::map
 {
-template < ElementTypes ET, el_o_t EO >
+template < ElementType ET, el_o_t EO >
 val_t computeBoundaryIntegralJacobian(
     BoundaryElementView< ET, EO >                                                               el_view,
     const Eigen::Matrix< val_t, Element< ET, EO >::native_dim, Element< ET, EO >::native_dim >& jacobi_mat)

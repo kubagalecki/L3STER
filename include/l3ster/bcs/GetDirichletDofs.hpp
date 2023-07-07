@@ -24,7 +24,7 @@ auto getDirichletDofs(const MeshPartition< orders... >&                         
             constexpr auto  domain_id        = domain_def.first;
             constexpr auto& coverage         = domain_def.second;
             constexpr auto  covered_dof_inds = util::getTrueInds< coverage >();
-            const auto      process_element  = [&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
+            const auto      process_element  = [&]< ElementType T, el_o_t O >(const Element< T, O >& element) {
                 const auto element_dirichlet_dofs =
                     detail::getUnsortedPrimaryDofs< covered_dof_inds >(element, node_to_dof_map, cond_map);
                 for (auto dof : element_dirichlet_dofs)

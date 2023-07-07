@@ -21,13 +21,13 @@ auto makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz) -> MeshPartition< 1 >
     const size_t e_dz = n_dz - 1;
 
     auto domains = MeshPartition< 1 >::domain_map_t{};
-    domains[0].reserve< ElementTypes::Hex, 1 >(e_dx * e_dy * e_dz);
-    domains[1].reserve< ElementTypes::Quad, 1 >(e_dx * e_dy);
-    domains[2].reserve< ElementTypes::Quad, 1 >(e_dx * e_dy);
-    domains[3].reserve< ElementTypes::Quad, 1 >(e_dx * e_dz);
-    domains[4].reserve< ElementTypes::Quad, 1 >(e_dx * e_dz);
-    domains[5].reserve< ElementTypes::Quad, 1 >(e_dz * e_dy);
-    domains[6].reserve< ElementTypes::Quad, 1 >(e_dz * e_dy);
+    domains[0].reserve< ElementType::Hex, 1 >(e_dx * e_dy * e_dz);
+    domains[1].reserve< ElementType::Quad, 1 >(e_dx * e_dy);
+    domains[2].reserve< ElementType::Quad, 1 >(e_dx * e_dy);
+    domains[3].reserve< ElementType::Quad, 1 >(e_dx * e_dz);
+    domains[4].reserve< ElementType::Quad, 1 >(e_dx * e_dz);
+    domains[5].reserve< ElementType::Quad, 1 >(e_dz * e_dy);
+    domains[6].reserve< ElementType::Quad, 1 >(e_dz * e_dy);
 
     el_id_t el_ind = 0;
 
@@ -54,7 +54,7 @@ auto makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz) -> MeshPartition< 1 >
                                                            Point{distx[ix + 1], disty[iy], distz[iz + 1]},
                                                            Point{distx[ix], disty[iy + 1], distz[iz + 1]},
                                                            Point{distx[ix + 1], disty[iy + 1], distz[iz + 1]}};
-                domains[0].emplaceBack< ElementTypes::Hex, 1 >(nodes, verts, el_ind++);
+                domains[0].emplaceBack< ElementType::Hex, 1 >(nodes, verts, el_ind++);
             }
         }
     }
@@ -76,8 +76,8 @@ auto makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz) -> MeshPartition< 1 >
             auto verts2 = verts1;
             std::ranges::for_each(verts2, [&](auto& v) { v = Point{v.x(), v.y(), distz[e_dz]}; });
 
-            domains[1].emplaceBack< ElementTypes::Quad, 1 >(nodes1, verts1, el_ind++);
-            domains[2].emplaceBack< ElementTypes::Quad, 1 >(nodes2, verts2, el_ind++);
+            domains[1].emplaceBack< ElementType::Quad, 1 >(nodes1, verts1, el_ind++);
+            domains[2].emplaceBack< ElementType::Quad, 1 >(nodes2, verts2, el_ind++);
         }
     }
 
@@ -100,8 +100,8 @@ auto makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz) -> MeshPartition< 1 >
             auto verts2 = verts1;
             std::ranges::for_each(verts2, [&](auto& v) { v = Point{v.x(), disty[e_dy], v.z()}; });
 
-            domains[3].emplaceBack< ElementTypes::Quad, 1 >(nodes1, verts1, el_ind++);
-            domains[4].emplaceBack< ElementTypes::Quad, 1 >(nodes2, verts2, el_ind++);
+            domains[3].emplaceBack< ElementType::Quad, 1 >(nodes1, verts1, el_ind++);
+            domains[4].emplaceBack< ElementType::Quad, 1 >(nodes2, verts2, el_ind++);
         }
     }
 
@@ -124,8 +124,8 @@ auto makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz) -> MeshPartition< 1 >
             auto verts2 = verts1;
             std::ranges::for_each(verts2, [&](auto& v) { v = Point{distx[e_dx], v.y(), v.z()}; });
 
-            domains[5].emplaceBack< ElementTypes::Quad, 1 >(nodes1, verts1, el_ind++);
-            domains[6].emplaceBack< ElementTypes::Quad, 1 >(nodes2, verts2, el_ind++);
+            domains[5].emplaceBack< ElementType::Quad, 1 >(nodes1, verts1, el_ind++);
+            domains[6].emplaceBack< ElementType::Quad, 1 >(nodes2, verts2, el_ind++);
         }
     }
 

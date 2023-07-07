@@ -193,7 +193,7 @@ void LocalSystemManager< problem_size, update_size >::update(
         flushFullBuf(batch_matrix, batch_size, is_wgt_positive ? 1. : -1.);
 }
 
-template < typename Kernel, ElementTypes ET, el_o_t EO, size_t n_fields >
+template < typename Kernel, ElementType ET, el_o_t EO, size_t n_fields >
 auto& getLocalSystemManager()
 {
     constexpr auto dim                = Element< ET, EO >::native_dim;
@@ -247,7 +247,7 @@ void LocalSystemManager< problem_size, update_size >::setZero()
 }
 } // namespace detail
 
-template < ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
+template < ElementType ET, el_o_t EO, q_l_t QL, int n_fields >
 const auto&
 assembleLocalSystem(auto&&                                                                            kernel,
                     const Element< ET, EO >&                                                          element,
@@ -277,7 +277,7 @@ assembleLocalSystem(auto&&                                                      
     return local_system_manager.getSystem();
 }
 
-template < typename Kernel, ElementTypes ET, el_o_t EO, q_l_t QL, int n_fields >
+template < typename Kernel, ElementType ET, el_o_t EO, q_l_t QL, int n_fields >
 const auto&
 assembleLocalBoundarySystem(Kernel&&                                                                          kernel,
                             BoundaryElementView< ET, EO >                                                     el_view,

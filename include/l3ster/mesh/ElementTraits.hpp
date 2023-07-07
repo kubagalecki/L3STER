@@ -1,7 +1,7 @@
 #ifndef L3STER_MESH_ELEMENTTRAITS_HPP
 #define L3STER_MESH_ELEMENTTRAITS_HPP
 
-#include "l3ster/mesh/ElementTypes.hpp"
+#include "l3ster/mesh/ElementType.hpp"
 #include "l3ster/mesh/Point.hpp"
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/ConstexprVector.hpp"
@@ -10,7 +10,7 @@
 
 namespace lstr
 {
-template < ElementTypes ELTYPE, el_o_t ELORDER >
+template < ElementType ELTYPE, el_o_t ELORDER >
 class Element;
 
 template < typename >
@@ -59,13 +59,13 @@ consteval auto makeInternalNodeInds()
 } // namespace detail::elem
 
 template < el_o_t O >
-struct ElementTraits< Element< ElementTypes::Hex, O > >
+struct ElementTraits< Element< ElementType::Hex, O > >
 {
-    static constexpr ElementTypes type              = ElementTypes::Hex;
-    static constexpr el_o_t       order             = O;
-    static constexpr el_locind_t  nodes_per_element = (O + 1) * (O + 1) * (O + 1);
-    static constexpr dim_t        native_dim        = 3;
-    static constexpr el_side_t    n_sides           = 6;
+    static constexpr ElementType type              = ElementType::Hex;
+    static constexpr el_o_t      order             = O;
+    static constexpr el_locind_t nodes_per_element = (O + 1) * (O + 1) * (O + 1);
+    static constexpr dim_t       native_dim        = 3;
+    static constexpr el_side_t   n_sides           = 6;
 
 private:
     struct BoundaryTable
@@ -104,13 +104,13 @@ public:
 };
 
 template < el_o_t O >
-struct ElementTraits< Element< ElementTypes::Quad, O > >
+struct ElementTraits< Element< ElementType::Quad, O > >
 {
-    static constexpr ElementTypes type              = ElementTypes::Quad;
-    static constexpr el_o_t       order             = O;
-    static constexpr el_locind_t  nodes_per_element = (O + 1) * (O + 1);
-    static constexpr dim_t        native_dim        = 2;
-    static constexpr el_side_t    n_sides           = 4;
+    static constexpr ElementType type              = ElementType::Quad;
+    static constexpr el_o_t      order             = O;
+    static constexpr el_locind_t nodes_per_element = (O + 1) * (O + 1);
+    static constexpr dim_t       native_dim        = 2;
+    static constexpr el_side_t   n_sides           = 4;
 
 private:
     struct BoundaryTable
@@ -140,13 +140,13 @@ public:
 };
 
 template < el_o_t O >
-struct ElementTraits< Element< ElementTypes::Line, O > >
+struct ElementTraits< Element< ElementType::Line, O > >
 {
-    static constexpr ElementTypes type              = ElementTypes::Line;
-    static constexpr el_o_t       order             = O;
-    static constexpr el_locind_t  nodes_per_element = (O + 1);
-    static constexpr dim_t        native_dim        = 1;
-    static constexpr el_side_t    n_sides           = 2;
+    static constexpr ElementType type              = ElementType::Line;
+    static constexpr el_o_t      order             = O;
+    static constexpr el_locind_t nodes_per_element = (O + 1);
+    static constexpr dim_t       native_dim        = 1;
+    static constexpr el_side_t   n_sides           = 2;
 
 private:
     struct BoundaryTable

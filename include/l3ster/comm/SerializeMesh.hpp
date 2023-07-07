@@ -10,13 +10,13 @@ namespace lstr
 {
 namespace detail
 {
-template < ElementTypes T, el_o_t O >
+template < ElementType T, el_o_t O >
 void serializeElementNodes(const Element< T, O >& el, n_id_t* dest) noexcept
 {
     std::ranges::copy(el.getNodes(), dest);
 }
 
-template < ElementTypes T, el_o_t O >
+template < ElementType T, el_o_t O >
 void serializeElementData(const Element< T, O >& el, val_t* dest) noexcept
 {
     constexpr auto n_verts = static_cast< ptrdiff_t >(ElementData< T, O >::n_verts);
@@ -33,7 +33,7 @@ public:
         : node_offset(node_init_offset), data_offset(data_init_offset), id_offset(id_init_offset)
     {}
 
-    template < ElementTypes T, el_o_t O >
+    template < ElementType T, el_o_t O >
     void operator()(const Element< T, O >& el) noexcept
     {
         serializeElementNodes(el, node_offset);
@@ -76,7 +76,7 @@ SerializedDomain::SerializedDomain(const Domain< el_orders... >& domain)
     types.reserve(offset_size);
     orders.reserve(offset_size);
 
-    const auto update_sizes = [&]< ElementTypes T, el_o_t O >(const std::vector< Element< T, O > >& el_v) {
+    const auto update_sizes = [&]< ElementType T, el_o_t O >(const std::vector< Element< T, O > >& el_v) {
         constexpr auto node_chunk_size = Element< T, O >::n_nodes;
         constexpr auto data_chunk_size = ElementData< T, O >::n_verts * 3;
         const auto     vec_size        = el_v.size();

@@ -31,7 +31,7 @@ public:
     friend class Domain;
     friend struct SerializedDomain;
 
-    template < ElementTypes ET, el_o_t EO >
+    template < ElementType ET, el_o_t EO >
     using element_vector_t = std::vector< Element< ET, EO > >;
     using element_vector_variant_t =
         parametrize_type_over_element_types_and_orders_t< std::variant, element_vector_t, orders... >;
@@ -44,13 +44,13 @@ public:
         : m_element_vectors{std::move(element_vectors_)}, m_dim{dim_}
     {}
 
-    template < ElementTypes ET, el_o_t EO >
+    template < ElementType ET, el_o_t EO >
     void push(const Element< ET, EO >& element);
-    template < ElementTypes ET, el_o_t EO, typename... Args >
+    template < ElementType ET, el_o_t EO, typename... Args >
     void emplaceBack(Args&&... args);
-    template < ElementTypes ET, el_o_t EO >
+    template < ElementType ET, el_o_t EO >
     auto getBackInserter();
-    template < ElementTypes ET, el_o_t EO >
+    template < ElementType ET, el_o_t EO >
     void reserve(size_t size);
 
     template < typename F, SimpleExecutionPolicy_c ExecPolicy >
@@ -87,7 +87,7 @@ public:
     template < el_o_t O_CONV >
     auto getConversionAlloc() const -> Domain< O_CONV >;
 
-    template < ElementTypes ET, el_o_t EO >
+    template < ElementType ET, el_o_t EO >
     auto getElementVector() -> std::vector< Element< ET, EO > >&;
 
 private:
@@ -110,7 +110,7 @@ namespace detail
 
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
-template < ElementTypes ET, el_o_t EO >
+template < ElementType ET, el_o_t EO >
 auto Domain< orders... >::getElementVector() -> std::vector< Element< ET, EO > >&
 {
     using el_vec_t = element_vector_t< ET, EO >;
@@ -131,7 +131,7 @@ auto Domain< orders... >::getElementVector() -> std::vector< Element< ET, EO > >
 
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
-template < ElementTypes ET, el_o_t EO >
+template < ElementType ET, el_o_t EO >
 void Domain< orders... >::push(const Element< ET, EO >& element)
 {
     emplaceBack< ET, EO >(element);
@@ -139,7 +139,7 @@ void Domain< orders... >::push(const Element< ET, EO >& element)
 
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
-template < ElementTypes T, el_o_t O, typename... ArgTypes >
+template < ElementType T, el_o_t O, typename... ArgTypes >
 void Domain< orders... >::emplaceBack(ArgTypes&&... Args)
 {
     using el_t   = Element< T, O >;
@@ -155,7 +155,7 @@ void Domain< orders... >::emplaceBack(ArgTypes&&... Args)
 
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
-template < ElementTypes ET, el_o_t EO >
+template < ElementType ET, el_o_t EO >
 auto Domain< orders... >::getBackInserter()
 {
     return std::back_inserter(getElementVector< ET, EO >());
@@ -163,7 +163,7 @@ auto Domain< orders... >::getBackInserter()
 
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
-template < ElementTypes ET, el_o_t EO >
+template < ElementType ET, el_o_t EO >
 void Domain< orders... >::reserve(size_t size)
 {
     using el_vec_t = element_vector_t< ET, EO >;
@@ -230,7 +230,7 @@ auto Domain< orders... >::transformReduce(const auto&                    zero,
 {
     if constexpr (SequencedPolicy_c< decltype(policy) >)
     {
-        const auto reduce_element_vector = [&]< ElementTypes ET, el_o_t EO >(const element_vector_t< ET, EO >& el_vec) {
+        const auto reduce_element_vector = [&]< ElementType ET, el_o_t EO >(const element_vector_t< ET, EO >& el_vec) {
             return std::transform_reduce(std::execution::unseq, begin(el_vec), end(el_vec), zero, reduction, transform);
         };
         const auto reduce_element_vector_variant = [&](const element_vector_variant_t& vec_var) {
@@ -245,7 +245,7 @@ auto Domain< orders... >::transformReduce(const auto&                    zero,
     }
     else
     {
-        const auto reduce_element_vector = [&]< ElementTypes ET, el_o_t EO >(const element_vector_t< ET, EO >& el_vec) {
+        const auto reduce_element_vector = [&]< ElementType ET, el_o_t EO >(const element_vector_t< ET, EO >& el_vec) {
             return util::tbb::parallelTransformReduce(el_vec, zero, reduction, transform);
         };
         const auto reduce_element_vector_variant = [&](const element_vector_variant_t& vec_var) {
@@ -263,7 +263,7 @@ auto Domain< orders... >::find(F&& predicate, SimpleExecutionPolicy_c auto&& pol
 {
     std::optional< element_ptr_variant_t< orders... > > opt_el_ptr_variant;
     std::mutex                                          mutex;
-    const auto vector_visitor = [&]< ElementTypes T, el_o_t O >(const element_vector_t< T, O >& el_vec) {
+    const auto vector_visitor = [&]< ElementType T, el_o_t O >(const element_vector_t< T, O >& el_vec) {
         const auto el_it = std::find_if(policy, cbegin(el_vec), cend(el_vec), predicate);
         if (el_it != el_vec.cend())
         {
@@ -295,7 +295,7 @@ template < el_o_t... orders >
 auto Domain< orders... >::find(el_id_t id) -> find_result_t
 {
     std::optional< element_ptr_variant_t< orders... > > opt_el_ptr_variant;
-    const auto vector_visitor = [&]< ElementTypes T, el_o_t O >(element_vector_t< T, O >& el_vec) -> bool {
+    const auto vector_visitor = [&]< ElementType T, el_o_t O >(element_vector_t< T, O >& el_vec) -> bool {
         if (el_vec.empty())
             return false;
 
@@ -383,7 +383,7 @@ auto Domain< orders... >::getConversionAlloc() const -> Domain< O_CONV >
     for (const auto& el_v : m_element_vectors)
     {
         std::visit(
-            [&]< ElementTypes T, el_o_t O >(const element_vector_t< T, O >& existing_vec) {
+            [&]< ElementType T, el_o_t O >(const element_vector_t< T, O >& existing_vec) {
                 retval.template reserve< T, O_CONV >(existing_vec.size());
             },
             el_v);

@@ -5,7 +5,7 @@
 
 namespace lstr::basis
 {
-template < ElementTypes ET, el_o_t EO, size_t n_points >
+template < ElementType ET, el_o_t EO, size_t n_points >
 struct ReferenceBasisAtPoints
 {
     static constexpr auto n_bases = Element< ET, EO >::n_nodes;
@@ -20,7 +20,7 @@ struct ReferenceBasisAtPoints
 namespace detail
 {
 template < BasisType                                                     BT,
-           ElementTypes                                                  ET,
+           ElementType                                                   ET,
            el_o_t                                                        EO,
            std::convertible_to< Point< Element< ET, EO >::native_dim > > Point_t,
            size_t                                                        n_points >

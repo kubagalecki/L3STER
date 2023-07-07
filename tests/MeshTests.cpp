@@ -70,14 +70,14 @@ TEST_CASE("Incorrect domain dim handling", "[mesh]")
 {
     auto domain = Domain< 1 >{};
 
-    ElementData< ElementTypes::Line, 1 > data{{Point{0., 0., 0.}, Point{0., 0., 0.}}};
+    ElementData< ElementType::Line, 1 > data{{Point{0., 0., 0.}, Point{0., 0., 0.}}};
     std::array< n_id_t, 2 >              nodes{1, 2};
     el_id_t                              id = 1;
-    domain.reserve< ElementTypes::Line, 1 >(1);
-    domain.emplaceBack< ElementTypes::Line, 1 >(nodes, data, id++);
-    domain.reserve< ElementTypes::Line, 1 >(1);
-    CHECK_THROWS(domain.reserve< ElementTypes::Quad, 1 >(1));
-    CHECK_THROWS(domain.getElementVector< ElementTypes::Quad, 1 >());
+    domain.reserve< ElementType::Line, 1 >(1);
+    domain.emplaceBack< ElementType::Line, 1 >(nodes, data, id++);
+    domain.reserve< ElementType::Line, 1 >(1);
+    CHECK_THROWS(domain.reserve< ElementType::Quad, 1 >(1));
+    CHECK_THROWS(domain.getElementVector< ElementType::Quad, 1 >());
 }
 
 TEMPLATE_TEST_CASE("Iteration over elements",
@@ -217,12 +217,12 @@ TEST_CASE("Element lookup by ID", "[mesh]")
     CHECK_FALSE(domain.find(1));
     CHECK_FALSE(std::as_const(domain).find(1));
 
-    ElementData< ElementTypes::Line, 1 > data{{Point{0., 0., 0.}, Point{0., 0., 0.}}};
+    ElementData< ElementType::Line, 1 > data{{Point{0., 0., 0.}, Point{0., 0., 0.}}};
     std::array< n_id_t, 2 >              nodes{1, 2};
     el_id_t                              id = 1;
-    domain.reserve< ElementTypes::Line, 1 >(1);
+    domain.reserve< ElementType::Line, 1 >(1);
     CHECK_FALSE(domain.find(1));
-    domain.emplaceBack< ElementTypes::Line, 1 >(nodes, data, id++);
+    domain.emplaceBack< ElementType::Line, 1 >(nodes, data, id++);
     CHECK(domain.find(1));
     CHECK_FALSE(domain.find(0));
 
@@ -232,13 +232,13 @@ TEST_CASE("Element lookup by ID", "[mesh]")
     };
 
     for (size_t i = 0; i < 10; ++i)
-        domain.emplaceBack< ElementTypes::Line, 1 >(next(), data, id++);
+        domain.emplaceBack< ElementType::Line, 1 >(next(), data, id++);
     CHECK(domain.find(10));
 
-    domain.emplaceBack< ElementTypes::Line, 1 >(next(), data, 0);
+    domain.emplaceBack< ElementType::Line, 1 >(next(), data, 0);
     CHECK(domain.find(0));
 
-    domain.emplaceBack< ElementTypes::Line, 1 >(next(), data, id *= 2);
+    domain.emplaceBack< ElementType::Line, 1 >(next(), data, id *= 2);
     CHECK(domain.find(id));
     CHECK_FALSE(domain.find(id + 1));
 }
@@ -316,7 +316,7 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
         mesh1.initDualGraph();
         auto mesh = convertMeshToOrder< order >(mesh1);
         CHECK(n_elements == mesh.getNElements());
-        const auto validate_elorder = [&]< ElementTypes T, el_o_t O >(const Element< T, O >&) {
+        const auto validate_elorder = [&]< ElementType T, el_o_t O >(const Element< T, O >&) {
             if constexpr (O != 2)
                 throw std::logic_error{"Incorrect element order"};
         };

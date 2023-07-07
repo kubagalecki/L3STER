@@ -15,7 +15,7 @@ BENCHMARK(BM_JacobianComputation)->Name("Compute Jacobian [hex]");
 
 static void BM_ReferenceBasisComputation(benchmark::State& state)
 {
-    constexpr auto   T     = ElementTypes::Hex;
+    constexpr auto   T     = ElementType::Hex;
     constexpr el_o_t O     = 1;
     const auto       point = Point{.5, .5, .5};
     for (auto _ : state)
@@ -31,7 +31,7 @@ static void BM_BasisPhysicalDerivativeComputation(benchmark::State& state)
     const auto element  = getExampleHexElement< 1 >();
     const auto point    = Point{.5, .5, .5};
     const auto J        = map::getNatJacobiMatGenerator(element)(point);
-    const auto ref_ders = basis::computeRefBasisDers< ElementTypes::Hex, 1, basis::BasisType::Lagrange >(point);
+    const auto ref_ders = basis::computeRefBasisDers< ElementType::Hex, 1, basis::BasisType::Lagrange >(point);
     for (auto _ : state)
     {
         const auto ders = map::computePhysBasisDers(J, ref_ders);

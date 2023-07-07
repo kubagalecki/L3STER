@@ -64,7 +64,7 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 {
     SECTION("1 point quadrature")
     {
-        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 1, ElementTypes::Line >();
+        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 1, ElementType::Line >();
 
         REQUIRE(quadrature.size == 1);
         REQUIRE(quadrature.dim == 1);
@@ -78,7 +78,7 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 
     SECTION("2 point quadrature")
     {
-        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 3, ElementTypes::Line >();
+        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 3, ElementType::Line >();
 
         REQUIRE(quadrature.size == 2);
         REQUIRE(quadrature.dim == 1);
@@ -95,7 +95,7 @@ TEST_CASE("Gauss-Legendre quadratures for line element", "[quadrature]")
 
     SECTION("3 point quadrature")
     {
-        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 5, ElementTypes::Line >();
+        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 5, ElementType::Line >();
 
         REQUIRE(quadrature.size == 3);
         REQUIRE(quadrature.dim == 1);
@@ -160,7 +160,7 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
     SECTION("1 point quadrature")
     {
-        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 1, ElementTypes::Quad >();
+        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 1, ElementType::Quad >();
 
         REQUIRE(quadrature.size == 1);
         REQUIRE(quadrature.dim == 2);
@@ -174,7 +174,7 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
     SECTION("4 point quadrature")
     {
-        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 3, ElementTypes::Quad >();
+        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 3, ElementType::Quad >();
 
         REQUIRE(quadrature.size == 4);
         REQUIRE(quadrature.dim == 2);
@@ -192,7 +192,7 @@ TEST_CASE("Gauss-Legendre quadratures for quadrilateral element", "[quadrature]"
 
     SECTION("9 point quadrature")
     {
-        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 5, ElementTypes::Quad >();
+        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 5, ElementType::Quad >();
 
         REQUIRE(quadrature.size == 9);
         REQUIRE(quadrature.dim == 2);
@@ -242,7 +242,7 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
 
     SECTION("1 point quadrature")
     {
-        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 1, ElementTypes::Hex >();
+        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 1, ElementType::Hex >();
 
         REQUIRE(quadrature.size == 1);
         REQUIRE(quadrature.dim == 3);
@@ -257,7 +257,7 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
 
     SECTION("8 point quadrature")
     {
-        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 3, ElementTypes::Hex >();
+        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 3, ElementType::Hex >();
 
         REQUIRE(quadrature.size == 8);
         REQUIRE(quadrature.dim == 3);
@@ -275,7 +275,7 @@ TEST_CASE("Gauss-Legendre quadratures for hexahedral element", "[quadrature]")
 
     SECTION("512 point quadrature")
     {
-        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 15, ElementTypes::Hex >();
+        const auto& quadrature = quad::getQuadrature< quad::QuadratureType::GaussLegendre, 15, ElementType::Hex >();
 
         REQUIRE(quadrature.size == 512);
         REQUIRE(quadrature.dim == 3);

@@ -8,16 +8,16 @@
 
 namespace lstr::quad
 {
-template < QuadratureType QT, q_o_t QO, ElementTypes ET >
+template < QuadratureType QT, q_o_t QO, ElementType ET >
 const auto& getQuadrature()
-    requires(ET == ElementTypes::Line)
+    requires(ET == ElementType::Line)
 {
     return getReferenceQuadrature< QT, QO >();
 }
 
-template < QuadratureType QT, q_o_t QO, ElementTypes ET >
+template < QuadratureType QT, q_o_t QO, ElementType ET >
 const auto& getQuadrature()
-    requires(ET == ElementTypes::Quad)
+    requires(ET == ElementType::Quad)
 {
     static const auto value = std::invoke([] {
         const auto& ref_quadrature   = getReferenceQuadrature< QT, QO >();
@@ -45,9 +45,9 @@ const auto& getQuadrature()
     return value;
 }
 
-template < QuadratureType QT, q_o_t QO, ElementTypes ET >
+template < QuadratureType QT, q_o_t QO, ElementType ET >
 const auto& getQuadrature()
-    requires(ET == ElementTypes::Hex)
+    requires(ET == ElementType::Hex)
 {
     static const auto value = std::invoke([] {
         const auto& ref_quadrature   = getReferenceQuadrature< QT, QO >();

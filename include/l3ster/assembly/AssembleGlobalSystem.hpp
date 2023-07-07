@@ -37,7 +37,7 @@ namespace detail
 template < typename Kernel, size_t n_fields, el_o_t... orders >
 struct PotentiallyValidKernelDeductionHelper
 {
-    template < ElementTypes T, el_o_t O >
+    template < ElementType T, el_o_t O >
     struct DeductionHelperDomain
     {
         static constexpr bool value = Kernel_c< Kernel, Element< T, O >::native_dim, n_fields >;
@@ -45,7 +45,7 @@ struct PotentiallyValidKernelDeductionHelper
     static constexpr bool domain =
         ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
 
-    template < ElementTypes T, el_o_t O >
+    template < ElementType T, el_o_t O >
     struct DeductionHelperBoundary
     {
         static constexpr bool value = BoundaryKernel_c< Kernel, Element< T, O >::native_dim, n_fields >;
@@ -65,7 +65,7 @@ concept PotentiallyValidBoundaryKernel_c =
 template < typename Kernel, size_t n_fields, el_o_t... orders >
 struct KernelStackSizeDeductionHelper
 {
-    template < ElementTypes ET, el_o_t EO >
+    template < ElementType ET, el_o_t EO >
     struct DeductionHelperDomain
     {
         static constexpr size_t value = std::invoke([] {
@@ -80,7 +80,7 @@ struct KernelStackSizeDeductionHelper
         []< typename... DH >(util::TypePack< DH... >) { return std::ranges::max(std::array{DH::value...}); },
         parametrize_type_over_element_types_and_orders_t< util::TypePack, DeductionHelperDomain, orders... >{});
 
-    template < ElementTypes ET, el_o_t EO >
+    template < ElementType ET, el_o_t EO >
     struct DeductionHelperBoundary
     {
         static constexpr size_t value = std::invoke([] {
@@ -129,7 +129,7 @@ void assembleGlobalSystem(auto&&                                               k
     requires detail::PotentiallyValidKernel_c< decltype(kernel), n_fields, orders... >
 {
     L3STER_PROFILE_FUNCTION;
-    const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
+    const auto process_element = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
         constexpr auto el_dim = Element< ET, EO >::native_dim;
         if constexpr (detail::Kernel_c< decltype(kernel), el_dim, n_fields >)
         {
@@ -178,7 +178,7 @@ void assembleGlobalBoundarySystem(auto&&                                        
     requires detail::PotentiallyValidBoundaryKernel_c< decltype(kernel), n_fields, orders... >
 {
     L3STER_PROFILE_FUNCTION;
-    const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
+    const auto process_element = [&]< ElementType ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
         constexpr auto el_dim = Element< ET, EO >::native_dim;
         if constexpr (detail::BoundaryKernel_c< decltype(kernel), el_dim, n_fields >)
         {

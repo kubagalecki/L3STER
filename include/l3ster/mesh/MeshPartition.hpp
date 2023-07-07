@@ -142,7 +142,7 @@ public:
     inline const_find_result_t find(el_id_t id) const;
 
     // boundary views
-    template < ElementTypes T, el_o_t O >
+    template < ElementType T, el_o_t O >
     auto getElementBoundaryView(const Element< T, O >& el, d_id_t d) const -> el_boundary_view_result_t;
     auto getBoundaryView(detail::DomainIdRange_c auto&& boundary_ids) const -> BoundaryView< orders... >;
     auto getBoundaryView(d_id_t id) const -> BoundaryView< orders... >
@@ -178,9 +178,9 @@ private:
     // Deduce constness based on the domain map, helps with deduplication. Idea similar to C++23 "deducing this"
     static void visitImpl(auto&& visitor, auto&& domain_map, auto&& domain_ids, SimpleExecutionPolicy_c auto&& policy);
 
-    template < ElementTypes T, el_o_t O >
+    template < ElementType T, el_o_t O >
     auto getElementBoundaryViewImpl(const Element< T, O >& el) const -> el_boundary_view_result_t;
-    template < ElementTypes T, el_o_t O >
+    template < ElementType T, el_o_t O >
     auto getElementBoundaryViewFallback(const Element< T, O >& el, d_id_t d) const -> el_boundary_view_result_t;
 
     domain_map_t                               m_domains;
@@ -557,17 +557,17 @@ auto MeshPartition< orders... >::find(el_id_t id) const -> const_find_result_t
 
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
-template < ElementTypes T, el_o_t O >
+template < ElementType T, el_o_t O >
 auto MeshPartition< orders... >::getElementBoundaryViewImpl(const Element< T, O >& el) const
     -> el_boundary_view_result_t
 {
     constexpr auto miss       = std::numeric_limits< el_side_t >::max();
-    constexpr auto matchElDim = []< ElementTypes T_, el_o_t O_ >(const Element< T_, O_ >*) {
+    constexpr auto matchElDim = []< ElementType T_, el_o_t O_ >(const Element< T_, O_ >*) {
         return Element< T_, O_ >::native_dim - 1 == Element< T, O >::native_dim;
     };
 
     const auto boundary_nodes = util::getSortedArray(el.getNodes());
-    const auto match_side     = [&]< ElementTypes T_, el_o_t O_ >(const Element< T_, O_ >* domain_element) {
+    const auto match_side     = [&]< ElementType T_, el_o_t O_ >(const Element< T_, O_ >* domain_element) {
         return detail::matchBoundaryNodesToElement(*domain_element, boundary_nodes);
     };
 
@@ -587,14 +587,14 @@ auto MeshPartition< orders... >::getElementBoundaryViewImpl(const Element< T, O 
 
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
-template < ElementTypes T, el_o_t O >
+template < ElementType T, el_o_t O >
 auto MeshPartition< orders... >::getElementBoundaryViewFallback(const Element< T, O >& el, d_id_t d) const
     -> el_boundary_view_result_t
 {
     const auto boundary_nodes = util::getSortedArray(el.getNodes());
     el_side_t  side_index     = 0;
 
-    const auto is_domain_element = [&]< ElementTypes T_, el_o_t O_ >(const Element< T_, O_ >& domain_element) {
+    const auto is_domain_element = [&]< ElementType T_, el_o_t O_ >(const Element< T_, O_ >& domain_element) {
         side_index = detail::matchBoundaryNodesToElement(domain_element, boundary_nodes);
         return side_index != std::numeric_limits< el_side_t >::max();
     };
@@ -607,7 +607,7 @@ auto MeshPartition< orders... >::getElementBoundaryViewFallback(const Element< T
 
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
-template < ElementTypes T, el_o_t O >
+template < ElementType T, el_o_t O >
 auto MeshPartition< orders... >::getElementBoundaryView(const Element< T, O >& el, d_id_t d) const
     -> el_boundary_view_result_t
 {
@@ -644,7 +644,7 @@ auto MeshPartition< orders... >::getBoundaryView(detail::DomainIdRange_c auto&& 
                 return;
             }
 
-            const auto emplace_element = [&]< ElementTypes T, el_o_t O >(const Element< T, O >* domain_element_ptr) {
+            const auto emplace_element = [&]< ElementType T, el_o_t O >(const Element< T, O >* domain_element_ptr) {
                 std::scoped_lock lock{insertion_mutex};
                 boundary_elements.emplace_back(
                     std::in_place_type< BoundaryElementView< T, O > >, *domain_element_ptr, side_index);
@@ -696,7 +696,7 @@ auto MeshPartition< orders... >::convertToMetisFormat() const
     {
         const auto el_ptr = find(id)->first;
         std::visit(
-            [&]< ElementTypes T, el_o_t O >(const Element< T, O >* element) {
+            [&]< ElementType T, el_o_t O >(const Element< T, O >* element) {
                 std::ranges::copy(element->getNodes() |
                                       std::views::transform([](auto n) { return util::exactIntegerCast< idx_t >(n); }),
                                   std::back_inserter(eind));

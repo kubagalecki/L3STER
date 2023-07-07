@@ -13,13 +13,13 @@ auto makeLineMesh(Rx&& distx) -> MeshPartition< 1 >
     const size_t e_dx = n_dx - 1;
 
     auto domains = MeshPartition< 1 >::domain_map_t{};
-    domains[0].reserve< ElementTypes::Line, 1 >(e_dx);
+    domains[0].reserve< ElementType::Line, 1 >(e_dx);
 
     for (el_id_t id : std::views::iota(0u, e_dx))
     {
         const std::array< n_id_t, 2 >     nodes = {id, id + 1};
         const std::array< Point< 3 >, 2 > verts = {Point{distx[id], 0., 0.}, Point{distx[id + 1], 0., 0.}};
-        domains[0].emplaceBack< ElementTypes::Line, 1 >(nodes, verts, id);
+        domains[0].emplaceBack< ElementType::Line, 1 >(nodes, verts, id);
     }
 
     std::vector< n_id_t > nodes(n_dx);

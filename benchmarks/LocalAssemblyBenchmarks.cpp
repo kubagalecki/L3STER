@@ -6,7 +6,7 @@ static void BM_PhysBasisDersComputation(benchmark::State& state)
     constexpr auto QT          = quad::QuadratureType::GaussLegendre;
     constexpr auto BT          = basis::BasisType::Lagrange;
     const auto     element     = getExampleHexElement< EO >();
-    const auto&    ref_basis   = basis::getReferenceBasisAtDomainQuadrature< BT, ElementTypes::Hex, EO, QT, QO >();
+    const auto&    ref_basis   = basis::getReferenceBasisAtDomainQuadrature< BT, ElementType::Hex, EO, QT, QO >();
     const auto     jac_mat_gen = map::getNatJacobiMatGenerator(element);
     for (auto _ : state)
         for (size_t qp_ind = 0; qp_ind < ref_basis.quadrature.size; ++qp_ind)
@@ -16,7 +16,7 @@ static void BM_PhysBasisDersComputation(benchmark::State& state)
             benchmark::DoNotOptimize(map::computePhysBasisDers(jac_mat, ref_ders));
         }
 
-    constexpr auto n_nodes = Element< ElementTypes::Hex, EO >::n_nodes;
+    constexpr auto n_nodes = Element< ElementType::Hex, EO >::n_nodes;
     const auto     n_qp    = ref_basis.quadrature.size;
     state.counters["DPFlops"] =
         benchmark::Counter{static_cast< double >(state.iterations()) * 3 * 3 * 2 * n_nodes * n_qp,
@@ -51,10 +51,10 @@ static void BM_NS3DLocalAssembly(benchmark::State& state)
     using nodal_vals_t            = Eigen::Matrix< val_t, element.n_nodes, n_fields >;
     const nodal_vals_t nodal_vals = nodal_vals_t::Random();
 
-    constexpr auto n_nodes      = Element< ElementTypes ::Hex, EO >::n_nodes;
+    constexpr auto n_nodes      = Element< ElementType ::Hex, EO >::n_nodes;
     constexpr auto loc_mat_rows = n_nodes * n_fields;
 
-    const auto& ref_bas_at_quad = basis::getReferenceBasisAtDomainQuadrature< BT, ElementTypes::Hex, EO, QT, QO >();
+    const auto& ref_bas_at_quad = basis::getReferenceBasisAtDomainQuadrature< BT, ElementType::Hex, EO, QT, QO >();
 
     constexpr auto ns3d_kernel =
         []< typename T >(const auto& vals, const std::array< T, 3 >& ders, const auto&) noexcept {
@@ -133,7 +133,7 @@ static void BM_NS3DLocalAssembly(benchmark::State& state)
         };
 
     constexpr auto required_stack_size = detail::KernelStackSizeDeductionHelper< decltype(ns3d_kernel), n_fields >::
-        template DeductionHelperDomain< ElementTypes::Hex, EO >::value;
+        template DeductionHelperDomain< ElementType::Hex, EO >::value;
     const auto stack_size_guard = util::StackSizeGuard{util::default_stack_size + required_stack_size};
     for (auto _ : state)
         benchmark::DoNotOptimize(assembleLocalSystem(ns3d_kernel, element, nodal_vals, ref_bas_at_quad, 0.));

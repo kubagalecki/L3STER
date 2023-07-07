@@ -5,7 +5,7 @@
 
 namespace lstr
 {
-template < basis::BasisType BT, ElementTypes T, el_o_t O, RandomAccessRangeOf< val_t > R >
+template < basis::BasisType BT, ElementType T, el_o_t O, RandomAccessRangeOf< val_t > R >
 val_t valueAt(const Element< T, O >&, R&& node_vals, const Point< Element< T, O >::native_dim >& point)
 {
     return std::invoke(

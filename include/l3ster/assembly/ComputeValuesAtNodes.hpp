@@ -46,7 +46,7 @@ concept ValueAtNodeBoundaryKernel_c =
 template < typename Kernel, size_t n_fields, size_t results_size, el_o_t... orders >
 struct PotentiallyValidNodalKernelDeductionHelper
 {
-    template < ElementTypes T, el_o_t O >
+    template < ElementType T, el_o_t O >
     struct DeductionHelperDomain
     {
         static constexpr bool value =
@@ -55,7 +55,7 @@ struct PotentiallyValidNodalKernelDeductionHelper
     static constexpr bool domain =
         ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
 
-    template < ElementTypes T, el_o_t O >
+    template < ElementType T, el_o_t O >
     struct DeductionHelperBoundary
     {
         static constexpr bool value =
@@ -82,7 +82,7 @@ auto initValsAndParents(const MeshPartition< orders... >&                       
     if constexpr (n_fields != 0)
     {
         std::vector< std::uint8_t > retval(values.size(), 0);
-        const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
+        const auto process_element = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
             for (auto node :
                  element.getNodes() | std::views::filter([&](auto node) { return not mesh.isGhostNode(node); }))
                 for (auto dof : getValuesAtInds(map(node).front(), dofinds_ctwrpr))
@@ -106,7 +106,7 @@ auto initValsAndParents(const BoundaryView< orders... >&                        
                         std::span< val_t > values) -> std::vector< std::uint8_t >
 {
     std::vector< std::uint8_t > retval(values.size(), 0);
-    const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
+    const auto process_element = [&]< ElementType ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
         for (auto node :
              el_view.getSideNodeInds() | std::views::transform([&](auto ind) { return el_view->getNodes()[ind]; }))
             if (not boundary.getParent()->isGhostNode(node))
@@ -131,7 +131,7 @@ void computeValuesAtNodes(const MeshPartition< orders... >&                     
     requires(std::ranges::all_of(dof_inds, [](size_t dof) { return dof < max_dofs_per_node; }))
 {
     L3STER_PROFILE_FUNCTION;
-    const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
+    const auto process_element = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
         const auto& el_nodes     = element.getNodes();
         const auto  process_node = [&](size_t node_ind) {
             for (size_t dof_ind = 0; auto dof : util::getValuesAtInds(map(el_nodes[node_ind]).front(), dofinds_ctwrpr))
@@ -160,7 +160,7 @@ void computeValuesAtNodes(auto&&                                                
     L3STER_PROFILE_FUNCTION;
     const auto num_parents =
         detail::initValsAndParents(mesh, domain_ids, map, dofinds_ctwrpr, field_val_getter, values);
-    const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
+    const auto process_element = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
         if constexpr (detail::ValueAtNodeKernel_c< decltype(kernel),
                                                    n_fields,
                                                    Element< ET, EO >::native_dim,
@@ -226,7 +226,7 @@ void computeValuesAtBoundaryNodes(auto&&                                        
 {
     L3STER_PROFILE_FUNCTION;
     const auto num_parents     = detail::initValsAndParents(boundary, map, dofinds_ctwrpr, field_val_getter, values);
-    const auto process_element = [&]< ElementTypes ET, el_o_t EO >(BoundaryElementView< ET, EO > el_view) {
+    const auto process_element = [&]< ElementType ET, el_o_t EO >(BoundaryElementView< ET, EO > el_view) {
         if constexpr (detail::ValueAtNodeBoundaryKernel_c< decltype(kernel),
                                                            n_fields,
                                                            Element< ET, EO >::native_dim,

@@ -153,50 +153,50 @@ val_t evaluateHexBasisFunDerZeta(const Point< 3 >& point)
 }
 } // namespace detail
 
-template < ElementTypes T, el_o_t O, el_locind_t I, BasisType BT, DerDim DER_DIM = DerDim::NoDer >
+template < ElementType T, el_o_t O, el_locind_t I, BasisType BT, DerDim DER_DIM = DerDim::NoDer >
     requires(I < Element< T, O >::n_nodes and static_cast< dim_t >(DER_DIM) <= Element< T, O >::native_dim)
 struct ReferenceBasisFunction
 {
     val_t operator()(const Point< Element< T, O >::native_dim >& point) const
         requires(DER_DIM == DerDim::NoDer)
     {
-        if constexpr (T == ElementTypes::Line)
+        if constexpr (T == ElementType::Line)
             return detail::evaluateLineBasisFun< O, I, BT >(point);
-        else if constexpr (T == ElementTypes::Quad)
+        else if constexpr (T == ElementType::Quad)
             return detail::evaluateQuadBasisFun< O, I, BT >(point);
-        else if constexpr (T == ElementTypes::Hex)
+        else if constexpr (T == ElementType::Hex)
             return detail::evaluateHexBasisFun< O, I, BT >(point);
     }
 
     val_t operator()(const Point< Element< T, O >::native_dim >& point) const
         requires(DER_DIM == DerDim::DX1)
     {
-        if constexpr (T == ElementTypes::Line)
+        if constexpr (T == ElementType::Line)
             return detail::evaluateLineBasisFunDer< O, I, BT >(point);
-        else if constexpr (T == ElementTypes::Quad)
+        else if constexpr (T == ElementType::Quad)
             return detail::evaluateQuadBasisFunDerXi< O, I, BT >(point);
-        else if constexpr (T == ElementTypes::Hex)
+        else if constexpr (T == ElementType::Hex)
             return detail::evaluateHexBasisFunDerXi< O, I, BT >(point);
     }
 
     val_t operator()(const Point< Element< T, O >::native_dim >& point) const
         requires(DER_DIM == DerDim::DX2)
     {
-        if constexpr (T == ElementTypes::Quad)
+        if constexpr (T == ElementType::Quad)
             return detail::evaluateQuadBasisFunDerEta< O, I, BT >(point);
-        else if constexpr (T == ElementTypes::Hex)
+        else if constexpr (T == ElementType::Hex)
             return detail::evaluateHexBasisFunDerEta< O, I, BT >(point);
     }
 
     val_t operator()(const Point< Element< T, O >::native_dim >& point) const
         requires(DER_DIM == DerDim::DX3)
     {
-        if constexpr (T == ElementTypes::Hex)
+        if constexpr (T == ElementType::Hex)
             return detail::evaluateHexBasisFunDerZeta< O, I, BT >(point);
     }
 };
 
-template < ElementTypes T, el_o_t O, BasisType BT >
+template < ElementType T, el_o_t O, BasisType BT >
 auto computeRefBasis(const Point< Element< T, O >::native_dim >& point)
 {
     constexpr el_locind_t               n_basis_fun = Element< T, O >::n_nodes;
@@ -218,7 +218,7 @@ constexpr DerDim derivativeByIndex(dim_t d)
 }
 } // namespace detail
 
-template < ElementTypes T, el_o_t O, BasisType BT >
+template < ElementType T, el_o_t O, BasisType BT >
 auto computeRefBasisDers(const Point< Element< T, O >::native_dim >& point)
 {
     constexpr dim_t       nat_dim     = Element< T, O >::native_dim;

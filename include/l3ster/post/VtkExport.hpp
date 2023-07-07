@@ -165,59 +165,59 @@ inline constexpr std::string_view vtu_preamble  = R"(<?xml version="1.0"?>
 inline constexpr std::string_view vtu_postamble = "</AppendedData>\n</VTKFile>";
 
 // Data serialization
-template < ElementTypes ET, el_o_t EO >
+template < ElementType ET, el_o_t EO >
 consteval size_t numSubels()
 {
     constexpr auto el_o = static_cast< size_t >(EO);
-    if constexpr (ET == ElementTypes::Line)
+    if constexpr (ET == ElementType::Line)
         return el_o;
-    else if constexpr (ET == ElementTypes::Quad)
+    else if constexpr (ET == ElementType::Quad)
         return el_o * el_o;
-    else if constexpr (ET == ElementTypes::Hex)
+    else if constexpr (ET == ElementType::Hex)
         return el_o * el_o * el_o;
     else
         static_assert(ET != ET); // Assert every element type has a corresponding branch
 }
 
-template < ElementTypes ET, el_o_t EO >
+template < ElementType ET, el_o_t EO >
 consteval size_t numSubelNodes()
 {
-    if constexpr (ET == ElementTypes::Line)
+    if constexpr (ET == ElementType::Line)
         return 2;
-    else if constexpr (ET == ElementTypes::Quad)
+    else if constexpr (ET == ElementType::Quad)
         return 4;
-    else if constexpr (ET == ElementTypes::Hex)
+    else if constexpr (ET == ElementType::Hex)
         return 8;
     else
         static_assert(ET != ET); // Assert every element type has a corresponding branch
 }
 
-template < ElementTypes ET, el_o_t EO >
+template < ElementType ET, el_o_t EO >
 consteval size_t numSerialTopoEntries()
 {
     return numSubels< ET, EO >() * numSubelNodes< ET, EO >();
 }
 
-template < ElementTypes ET, el_o_t EO >
+template < ElementType ET, el_o_t EO >
 consteval unsigned char subelCellType()
 {
-    if constexpr (ET == ElementTypes::Line)
+    if constexpr (ET == ElementType::Line)
         return 3;
-    else if constexpr (ET == ElementTypes::Quad)
+    else if constexpr (ET == ElementType::Quad)
         return 9;
-    else if constexpr (ET == ElementTypes::Hex)
+    else if constexpr (ET == ElementType::Hex)
         return 12;
     else
         static_assert(ET != ET); // Assert every element type has a corresponding branch
 }
 
-template < ElementTypes ET, el_o_t EO >
+template < ElementType ET, el_o_t EO >
 auto serializeElementSubtopo(const Element< ET, EO >& element)
 {
     const auto&                                            nodes = element.getNodes();
     std::array< n_id_t, numSerialTopoEntries< ET, EO >() > retval;
     auto                                                   out_topo = retval.begin();
-    if constexpr (ET == ElementTypes::Line)
+    if constexpr (ET == ElementType::Line)
     {
         for (size_t i = 0; i < nodes.size() - 1; ++i)
         {
@@ -225,9 +225,9 @@ auto serializeElementSubtopo(const Element< ET, EO >& element)
             *out_topo++ = nodes[i + 1];
         }
     }
-    else if constexpr (ET == ElementTypes::Quad)
+    else if constexpr (ET == ElementType::Quad)
     {
-        constexpr auto node_per_side = ElementTraits< Element< ElementTypes::Line, EO > >::nodes_per_element;
+        constexpr auto node_per_side = ElementTraits< Element< ElementType::Line, EO > >::nodes_per_element;
         for (size_t row = 0; row < node_per_side - 1; ++row)
             for (size_t col = 0; col < node_per_side - 1; ++col)
             {
@@ -238,9 +238,9 @@ auto serializeElementSubtopo(const Element< ET, EO >& element)
                 *out_topo++       = nodes[base + node_per_side];
             }
     }
-    else if constexpr (ET == ElementTypes::Hex)
+    else if constexpr (ET == ElementType::Hex)
     {
-        constexpr auto nodes_per_side  = ElementTraits< Element< ElementTypes::Line, EO > >::nodes_per_element;
+        constexpr auto nodes_per_side  = ElementTraits< Element< ElementType::Line, EO > >::nodes_per_element;
         constexpr auto nodes_per_layer = nodes_per_side * nodes_per_side;
         for (size_t layer = 0; layer < nodes_per_side - 1; ++layer)
             for (size_t row = 0; row < nodes_per_side - 1; ++row)
@@ -265,7 +265,7 @@ auto serializeElementSubtopo(const Element< ET, EO >& element)
 template < el_o_t... orders >
 std::array< size_t, 2 > getLocalTopoSize(const MeshPartition< orders... >& mesh)
 {
-    constexpr auto get_el_entries = []< ElementTypes ET, el_o_t EO >(const Element< ET, EO >&) {
+    constexpr auto get_el_entries = []< ElementType ET, el_o_t EO >(const Element< ET, EO >&) {
         return std::array{numSubels< ET, EO >(), numSerialTopoEntries< ET, EO >()};
     };
     return mesh.transformReduce(
@@ -313,7 +313,7 @@ auto serializeTopology(const MeshPartition< orders... >& mesh)
     std::memcpy(offsets.data(), &data_bytes, sizeof data_bytes);
 
     unsigned   offset          = 0;
-    const auto process_element = [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
+    const auto process_element = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
         const auto serialized_subtopo = serializeElementSubtopo(element);
         std::ranges::transform(serialized_subtopo, std::back_inserter(topo_data), [&mesh](n_id_t node) {
             return getLocalNodeIndex(mesh, node);

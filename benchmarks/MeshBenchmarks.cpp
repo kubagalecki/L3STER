@@ -84,12 +84,12 @@ static void BM_CopyElementNodes(benchmark::State& state)
     const auto            mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), gmsh_tag);
     std::atomic< size_t > node_counter{0u};
 
-    const auto element_op_counter = [&]< ElementTypes T, el_o_t O >(const Element< T, O >&) {
+    const auto element_op_counter = [&]< ElementType T, el_o_t O >(const Element< T, O >&) {
         node_counter.fetch_add(Element< T, O >::n_nodes, std::memory_order_relaxed);
     };
     mesh.visit(element_op_counter, std::execution::par);
 
-    const auto read_element = [&]< ElementTypes T, el_o_t O >(const Element< T, O >& el) {
+    const auto read_element = [&]< ElementType T, el_o_t O >(const Element< T, O >& el) {
         const auto nodes_copy = el.getNodes();
         benchmark::DoNotOptimize(nodes_copy);
     };

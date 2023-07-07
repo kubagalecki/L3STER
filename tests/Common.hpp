@@ -56,7 +56,7 @@ void describeMesh(const lstr::MpiComm& comm, const lstr::MeshPartition< orders..
             {
                 std::cout << "Domain: " << dom << '\n';
                 mesh.visit(
-                    []< lstr::ElementTypes ET, lstr::el_o_t EO >(const lstr::Element< ET, EO >& element) {
+                    []< lstr::ElementType ET, lstr::el_o_t EO >(const lstr::Element< ET, EO >& element) {
                         std::cout << "Element ID: " << element.getId() << ", type: " << static_cast< int >(ET)
                                   << ", order: " << static_cast< int >(EO) << ", nodes: ";
                         for (auto n : element.getNodes())

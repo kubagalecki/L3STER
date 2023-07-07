@@ -31,7 +31,7 @@ public:
             constexpr auto& coverage         = dom_def.second;
             constexpr auto  covered_dof_inds = util::getTrueInds< coverage >();
 
-            const auto process_element = [&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
+            const auto process_element = [&]< ElementType T, el_o_t O >(const Element< T, O >& element) {
                 const auto element_dofs = std::invoke([&] {
                     if constexpr (CP == CondensationPolicy::None)
                         return detail::getUnsortedPrimaryDofs< covered_dof_inds >(element, node_to_dof_map, cond_map);

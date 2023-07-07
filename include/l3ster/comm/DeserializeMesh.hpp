@@ -8,7 +8,7 @@ namespace lstr
 {
 namespace detail
 {
-template < ElementTypes T, el_o_t O >
+template < ElementType T, el_o_t O >
 auto deserializeElementVector(const n_id_t*& nodes, const val_t*& data, const el_id_t*& ids, size_t size)
     -> std::vector< Element< T, O > >
 {
@@ -33,10 +33,10 @@ auto deserializeElementVector(const n_id_t*& nodes, const val_t*& data, const el
 }
 
 template < el_o_t... orders >
-auto initElementVectorVariant(ElementTypes T, el_o_t O) -> Domain< orders... >::element_vector_variant_t
+auto initElementVectorVariant(ElementType T, el_o_t O) -> Domain< orders... >::element_vector_variant_t
 {
     auto       retval  = typename Domain< orders... >::element_vector_variant_t{};
-    const auto init_if = [&]< ElementTypes TYPE, el_o_t ORDER >(util::ValuePack< TYPE, ORDER >) {
+    const auto init_if = [&]< ElementType TYPE, el_o_t ORDER >(util::ValuePack< TYPE, ORDER >) {
         if (T == TYPE and O == ORDER)
         {
             retval.template emplace< std::vector< Element< TYPE, ORDER > > >();
@@ -66,9 +66,9 @@ auto deserializeDomain(const SerializedDomain& domain) -> Domain< orders... >
     for (auto&& offset : domain.type_order_offsets)
     {
         auto& current_vec = elements.emplace_back(
-            initElementVectorVariant< orders... >(static_cast< ElementTypes >(domain.types[i]), domain.orders[i]));
+            initElementVectorVariant< orders... >(static_cast< ElementType >(domain.types[i]), domain.orders[i]));
         std::visit(
-            [&]< ElementTypes T, el_o_t O >(std::vector< Element< T, O > >& v) {
+            [&]< ElementType T, el_o_t O >(std::vector< Element< T, O > >& v) {
                 v = deserializeElementVector< T, O >(node_ptr, data_ptr, id_ptr, offset);
             },
             current_vec);
@@ -77,7 +77,7 @@ auto deserializeDomain(const SerializedDomain& domain) -> Domain< orders... >
 
     dim_t domain_dim = 0;
     if (i > 0u)
-        std::visit([&]< ElementTypes T, el_o_t O >(
+        std::visit([&]< ElementType T, el_o_t O >(
                        const std::vector< Element< T, O > >&) { domain_dim = Element< T, O >::native_dim; },
                    elements.front());
 

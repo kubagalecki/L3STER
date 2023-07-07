@@ -14,7 +14,7 @@ TEST_CASE("Local system assembly", "[local_asm]")
 
     SECTION("Diffusion 2D")
     {
-        constexpr auto        ET       = ElementTypes::Quad;
+        constexpr auto        ET       = ElementType::Quad;
         constexpr el_o_t      EO       = 4;
         constexpr auto        QT       = quad::QuadratureType::GaussLegendre;
         constexpr q_o_t       QO       = 11; // Needs to be large enough for the local system buffer to overflow

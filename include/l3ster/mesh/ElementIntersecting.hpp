@@ -1,7 +1,7 @@
 #ifndef L3STER_MESH_ELEMENTINTERSECTING_HPP
 #define L3STER_MESH_ELEMENTINTERSECTING_HPP
 
-#include "l3ster/mesh/ElementTypes.hpp"
+#include "l3ster/mesh/ElementType.hpp"
 #include "l3ster/mesh/NodePhysicalLocation.hpp"
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/Meta.hpp"
@@ -13,7 +13,7 @@ namespace lstr
 {
 namespace detail
 {
-template < ElementTypes T, el_o_t O, el_side_t S1, el_side_t S2 >
+template < ElementType T, el_o_t O, el_side_t S1, el_side_t S2 >
 consteval auto intersectElementSides()
 {
     auto face1 = std::get< S1 >(ElementTraits< Element< T, O > >::boundary_table);
@@ -29,7 +29,7 @@ consteval auto intersectElementSides()
     return std::make_pair(intersection_buf, intersection_size);
 }
 
-template < ElementTypes T, el_o_t O, el_side_t S1, el_side_t S2 >
+template < ElementType T, el_o_t O, el_side_t S1, el_side_t S2 >
 consteval auto getSideIntersection()
 {
     constexpr auto intersect_raw = intersectElementSides< T, O, S1, S2 >();
@@ -43,13 +43,13 @@ struct tuple_largerequal : public std::conditional_t< std::tuple_size_v< T > >= 
 template < tuple_like T >
 using tuple_le2 = tuple_largerequal< T, 2 >;
 
-template < ElementTypes T, el_o_t O, el_side_t S, el_side_t... SIDES >
+template < ElementType T, el_o_t O, el_side_t S, el_side_t... SIDES >
 consteval auto intersectSideWith(std::integer_sequence< el_side_t, SIDES... >)
 {
     return util::makeTupleIf< tuple_le2 >(getSideIntersection< T, O, S, SIDES >()...);
 }
 
-template < ElementTypes T, el_o_t O, el_side_t S >
+template < ElementType T, el_o_t O, el_side_t S >
 consteval auto intersectSideWithSubseqSides()
 {
     constexpr el_side_t max_side_ind = ElementTraits< Element< T, O > >::n_sides - 1;
@@ -59,13 +59,13 @@ consteval auto intersectSideWithSubseqSides()
         return std::tuple<>{};
 }
 
-template < ElementTypes T, el_o_t O, el_side_t... SIDES >
+template < ElementType T, el_o_t O, el_side_t... SIDES >
 consteval auto intersectSidesWithSubseqSides(std::integer_sequence< el_side_t, SIDES... >)
 {
     return std::tuple_cat(intersectSideWithSubseqSides< T, O, SIDES >()...);
 }
 
-template < ElementTypes T, el_o_t O >
+template < ElementType T, el_o_t O >
 consteval auto makeElementEdgeTable()
 {
     if constexpr (Element< T, O >::native_dim < 3)
@@ -75,13 +75,13 @@ consteval auto makeElementEdgeTable()
             std::make_integer_sequence< el_side_t, ElementTraits< Element< T, O > >::n_sides - 1 >{});
 }
 
-template < ElementTypes T, el_o_t O >
+template < ElementType T, el_o_t O >
 consteval auto getElementIndices()
 {
     return std::make_tuple(util::consecutiveIndices(std::integral_constant< el_locind_t, Element< T, O >::n_nodes >{}));
 }
 
-template < ElementTypes T, el_o_t O, dim_t DIM >
+template < ElementType T, el_o_t O, dim_t DIM >
 consteval auto getElementOuterFeatures()
     requires(DIM <= 3)
 {
@@ -99,12 +99,12 @@ consteval auto getElementOuterFeatures()
 }
 } // namespace detail
 
-template < ElementTypes T, el_o_t O, dim_t DIM >
+template < ElementType T, el_o_t O, dim_t DIM >
 constexpr inline auto element_outer_features = detail::getElementOuterFeatures< T, O, DIM >();
 
 namespace detail
 {
-template < ElementTypes T1, ElementTypes T2 >
+template < ElementType T1, ElementType T2 >
 consteval dim_t getHighestMatchableDim()
 {
     constexpr auto d1        = Element< T1, 1 >::native_dim;
@@ -113,7 +113,7 @@ consteval dim_t getHighestMatchableDim()
     return d1 == d2 ? d1 - 1 : lower_dim;
 }
 
-template < dim_t DIM, el_o_t O, ElementTypes T1, ElementTypes T2 >
+template < dim_t DIM, el_o_t O, ElementType T1, ElementType T2 >
 auto elementIntersectionSpansAtDim(const Element< T1, 1 >& el1, const Element< T2, 1 >& el2)
 {
     using span_t = std::span< const el_locind_t >;
@@ -154,7 +154,7 @@ auto elementIntersectionSpansAtDim(const Element< T1, 1 >& el1, const Element< T
     return std::make_pair(intersect_inds1, intersect_inds2);
 }
 
-template < el_o_t O, ElementTypes T1, ElementTypes T2 >
+template < el_o_t O, ElementType T1, ElementType T2 >
 std::pair< std::span< const el_locind_t >, std::span< const el_locind_t > >
 elementIntersection(const Element< T1, 1 >& el1, const Element< T2, 1 >& el2)
 {
@@ -186,7 +186,7 @@ consteval auto getPointMatcher()
 }
 } // namespace detail
 
-template < el_o_t O, ElementTypes T >
+template < el_o_t O, ElementType T >
 constexpr void updateMatchMask(const Element< T, 1 >&                   el_o1,
                                std::bitset< Element< T, O >::n_nodes >& mask,
                                typename Element< T, O >::node_array_t&  nodes)
@@ -202,7 +202,7 @@ constexpr void updateMatchMask(const Element< T, 1 >&                   el_o1,
     }
 }
 
-template < ElementTypes T_converted, ElementTypes T_converting, el_o_t O >
+template < ElementType T_converted, ElementType T_converting, el_o_t O >
 constexpr void updateMatchMask(const Element< T_converted, 1 >&                    pattern_o1_el,
                                const Element< T_converted, O >&                    pattern_oN_el,
                                const Element< T_converting, 1 >&                   match_o1_el,

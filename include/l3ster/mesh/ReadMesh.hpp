@@ -34,20 +34,20 @@ constexpr inline MeshFormatTag gmsh_tag = MeshFormatTag< MeshFormat::Gmsh >{};
 namespace detail
 {
 inline constexpr std::array gmsh_elt_lookup_tab{
-    std::pair{1u, ElementTypes::Line}, std::pair{3u, ElementTypes::Quad}, std::pair{5u, ElementTypes::Hex}};
+    std::pair{1u, ElementType::Line}, std::pair{3u, ElementType::Quad}, std::pair{5u, ElementType::Hex}};
 
 template < size_t I >
-consteval ElementTypes lookupElt()
+consteval ElementType lookupElt()
 {
     return std::ranges::find(gmsh_elt_lookup_tab, I, [](const auto p) { return p.first; })->second;
 }
 
-template < ElementTypes T >
+template < ElementType T >
 void reorderNodes(auto& nodes)
 {
-    if constexpr (T == ElementTypes::Quad)
+    if constexpr (T == ElementType::Quad)
         std::swap(nodes[2], nodes[3]);
-    else if constexpr (T == ElementTypes::Hex)
+    else if constexpr (T == ElementType::Hex)
     {
         std::swap(nodes[2], nodes[3]);
         std::swap(nodes[6], nodes[7]);

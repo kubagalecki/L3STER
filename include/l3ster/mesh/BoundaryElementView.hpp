@@ -6,7 +6,7 @@
 
 namespace lstr
 {
-template < ElementTypes ET, el_o_t EO >
+template < ElementType ET, el_o_t EO >
 class BoundaryElementView
 {
 public:
@@ -24,7 +24,7 @@ private:
     el_side_t                m_element_side;
 };
 
-template < ElementTypes ET, el_o_t EO >
+template < ElementType ET, el_o_t EO >
 auto BoundaryElementView< ET, EO >::getSideNodeInds() const -> std::span< const el_locind_t >
 {
     std::span< const el_locind_t > retval;

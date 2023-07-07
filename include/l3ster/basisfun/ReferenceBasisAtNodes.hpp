@@ -6,7 +6,7 @@
 
 namespace lstr::basis
 {
-template < ElementTypes ET, el_o_t EO, BasisType BT = BasisType::Lagrange >
+template < ElementType ET, el_o_t EO, BasisType BT = BasisType::Lagrange >
 const auto& getBasisAtNodes()
 {
     static const ReferenceBasisAtPoints< ET, EO, Element< ET, EO >::n_nodes > retval = std::invoke([] {

@@ -17,24 +17,24 @@ using namespace lstr::map;
 
 static auto getLineElement()
 {
-    return Element< ElementTypes::Line, 1 >{
-        {0, 1}, ElementData< ElementTypes::Line, 1 >{{Point{0., 0., 0.}, Point{1., 0., 0.}}}, 0};
+    return Element< ElementType::Line, 1 >{
+        {0, 1}, ElementData< ElementType::Line, 1 >{{Point{0., 0., 0.}, Point{1., 0., 0.}}}, 0};
 }
 
 static auto getQuadElement()
 {
     using namespace lstr;
-    return Element< ElementTypes::Quad, 1 >{
+    return Element< ElementType::Quad, 1 >{
         {0, 1, 2, 3},
-        ElementData< ElementTypes::Quad, 1 >{
+        ElementData< ElementType::Quad, 1 >{
             {Point{0., 0., 0.}, Point{1., 0., 0.}, Point{0., 1., 0.}, Point{2., 2., 0.}}},
         0};
 }
 
 static auto getHexElement()
 {
-    return Element< ElementTypes::Hex, 1 >{{0, 1, 2, 3, 4, 5, 6, 7},
-                                           ElementData< ElementTypes::Hex, 1 >{{Point{0., 0., 0.},
+    return Element< ElementType::Hex, 1 >{{0, 1, 2, 3, 4, 5, 6, 7},
+                                           ElementData< ElementType::Hex, 1 >{{Point{0., 0., 0.},
                                                                                 Point{1., 0., 0.},
                                                                                 Point{0., 1., 0.},
                                                                                 Point{1., 1., 0.},
@@ -50,7 +50,7 @@ TEST_CASE("Reference to physical mapping", "[mesh]")
     constexpr auto el_o = 2;
     SECTION("1D")
     {
-        constexpr auto el_t                = ElementTypes::Line;
+        constexpr auto el_t                = ElementType::Line;
         using element_type                 = Element< el_t, el_o >;
         constexpr auto            el_nodes = typename element_type::node_array_t{};
         ElementData< el_t, el_o > data{{Point{1., 1., 1.}, Point{.5, .5, .5}}};
@@ -63,7 +63,7 @@ TEST_CASE("Reference to physical mapping", "[mesh]")
 
     SECTION("2D")
     {
-        constexpr auto el_t                = ElementTypes::Quad;
+        constexpr auto el_t                = ElementType::Quad;
         using element_type                 = Element< el_t, el_o >;
         constexpr auto            el_nodes = typename element_type::node_array_t{};
         ElementData< el_t, el_o > data{{Point{1., -1., 0.}, Point{2., -1., 0.}, Point{1., 1., 1.}, Point{2., 1., 1.}}};
@@ -76,7 +76,7 @@ TEST_CASE("Reference to physical mapping", "[mesh]")
 
     SECTION("3D")
     {
-        constexpr auto el_t                = ElementTypes::Hex;
+        constexpr auto el_t                = ElementType::Hex;
         using element_type                 = Element< el_t, el_o >;
         constexpr auto            el_nodes = typename element_type::node_array_t{};
         ElementData< el_t, el_o > data{{Point{.5, .5, .5},
@@ -210,7 +210,7 @@ TEST_CASE("Basis function values", "[mapping]")
     constexpr auto LB = BasisType::Lagrange;
     SECTION("Line")
     {
-        constexpr auto   ET = ElementTypes::Line;
+        constexpr auto   ET = ElementType::Line;
         constexpr el_o_t EO = 1;
 
         const ReferenceBasisFunction< ET, EO, 0, LB > basis0{};
@@ -224,7 +224,7 @@ TEST_CASE("Basis function values", "[mapping]")
 
     SECTION("Quad")
     {
-        constexpr auto   ET = ElementTypes::Quad;
+        constexpr auto   ET = ElementType::Quad;
         constexpr el_o_t EO = 1;
 
         const ReferenceBasisFunction< ET, EO, 0, LB > basis0{};
@@ -255,7 +255,7 @@ TEST_CASE("Basis function values", "[mapping]")
 
     SECTION("Hex")
     {
-        constexpr auto   ET = ElementTypes::Hex;
+        constexpr auto   ET = ElementType::Hex;
         constexpr el_o_t EO = 1;
 
         const ReferenceBasisFunction< ET, EO, 0, LB > basis0{};
@@ -348,8 +348,8 @@ TEST_CASE("Basis function derivatives", "[mapping]")
 
     SECTION("Hex")
     {
-        const auto element    = Element< ElementTypes::Hex, 1 >{{0, 1, 2, 3, 4, 5, 6, 7},
-                                                                ElementData< ElementTypes::Hex, 1 >{{Point{0., 0., 0.},
+        const auto element    = Element< ElementType::Hex, 1 >{{0, 1, 2, 3, 4, 5, 6, 7},
+                                                                ElementData< ElementType::Hex, 1 >{{Point{0., 0., 0.},
                                                                                                      Point{1., 0., 0.},
                                                                                                      Point{0., 1., 0.},
                                                                                                      Point{1., 1., 0.},
@@ -392,7 +392,7 @@ TEST_CASE("Basis function derivatives", "[mapping]")
 TEST_CASE("Reference basis at domain QPs", "[mapping]")
 {
     using namespace basis;
-    constexpr auto   ET            = ElementTypes::Hex;
+    constexpr auto   ET            = ElementType::Hex;
     constexpr el_o_t EO            = 4;
     constexpr auto   QT            = quad::QuadratureType::GaussLegendre;
     constexpr el_o_t QO            = 4;
@@ -439,7 +439,7 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
                 return retval;
             },
             normal);
-        const auto element_checker = [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
+        const auto element_checker = [&]< ElementType ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
             const auto& ref_q =
                 basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide()).quadrature;
             for (auto qp : ref_q.points)
@@ -454,7 +454,7 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
 
         SECTION("1D")
         {
-            constexpr auto   ET  = ElementTypes::Line;
+            constexpr auto   ET  = ElementType::Line;
             constexpr el_o_t EO  = 1;
             constexpr q_o_t  QLO = 1;
             const auto       el  = Element< ET, 1 >{
@@ -552,7 +552,7 @@ TEST_CASE("Boundary integration", "[mapping]")
         return Eigen::Vector< val_t, 1 >(1.); // Compute boundary area/length
     };
     const auto check_side_area =
-        [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element, el_side_t side, val_t expected_area) {
+        [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element, el_side_t side, val_t expected_area) {
             const auto el_view    = BoundaryElementView{element, side};
             const auto basis_vals = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(side);
             const auto node_vals  = util::eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, 0 >{};

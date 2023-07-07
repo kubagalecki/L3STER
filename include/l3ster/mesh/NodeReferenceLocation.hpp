@@ -43,21 +43,21 @@ auto makeHexNodeLocations()
 }
 } // namespace detail
 
-template < ElementTypes T, el_o_t O, basis::BasisType BT = basis::BasisType::Lagrange >
+template < ElementType T, el_o_t O, basis::BasisType BT = basis::BasisType::Lagrange >
 const auto& getNodeLocations()
-    requires(T == ElementTypes::Line or T == ElementTypes::Quad or T == ElementTypes::Hex)
+    requires(T == ElementType::Line or T == ElementType::Quad or T == ElementType::Hex)
 {
-    if constexpr (T == ElementTypes::Line)
+    if constexpr (T == ElementType::Line)
     {
         static const auto value = detail::makeLineNodeLocations< O >();
         return value;
     }
-    else if constexpr (T == ElementTypes::Quad)
+    else if constexpr (T == ElementType::Quad)
     {
         static const auto value = detail::makeQuadNodeLocations< O >();
         return value;
     }
-    else if constexpr (T == ElementTypes::Hex)
+    else if constexpr (T == ElementType::Hex)
     {
         static const auto value = detail::makeHexNodeLocations< O >();
         return value;

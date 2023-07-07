@@ -6,7 +6,7 @@
 
 namespace lstr
 {
-template < ElementTypes T, el_o_t O >
+template < ElementType T, el_o_t O >
 auto nodePhysicalLocation(const Element< T, O >& element)
 {
     const auto& ref_locs = getNodeLocations< T, O >();
@@ -16,7 +16,7 @@ auto nodePhysicalLocation(const Element< T, O >& element)
     return retval;
 }
 
-template < ElementTypes T, el_o_t O >
+template < ElementType T, el_o_t O >
 Point< 3 > nodePhysicalLocation(const Element< T, O >& element, el_locind_t i)
 {
     return map::mapToPhysicalSpace(element, getNodeLocations< T, O >()[i]);

@@ -85,7 +85,7 @@ auto getDomainData(const MeshPartition< orders... >& mesh, const std::vector< d_
 {
     size_t n_elements = 0, topology_size = 0;
     mesh.visit(
-        [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >&) {
+        [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >&) {
             ++n_elements;
             topology_size += ElementTraits< Element< ET, EO > >::boundary_node_inds.size();
         },
@@ -109,7 +109,7 @@ auto prepMetisInput(const MeshPartition< orders... >& part,
     e_ptr.reserve(domain_data.n_elements + 1);
     e_ptr.push_back(0);
     part.visit(
-        [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
+        [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
             const auto condensed_view =
                 getBoundaryNodes(element) | std::views::transform([&](auto n) { return cond_map[n]; });
             std::ranges::copy(condensed_view, std::back_inserter(e_ind));
@@ -124,7 +124,7 @@ auto makeNodeCondensationMaps(const MeshPartition< orders... >& mesh) -> std::ar
 {
     std::vector< n_id_t > forward_map(mesh.getAllNodes().size()), reverse_map;
     mesh.visit(
-        [&forward_map]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
+        [&forward_map]< ElementType T, el_o_t O >(const Element< T, O >& element) {
             for (auto node : getBoundaryNodes(element))
                 std::atomic_ref{forward_map[node]}.store(1, std::memory_order_relaxed);
         },
@@ -209,7 +209,7 @@ auto uncondenseNodes(const std::vector< idx_t >&       epart,
     size_t el_ind = 0;
     for (auto id : domain_ids)
         mesh.visit(
-            [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
+            [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
                 const auto el_part = epart[el_ind++];
                 for (auto n : getInternalNodes(element))
                     retval[n] = el_part;

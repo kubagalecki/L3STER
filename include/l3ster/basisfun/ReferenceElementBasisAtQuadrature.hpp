@@ -7,7 +7,7 @@
 
 namespace lstr::basis
 {
-template < BasisType BT, ElementTypes ET, el_o_t EO, quad::QuadratureType QT, q_o_t QO >
+template < BasisType BT, ElementType ET, el_o_t EO, quad::QuadratureType QT, q_o_t QO >
 const auto& getReferenceBasisAtDomainQuadrature()
 {
     static const auto value = std::invoke([] {
@@ -54,9 +54,9 @@ auto makeQuadratureFromCoordsMat(const Eigen::Matrix< val_t, R, C >& coords, con
 }
 } // namespace detail
 
-template < BasisType BT, ElementTypes ET, el_o_t EO, quad::QuadratureType QT, q_o_t QO >
+template < BasisType BT, ElementType ET, el_o_t EO, quad::QuadratureType QT, q_o_t QO >
 const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t el_side)
-    requires(ET == ElementTypes::Hex or ET == ElementTypes::Quad or ET == ElementTypes::Line)
+    requires(ET == ElementType::Hex or ET == ElementType::Quad or ET == ElementType::Line)
 {
     // Assumption: quadratures constructed for integration over all sides of the element have the same number of
     // points. If at some point in the future, e.g., pyramids are supported, this will not be true. In that event,
@@ -66,7 +66,7 @@ const auto& getReferenceBasisAtBoundaryQuadrature(el_side_t el_side)
         const auto [ref_quad_coords, weights] = std::invoke([] {
             if constexpr (Element< ET, EO >::native_dim > 1)
             {
-                constexpr auto boundary_type = ET == ElementTypes::Hex ? ElementTypes::Quad : ElementTypes::Line;
+                constexpr auto boundary_type = ET == ElementType::Hex ? ElementType::Quad : ElementType::Line;
                 const auto     ref_quad      = quad::getQuadrature< QT, QO, boundary_type >();
                 return std::make_pair(detail::getReferenceBoundaryQpCoords(ref_quad), ref_quad.weights);
             }

@@ -9,8 +9,8 @@ namespace lstr::map
 {
 // Jacobi matrix in native dimension, i.e. y=0, z=0 for 1D, z=0 for 2D is assumed
 // Note: the generator returned from this function cannot outlive the element passed as its argument
-template < ElementTypes T, el_o_t O >
-    requires(T == ElementTypes::Line or T == ElementTypes::Quad or T == ElementTypes::Hex)
+template < ElementType T, el_o_t O >
+    requires(T == ElementType::Line or T == ElementType::Quad or T == ElementType::Hex)
 auto getNatJacobiMatGenerator(const Element< T, O >& element)
 {
     return [&element](const Point< Element< T, O >::native_dim >& point) {

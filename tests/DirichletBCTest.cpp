@@ -51,8 +51,8 @@ void test()
         auto rhs      = input_vectors.getVectorNonConst(0)->getDataNonConst();
         auto rhs_view = std::span{rhs};
         my_partition.visit(
-            [&]< ElementTypes T, el_o_t O >(const Element< T, O >& element) {
-                if constexpr (T == ElementTypes::Hex and O == 1)
+            [&]< ElementType T, el_o_t O >(const Element< T, O >& element) {
+                if constexpr (T == ElementType::Hex and O == 1)
                 {
                     constexpr int n_dofs    = detail::getNumPrimaryNodes< CP, T, O >() * /* dofs per node */ 1;
                     auto          local_mat = util::eigen::RowMajorSquareMatrix< val_t, n_dofs >{};

@@ -35,7 +35,7 @@ struct IsCondensationPolicyTag< CondensationPolicyTag< CP > > : std::true_type
 template < typename T >
 concept CondensationPolicyTag_c = IsCondensationPolicyTag< T >::value;
 
-template < CondensationPolicy CP, ElementTypes ET, el_o_t EO >
+template < CondensationPolicy CP, ElementType ET, el_o_t EO >
 constexpr decltype(auto) getPrimaryNodesView(const Element< ET, EO >& element, CondensationPolicyTag< CP > = {})
 {
     if constexpr (CP == CondensationPolicy::None)
@@ -43,7 +43,7 @@ constexpr decltype(auto) getPrimaryNodesView(const Element< ET, EO >& element, C
     else if constexpr (CP == CondensationPolicy::ElementBoundary)
         return getBoundaryNodes(element);
 }
-template < CondensationPolicy CP, ElementTypes ET, el_o_t EO >
+template < CondensationPolicy CP, ElementType ET, el_o_t EO >
 constexpr decltype(auto) getPrimaryNodesArray(const Element< ET, EO >& element, CondensationPolicyTag< CP > = {})
 {
     if constexpr (CP == CondensationPolicy::None)
@@ -55,7 +55,7 @@ constexpr decltype(auto) getPrimaryNodesArray(const Element< ET, EO >& element, 
         return retval;
     }
 }
-template < CondensationPolicy CP, ElementTypes ET, el_o_t EO >
+template < CondensationPolicy CP, ElementType ET, el_o_t EO >
 consteval auto getNumPrimaryNodes(util::ValuePack< CP, ET, EO > = {}) -> size_t
 {
     return std::tuple_size_v<
@@ -69,7 +69,7 @@ auto getActiveNodes(const MeshPartition< orders... >& mesh,
 {
     auto active_nodes_set = robin_hood::unordered_flat_set< n_id_t >{};
     mesh.visit(
-        [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element) {
+        [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
             for (auto n : getPrimaryNodesView< CP >(element))
                 active_nodes_set.insert(n);
         },
