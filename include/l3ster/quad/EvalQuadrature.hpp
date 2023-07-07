@@ -1,7 +1,7 @@
 #ifndef L3STER_QUAD_EVALQUADRATURE_HPP
 #define L3STER_QUAD_EVALQUADRATURE_HPP
 
-#include "Quadrature.hpp"
+#include "l3ster/quad/Quadrature.hpp"
 
 #include <concepts>
 #include <numeric>

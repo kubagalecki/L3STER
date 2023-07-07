@@ -1,11 +1,11 @@
 #ifndef L3STER_COMM_RECEIVEMESH_HPP
 #define L3STER_COMM_RECEIVEMESH_HPP
 
-#include "SendMesh.hpp"
+#include "l3ster/comm/SendMesh.hpp"
 
 namespace lstr
 {
-inline auto receivePartition(const MpiComm& comm, int source) -> SerializedPartition
+inline auto receivePartition(const MpiComm& comm, int source) -> mesh::SerializedPartition
 {
     int msg_tag = 0;
 
@@ -26,13 +26,13 @@ inline auto receivePartition(const MpiComm& comm, int source) -> SerializedParti
     });
     auto       size_it = cbegin(sizes);
 
-    SerializedPartition             retval{};
-    std::vector< MpiComm::Request > messages{};
-    constexpr size_t                messages_per_domain = 6;
+    auto             retval              = mesh::SerializedPartition{};
+    auto             messages            = std::vector< MpiComm::Request >{};
+    constexpr size_t messages_per_domain = 6;
     messages.reserve(messages_per_domain * n_doms + 2);
     for (size_t i = 0; i < n_doms; ++i)
     {
-        auto& domain = retval.m_domains.emplace(dom_ids[i], SerializedDomain{}).first->second;
+        auto& domain = retval.m_domains.emplace(dom_ids[i], mesh::SerializedDomain{}).first->second;
 
         const auto node_msg_size = *size_it++;
         domain.element_nodes.resize(node_msg_size);

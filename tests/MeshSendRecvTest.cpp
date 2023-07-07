@@ -6,14 +6,16 @@
 
 #include <iostream>
 
+using namespace lstr;
+
 int main(int argc, char* argv[])
 {
     using namespace lstr;
     L3sterScopeGuard scope_guard{argc, argv};
     lstr::MpiComm    comm{MPI_COMM_WORLD};
 
-    const auto read_mesh = lstr::mesh::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::mesh::gmsh_tag);
-    const auto serial_part = lstr::SerializedPartition{read_mesh};
+    const auto read_mesh   = mesh::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::mesh::gmsh_tag);
+    const auto serial_part = mesh::SerializedPartition{read_mesh};
 
     if (comm.getSize() <= 1)
     {

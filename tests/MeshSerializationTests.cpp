@@ -1,4 +1,4 @@
-#include "l3ster/comm/DeserializeMesh.hpp"
+#include "l3ster/mesh/DeserializeMesh.hpp"
 #include "l3ster/mesh/ReadMesh.hpp"
 
 #include "TestDataPath.h"
@@ -37,8 +37,8 @@ bool compareEqual(const mesh::MeshPartition< orders... >& p1, const mesh::MeshPa
 TEST_CASE("Mesh serialization", "[mesh-serial]")
 {
     const auto mesh              = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::mesh::gmsh_tag);
-    const auto serialized_mesh   = SerializedPartition{mesh};
-    const auto deserialized_mesh = deserializePartition< 1 >(serialized_mesh);
+    const auto serialized_mesh   = mesh::SerializedPartition{mesh};
+    const auto deserialized_mesh = mesh::deserializePartition< 1 >(serialized_mesh);
 
     CHECK(std::ranges::equal(deserialized_mesh.getOwnedNodes(), mesh.getOwnedNodes()));
     CHECK(std::ranges::equal(deserialized_mesh.getGhostNodes(), mesh.getGhostNodes()));

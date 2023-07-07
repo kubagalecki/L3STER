@@ -11,11 +11,6 @@
 
 #include <map>
 
-namespace lstr // TODO
-{
-struct SerializedPartition;
-}
-
 namespace lstr::mesh
 {
 namespace detail
@@ -44,7 +39,7 @@ public:
     using el_boundary_view_result_t = std::pair< const_find_result_t, el_side_t >;
     using node_span_t               = std::span< const n_id_t >;
 
-    friend struct ::lstr::SerializedPartition; // TODO
+    friend struct SerializedPartition;
 
     MeshPartition() = default;
     inline MeshPartition(domain_map_t domains);

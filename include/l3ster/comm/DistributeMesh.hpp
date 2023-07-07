@@ -1,10 +1,10 @@
 #ifndef L3STER_COMM_DISTRIBUTEMESH_HPP
 #define L3STER_COMM_DISTRIBUTEMESH_HPP
 
-#include "DeserializeMesh.hpp"
-#include "ReceiveMesh.hpp"
 #include "l3ster/comm/GatherNodeThroughputs.hpp"
+#include "l3ster/comm/ReceiveMesh.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
+#include "l3ster/mesh/DeserializeMesh.hpp"
 #include "l3ster/mesh/PartitionMesh.hpp"
 #include "l3ster/mesh/ReadMesh.hpp"
 
@@ -162,7 +162,7 @@ auto distributeMesh(const MpiComm&                          comm,
                 my_partition = std::move(part);
             else
             {
-                const auto serialized_part = SerializedPartition{part};
+                const auto serialized_part = mesh::SerializedPartition{part};
                 sendPartition(comm, serialized_part, dest_rank);
             }
             ++unpermuted_rank;
@@ -170,7 +170,7 @@ auto distributeMesh(const MpiComm&                          comm,
         return my_partition;
     }
     else
-        return deserializePartition< orders... >(receivePartition(comm, 0));
+        return mesh::deserializePartition< orders... >(receivePartition(comm, 0));
 }
 
 template < el_o_t order, detail::ProblemDef_c auto problem_def = detail::empty_problem_def_t{} >

@@ -1,12 +1,12 @@
-#ifndef L3STER_COMM_SERIALIZEMESH_HPP
-#define L3STER_COMM_SERIALIZEMESH_HPP
+#ifndef L3STER_MESH_SERIALIZEMESH_HPP
+#define L3STER_MESH_SERIALIZEMESH_HPP
 
 #include "l3ster/mesh/Domain.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
 
 #include <iterator>
 
-namespace lstr
+namespace lstr::mesh
 {
 namespace detail
 {
@@ -123,5 +123,5 @@ struct SerializedPartition
     std::vector< n_id_t >                m_nodes;
     size_t                               m_n_owned_nodes{};
 };
-} // namespace lstr
-#endif // L3STER_COMM_SERIALIZEMESH_HPP
+} // namespace lstr::mesh
+#endif // L3STER_MESH_SERIALIZEMESH_HPP

@@ -1,10 +1,10 @@
-#ifndef L3STER_COMM_DESERIALIZEMESH_HPP
-#define L3STER_COMM_DESERIALIZEMESH_HPP
+#ifndef L3STER_MESH_DESERIALIZEMESH_HPP
+#define L3STER_MESH_DESERIALIZEMESH_HPP
 
-#include "SerializeMesh.hpp"
 #include "l3ster/mesh/ElementTraits.hpp"
+#include "l3ster/mesh/SerializeMesh.hpp"
 
-namespace lstr
+namespace lstr::mesh
 {
 namespace detail
 {
@@ -102,5 +102,5 @@ auto deserializePartition(SerializedPartition&& partition) -> mesh::MeshPartitio
         domain_map.emplace(id, detail::deserializeDomain< orders... >(domain));
     return {std::move(domain_map), std::move(partition.m_nodes), partition.m_n_owned_nodes};
 }
-} // namespace lstr
-#endif // L3STER_COMM_DESERIALIZEMESH_HPP
+} // namespace lstr::mesh
+#endif // L3STER_MESH_DESERIALIZEMESH_HPP

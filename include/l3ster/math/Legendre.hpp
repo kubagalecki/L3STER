@@ -1,7 +1,7 @@
 #ifndef L3STER_MATH_LEGENDRE_HPP
 #define L3STER_MATH_LEGENDRE_HPP
 
-#include "Polynomial.hpp"
+#include "l3ster/math/Polynomial.hpp"
 
 namespace lstr::math
 {

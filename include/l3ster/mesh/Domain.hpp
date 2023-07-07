@@ -17,11 +17,6 @@
 #include <variant>
 #include <vector>
 
-namespace lstr
-{
-struct SerializedDomain; // TODO
-}
-
 namespace lstr::mesh
 {
 template < el_o_t... orders >
@@ -34,7 +29,7 @@ public:
     template < el_o_t... friend_orders >
         requires(sizeof...(friend_orders) > 0)
     friend class Domain;
-    friend struct ::lstr::SerializedDomain;
+    friend struct SerializedDomain;
 
     template < ElementType ET, el_o_t EO >
     using element_vector_t = std::vector< Element< ET, EO > >;

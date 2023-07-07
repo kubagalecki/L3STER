@@ -65,16 +65,16 @@ static void BM_MeshSerialization(benchmark::State& state)
 {
     const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), mesh::gmsh_tag);
     for (auto _ : state)
-        benchmark::DoNotOptimize(SerializedPartition{mesh});
+        benchmark::DoNotOptimize(mesh::SerializedPartition{mesh});
 }
 BENCHMARK(BM_MeshSerialization)->Unit(benchmark::kMillisecond)->Name("Serialize mesh");
 
 static void BM_MeshDeserialization(benchmark::State& state)
 {
     const auto mesh       = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), mesh::gmsh_tag);
-    const auto serialized = SerializedPartition{mesh};
+    const auto serialized = mesh::SerializedPartition{mesh};
     for (auto _ : state)
-        benchmark::DoNotOptimize(deserializePartition< 1 >(serialized));
+        benchmark::DoNotOptimize(mesh::deserializePartition< 1 >(serialized));
 }
 BENCHMARK(BM_MeshDeserialization)->Unit(benchmark::kMillisecond)->Name("Deserialize mesh");
 

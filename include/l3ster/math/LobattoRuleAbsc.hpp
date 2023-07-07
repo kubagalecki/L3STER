@@ -1,7 +1,7 @@
 #ifndef L3STER_MATH_LOBATTORULEABSC_HPP
 #define L3STER_MATH_LOBATTORULEABSC_HPP
 
-#include "Lobatto.hpp"
+#include "l3ster/math/Lobatto.hpp"
 
 namespace lstr::math
 {

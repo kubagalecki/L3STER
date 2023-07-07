@@ -1,8 +1,8 @@
 #ifndef L3STER_COMM_SENDMESH_HPP
 #define L3STER_COMM_SENDMESH_HPP
 
-#include "MpiComm.hpp"
-#include "SerializeMesh.hpp"
+#include "l3ster/comm/MpiComm.hpp"
+#include "l3ster/mesh/SerializeMesh.hpp"
 
 #include <memory>
 #include <utility>
@@ -11,14 +11,14 @@ namespace lstr
 {
 namespace detail
 {
-inline auto sendNDoms(const MpiComm& comm, const SerializedPartition& part, int destination, int tag)
+inline auto sendNDoms(const MpiComm& comm, const mesh::SerializedPartition& part, int destination, int tag)
 {
     auto n_dom_ptr = std::make_unique< size_t >(part.m_domains.size()); // extend lifetime past fun call
     auto msg       = comm.sendAsync(std::span{n_dom_ptr.get(), 1}, destination, tag);
     return std::make_pair(std::move(n_dom_ptr), std::move(msg));
 }
 
-inline auto sendIds(const MpiComm& comm, const SerializedPartition& part, int destination, int tag)
+inline auto sendIds(const MpiComm& comm, const mesh::SerializedPartition& part, int destination, int tag)
 {
     std::vector< d_id_t > dom_ids(part.m_domains.size());
     std::ranges::transform(part.m_domains, begin(dom_ids), [](const auto& pair) { return pair.first; });
@@ -32,7 +32,7 @@ inline size_t getSizeMsgLength(size_t n_domains)
     return n_domain_size_params * n_domains + 2; // 4 per domain + 2 for (ghost) nodes
 }
 
-inline auto sendSizes(const MpiComm& comm, const SerializedPartition& part, int destination, int tag)
+inline auto sendSizes(const MpiComm& comm, const mesh::SerializedPartition& part, int destination, int tag)
 {
     const auto            msg_size = getSizeMsgLength(part.m_domains.size());
     std::vector< size_t > size_info{};
@@ -51,7 +51,7 @@ inline auto sendSizes(const MpiComm& comm, const SerializedPartition& part, int 
 }
 } // namespace detail
 
-inline void sendPartition(const MpiComm& comm, const SerializedPartition& part, int destination)
+inline void sendPartition(const MpiComm& comm, const mesh::SerializedPartition& part, int destination)
 {
     int msg_tag = 0;
 

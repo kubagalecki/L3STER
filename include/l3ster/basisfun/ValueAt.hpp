@@ -1,7 +1,7 @@
 #ifndef L3STER_BASISFUN_VALUEAT_HPP
 #define L3STER_BASISFUN_VALUEAT_HPP
 
-#include "ReferenceBasisFunction.hpp"
+#include "l3ster/basisfun/ReferenceBasisFunction.hpp"
 
 namespace lstr
 {

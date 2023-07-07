@@ -1,7 +1,7 @@
-#ifndef L3STER_MESH_LOBATTO_HPP
-#define L3STER_MESH_LOBATTO_HPP
+#ifndef L3STER_MATH_LOBATTO_HPP
+#define L3STER_MATH_LOBATTO_HPP
 
-#include "Legendre.hpp"
+#include "l3ster/math/Legendre.hpp"
 
 namespace lstr::math
 {
@@ -11,4 +11,4 @@ constexpr auto getLobattoPolynomial()
     return getLegendrePolynomial< T, N + 1 >().derivative();
 }
 } // namespace lstr::math
-#endif // L3STER_MESH_LOBATTO_HPP
+#endif // L3STER_MATH_LOBATTO_HPP
