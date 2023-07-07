@@ -6,7 +6,7 @@
 #include <concepts>
 #include <type_traits>
 
-namespace lstr
+namespace lstr::solvers
 {
 template < typename Derived >
     requires std::is_class_v< Derived > and std::same_as< Derived, std::remove_cv_t< Derived > >
@@ -32,5 +32,5 @@ concept Solver_c = requires(T solver) {
     []< typename B >(const SolverInterface< B >&) {
     }(solver);
 };
-} // namespace lstr
+} // namespace lstr::solvers
 #endif // L3STER_SOLVE_SOLVERINTERFACE_HPP

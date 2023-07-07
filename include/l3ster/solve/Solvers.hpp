@@ -46,7 +46,7 @@ private:
 
 class CG : public SolverInterface< CG >
 {
-    using precond_t        = decltype(Ifpack2::Factory{}.create("", Teuchos::RCP< const tpetra_crsmatrix_t >{}));
+    using precond_t        = decltype(Ifpack2::Factory::create("", Teuchos::RCP< const tpetra_crsmatrix_t >{}));
     using solver_t         = decltype(Belos::SolverFactory< val_t, tpetra_multivector_t, tpetra_operator_t >{}.create(
         "", Teuchos::RCP< Teuchos::ParameterList >{}));
     using linear_problem_t = Teuchos::RCP< Belos::LinearProblem< val_t, tpetra_multivector_t, tpetra_operator_t > >;
@@ -66,9 +66,8 @@ public:
                         const Teuchos::RCP< const tpetra_multivector_t >& b,
                         const Teuchos::RCP< tpetra_multivector_t >&       x)
     {
-        auto precond_factory = Ifpack2::Factory{};
-        m_precond            = precond_factory.create("CHEBYSHEV", A);
-        auto precond_params  = util::makeTeuchosRCP< Teuchos::ParameterList >();
+        m_precond           = Ifpack2::Factory::create("CHEBYSHEV", A);
+        auto precond_params = util::makeTeuchosRCP< Teuchos::ParameterList >();
         precond_params->set("chebyshev: degree", 3);
         m_precond->setParameters(*precond_params);
         m_precond->initialize();

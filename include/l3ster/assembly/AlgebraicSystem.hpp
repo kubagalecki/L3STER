@@ -88,7 +88,7 @@ public:
                               const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = 0,
                               val_t                                                time             = 0.);
 
-    void solve(Solver_c auto& solver, const Teuchos::RCP< tpetra_femultivector_t >& solution) const;
+    void solve(solvers::Solver_c auto& solver, const Teuchos::RCP< tpetra_femultivector_t >& solution) const;
 
     inline void describe(const MpiComm& comm, std::ostream& out = std::cout) const;
 
@@ -136,7 +136,7 @@ private:
 };
 
 template < size_t max_dofs_per_node, CondensationPolicy CP >
-void AlgebraicSystem< max_dofs_per_node, CP >::solve(Solver_c auto&                                solver,
+void AlgebraicSystem< max_dofs_per_node, CP >::solve(solvers::Solver_c auto&                       solver,
                                                      const Teuchos::RCP< tpetra_femultivector_t >& solution) const
 {
     L3STER_PROFILE_FUNCTION;
