@@ -2,7 +2,7 @@
 #define L3STER_ASSEMBLY_SCATTERLOCALSYSTEM_HPP
 
 #include "l3ster/glob_asm/AssembleLocalSystem.hpp"
-#include "l3ster/glob_asm/SparsityGraph.hpp"
+#include "l3ster/util/TrilinosUtils.hpp"
 
 #include <atomic>
 

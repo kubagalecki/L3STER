@@ -1,6 +1,7 @@
 #ifndef L3STER_ASSEMBLY_STATICCONDENSATIONMANAGER_HPP
 #define L3STER_ASSEMBLY_STATICCONDENSATIONMANAGER_HPP
 
+#include "l3ster/dofs/DofsFromNodes.hpp"
 #include "l3ster/glob_asm/ScatterLocalSystem.hpp"
 #include "l3ster/post/SolutionManager.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
@@ -102,7 +103,7 @@ public:
                             util::ConstexprValue< field_inds >                             field_inds_ctwrpr)
     {
         const auto [row_dofs, col_dofs, rhs_dofs] =
-            detail::getUnsortedPrimaryDofs(element, node_dof_map, no_condensation_tag, field_inds_ctwrpr);
+            dofs::getUnsortedPrimaryDofs(element, node_dof_map, no_condensation_tag, field_inds_ctwrpr);
         detail::scatterLocalSystem(local_mat, local_vec, global_mat, global_rhs, row_dofs, col_dofs, rhs_dofs);
     }
     template < el_o_t... orders, size_t max_dofs_per_node >
@@ -313,7 +314,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemb
                     -(elem_data.upper_block * elem_data.diag_block_inv * elem_data.upper_block.transpose());
                 primary_upd_rhs = -(elem_data.upper_block * elem_data.diag_block_inv * elem_data.rhs);
                 const auto [row_dofs, col_dofs, rhs_dofs] =
-                    detail::getUnsortedPrimaryDofs(*element_ptr, dof_map, element_boundary_tag);
+                    dofs::getUnsortedPrimaryDofs(*element_ptr, dof_map, element_boundary_tag);
                 detail::scatterLocalSystem(primary_upd_mat, primary_upd_rhs, matrix, rhs, row_dofs, col_dofs, rhs_dofs);
             },
             element_ptr_variant);
@@ -334,7 +335,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
     auto&      elem_data = m_elem_data_map.at(element.getId());
     const auto dof_inds  = computeLocalDofInds(element, node_dof_map, elem_data, field_inds_ctwrpr);
     const auto [row_dofs, col_dofs, rhs_dofs] =
-        detail::getUnsortedPrimaryDofs(element, node_dof_map, element_boundary_tag, field_inds_ctwrpr);
+        dofs::getUnsortedPrimaryDofs(element, node_dof_map, element_boundary_tag, field_inds_ctwrpr);
 
     // Primary diagonal block + RHS
     constexpr int           n_prim_dofs = std::tuple_size_v< decltype(dof_inds.primary_src_inds) >;
@@ -403,7 +404,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSo
         std::visit(
             [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >* element_ptr) {
                 const auto [row_dofs, col_dofs, rhs_dofs] =
-                    detail::getUnsortedPrimaryDofs(*element_ptr, node_dof_map, element_boundary_tag);
+                    dofs::getUnsortedPrimaryDofs(*element_ptr, node_dof_map, element_boundary_tag);
                 primary_vals.resize(rhs_dofs.size());
                 for (Eigen::Index i = 0; auto dof : rhs_dofs)
                     primary_vals[i++] = condensed_solution[dof];

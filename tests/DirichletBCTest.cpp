@@ -2,6 +2,7 @@
 #include "l3ster/bcs/GetDirichletDofs.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/glob_asm/ScatterLocalSystem.hpp"
+#include "l3ster/glob_asm/SparsityGraph.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/solve/Solvers.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
@@ -63,7 +64,7 @@ void test()
 
                     constexpr auto dof_inds_wrpr = util::ConstexprValue< std::array{size_t{0}} >{};
                     const auto [row_dofs, col_dofs, rhs_dofs] =
-                        detail::getUnsortedPrimaryDofs(element, dof_map, CondensationPolicyTag< CP >{}, dof_inds_wrpr);
+                        dofs::getUnsortedPrimaryDofs(element, dof_map, CondensationPolicyTag< CP >{}, dof_inds_wrpr);
                     detail::scatterLocalSystem(local_mat, local_vec, *matrix, rhs_view, row_dofs, col_dofs, rhs_dofs);
                 }
             },

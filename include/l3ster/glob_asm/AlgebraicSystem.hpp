@@ -4,6 +4,7 @@
 #include "l3ster/bcs/DirichletBC.hpp"
 #include "l3ster/bcs/GetDirichletDofs.hpp"
 #include "l3ster/glob_asm/ComputeValuesAtNodes.hpp"
+#include "l3ster/glob_asm/SparsityGraph.hpp"
 #include "l3ster/glob_asm/StaticCondensationManager.hpp"
 #include "l3ster/post/SolutionManager.hpp"
 #include "l3ster/solve/SolverInterface.hpp"

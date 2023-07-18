@@ -1,7 +1,7 @@
 #ifndef L3STER_BCS_GETDIRICHLETDOFS_HPP
 #define L3STER_BCS_GETDIRICHLETDOFS_HPP
 
-#include "l3ster/glob_asm/SparsityGraph.hpp"
+#include "l3ster/dofs/DofsFromNodes.hpp"
 
 namespace lstr::bcs
 {
@@ -23,7 +23,7 @@ auto getDirichletDofs(const mesh::MeshPartition< orders... >&                   
             constexpr auto  covered_dof_inds = util::getTrueInds< coverage >();
             const auto process_element = [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >& element) {
                 const auto element_dirichlet_dofs =
-                    detail::getUnsortedPrimaryDofs< covered_dof_inds >(element, node_to_dof_map, cond_map);
+                    dofs::getUnsortedPrimaryDofs< covered_dof_inds >(element, node_to_dof_map, cond_map);
                 for (auto dof : element_dirichlet_dofs)
                     dirichlet_dofs->replaceGlobalValue(dof, 0, 1.);
             };
