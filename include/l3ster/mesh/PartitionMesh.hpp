@@ -28,7 +28,7 @@ inline auto convertPartWeights(std::vector< real_t > wgts) -> std::vector< real_
     return wgts;
 }
 
-template < el_o_t... orders, ProblemDef_c auto problem_def > // TODO namespace
+template < el_o_t... orders, ProblemDef_c auto problem_def >
 auto computeNodeWeights(const MeshPartition< orders... >& mesh, util::ConstexprValue< problem_def > probdef_ctwrapper)
     -> std::vector< idx_t >
 {

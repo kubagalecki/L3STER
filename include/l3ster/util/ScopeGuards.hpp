@@ -36,20 +36,43 @@ private:
 
 MpiScopeGuard::MpiScopeGuard(int& argc, char**& argv)
 {
-    int        initialized{};
-    const auto init_check_err = MPI_Initialized(&initialized);
-    lstr::detail::mpi::handleMPIError(init_check_err, "Failed to check MPI initialization status");
-    if (initialized)
-        return;
+    static constexpr auto required_mode            = MPI_THREAD_FUNNELED;
+    constexpr auto        check_mpi_thread_support = [] {
+        int        provided_mode{};
+        const auto err_code = MPI_Query_thread(&provided_mode);
+        lstr::detail::mpi::handleMPIError(err_code, "`MPI_Query_thread` failed");
+        util::throwingAssert(provided_mode >= required_mode,
+                             "The provided MPI installation appears not to have the required threading support: "
+                                    "`MPI_THREAD_FUNNELED`\nIf you are initializing MPI yourself (i.e. not via L3STER scope "
+                                    "guards), be sure to do so by calling `MPI_Init_thread` and passing `MPI_THREAD_FUNNELED` "
+                                    "as the requirement, and *not* by calling `MPI_Init`");
+    };
+    constexpr auto check_initialized = []() -> bool {
+        int        retval{};
+        const auto err_code = MPI_Initialized(&retval);
+        lstr::detail::mpi::handleMPIError(err_code, "`MPI_Initialized` failed");
+        return retval;
+    };
+    constexpr auto check_not_finalized = [] {
+        int        finalized{};
+        const auto err_code = MPI_Finalized(&finalized);
+        lstr::detail::mpi::handleMPIError(err_code, "`MPI_Finalized` failed");
+        util::terminatingAssert(
+            not finalized, "You are attempting to create `lstr::MpiScopeGuard` after `MPI_Finalize` has been called");
+    };
+    const auto initialize = [&] {
+        int        dummy{};
+        const auto err_code = MPI_Init_thread(&argc, &argv, required_mode, &dummy);
+        lstr::detail::mpi::handleMPIError(err_code, "`MPI_Init_thread` failed");
+    };
 
-    constexpr auto required_mode = MPI_THREAD_FUNNELED;
-    int            provided_mode{};
-    int            mpi_status = MPI_Init_thread(&argc, &argv, required_mode, &provided_mode);
-    lstr::detail::mpi::handleMPIError(mpi_status, "Failed to initialize MPI");
-    m_is_owning = true;
-    util::throwingAssert(
-        provided_mode >= required_mode,
-        "The installed configuration of MPI does not support the required threading mode MPI_THREAD_FUNNELED");
+    check_not_finalized();
+    if (not check_initialized())
+    {
+        initialize();
+        m_is_owning = true;
+    }
+    check_mpi_thread_support();
 }
 
 class KokkosScopeGuard
