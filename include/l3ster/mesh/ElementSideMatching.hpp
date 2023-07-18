@@ -48,5 +48,5 @@ constexpr el_side_t matchBoundaryNodesToElement(const Element< T, O >&         e
     constexpr auto n_sides = ElementTraits< Element< T, O > >::n_sides;
     return matchSidesRecursively< n_sides - 1 >(element, srt_boundary_nodes);
 }
-} // namespace lstr::detail
+} // namespace lstr::mesh::detail
 #endif // L3STER_MESH_ELEMENTSIDEMATCHING_HPP

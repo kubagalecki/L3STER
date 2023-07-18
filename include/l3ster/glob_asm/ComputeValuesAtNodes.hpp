@@ -72,10 +72,10 @@ concept PotentiallyValidBoundaryNodalKernel_c =
     PotentiallyValidNodalKernelDeductionHelper< Kernel, n_fields, results_size, orders... >::boundary;
 
 template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
-auto initValsAndParents(const mesh::MeshPartition< orders... >&                 mesh,
-                        mesh::detail::DomainIdRange_c auto&&                    domain_ids,
-                        const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
-                        util::ConstexprValue< dof_inds >                        dofinds_ctwrpr,
+auto initValsAndParents(const mesh::MeshPartition< orders... >&                       mesh,
+                        mesh::detail::DomainIdRange_c auto&&                          domain_ids,
+                        const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
+                        util::ConstexprValue< dof_inds >                              dofinds_ctwrpr,
                         const SolutionManager::FieldValueGetter< n_fields >&,
                         std::span< val_t > values) -> std::vector< std::uint8_t >
 {
@@ -99,9 +99,9 @@ auto initValsAndParents(const mesh::MeshPartition< orders... >&                 
 }
 
 template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
-auto initValsAndParents(const mesh::BoundaryView< orders... >&                  boundary,
-                        const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
-                        util::ConstexprValue< dof_inds >                        dofinds_ctwrpr,
+auto initValsAndParents(const mesh::BoundaryView< orders... >&                        boundary,
+                        const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
+                        util::ConstexprValue< dof_inds >                              dofinds_ctwrpr,
                         const SolutionManager::FieldValueGetter< n_fields >&,
                         std::span< val_t > values) -> std::vector< std::uint8_t >
 {
@@ -123,12 +123,12 @@ auto initValsAndParents(const mesh::BoundaryView< orders... >&                  
 } // namespace detail
 
 template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps >
-void computeValuesAtNodes(const mesh::MeshPartition< orders... >&                 mesh,
-                          mesh::detail::DomainIdRange_c auto&&                    domain_ids,
-                          const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
-                          util::ConstexprValue< dof_inds >                        dofinds_ctwrpr,
-                          std::span< const val_t, std::ranges::size(dof_inds) >   values_in,
-                          std::span< val_t >                                      values_out)
+void computeValuesAtNodes(const mesh::MeshPartition< orders... >&                       mesh,
+                          mesh::detail::DomainIdRange_c auto&&                          domain_ids,
+                          const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
+                          util::ConstexprValue< dof_inds >                              dofinds_ctwrpr,
+                          std::span< const val_t, std::ranges::size(dof_inds) >         values_in,
+                          std::span< val_t >                                            values_out)
     requires(std::ranges::all_of(dof_inds, [](size_t dof) { return dof < max_dofs_per_node; }))
 {
     L3STER_PROFILE_FUNCTION;
@@ -146,14 +146,14 @@ void computeValuesAtNodes(const mesh::MeshPartition< orders... >&               
 }
 
 template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
-void computeValuesAtNodes(auto&&                                                  kernel,
-                          const mesh::MeshPartition< orders... >&                 mesh,
-                          mesh::detail::DomainIdRange_c auto&&                    domain_ids,
-                          const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
-                          util::ConstexprValue< dof_inds >                        dofinds_ctwrpr,
-                          const SolutionManager::FieldValueGetter< n_fields >&    field_val_getter,
-                          std::span< val_t >                                      values,
-                          val_t                                                   time = 0.)
+void computeValuesAtNodes(auto&&                                                        kernel,
+                          const mesh::MeshPartition< orders... >&                       mesh,
+                          mesh::detail::DomainIdRange_c auto&&                          domain_ids,
+                          const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
+                          util::ConstexprValue< dof_inds >                              dofinds_ctwrpr,
+                          const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
+                          std::span< val_t >                                            values,
+                          val_t                                                         time = 0.)
     requires detail::
                  PotentiallyValidNodalKernel_c< decltype(kernel), n_fields, std::ranges::size(dof_inds), orders... > and
              (std::ranges::all_of(dof_inds, [](size_t dof) { return dof < max_dofs_per_node; }))
@@ -212,13 +212,13 @@ void computeValuesAtNodes(auto&&                                                
 }
 
 template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
-void computeValuesAtBoundaryNodes(auto&&                                                  kernel,
-                                  const mesh::BoundaryView< orders... >&                  boundary,
-                                  const NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
-                                  util::ConstexprValue< dof_inds >                        dofinds_ctwrpr,
-                                  const SolutionManager::FieldValueGetter< n_fields >&    field_val_getter,
-                                  std::span< val_t >                                      values,
-                                  val_t                                                   time = 0.)
+void computeValuesAtBoundaryNodes(auto&&                                                        kernel,
+                                  const mesh::BoundaryView< orders... >&                        boundary,
+                                  const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
+                                  util::ConstexprValue< dof_inds >                              dofinds_ctwrpr,
+                                  const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
+                                  std::span< val_t >                                            values,
+                                  val_t                                                         time = 0.)
     requires detail::PotentiallyValidBoundaryNodalKernel_c< decltype(kernel),
                                                             n_fields,
                                                             std::ranges::size(dof_inds),

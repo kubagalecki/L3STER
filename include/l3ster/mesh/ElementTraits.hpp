@@ -159,5 +159,5 @@ public:
     static constexpr auto boundary_node_inds = detail::elem::makeBoundaryNodeInds< BoundaryTable >();
     static constexpr auto internal_node_inds = detail::elem::makeInternalNodeInds< BoundaryTable, nodes_per_element >();
 };
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_ELEMENTTRAITS_HPP

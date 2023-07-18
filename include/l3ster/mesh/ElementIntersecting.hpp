@@ -226,5 +226,5 @@ constexpr void updateMatchMask(const Element< T_converted, 1 >&                 
         nodes[m_ind] = pattern_oN_el.getNodes()[pattern_inds[match_buffer[i++]]];
     }
 }
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_ELEMENTINTERSECTING_HPP

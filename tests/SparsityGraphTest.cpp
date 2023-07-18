@@ -13,17 +13,17 @@ class DenseGraph
 {
 public:
     template < el_o_t... orders, auto problem_def, CondensationPolicy CP >
-    DenseGraph(const mesh::MeshPartition< orders... >&                                     mesh,
-               util::ConstexprValue< problem_def >                                         problemdef_ctwrpr,
-               const detail::node_interval_vector_t< detail::deduceNFields(problem_def) >& dof_intervals,
-               const detail::NodeCondensationMap< CP >&                                    cond_map)
+    DenseGraph(const mesh::MeshPartition< orders... >&                                           mesh,
+               util::ConstexprValue< problem_def >                                               problemdef_ctwrpr,
+               const dofs::detail::node_interval_vector_t< detail::deduceNFields(problem_def) >& dof_intervals,
+               const dofs::NodeCondensationMap< CP >&                                            cond_map)
     {
-        const auto node_to_dof_map = NodeToGlobalDofMap{dof_intervals, cond_map};
-        m_dim =
-            std::ranges::max(node_to_dof_map(cond_map.getCondensedIds().back()) | std::views::filter([](auto dof) {
-                                 return dof != NodeToGlobalDofMap< detail::deduceNFields(problem_def) >::invalid_dof;
-                             })) +
-            1;
+        const auto node_to_dof_map = dofs::NodeToGlobalDofMap{dof_intervals, cond_map};
+        m_dim = std::ranges::max(node_to_dof_map(cond_map.getCondensedIds().back()) | std::views::filter([](auto dof) {
+                                     return dof !=
+                                            dofs::NodeToGlobalDofMap< detail::deduceNFields(problem_def) >::invalid_dof;
+                                 })) +
+                1;
         m_entries = util::DynamicBitset{m_dim * m_dim};
 
         const auto process_domain = [&]< auto dom_def >(util::ConstexprValue< dom_def >) {
@@ -85,13 +85,13 @@ void test()
                                             util::Pair{d_id_t{3}, std::array{true, true}}};
     constexpr auto probdef_ctwrpr = util::ConstexprValue< problem_def >{};
 
-    const auto cond_map       = detail::makeCondensationMap< CP >(comm, my_partition, probdef_ctwrpr);
-    const auto cond_map_full  = detail::makeCondensationMap< CP >(MpiComm{MPI_COMM_SELF}, full_mesh, probdef_ctwrpr);
-    const auto dof_intervals  = computeDofIntervals(comm, my_partition, cond_map, probdef_ctwrpr);
-    const auto node_dof_map   = NodeToGlobalDofMap{dof_intervals, cond_map};
+    const auto cond_map       = dofs::makeCondensationMap< CP >(comm, my_partition, probdef_ctwrpr);
+    const auto cond_map_full  = dofs::makeCondensationMap< CP >(MpiComm{MPI_COMM_SELF}, full_mesh, probdef_ctwrpr);
+    const auto dof_intervals  = dofs::computeDofIntervals(comm, my_partition, cond_map, probdef_ctwrpr);
+    const auto node_dof_map   = dofs::NodeToGlobalDofMap{dof_intervals, cond_map};
     const auto sparsity_graph = detail::makeSparsityGraph(comm, my_partition, node_dof_map, cond_map, probdef_ctwrpr);
 
-    const auto num_all_dofs = detail::getNodeDofs(cond_map_full.getCondensedIds(), dof_intervals).size();
+    const auto num_all_dofs = dofs::detail::getNodeDofs(cond_map_full.getCondensedIds(), dof_intervals).size();
     const auto dense_graph  = DenseGraph{full_mesh, probdef_ctwrpr, dof_intervals, cond_map_full};
 
     REQUIRE(sparsity_graph->getGlobalNumRows() == num_all_dofs);

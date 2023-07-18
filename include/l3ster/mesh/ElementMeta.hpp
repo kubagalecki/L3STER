@@ -109,5 +109,5 @@ public:
     static constexpr bool invocable_on_boundary_views_return = BoundaryInvokeReturnHelper< R, F, Args... >::value;
 };
 } // namespace detail
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_ALIASES_HPP

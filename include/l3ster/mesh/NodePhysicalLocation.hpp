@@ -21,5 +21,5 @@ Point< 3 > nodePhysicalLocation(const Element< T, O >& element, el_locind_t i)
 {
     return map::mapToPhysicalSpace(element, getNodeLocations< T, O >()[i]);
 }
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_NODEPHYSICALLOCATION_HPP

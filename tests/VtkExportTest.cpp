@@ -46,7 +46,7 @@ void vtkExportTest2D()
     constexpr auto vec_inds          = std::array< size_t, 2 >{1, 3};
     constexpr auto all_field_inds    = util::makeIotaArray< size_t, n_fields >();
 
-    const auto system_manager   = makeAlgebraicSystem(comm, my_partition, no_condensation, problemdef_ctwrpr);
+    const auto system_manager   = makeAlgebraicSystem(comm, my_partition, no_condensation_tag, problemdef_ctwrpr);
     auto       solution_manager = SolutionManager{my_partition, n_fields};
 
     auto solution = system_manager->makeSolutionVector();
@@ -122,7 +122,7 @@ void vtkExportTest3D()
     constexpr auto domain_field_inds   = std::array< size_t, 3 >{0, 1, 2};
     constexpr auto boundary_field_inds = std::array< size_t, 3 >{3, 4, 5};
 
-    const auto system_manager   = makeAlgebraicSystem(comm, my_partition, no_condensation, problemdef_ctwrpr);
+    const auto system_manager   = makeAlgebraicSystem(comm, my_partition, no_condensation_tag, problemdef_ctwrpr);
     auto       solution_manager = SolutionManager{my_partition, n_fields};
 
     auto solution = system_manager->makeSolutionVector();

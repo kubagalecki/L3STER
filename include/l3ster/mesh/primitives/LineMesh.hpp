@@ -26,5 +26,5 @@ auto makeLineMesh(Rx&& distx) -> MeshPartition< 1 >
     std::iota(begin(nodes), end(nodes), 0);
     return {std::move(domains), std::move(nodes), std::vector< n_id_t >{}};
 }
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_LINEMESH_HPP

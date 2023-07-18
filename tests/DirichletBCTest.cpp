@@ -27,9 +27,9 @@ void test()
     auto           my_partition  = distributeMesh(comm, mesh, {boundary});
     const auto     boundary_view = my_partition.getBoundaryView(boundary);
 
-    const auto cond_map            = detail::makeCondensationMap< CP >(comm, my_partition, probdef_ctwrpr);
-    const auto dof_intervals       = computeDofIntervals(comm, my_partition, cond_map, probdef_ctwrpr);
-    const auto global_node_dof_map = NodeToGlobalDofMap{dof_intervals, cond_map};
+    const auto cond_map            = dofs::makeCondensationMap< CP >(comm, my_partition, probdef_ctwrpr);
+    const auto dof_intervals       = dofs::computeDofIntervals(comm, my_partition, cond_map, probdef_ctwrpr);
+    const auto global_node_dof_map = dofs::NodeToGlobalDofMap{dof_intervals, cond_map};
     const auto sparsity_graph =
         detail::makeSparsityGraph(comm, my_partition, global_node_dof_map, cond_map, probdef_ctwrpr);
 
@@ -44,7 +44,7 @@ void test()
     matrix->beginAssembly();
     input_vectors.beginAssembly();
 
-    const auto dof_map = NodeToLocalDofMap{
+    const auto dof_map = dofs::NodeToLocalDofMap{
         cond_map, global_node_dof_map, *matrix->getRowMap(), *matrix->getColMap(), *input_vectors.getMap()};
 
     {
@@ -54,7 +54,7 @@ void test()
             [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >& element) {
                 if constexpr (T == mesh::ElementType::Hex and O == 1)
                 {
-                    constexpr int n_dofs    = detail::getNumPrimaryNodes< CP, T, O >() * /* dofs per node */ 1;
+                    constexpr int n_dofs    = dofs::detail::getNumPrimaryNodes< CP, T, O >() * /* dofs per node */ 1;
                     auto          local_mat = util::eigen::RowMajorSquareMatrix< val_t, n_dofs >{};
                     auto          local_vec = Eigen::Vector< val_t, n_dofs >{};
                     local_mat.setRandom();

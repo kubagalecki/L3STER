@@ -26,5 +26,5 @@ struct ElementData< T, O >
 
     vertex_array_t vertices;
 };
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_ELEMENTDATA_HPP

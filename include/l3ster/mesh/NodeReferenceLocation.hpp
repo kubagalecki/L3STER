@@ -63,5 +63,5 @@ const auto& getNodeLocations()
         return value;
     }
 }
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_NODEREFERENCELOCATION_HPP

@@ -11,12 +11,12 @@
 
 using namespace lstr;
 
-template < el_o_t... orders, CondensationPolicy CP, detail::ProblemDef_c auto problem_def >
+template < el_o_t... orders, CondensationPolicy CP, ProblemDef_c auto problem_def >
 static auto makeLocalCondensationMap(const mesh::MeshPartition< orders... >& mesh,
                                      util::ConstexprValue< problem_def >     probdef_ctwrpr,
-                                     CondensationPolicyTag< CP > = {}) -> detail::NodeCondensationMap< CP >
+                                     CondensationPolicyTag< CP > = {}) -> dofs::NodeCondensationMap< CP >
 {
-    const auto active_nodes    = detail::getActiveNodes< CP >(mesh, probdef_ctwrpr);
+    const auto active_nodes    = dofs::detail::getActiveNodes< CP >(mesh, probdef_ctwrpr);
     auto       condensed_nodes = std::vector< n_id_t >(active_nodes);
     std::iota(condensed_nodes.begin(), condensed_nodes.end(), 0);
     return {active_nodes, std::move(condensed_nodes)};
@@ -33,7 +33,7 @@ TEMPLATE_TEST_CASE("Local node DOF interval calculation",
     constexpr auto   probdef_ctwrpr = util::ConstexprValue< std::array{
         util::Pair{d_id_t{0}, std::array{true, false}}, util::Pair{d_id_t{1}, std::array{false, true}}} >{};
     const auto       cond_map       = makeLocalCondensationMap(mesh, probdef_ctwrpr, TestType{});
-    const auto       result         = detail::computeLocalDofIntervals(mesh, cond_map, probdef_ctwrpr);
+    const auto       result         = dofs::detail::computeLocalDofIntervals(mesh, cond_map, probdef_ctwrpr);
     REQUIRE(result.size() == 2);
     CHECK(result[0].first[0] == 0);
     CHECK(result[0].first[1] == 8);
@@ -59,7 +59,7 @@ TEMPLATE_TEST_CASE("Node DOF intervals of parts sum up to whole",
                                          util::Pair{d_id_t{8}, std::array{true, true, true}}} >{};
     const auto mesh          = mesh::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube_multidom.msh), mesh::gmsh_tag);
     const auto cond_map_full = makeLocalCondensationMap(mesh, problem_def, TestType{});
-    const auto unpartitioned_intervals = detail::computeLocalDofIntervals(mesh, cond_map_full, problem_def);
+    const auto unpartitioned_intervals = dofs::detail::computeLocalDofIntervals(mesh, cond_map_full, problem_def);
 
     std::vector< d_id_t > boundaries(24);
     std::iota(boundaries.begin(), boundaries.end(), 9);
@@ -74,12 +74,12 @@ TEMPLATE_TEST_CASE("Node DOF intervals of parts sum up to whole",
             auto cond_ids = std::vector< n_id_t >{};
             std::ranges::copy(part.getAllNodes(), std::back_inserter(cond_ids));
             std::ranges::sort(cond_ids);
-            return detail::NodeCondensationMap< TestType::value >{cond_ids, cond_ids};
+            return dofs::NodeCondensationMap< TestType::value >{cond_ids, cond_ids};
         });
-        const auto intervals = detail::computeLocalDofIntervals(part, cond_map, problem_def);
+        const auto intervals = dofs::detail::computeLocalDofIntervals(part, cond_map, problem_def);
         std::ranges::copy(intervals, std::back_inserter(partitioned_intervals));
     }
-    detail::consolidateDofIntervals(partitioned_intervals);
+    dofs::detail::consolidateDofIntervals(partitioned_intervals);
     CHECK(partitioned_intervals == unpartitioned_intervals);
 }
 
@@ -90,7 +90,7 @@ TEMPLATE_TEST_CASE("Node DOF interval (de-)serialization",
 {
     constexpr std::size_t n_fields           = TestType::value;
     constexpr size_t      test_size          = 1u << 12;
-    auto                  original_intervals = detail::node_interval_vector_t< n_fields >{};
+    auto                  original_intervals = dofs::detail::node_interval_vector_t< n_fields >{};
     original_intervals.reserve(test_size);
     std::generate_n(
         std::back_inserter(original_intervals), test_size, [prng = std::mt19937{std::random_device{}()}]() mutable {
@@ -104,8 +104,8 @@ TEMPLATE_TEST_CASE("Node DOF interval (de-)serialization",
     deserialized_intervals.clear();
     std::vector< unsigned long long > serial;
     serial.reserve((util::bitsetNUllongs< n_fields >() + 2) * original_intervals.size());
-    detail::serializeDofIntervals(original_intervals, std::back_inserter(serial));
-    detail::deserializeDofIntervals< n_fields >(serial, std::back_inserter(deserialized_intervals));
+    dofs::detail::serializeDofIntervals(original_intervals, std::back_inserter(serial));
+    dofs::detail::deserializeDofIntervals< n_fields >(serial, std::back_inserter(deserialized_intervals));
     CHECK(original_intervals == deserialized_intervals);
 }
 
@@ -148,7 +148,7 @@ TEMPLATE_TEST_CASE("Node DOF interval consolidation", "[dof]", util::ConstexprVa
             return interval;
         });
 
-        detail::consolidateDofIntervals(intervals);
+        dofs::detail::consolidateDofIntervals(intervals);
 
         if (intervals.empty())
         {
@@ -191,14 +191,14 @@ TEMPLATE_TEST_CASE("Node to global DOF",
 
     SECTION("Non-contiguous DOF distribution")
     {
-        auto   dof_intervals = detail::node_interval_vector_t< n_fields >{};
+        auto   dof_intervals = dofs::detail::node_interval_vector_t< n_fields >{};
         n_id_t i1_begin = 0, i1_end = node_dist.size() * node_dist.size() - 1, i2_begin = i1_end + 1,
                i2_end = mesh.getOwnedNodes().size() - 1;
         std::bitset< n_fields > i1_cov{0b110ull}, i2_cov{0b101ull};
         dof_intervals.emplace_back(std::array{i1_begin, i1_end}, i1_cov);
         dof_intervals.emplace_back(std::array{i2_begin, i2_end}, i2_cov);
 
-        const auto check_dofs = [&](std::span< const n_id_t > nodes, const NodeToGlobalDofMap< n_fields >& map) {
+        const auto check_dofs = [&](std::span< const n_id_t > nodes, const dofs::NodeToGlobalDofMap< n_fields >& map) {
             for (auto node : nodes)
             {
                 const auto  computed_dofs = map(cond_map_full.getCondensedId(node));
@@ -219,7 +219,7 @@ TEMPLATE_TEST_CASE("Node to global DOF",
 
         SECTION("Unpartitioned")
         {
-            const auto map = NodeToGlobalDofMap{dof_intervals, cond_map_full};
+            const auto map = dofs::NodeToGlobalDofMap{dof_intervals, cond_map_full};
             CHECK_FALSE(map.isContiguous());
             check_dofs(mesh.getOwnedNodes(), map);
         }
@@ -230,7 +230,7 @@ TEMPLATE_TEST_CASE("Node to global DOF",
             bool       not_contiguous = false;
             for (const auto& part : partitions)
             {
-                const auto map = NodeToGlobalDofMap{dof_intervals, cond_map_full};
+                const auto map = dofs::NodeToGlobalDofMap{dof_intervals, cond_map_full};
                 not_contiguous |= not map.isContiguous();
                 check_dofs(part.getOwnedNodes(), map);
                 check_dofs(part.getGhostNodes(), map);
@@ -241,11 +241,11 @@ TEMPLATE_TEST_CASE("Node to global DOF",
 
     SECTION("Contiguous DOF distribution")
     {
-        detail::node_interval_vector_t< n_fields > dof_intervals;
-        const auto                                 max_node = node_dist.size() * node_dist.size() * node_dist.size();
+        dofs::detail::node_interval_vector_t< n_fields > dof_intervals;
+        const auto max_node = node_dist.size() * node_dist.size() * node_dist.size();
         dof_intervals.emplace_back(std::array< n_id_t, 2 >{0, max_node}, std::bitset< n_fields >{0b111ul});
 
-        const auto check_dofs = [&](std::span< const n_id_t > nodes, const NodeToGlobalDofMap< n_fields >& map) {
+        const auto check_dofs = [&](std::span< const n_id_t > nodes, const dofs::NodeToGlobalDofMap< n_fields >& map) {
             for (auto node : nodes)
             {
                 const auto   computed_dofs = map(node);
@@ -257,7 +257,7 @@ TEMPLATE_TEST_CASE("Node to global DOF",
 
         SECTION("Unpartitioned")
         {
-            const auto map = NodeToGlobalDofMap{dof_intervals, cond_map_full};
+            const auto map = dofs::NodeToGlobalDofMap{dof_intervals, cond_map_full};
             CHECK(map.isContiguous());
             check_dofs(mesh.getOwnedNodes(), map);
         }
@@ -267,7 +267,7 @@ TEMPLATE_TEST_CASE("Node to global DOF",
             const auto partitions = partitionMesh(mesh, n_parts, {});
             for (const auto& part : partitions)
             {
-                const auto map = NodeToGlobalDofMap{dof_intervals, cond_map_full};
+                const auto map = dofs::NodeToGlobalDofMap{dof_intervals, cond_map_full};
                 CHECK(map.isContiguous());
                 check_dofs(part.getOwnedNodes(), map);
                 check_dofs(part.getGhostNodes(), map);

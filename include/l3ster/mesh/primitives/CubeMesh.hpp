@@ -140,5 +140,5 @@ auto makeCubeMesh(R&& dist) -> MeshPartition< 1 >
 {
     return makeCubeMesh(dist, dist, dist);
 }
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_CUBEMESH_HPP

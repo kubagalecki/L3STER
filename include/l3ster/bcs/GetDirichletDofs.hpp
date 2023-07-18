@@ -5,14 +5,11 @@
 
 namespace lstr::bcs
 {
-template < el_o_t... orders,
-           CondensationPolicy        CP,
-           detail::ProblemDef_c auto problem_def,
-           detail::ProblemDef_c auto dirichlet_def >
-auto getDirichletDofs(const mesh::MeshPartition< orders... >&                         mesh,
-                      const Teuchos::RCP< const tpetra_fecrsgraph_t >&                sparsity_graph,
-                      const NodeToGlobalDofMap< detail::deduceNFields(problem_def) >& node_to_dof_map,
-                      const detail::NodeCondensationMap< CP >&                        cond_map,
+template < el_o_t... orders, CondensationPolicy CP, ProblemDef_c auto problem_def, ProblemDef_c auto dirichlet_def >
+auto getDirichletDofs(const mesh::MeshPartition< orders... >&                               mesh,
+                      const Teuchos::RCP< const tpetra_fecrsgraph_t >&                      sparsity_graph,
+                      const dofs::NodeToGlobalDofMap< detail::deduceNFields(problem_def) >& node_to_dof_map,
+                      const dofs::NodeCondensationMap< CP >&                                cond_map,
                       util::ConstexprValue< problem_def >,
                       util::ConstexprValue< dirichlet_def > dirichletdef_ctwrpr)
 {

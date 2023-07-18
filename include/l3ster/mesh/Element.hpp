@@ -54,5 +54,5 @@ constexpr auto getBoundaryNodes(const Element< T, O >& element)
     return ElementTraits< Element< T, O > >::boundary_node_inds |
            std::views::transform([&](size_t i) { return element.getNodes()[i]; });
 }
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_ELEMENT_HPP

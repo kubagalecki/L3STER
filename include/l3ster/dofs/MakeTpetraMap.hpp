@@ -1,10 +1,10 @@
 #ifndef L3STER_ASSEMBLY_MAKETPETRAMAP_HPP
 #define L3STER_ASSEMBLY_MAKETPETRAMAP_HPP
 
+#include "l3ster/dofs/NodeToDofMap.hpp"
 #include "l3ster/util/TrilinosUtils.hpp"
-#include "NodeToDofMap.hpp"
 
-namespace lstr
+namespace lstr::dofs
 {
 namespace detail
 {
@@ -66,5 +66,5 @@ Teuchos::RCP< const tpetra_map_t > makeTpetraMap(RangeOfConvertibleTo_c< n_id_t 
     const auto dofs = detail::getNodeDofs(std::forward< decltype(nodes) >(nodes), dof_intervals);
     return makeTpetraMap(dofs, comm);
 }
-} // namespace lstr
+} // namespace lstr::dofs
 #endif // L3STER_ASSEMBLY_MAKETPETRAMAP_HPP

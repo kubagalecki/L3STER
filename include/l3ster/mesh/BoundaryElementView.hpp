@@ -44,5 +44,5 @@ auto BoundaryElementView< ET, EO >::getSideNodeInds() const -> std::span< const 
         std::make_integer_sequence< el_side_t, ElementTraits< Element< ET, EO > >::n_sides >{});
     return retval;
 }
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_BOUNDARYELEMENTVIEW_HPP

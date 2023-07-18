@@ -73,5 +73,5 @@ bool operator==(const Point< DIM >& p1, const Point< DIM >& p2)
 {
     return static_cast< Point< DIM >::coords_array_t >(p1) == static_cast< Point< DIM >::coords_array_t >(p2);
 }
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_POINT_HPP

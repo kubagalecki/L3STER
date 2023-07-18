@@ -20,11 +20,11 @@ void test(CondensationPolicyTag< CP > = {})
     const auto           mesh = generateAndDistributeMesh< mesh_order >(
         comm, [&] { return mesh::makeCubeMesh(node_dist); }, {1, 2, 3, 4, 5, 6}, {}, problemdef_ctwrpr);
 
-    const auto  condensation_map         = detail::makeCondensationMap< CP >(comm, mesh, problemdef_ctwrpr);
-    const auto& global_nodes_to_condense = detail::getActiveNodes< CP >(mesh, problemdef_ctwrpr);
+    const auto  condensation_map         = dofs::makeCondensationMap< CP >(comm, mesh, problemdef_ctwrpr);
+    const auto& global_nodes_to_condense = dofs::detail::getActiveNodes< CP >(mesh, problemdef_ctwrpr);
     REQUIRE(condensation_map.getCondensedIds().size() == global_nodes_to_condense.size());
     for (auto n : global_nodes_to_condense)
-        REQUIRE(detail::getLocalCondensedId(condensation_map, n) < global_nodes_to_condense.size());
+        REQUIRE(condensation_map.getLocalCondensedId(n) < global_nodes_to_condense.size());
     std::vector< n_id_t > uncondensed_owned, condensed_ghost, condensed_owned;
     for (auto n : global_nodes_to_condense)
     {

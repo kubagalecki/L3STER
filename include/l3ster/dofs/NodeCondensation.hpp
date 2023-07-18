@@ -21,9 +21,11 @@ struct CondensationPolicyTag
     static constexpr auto value = cond_policy;
 };
 
-inline constexpr auto no_condensation  = CondensationPolicyTag< CondensationPolicy::None >{};
-inline constexpr auto element_boundary = CondensationPolicyTag< CondensationPolicy::ElementBoundary >{};
+inline constexpr auto no_condensation_tag  = CondensationPolicyTag< CondensationPolicy::None >{};
+inline constexpr auto element_boundary_tag = CondensationPolicyTag< CondensationPolicy::ElementBoundary >{};
 
+namespace dofs
+{
 namespace detail
 {
 template < typename T >
@@ -83,7 +85,7 @@ auto getActiveNodes(const mesh::MeshPartition< orders... >& mesh,
 
 auto packRangeWithSizeForComm(std::ranges::range auto&& range, size_t alloc_size)
     -> util::ArrayOwner< std::ranges::range_value_t< decltype(range) > >
-    requires mpi::MpiType_c< std::ranges::range_value_t< decltype(range) > > and
+    requires lstr::detail::mpi::MpiType_c< std::ranges::range_value_t< decltype(range) > > and
              std::integral< std::ranges::range_value_t< decltype(range) > >
 {
     using range_value_t             = std::ranges::range_value_t< decltype(range) >;
@@ -195,6 +197,7 @@ void activateOwned(const MpiComm&                          comm,
         process_offrank_active_nodes(comm_buf);
     my_active_nodes.shrink_to_fit();
 }
+} // namespace detail
 
 template < CondensationPolicy >
 class NodeCondensationMap
@@ -217,6 +220,24 @@ public:
     [[nodiscard]] auto getUncondensedId(n_id_t id) const -> n_id_t { return m_inverse_map.at(id); }
     [[nodiscard]] auto getCondensedIds() const -> std::span< const n_id_t > { return m_condensed_ids; }
 
+    [[nodiscard]] auto getLocalCondensedId(n_id_t node) const -> n_id_t
+    {
+        return static_cast< n_id_t >(std::distance(getCondensedIds().begin(),
+                                                   std::ranges::lower_bound(getCondensedIds(), getCondensedId(node))));
+    }
+    template < el_o_t... orders >
+    [[nodiscard]] auto getCondensedOwnedNodesView(const mesh::MeshPartition< orders... >& mesh) const
+    {
+        return getCondensedIds() |
+               std::views::filter([&](n_id_t node) { return mesh.isOwnedNode(getUncondensedId(node)); });
+    }
+    template < el_o_t... orders >
+    [[nodiscard]] auto getCondensedGhostNodesView(const mesh::MeshPartition< orders... >& mesh) const
+    {
+        return getCondensedIds() |
+               std::views::filter([&](n_id_t node) { return mesh.isGhostNode(getUncondensedId(node)); });
+    }
+
 private:
     std::vector< n_id_t >                            m_condensed_ids;
     robin_hood::unordered_flat_map< n_id_t, n_id_t > m_forward_map, m_inverse_map;
@@ -228,33 +249,11 @@ auto makeCondensationMap(const MpiComm&                          comm,
                          util::ConstexprValue< problem_def >     probdef_ctwrpr,
                          CondensationPolicyTag< CP >             cp_tag = {}) -> NodeCondensationMap< CP >
 {
-    auto active_nodes = getActiveNodes(mesh, probdef_ctwrpr, cp_tag);
-    activateOwned(comm, mesh, active_nodes);
-    auto condensed_active_nodes = computeCondensedActiveNodeIds(comm, mesh, active_nodes);
+    auto active_nodes = dofs::detail::getActiveNodes(mesh, probdef_ctwrpr, cp_tag);
+    detail::activateOwned(comm, mesh, active_nodes);
+    auto condensed_active_nodes = detail::computeCondensedActiveNodeIds(comm, mesh, active_nodes);
     return {std::move(active_nodes), std::move(condensed_active_nodes)};
 }
-
-template < CondensationPolicy CP >
-inline auto getLocalCondensedId(const NodeCondensationMap< CP >& cond_map, n_id_t node) -> n_id_t
-{
-    return static_cast< n_id_t >(
-        std::distance(cond_map.getCondensedIds().begin(),
-                      std::ranges::lower_bound(cond_map.getCondensedIds(), cond_map.getCondensedId(node))));
-}
-
-template < CondensationPolicy CP, el_o_t... orders >
-auto getCondensedOwnedNodesView(const mesh::MeshPartition< orders... >& mesh, const NodeCondensationMap< CP >& cond_map)
-{
-    return cond_map.getCondensedIds() |
-           std::views::filter([&](n_id_t node) { return mesh.isOwnedNode(cond_map.getUncondensedId(node)); });
-}
-
-template < CondensationPolicy CP, el_o_t... orders >
-auto getCondensedGhostNodesView(const mesh::MeshPartition< orders... >& mesh, const NodeCondensationMap< CP >& cond_map)
-{
-    return cond_map.getCondensedIds() |
-           std::views::filter([&](n_id_t node) { return mesh.isGhostNode(cond_map.getUncondensedId(node)); });
-}
-} // namespace detail
+} // namespace dofs
 } // namespace lstr
 #endif // L3STER_DOFS_NODECONDENSATION_HPP

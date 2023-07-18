@@ -88,5 +88,5 @@ Zero BoundaryView< orders... >::reduce(Zero&& zero, Proj&& projection, Red&& red
         std::forward< Red >(reduction),
         [&](const boundary_element_view_variant_t& var) { return std::visit< Zero >(projection, var); });
 }
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_BOUNDARYVIEW_HPP

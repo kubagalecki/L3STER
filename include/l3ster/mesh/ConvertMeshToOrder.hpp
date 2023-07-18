@@ -61,5 +61,5 @@ auto convertMeshToOrder(const MeshPartition< 1 >& mesh, std::integral_constant< 
 
     return {std::move(new_domains), util::consecutiveIndices(max_node), max_node};
 }
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_CONVERTMESHTOORDER_HPP

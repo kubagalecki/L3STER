@@ -347,5 +347,5 @@ inline auto readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
     const auto node_data   = parse_nodes(format_data);
     return parse_elements(format_data, entity_data, node_data);
 }
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_READMESH_HPP

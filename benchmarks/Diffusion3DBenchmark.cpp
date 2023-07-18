@@ -121,7 +121,7 @@ int main(int argc, char* argv[])
         return retval;
     };
 
-    auto alg_system = makeAlgebraicSystem(comm, my_partition, element_boundary, probdef_ctwrpr, dirichletdef_ctwrpr);
+    auto alg_system = makeAlgebraicSystem(comm, my_partition, element_boundary_tag, probdef_ctwrpr, dirichletdef_ctwrpr);
     alg_system->beginAssembly();
     alg_system->assembleDomainProblem(diffusion_kernel3d, my_partition, std::views::single(domain_id));
     alg_system->endAssembly(my_partition);

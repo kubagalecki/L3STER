@@ -5,7 +5,7 @@
 #include "l3ster/dofs/DofIntervals.hpp"
 #include "l3ster/util/RobinHoodHashTables.hpp"
 
-namespace lstr
+namespace lstr::dofs
 {
 template < size_t dofs_per_node >
 class NodeToGlobalDofMap
@@ -28,7 +28,7 @@ public:
     NodeToGlobalDofMap() = default;
     template < CondensationPolicy CP >
     NodeToGlobalDofMap(const detail::node_interval_vector_t< dofs_per_node >& dof_intervals,
-                       const detail::NodeCondensationMap< CP >&               cond_map);
+                       const NodeCondensationMap< CP >&                       cond_map);
 
     [[nodiscard]] inline payload_t operator()(n_id_t node) const noexcept;
     [[nodiscard]] bool             isContiguous() const noexcept
@@ -39,10 +39,10 @@ public:
 private:
     template < CondensationPolicy CP >
     bool tryInitAsContiguous(const detail::node_interval_vector_t< dofs_per_node >& dof_ints,
-                             const detail::NodeCondensationMap< CP >&               cond_map);
+                             const NodeCondensationMap< CP >&                       cond_map);
     template < CondensationPolicy CP >
     void initNonContiguous(const detail::node_interval_vector_t< dofs_per_node >& dof_intervals,
-                           const detail::NodeCondensationMap< CP >&               cond_map);
+                           const NodeCondensationMap< CP >&                       cond_map);
 
     std::variant< map_t, ContiguousCaseInfo > m_data;
 };
@@ -59,7 +59,7 @@ public:
 
     NodeToLocalDofMap() = default;
     template < CondensationPolicy CP >
-    NodeToLocalDofMap(const detail::NodeCondensationMap< CP >&   cond_map,
+    NodeToLocalDofMap(const NodeCondensationMap< CP >&           cond_map,
                       const NodeToGlobalDofMap< dofs_per_node >& global_map,
                       const std::same_as< tpetra_map_t > auto&... local_global_maps)
         requires(sizeof...(local_global_maps) == num_maps);
@@ -74,7 +74,7 @@ private:
 };
 
 template < CondensationPolicy CP, size_t dofs_per_node >
-NodeToLocalDofMap(const detail::NodeCondensationMap< CP >&   cond_map,
+NodeToLocalDofMap(const NodeCondensationMap< CP >&           cond_map,
                   const NodeToGlobalDofMap< dofs_per_node >& global_map,
                   const std::same_as< tpetra_map_t > auto&... local_global_maps)
     -> NodeToLocalDofMap< dofs_per_node, sizeof...(local_global_maps) >;
@@ -95,8 +95,7 @@ concept NodeToDofMap_c = detail::is_node_map< T >;
 template < size_t dofs_per_node >
 template < CondensationPolicy CP >
 NodeToGlobalDofMap< dofs_per_node >::NodeToGlobalDofMap(
-    const detail::node_interval_vector_t< dofs_per_node >& dof_intervals,
-    const detail::NodeCondensationMap< CP >&               cond_map)
+    const detail::node_interval_vector_t< dofs_per_node >& dof_intervals, const NodeCondensationMap< CP >& cond_map)
 {
     L3STER_PROFILE_FUNCTION;
     if (cond_map.getCondensedIds().empty())
@@ -128,8 +127,7 @@ NodeToGlobalDofMap< dofs_per_node >::operator()(n_id_t node) const noexcept
 template < size_t dofs_per_node >
 template < CondensationPolicy CP >
 bool NodeToGlobalDofMap< dofs_per_node >::tryInitAsContiguous(
-    const detail::node_interval_vector_t< dofs_per_node >& dof_intervals,
-    const detail::NodeCondensationMap< CP >&               cond_map)
+    const detail::node_interval_vector_t< dofs_per_node >& dof_intervals, const NodeCondensationMap< CP >& cond_map)
 {
     const auto min_node_in_partition = cond_map.getCondensedIds().front();
     const auto max_node_in_partition = cond_map.getCondensedIds().back();
@@ -156,8 +154,7 @@ bool NodeToGlobalDofMap< dofs_per_node >::tryInitAsContiguous(
 template < size_t dofs_per_node >
 template < CondensationPolicy CP >
 void NodeToGlobalDofMap< dofs_per_node >::initNonContiguous(
-    const detail::node_interval_vector_t< dofs_per_node >& dof_intervals,
-    const detail::NodeCondensationMap< CP >&               cond_map)
+    const detail::node_interval_vector_t< dofs_per_node >& dof_intervals, const NodeCondensationMap< CP >& cond_map)
 {
     auto&      map                 = m_data.template emplace< map_t >();
     const auto dof_interval_starts = detail::computeIntervalStarts(dof_intervals);
@@ -185,7 +182,7 @@ void NodeToGlobalDofMap< dofs_per_node >::initNonContiguous(
 template < size_t dofs_per_node, size_t num_maps >
 template < CondensationPolicy CP >
 NodeToLocalDofMap< dofs_per_node, num_maps >::NodeToLocalDofMap(
-    const detail::NodeCondensationMap< CP >&   cond_map,
+    const NodeCondensationMap< CP >&           cond_map,
     const NodeToGlobalDofMap< dofs_per_node >& global_map,
     const std::same_as< tpetra_map_t > auto&... local_global_maps)
     requires(sizeof...(local_global_maps) == num_maps)
@@ -202,5 +199,5 @@ NodeToLocalDofMap< dofs_per_node, num_maps >::NodeToLocalDofMap(
     for (n_id_t cond_node : cond_map.getCondensedIds())
         m_map[cond_map.getUncondensedId(cond_node)] = payload_t{get_node_dofs(cond_node, local_global_maps)...};
 }
-} // namespace lstr
+} // namespace lstr::dofs
 #endif // L3STER_DOFS_NODETODOFMAP_HPP

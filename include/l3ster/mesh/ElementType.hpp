@@ -23,5 +23,5 @@ inline constexpr auto element_types = std::invoke([] {
     std::ranges::generate(retval, [i = 0]() mutable { return static_cast< ElementType >(i++); });
     return retval;
 });
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_ELEMENTTYPES_HPP
