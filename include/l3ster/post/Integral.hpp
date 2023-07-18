@@ -1,7 +1,7 @@
 #ifndef L3STER_POST_INTEGRAL_HPP
 #define L3STER_POST_INTEGRAL_HPP
 
-#include "l3ster/assembly/AssembleGlobalSystem.hpp"
+#include "l3ster/glob_asm/AssembleGlobalSystem.hpp"
 #include "l3ster/quad/EvalQuadrature.hpp"
 
 namespace lstr

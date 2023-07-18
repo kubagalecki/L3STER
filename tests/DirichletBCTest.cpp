@@ -1,7 +1,7 @@
 #include "l3ster/bcs/DirichletBC.hpp"
-#include "l3ster/assembly/ScatterLocalSystem.hpp"
 #include "l3ster/bcs/GetDirichletDofs.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
+#include "l3ster/glob_asm/ScatterLocalSystem.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/solve/Solvers.hpp"
 #include "l3ster/util/ScopeGuards.hpp"

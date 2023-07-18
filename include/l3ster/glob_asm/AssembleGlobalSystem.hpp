@@ -1,8 +1,8 @@
 #ifndef L3STER_ASSEMBLY_ASSEMBLEGLOBALSYSTEM_HPP
 #define L3STER_ASSEMBLY_ASSEMBLEGLOBALSYSTEM_HPP
 
-#include "l3ster/assembly/StaticCondensationManager.hpp"
 #include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
+#include "l3ster/glob_asm/StaticCondensationManager.hpp"
 #include "l3ster/post/SolutionManager.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 

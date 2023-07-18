@@ -1,8 +1,8 @@
 #ifndef L3STER_ASSEMBLY_COMPUTEVALUESATNODES_HPP
 #define L3STER_ASSEMBLY_COMPUTEVALUESATNODES_HPP
 
-#include "l3ster/assembly/AssembleGlobalSystem.hpp"
 #include "l3ster/basisfun/ReferenceBasisAtNodes.hpp"
+#include "l3ster/glob_asm/AssembleGlobalSystem.hpp"
 #include "l3ster/mesh/NodePhysicalLocation.hpp"
 
 #include <atomic>

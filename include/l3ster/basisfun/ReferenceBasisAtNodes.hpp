@@ -1,7 +1,7 @@
 #ifndef L3STER_BASISFUN_REFERENCEBASISATNODES_HPP
 #define L3STER_BASISFUN_REFERENCEBASISATNODES_HPP
 
-#include "l3ster/basisfun/ReferenceBasisFunction.hpp"
+#include "l3ster/basisfun/ReferenceBasisAtPoints.hpp"
 #include "l3ster/mesh/NodeReferenceLocation.hpp"
 
 namespace lstr::basis

@@ -1,5 +1,5 @@
-#include "l3ster/assembly/AlgebraicSystem.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
+#include "l3ster/glob_asm/AlgebraicSystem.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 #include "l3ster/post/NormL2.hpp"
 #include "l3ster/solve/Solvers.hpp"

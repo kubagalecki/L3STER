@@ -1,8 +1,8 @@
 #ifndef L3STER_ASSEMBLY_SCATTERLOCALSYSTEM_HPP
 #define L3STER_ASSEMBLY_SCATTERLOCALSYSTEM_HPP
 
-#include "l3ster/assembly/AssembleLocalSystem.hpp"
-#include "l3ster/assembly/SparsityGraph.hpp"
+#include "l3ster/glob_asm/AssembleLocalSystem.hpp"
+#include "l3ster/glob_asm/SparsityGraph.hpp"
 
 #include <atomic>
 

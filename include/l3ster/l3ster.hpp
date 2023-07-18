@@ -3,9 +3,9 @@
 
 // This header includes the entire L3STER library
 
-#include "l3ster/assembly/AlgebraicSystem.hpp"
-#include "l3ster/assembly/ComputeValuesAtNodes.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
+#include "l3ster/glob_asm/AlgebraicSystem.hpp"
+#include "l3ster/glob_asm/ComputeValuesAtNodes.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
