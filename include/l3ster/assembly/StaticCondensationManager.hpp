@@ -2,7 +2,7 @@
 #define L3STER_ASSEMBLY_STATICCONDENSATIONMANAGER_HPP
 
 #include "l3ster/assembly/ScatterLocalSystem.hpp"
-#include "l3ster/assembly/SolutionManager.hpp"
+#include "l3ster/post/SolutionManager.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 #include "l3ster/util/TbbUtils.hpp"
 

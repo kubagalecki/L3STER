@@ -2,10 +2,10 @@
 #define L3STER_ASSEMBLY_ALGEBRAICSYSTEMMANAGER_HPP
 
 #include "l3ster/assembly/ComputeValuesAtNodes.hpp"
-#include "l3ster/assembly/SolutionManager.hpp"
 #include "l3ster/assembly/StaticCondensationManager.hpp"
 #include "l3ster/bcs/DirichletBC.hpp"
 #include "l3ster/bcs/GetDirichletDofs.hpp"
+#include "l3ster/post/SolutionManager.hpp"
 #include "l3ster/solve/SolverInterface.hpp"
 #include "l3ster/util/Assertion.hpp"
 #include "l3ster/util/GlobalResource.hpp"

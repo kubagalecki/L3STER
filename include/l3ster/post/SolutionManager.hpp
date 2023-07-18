@@ -1,5 +1,5 @@
-#ifndef L3STER_SOLUTIONMANAGER_HPP
-#define L3STER_SOLUTIONMANAGER_HPP
+#ifndef L3STER_POST_SOLUTIONMANAGER_HPP
+#define L3STER_POST_SOLUTIONMANAGER_HPP
 
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/util/EigenUtils.hpp"
@@ -148,4 +148,4 @@ auto combineFieldValueGetters(auto&&... fval_getters)
 }
  */
 } // namespace lstr
-#endif // L3STER_SOLUTIONMANAGER_HPP
+#endif // L3STER_POST_SOLUTIONMANAGER_HPP

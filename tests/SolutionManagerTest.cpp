@@ -1,4 +1,4 @@
-#include "l3ster/assembly/SolutionManager.hpp"
+#include "l3ster/post/SolutionManager.hpp"
 #include "l3ster/mesh/PartitionMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 
