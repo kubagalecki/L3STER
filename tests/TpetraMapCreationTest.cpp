@@ -1,7 +1,7 @@
 #include "Common.hpp"
 #include "TestDataPath.h"
-#include "l3ster/assembly/MakeTpetraMap.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
+#include "l3ster/dofs/MakeTpetraMap.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 

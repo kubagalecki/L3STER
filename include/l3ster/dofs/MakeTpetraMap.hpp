@@ -1,8 +1,8 @@
 #ifndef L3STER_ASSEMBLY_MAKETPETRAMAP_HPP
 #define L3STER_ASSEMBLY_MAKETPETRAMAP_HPP
 
-#include "l3ster/assembly/NodeToDofMap.hpp"
 #include "l3ster/util/TrilinosUtils.hpp"
+#include "NodeToDofMap.hpp"
 
 namespace lstr
 {

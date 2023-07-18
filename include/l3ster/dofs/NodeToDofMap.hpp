@@ -1,8 +1,8 @@
-#ifndef L3STER_ASSEMBLY_NODETODOFMAP_HPP
-#define L3STER_ASSEMBLY_NODETODOFMAP_HPP
+#ifndef L3STER_DOFS_NODETODOFMAP_HPP
+#define L3STER_DOFS_NODETODOFMAP_HPP
 
-#include "l3ster/assembly/DofIntervals.hpp"
 #include "l3ster/defs/TrilinosTypedefs.h"
+#include "l3ster/dofs/DofIntervals.hpp"
 #include "l3ster/util/RobinHoodHashTables.hpp"
 
 namespace lstr
@@ -203,4 +203,4 @@ NodeToLocalDofMap< dofs_per_node, num_maps >::NodeToLocalDofMap(
         m_map[cond_map.getUncondensedId(cond_node)] = payload_t{get_node_dofs(cond_node, local_global_maps)...};
 }
 } // namespace lstr
-#endif // L3STER_ASSEMBLY_NODETODOFMAP_HPP
+#endif // L3STER_DOFS_NODETODOFMAP_HPP

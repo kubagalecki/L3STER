@@ -1,7 +1,7 @@
 #ifndef L3STER_MESH_PARTITIONMESH_HPP
 #define L3STER_MESH_PARTITIONMESH_HPP
 
-#include "l3ster/assembly/ProblemDefinition.hpp"
+#include "l3ster/dofs/ProblemDefinition.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/Caliper.hpp"

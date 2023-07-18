@@ -1,7 +1,7 @@
 #ifndef L3STER_POST_VTKEXPORT_HPP
 #define L3STER_POST_VTKEXPORT_HPP
 
-#include "l3ster/assembly/NodeToDofMap.hpp"
+#include "l3ster/dofs/NodeToDofMap.hpp"
 #include "l3ster/mesh/NodePhysicalLocation.hpp"
 #include "l3ster/post/SolutionManager.hpp"
 #include "l3ster/util/Base64.hpp"

@@ -1,4 +1,4 @@
-#include "l3ster/assembly/NodeCondensation.hpp"
+#include "l3ster/dofs/NodeCondensation.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/util/ScopeGuards.hpp"

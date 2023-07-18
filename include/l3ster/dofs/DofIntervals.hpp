@@ -1,7 +1,7 @@
-#ifndef L3STER_ASSEMBLY_DOFINTERVALS_HPP
-#define L3STER_ASSEMBLY_DOFINTERVALS_HPP
+#ifndef L3STER_DOFS_DOFINTERVALS_HPP
+#define L3STER_DOFS_DOFINTERVALS_HPP
 
-#include "l3ster/assembly/NodeCondensation.hpp"
+#include "l3ster/dofs/NodeCondensation.hpp"
 #include "l3ster/util/Caliper.hpp"
 
 namespace lstr
@@ -307,4 +307,4 @@ auto computeDofIntervals(const MpiComm&                           comm,
     return retval;
 }
 } // namespace lstr
-#endif // L3STER_ASSEMBLY_DOFINTERVALS_HPP
+#endif // L3STER_DOFS_DOFINTERVALS_HPP

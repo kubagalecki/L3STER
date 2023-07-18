@@ -1,5 +1,5 @@
-#include "l3ster/assembly/MakeTpetraMap.hpp"
-#include "l3ster/assembly/NodeToDofMap.hpp"
+#include "l3ster/dofs/MakeTpetraMap.hpp"
+#include "l3ster/dofs/NodeToDofMap.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/PartitionMesh.hpp"
 #include "l3ster/mesh/ReadMesh.hpp"

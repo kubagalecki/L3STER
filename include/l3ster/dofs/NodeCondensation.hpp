@@ -1,8 +1,8 @@
-#ifndef L3STER_NODECONDENSATION_HPP
-#define L3STER_NODECONDENSATION_HPP
+#ifndef L3STER_DOFS_NODECONDENSATION_HPP
+#define L3STER_DOFS_NODECONDENSATION_HPP
 
-#include "l3ster/assembly/ProblemDefinition.hpp"
 #include "l3ster/comm/MpiComm.hpp"
+#include "l3ster/dofs/ProblemDefinition.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/util/ArrayOwner.hpp"
 #include "l3ster/util/RobinHoodHashTables.hpp"
@@ -257,4 +257,4 @@ auto getCondensedGhostNodesView(const mesh::MeshPartition< orders... >& mesh, co
 }
 } // namespace detail
 } // namespace lstr
-#endif // L3STER_NODECONDENSATION_HPP
+#endif // L3STER_DOFS_NODECONDENSATION_HPP

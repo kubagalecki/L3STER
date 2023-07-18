@@ -2,6 +2,7 @@
 #define L3STER_UTILS_TRILINOSUTILS_HPP
 
 #include "l3ster/defs/TrilinosTypedefs.h"
+#include "l3ster/util/Concepts.hpp"
 
 #include <concepts>
 #include <ranges>
