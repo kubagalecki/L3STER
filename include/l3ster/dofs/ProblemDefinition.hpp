@@ -2,37 +2,80 @@
 #define L3STER_DOFS_PROBLEMDEFINITION_HPP
 
 #include "l3ster/defs/Typedefs.h"
-#include "l3ster/util/BitsetManip.hpp"
-#include "l3ster/util/Common.hpp"
+
+#include <algorithm>
+#include <array>
+#include <concepts>
 
 namespace lstr
 {
+template < size_t fields >
+struct DomainDef
+{
+    d_id_t                     domain{};
+    std::array< bool, fields > active_fields{};
+};
+
+template < size_t fields >
+constexpr auto defineDomain(d_id_t domain, std::convertible_to< size_t > auto... field_inds) -> DomainDef< fields >
+{
+    auto                        active_fields = std::array< bool, fields >{};
+    [[maybe_unused]] const auto set           = [&](auto ind) {
+        active_fields.at(static_cast< size_t >(ind)) = true;
+    };
+    (set(field_inds), ...);
+    return {domain, active_fields};
+}
+
 namespace detail
 {
-template < size_t n_fields, size_t n_domains >
-using problem_def_t = std::array< util::Pair< d_id_t, std::array< bool, n_fields > >, n_domains >;
-
-template < typename T >
-inline constexpr bool is_problem_def = false;
-template < size_t n_fields, size_t n_domains >
-inline constexpr bool is_problem_def< problem_def_t< n_fields, n_domains > > = true;
-
-template < size_t n_fields, size_t n_domains >
-consteval size_t deduceNFields(const problem_def_t< n_fields, n_domains >&)
+template < std::integral T >
+constexpr auto getNFields(std::initializer_list< T > list) -> size_t
 {
-    return n_fields;
+    return std::max(list) + 1;
 }
-
-template < size_t n_fields, size_t n_domains >
-consteval size_t deduceNDomains(const problem_def_t< n_fields, n_domains >&)
+constexpr auto getNFields() -> size_t
 {
-    return n_domains;
+    return 0;
 }
 } // namespace detail
+#define L3STER_DEFINE_DOMAIN(domain, ...)                                                                              \
+    defineDomain< detail::getNFields(__VA_OPT__({) __VA_ARGS__ __VA_OPT__(})) >(domain __VA_OPT__(, ) __VA_ARGS__)
 
-template < typename T >
-concept ProblemDef_c = detail::is_problem_def< T >;
+template < size_t domains, size_t fields >
+class ProblemDef
+{
+public:
+    static constexpr size_t n_domains = domains;
+    static constexpr size_t n_fields  = fields;
 
-using EmptyProblemDef = std::array< util::Pair< d_id_t, std::array< bool, 0 > >, 0 >;
+    constexpr ProblemDef() = default;
+    template < size_t... comp_fields >
+    constexpr explicit ProblemDef(const DomainDef< comp_fields >&... domain_defs_)
+        : domain_defs{extendDomainDef(domain_defs_)...}
+    {}
+
+    constexpr auto begin() const { return domain_defs.cbegin(); }
+    constexpr auto end() const { return domain_defs.cend(); }
+    constexpr auto size() const { return domain_defs.size(); }
+
+    std::array< DomainDef< fields >, domains > domain_defs{};
+
+private:
+    template < size_t nf >
+    constexpr auto extendDomainDef(const DomainDef< nf >& dom_def) -> DomainDef< fields >
+        requires(nf <= fields)
+    {
+        auto retval = DomainDef< fields >{};
+        retval.active_fields.fill(false);
+        retval.domain = dom_def.domain;
+        std::ranges::copy(dom_def.active_fields, retval.active_fields.begin());
+        return retval;
+    }
+};
+template < size_t... fields >
+ProblemDef(const DomainDef< fields >&... dom_defs) -> ProblemDef< sizeof...(dom_defs), std::max({fields...}) >;
+
+using EmptyProblemDef = ProblemDef< 0, 0 >;
 } // namespace lstr
 #endif // L3STER_DOFS_PROBLEMDEFINITION_HPP

@@ -24,7 +24,8 @@ public:
                         SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
                         SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds);
     template < el_o_t... orders >
-    void updateNodeCoords(const mesh::MeshPartition< orders... >& mesh);
+    void        updateNodeCoords(const mesh::MeshPartition< orders... >& mesh);
+    inline void flushWriteQueue();
 
 private:
     struct SectionSizes
@@ -62,7 +63,6 @@ private:
                             ContiguousSizedRangeOf< char > auto&&  text)
         requires std::ranges::borrowed_range< decltype(text) > or std::same_as< std::string&&, decltype(text) > or
                  std::same_as< util::ArrayOwner< char >&&, decltype(text) >;
-    inline void flushWriteQueue();
 
     size_t                    m_n_cells, m_n_nodes;
     SectionSizes              m_section_sizes;

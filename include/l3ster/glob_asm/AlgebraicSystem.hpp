@@ -18,14 +18,14 @@ namespace lstr
 template < size_t max_dofs_per_node, CondensationPolicy CP >
 class AlgebraicSystem
 {
-    template < el_o_t... orders, ProblemDef_c auto problem_def, ProblemDef_c auto dirichlet_def >
+    template < el_o_t... orders, ProblemDef problem_def, ProblemDef dirichlet_def >
     AlgebraicSystem(const MpiComm&                          comm,
                     const mesh::MeshPartition< orders... >& mesh,
                     util::ConstexprValue< problem_def >,
                     util::ConstexprValue< dirichlet_def >);
 
 public:
-    template < el_o_t... orders, ProblemDef_c auto problem_def, ProblemDef_c auto dirichlet_def >
+    template < el_o_t... orders, ProblemDef problem_def, ProblemDef dirichlet_def >
     static auto makeAlgebraicSystem(const MpiComm&                          comm,
                                     const mesh::MeshPartition< orders... >& mesh,
                                     util::ConstexprValue< problem_def >     problemdef_ctwrpr,
@@ -126,7 +126,7 @@ private:
         return std::hash< const void* >{}(key.first) ^ std::hash< size_t >{}(key.second);
     });
     static inline util::WeakCache< cache_key_t, AlgebraicSystem, cache_key_hash_t > cache{};
-    template < el_o_t... orders, ProblemDef_c auto problem_def, ProblemDef_c auto dirichlet_def >
+    template < el_o_t... orders, ProblemDef problem_def, ProblemDef dirichlet_def >
     static auto makeCacheKey(const mesh::MeshPartition< orders... >& mesh,
                              util::ConstexprValue< problem_def >,
                              util::ConstexprValue< dirichlet_def >) -> cache_key_t
@@ -236,7 +236,7 @@ auto AlgebraicSystem< max_dofs_per_node, CP >::makeSolutionVector() const -> Teu
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP >
-template < el_o_t... orders, ProblemDef_c auto problem_def, ProblemDef_c auto dirichlet_def >
+template < el_o_t... orders, ProblemDef problem_def, ProblemDef dirichlet_def >
 auto AlgebraicSystem< max_dofs_per_node, CP >::makeAlgebraicSystem(
     const MpiComm&                          comm,
     const mesh::MeshPartition< orders... >& mesh,
@@ -253,20 +253,20 @@ auto AlgebraicSystem< max_dofs_per_node, CP >::makeAlgebraicSystem(
         return cache.emplace(cache_key, AlgebraicSystem{comm, mesh, problemdef_ctwrpr, dbcdef_ctwrpr});
 }
 
-template < el_o_t... orders, ProblemDef_c auto problem_def, CondensationPolicy CP >
+template < el_o_t... orders, ProblemDef problem_def, CondensationPolicy CP >
 AlgebraicSystem(const MpiComm&,
                 const mesh::MeshPartition< orders... >&,
                 util::ConstexprValue< problem_def >,
-                CondensationPolicyTag< CP >) -> AlgebraicSystem< detail::deduceNFields(problem_def), CP >;
-template < el_o_t... orders, ProblemDef_c auto problem_def, ProblemDef_c auto dirichlet_def, CondensationPolicy CP >
+                CondensationPolicyTag< CP >) -> AlgebraicSystem< problem_def.n_fields, CP >;
+template < el_o_t... orders, ProblemDef problem_def, ProblemDef dirichlet_def, CondensationPolicy CP >
 AlgebraicSystem(const MpiComm&,
                 const mesh::MeshPartition< orders... >&,
                 util::ConstexprValue< problem_def >,
                 util::ConstexprValue< dirichlet_def >,
-                CondensationPolicyTag< CP >) -> AlgebraicSystem< detail::deduceNFields(problem_def), CP >;
+                CondensationPolicyTag< CP >) -> AlgebraicSystem< problem_def.n_fields, CP >;
 
 template < size_t max_dofs_per_node, CondensationPolicy CP >
-template < el_o_t... orders, ProblemDef_c auto problem_def, ProblemDef_c auto dirichlet_def >
+template < el_o_t... orders, ProblemDef problem_def, ProblemDef dirichlet_def >
 AlgebraicSystem< max_dofs_per_node, CP >::AlgebraicSystem(const MpiComm&                          comm,
                                                           const mesh::MeshPartition< orders... >& mesh,
                                                           util::ConstexprValue< problem_def >     problemdef_ctwrpr,
@@ -290,7 +290,7 @@ AlgebraicSystem< max_dofs_per_node, CP >::AlgebraicSystem(const MpiComm&        
     m_condensation_manager = detail::StaticCondensationManager< CP >{mesh, m_node_dof_map, problemdef_ctwrpr};
     m_condensation_manager.beginAssembly();
 
-    if constexpr (dirichlet_def.size() != 0)
+    if constexpr (dirichlet_def.n_domains != 0)
     {
         L3STER_PROFILE_REGION_BEGIN("Dirichlet BCs");
         auto [owned_bcdofs, shared_bcdofs] = bcs::getDirichletDofs(
@@ -447,25 +447,26 @@ void AlgebraicSystem< max_dofs_per_node, CP >::describe(const MpiComm& comm, std
 
 namespace detail
 {
-consteval auto makeEmptyDirichletBCDef(const ProblemDef_c auto& problem_def)
+template < size_t domains, size_t fields >
+consteval auto makeEmptyDirichletBCDef(const ProblemDef< domains, fields >&) -> ProblemDef< 0, fields >
 {
-    return std::array< typename std::decay_t< decltype(problem_def) >::value_type, 0 >{};
+    return {};
 }
 } // namespace detail
 
 template < el_o_t... orders,
            CondensationPolicy CP,
-           ProblemDef_c auto  problem_def,
-           ProblemDef_c auto  dirichlet_def = detail::makeEmptyDirichletBCDef(problem_def) >
+           ProblemDef         problem_def,
+           ProblemDef         dirichlet_def = detail::makeEmptyDirichletBCDef(problem_def) >
 auto makeAlgebraicSystem(const MpiComm&                          comm,
                          const mesh::MeshPartition< orders... >& mesh,
                          CondensationPolicyTag< CP >,
                          util::ConstexprValue< problem_def >   problemdef_ctwrpr,
                          util::ConstexprValue< dirichlet_def > dbcdef_ctwrpr = {})
-    -> std::shared_ptr< AlgebraicSystem< detail::deduceNFields(problem_def), CP > >
+    -> std::shared_ptr< AlgebraicSystem< problem_def.n_fields, CP > >
 {
     L3STER_PROFILE_FUNCTION;
-    constexpr auto max_dofs_per_node = detail::deduceNFields(problem_def);
+    constexpr auto max_dofs_per_node = problem_def.n_fields;
     return AlgebraicSystem< max_dofs_per_node, CP >::makeAlgebraicSystem(comm, mesh, problemdef_ctwrpr, dbcdef_ctwrpr);
 }
 } // namespace lstr

@@ -28,36 +28,37 @@ inline auto convertPartWeights(std::vector< real_t > wgts) -> std::vector< real_
     return wgts;
 }
 
-template < el_o_t... orders, ProblemDef_c auto problem_def >
-auto computeNodeWeights(const MeshPartition< orders... >& mesh, util::ConstexprValue< problem_def > probdef_ctwrapper)
+template < el_o_t... orders, ProblemDef problem_def >
+auto computeNodeWeights(const MeshPartition< orders... >& mesh, util::ConstexprValue< problem_def > probdef_ctwrpr)
     -> std::vector< idx_t >
 {
-    if constexpr (problem_def.size() == 0)
+    if constexpr (problem_def.n_domains == 0)
         return {};
 
-    constexpr auto n_fields      = lstr::detail::deduceNFields(problem_def);
-    auto           node_dof_inds = util::DynamicBitset{n_fields * mesh.getAllNodes().size()};
+    constexpr auto n_fields      = problem_def.n_fields;
+    auto           node_dof_inds = util::DynamicBitset{problem_def.n_fields * mesh.getAllNodes().size()};
     util::forConstexpr(
-        [&]< auto dom_def >(util::ConstexprValue< dom_def >) {
-            constexpr auto dom_id   = dom_def.first;
-            constexpr auto dom_dofs = util::getTrueInds< dom_def.second >();
+        [&]< DomainDef< n_fields > dom_def >(util::ConstexprValue< dom_def >) {
+            constexpr auto dom_dofs = util::getTrueInds< dom_def.active_fields >();
             mesh.visit(
                 [&](const auto& element) {
                     for (auto node : element.getNodes())
                     {
-                        auto node_dofs = node_dof_inds.getSubView(node * n_fields, (node + 1) * n_fields);
+                        const auto begin_ind      = node * problem_def.n_fields;
+                        const auto end_ind        = begin_ind + problem_def.n_fields;
+                        auto       node_dofs_view = node_dof_inds.getSubView(begin_ind, end_ind);
                         for (auto dof : dom_dofs)
-                            node_dofs.set(dof);
+                            node_dofs_view.set(dof);
                     }
                 },
-                dom_id);
+                dom_def.domain);
         },
-        probdef_ctwrapper);
+        probdef_ctwrpr);
 
     std::vector< idx_t > retval;
     retval.reserve(mesh.getAllNodes().size());
     std::ranges::transform(mesh.getAllNodes(), std::back_inserter(retval), [&](auto node) {
-        const auto node_dofs = node_dof_inds.getSubView(node * n_fields, (node + 1) * n_fields);
+        const auto node_dofs = node_dof_inds.getSubView(node * problem_def.n_fields, (node + 1) * problem_def.n_fields);
         return node_dofs.count();
     });
     return retval;
@@ -403,7 +404,7 @@ auto partitionMeshImpl(const MeshPartition< orders... >& mesh,
 
 template < el_o_t... orders,
            RangeOfConvertibleTo_c< real_t > PartWgtRange = std::array< real_t, 0 >,
-           ProblemDef_c auto                problem_def  = EmptyProblemDef{} >
+           ProblemDef                       problem_def  = EmptyProblemDef{} >
 auto partitionMesh(const MeshPartition< orders... >&   mesh,
                    idx_t                               n_parts,
                    const std::vector< d_id_t >&        boundary_ids,

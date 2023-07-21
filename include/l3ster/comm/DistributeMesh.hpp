@@ -12,17 +12,16 @@ namespace lstr
 {
 namespace detail::dist_mesh
 {
-template < el_o_t... orders, ProblemDef_c auto problem_def >
-auto makeNodeToDofMap(const mesh::MeshPartition< orders... >& mesh,
-                      util::ConstexprValue< problem_def >     probdef_ctwrapper)
-    -> robin_hood::unordered_flat_map< n_id_t, std::bitset< deduceNFields(problem_def) > >
+template < el_o_t... orders, ProblemDef problem_def >
+auto makeNodeToDofMap(const mesh::MeshPartition< orders... >& mesh, util::ConstexprValue< problem_def > probdef_ctwrpr)
+    -> robin_hood::unordered_flat_map< n_id_t, std::bitset< problem_def.n_fields > >
 {
-    auto retval =
-        robin_hood::unordered_flat_map< n_id_t, std::bitset< deduceNFields(problem_def) > >{mesh.getAllNodes().size()};
+    constexpr auto n_fields = problem_def.n_fields;
+    using retval_t          = robin_hood::unordered_flat_map< n_id_t, std::bitset< problem_def.n_fields > >;
+    auto retval             = retval_t{mesh.getAllNodes().size()};
     forConstexpr(
-        [&]< auto dom_def >(util::ConstexprValue< dom_def >) {
-            constexpr auto dom_id   = dom_def.first;
-            constexpr auto dom_dofs = util::getTrueInds< dom_def.second >();
+        [&]< DomainDef< n_fields > dom_def >(util::ConstexprValue< dom_def >) {
+            constexpr auto dom_dofs = util::getTrueInds< dom_def.active_fields >();
             mesh.visit(
                 [&](const auto& element) {
                     for (auto node : element.getNodes())
@@ -32,9 +31,9 @@ auto makeNodeToDofMap(const mesh::MeshPartition< orders... >& mesh,
                             node_map_entry.set(dof);
                     }
                 },
-                dom_id);
+                dom_def.domain);
         },
-        probdef_ctwrapper);
+        probdef_ctwrpr);
     return retval;
 }
 
@@ -61,7 +60,7 @@ struct CommVolumeInfo
 {
     std::vector< int > sources, degrees, destinations, weights;
 };
-template < el_o_t... orders, ProblemDef_c auto problem_def >
+template < el_o_t... orders, ProblemDef problem_def >
 auto makeCommVolumeInfo(const std::vector< mesh::MeshPartition< orders... > >& mesh_parts,
                         util::ConstexprValue< problem_def >                    probdef_ctwrapper)
 {
@@ -93,7 +92,7 @@ auto makeCommVolumeInfo(const std::vector< mesh::MeshPartition< orders... > >& m
     return retval;
 }
 
-template < el_o_t... orders, ProblemDef_c auto problem_def >
+template < el_o_t... orders, ProblemDef problem_def >
 auto computeOptimalRankPermutation(const MpiComm&                                         comm,
                                    const std::vector< mesh::MeshPartition< orders... > >& mesh,
                                    util::ConstexprValue< problem_def > probdef_ctwrapper) -> std::vector< int >
@@ -136,7 +135,7 @@ auto readAndConvertMesh(std::string_view mesh_file, mesh::MeshFormatTag< mesh_fo
 }
 } // namespace detail::dist_mesh
 
-template < el_o_t... orders, ProblemDef_c auto problem_def = EmptyProblemDef{} >
+template < el_o_t... orders, ProblemDef problem_def = EmptyProblemDef{} >
 auto distributeMesh(const MpiComm&                          comm,
                     const mesh::MeshPartition< orders... >& mesh,
                     const std::vector< d_id_t >&            boundaries,
@@ -173,7 +172,7 @@ auto distributeMesh(const MpiComm&                          comm,
         return mesh::deserializePartition< orders... >(receivePartition(comm, 0));
 }
 
-template < el_o_t order, ProblemDef_c auto problem_def = EmptyProblemDef{} >
+template < el_o_t order, ProblemDef problem_def = EmptyProblemDef{} >
 auto generateAndDistributeMesh(const MpiComm&               comm,
                                auto&&                       mesh_generator,
                                const std::vector< d_id_t >& boundaries,
@@ -190,7 +189,7 @@ auto generateAndDistributeMesh(const MpiComm&               comm,
     return distributeMesh(comm, mesh, boundaries, probdef_ctwrpr);
 }
 
-template < el_o_t order, mesh::MeshFormat mesh_format, ProblemDef_c auto problem_def = EmptyProblemDef{} >
+template < el_o_t order, mesh::MeshFormat mesh_format, ProblemDef problem_def = EmptyProblemDef{} >
 auto readAndDistributeMesh(const MpiComm&                     comm,
                            std::string_view                   mesh_file,
                            mesh::MeshFormatTag< mesh_format > format_tag,

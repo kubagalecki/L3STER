@@ -12,7 +12,7 @@ void test(CondensationPolicyTag< CP > = {})
 {
     MpiComm comm{MPI_COMM_WORLD};
 
-    constexpr auto problem_def       = std::array{util::Pair{d_id_t{0}, std::array{true}}};
+    constexpr auto problem_def       = ProblemDef{L3STER_DEFINE_DOMAIN(0, 0)};
     constexpr auto problemdef_ctwrpr = util::ConstexprValue< problem_def >{};
 
     constexpr auto       mesh_order = 2;

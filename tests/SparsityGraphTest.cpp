@@ -12,39 +12,41 @@ using namespace lstr;
 class DenseGraph
 {
 public:
-    template < el_o_t... orders, auto problem_def, CondensationPolicy CP >
-    DenseGraph(const mesh::MeshPartition< orders... >&                                           mesh,
-               util::ConstexprValue< problem_def >                                               problemdef_ctwrpr,
-               const dofs::detail::node_interval_vector_t< detail::deduceNFields(problem_def) >& dof_intervals,
-               const dofs::NodeCondensationMap< CP >&                                            cond_map)
+    template < el_o_t... orders, ProblemDef problem_def, CondensationPolicy CP >
+    DenseGraph(const mesh::MeshPartition< orders... >&                             mesh,
+               util::ConstexprValue< problem_def >                                 probdef_ctwrpr,
+               const dofs::detail::node_interval_vector_t< problem_def.n_fields >& dof_intervals,
+               const dofs::NodeCondensationMap< CP >&                              cond_map)
     {
         const auto node_to_dof_map = dofs::NodeToGlobalDofMap{dof_intervals, cond_map};
-        m_dim = std::ranges::max(node_to_dof_map(cond_map.getCondensedIds().back()) | std::views::filter([](auto dof) {
-                                     return dof !=
-                                            dofs::NodeToGlobalDofMap< detail::deduceNFields(problem_def) >::invalid_dof;
-                                 })) +
-                1;
+        const auto max_dof =
+            std::ranges::max(node_to_dof_map(cond_map.getCondensedIds().back()) | std::views::filter([](auto dof) {
+                                 return dof != dofs::NodeToGlobalDofMap< problem_def.n_fields >::invalid_dof;
+                             }));
+        m_dim     = static_cast< size_t >(max_dof + 1);
         m_entries = util::DynamicBitset{m_dim * m_dim};
 
-        const auto process_domain = [&]< auto dom_def >(util::ConstexprValue< dom_def >) {
-            constexpr auto  domain_id        = dom_def.first;
-            constexpr auto& coverage         = dom_def.second;
-            constexpr auto  covered_dof_inds = util::getTrueInds< coverage >();
-
-            const auto process_element = [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >& element) {
-                const auto element_dofs = std::invoke([&] {
-                    if constexpr (CP == CondensationPolicy::None)
-                        return dofs::getUnsortedPrimaryDofs< covered_dof_inds >(element, node_to_dof_map, cond_map);
-                    else if constexpr ((CP == CondensationPolicy::ElementBoundary))
-                        return dofs::getUnsortedPrimaryDofs(element, node_to_dof_map, cond_map);
-                });
-                for (auto row : element_dofs)
-                    for (auto col : element_dofs)
-                        getRow(row).set(col);
-            };
-            mesh.visit(process_element, domain_id);
-        };
-        util::forConstexpr(process_domain, problemdef_ctwrpr);
+        constexpr auto n_fields = problem_def.n_fields;
+        util::forConstexpr(
+            [&]< DomainDef< n_fields > dom_def >(util::ConstexprValue< dom_def >) {
+                const auto process_element = [&]< mesh::ElementType T, el_o_t O >(
+                                                 const mesh::Element< T, O >& element) {
+                    const auto element_dofs = std::invoke([&] {
+                        if constexpr (CP == CondensationPolicy::None)
+                        {
+                            constexpr auto covered_dof_inds = util::getTrueInds< dom_def.active_fields >();
+                            return dofs::getUnsortedPrimaryDofs< covered_dof_inds >(element, node_to_dof_map, cond_map);
+                        }
+                        else if constexpr ((CP == CondensationPolicy::ElementBoundary))
+                            return dofs::getUnsortedPrimaryDofs(element, node_to_dof_map, cond_map);
+                    });
+                    for (auto row : element_dofs)
+                        for (auto col : element_dofs)
+                            getRow(static_cast< size_t >(row)).set(static_cast< size_t >(col));
+                };
+                mesh.visit(process_element, dom_def.domain);
+            },
+            probdef_ctwrpr);
     }
 
     [[nodiscard]] auto getRow(size_t row) { return m_entries.getSubView(row * m_dim, (row + 1) * m_dim); }
@@ -80,9 +82,8 @@ void test()
     });
     const auto my_partition = distributeMesh(comm, full_mesh, {1, 3});
 
-    constexpr auto problem_def    = std::array{util::Pair{d_id_t{0}, std::array{false, true}},
-                                            util::Pair{d_id_t{1}, std::array{true, false}},
-                                            util::Pair{d_id_t{3}, std::array{true, true}}};
+    constexpr auto problem_def =
+        ProblemDef{defineDomain< 2 >(0, 1), defineDomain< 2 >(1, 0), defineDomain< 2 >(3, 0, 1)};
     constexpr auto probdef_ctwrpr = util::ConstexprValue< problem_def >{};
 
     const auto cond_map       = dofs::makeCondensationMap< CP >(comm, my_partition, probdef_ctwrpr);

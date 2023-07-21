@@ -5,29 +5,28 @@
 
 namespace lstr::bcs
 {
-template < el_o_t... orders, CondensationPolicy CP, ProblemDef_c auto problem_def, ProblemDef_c auto dirichlet_def >
-auto getDirichletDofs(const mesh::MeshPartition< orders... >&                               mesh,
-                      const Teuchos::RCP< const tpetra_fecrsgraph_t >&                      sparsity_graph,
-                      const dofs::NodeToGlobalDofMap< detail::deduceNFields(problem_def) >& node_to_dof_map,
-                      const dofs::NodeCondensationMap< CP >&                                cond_map,
+template < el_o_t... orders, CondensationPolicy CP, ProblemDef problem_def, ProblemDef dirichlet_def >
+auto getDirichletDofs(const mesh::MeshPartition< orders... >&                 mesh,
+                      const Teuchos::RCP< const tpetra_fecrsgraph_t >&        sparsity_graph,
+                      const dofs::NodeToGlobalDofMap< problem_def.n_fields >& node_to_dof_map,
+                      const dofs::NodeCondensationMap< CP >&                  cond_map,
                       util::ConstexprValue< problem_def >,
                       util::ConstexprValue< dirichlet_def > dirichletdef_ctwrpr)
 {
-    const auto mark_owned_dirichlet_dofs = [&] {
+    constexpr auto n_fields                  = problem_def.n_fields;
+    const auto     mark_owned_dirichlet_dofs = [&] {
         const auto dirichlet_dofs = util::makeTeuchosRCP< tpetra_femultivector_t >(
             sparsity_graph->getColMap(), sparsity_graph->getImporter(), 1u);
         dirichlet_dofs->beginAssembly();
-        const auto process_domain = [&]< auto domain_def >(util::ConstexprValue< domain_def >) {
-            constexpr auto  domain_id        = domain_def.first;
-            constexpr auto& coverage         = domain_def.second;
-            constexpr auto  covered_dof_inds = util::getTrueInds< coverage >();
+        const auto process_domain = [&]< DomainDef< n_fields > domain_def >(util::ConstexprValue< domain_def >) {
+            constexpr auto covered_dof_inds = util::getTrueInds< domain_def.active_fields >();
             const auto process_element = [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >& element) {
                 const auto element_dirichlet_dofs =
                     dofs::getUnsortedPrimaryDofs< covered_dof_inds >(element, node_to_dof_map, cond_map);
                 for (auto dof : element_dirichlet_dofs)
                     dirichlet_dofs->replaceGlobalValue(dof, 0, 1.);
             };
-            mesh.visit(process_element, domain_id);
+            mesh.visit(process_element, domain_def.domain);
         };
         util::forConstexpr(process_domain, dirichletdef_ctwrpr);
         dirichlet_dofs->endAssembly();

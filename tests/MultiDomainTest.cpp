@@ -13,19 +13,12 @@ using namespace lstr;
 template < CondensationPolicy CP >
 void test()
 {
-    static constexpr auto domains        = std::array< d_id_t, 4 >{13, 14, 15, 16};
-    constexpr auto        problem_def    = std::invoke([] {
-        auto retval = std::array< util::Pair< d_id_t, std::array< bool, domains.size() > >, domains.size() >{};
-        for (auto& a : retval)
-            a.second.fill(false);
-        for (size_t i = 0; auto& [dom, cov] : retval)
-        {
-            dom      = domains[i];
-            cov[i++] = true;
-        }
-        return retval;
-    });
-    constexpr auto        probdef_ctwrpr = util::ConstexprValue< problem_def >{};
+    constexpr auto domains        = std::array< d_id_t, 4 >{13, 14, 15, 16};
+    constexpr auto problem_def    = ProblemDef{defineDomain< domains.size() >(domains[0], 0),
+                                            defineDomain< domains.size() >(domains[1], 1),
+                                            defineDomain< domains.size() >(domains[2], 2),
+                                            defineDomain< domains.size() >(domains[3], 3)};
+    constexpr auto probdef_ctwrpr = util::ConstexprValue< problem_def >{};
 
     const auto comm = MpiComm{MPI_COMM_WORLD};
     const auto mesh = readAndDistributeMesh(comm,
@@ -71,13 +64,13 @@ void test()
     auto solution = alg_sys->makeSolutionVector();
     alg_sys->solve(solver, solution);
 
-    auto solution_manager = SolutionManager{mesh, detail::deduceNFields(problem_def)};
-    for (size_t i = 0; i != detail::deduceNFields(problem_def); ++i)
+    auto solution_manager = SolutionManager{mesh, problem_def.n_fields};
+    for (size_t i = 0; i != problem_def.n_fields; ++i)
         solution_manager.setField(i, static_cast< double >(i + 1));
-    constexpr auto dof_inds = util::makeIotaArray< size_t, detail::deduceNFields(problem_def) >();
+    constexpr auto dof_inds = util::makeIotaArray< size_t, problem_def.n_fields >();
     alg_sys->updateSolution(mesh, solution, dof_inds, solution_manager, dof_inds);
 
-    for (size_t i = 0; i != detail::deduceNFields(problem_def); ++i)
+    for (size_t i = 0; i != problem_def.n_fields; ++i)
     {
         const auto field_vals = solution_manager.getFieldView(i);
         REQUIRE(std::ranges::all_of(field_vals,

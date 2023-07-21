@@ -18,8 +18,8 @@ void test()
 
     constexpr auto   boundary       = 3;
     constexpr d_id_t domain_id      = 0;
-    constexpr auto   problem_def    = std::array{util::Pair{d_id_t{domain_id}, std::array{true}}};
-    constexpr auto   dirichlet_def  = std::array{util::Pair{d_id_t{boundary}, std::array{true}}};
+    constexpr auto   problem_def    = ProblemDef{defineDomain< 1 >(domain_id, 0)};
+    constexpr auto   dirichlet_def  = ProblemDef{defineDomain< 1 >(boundary, 0)};
     constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
     constexpr auto   dirdef_ctwrpr  = util::ConstexprValue< dirichlet_def >{};
 

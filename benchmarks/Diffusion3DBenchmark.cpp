@@ -1,4 +1,4 @@
-#define L3STER_ELEMENT_ORDERS 8
+#define L3STER_ELEMENT_ORDERS 4
 #include "l3ster/l3ster.hpp"
 
 #include "DataPath.h"
@@ -13,19 +13,21 @@ int main(int argc, char* argv[])
 
     constexpr d_id_t      domain_id           = 0;
     static constexpr auto boundary_ids        = util::makeIotaArray< d_id_t, 6 >(1);
-    constexpr auto        problem_def         = std::array{util::Pair{domain_id, std::array{true, true, true, true}}};
+    static constexpr auto problem_def         = ProblemDef{defineDomain< 4 >(domain_id, 0, 1, 2, 3)};
     constexpr auto        dirichlet_def       = std::invoke([] {
-        std::array< util::Pair< d_id_t, std::array< bool, 4 > >, boundary_ids.size() > retval{};
-        std::ranges::transform(boundary_ids, retval.begin(), [](auto d) {
-            return util::Pair{d, std::array{true, false, false, false}};
-        });
+        auto retval = ProblemDef< boundary_ids.size(), problem_def.n_fields >{};
+        for (size_t i = 0; auto& [id, fields] : retval.domain_defs)
+        {
+            id             = boundary_ids[i++];
+            fields.front() = true;
+        }
         return retval;
     });
     constexpr auto        probdef_ctwrpr      = util::ConstexprValue< problem_def >{};
     constexpr auto        dirichletdef_ctwrpr = util::ConstexprValue< dirichlet_def >{};
 
     constexpr auto node_dist    = std::invoke([] {
-        constexpr size_t                   edge_divs = 2;
+        constexpr size_t                   edge_divs = 4;
         constexpr auto                     dx        = 1. / static_cast< val_t >(edge_divs);
         std::array< val_t, edge_divs + 1 > retval{};
         for (double x = 0; auto& r : retval)
@@ -44,8 +46,7 @@ int main(int argc, char* argv[])
         probdef_ctwrpr);
     const auto boundary_view = my_partition.getBoundaryView(boundary_ids);
 
-    constexpr auto n_fields    = detail::deduceNFields(problem_def);
-    constexpr auto field_inds  = util::makeIotaArray< size_t, n_fields >();
+    constexpr auto field_inds  = util::makeIotaArray< size_t, problem_def.n_fields >();
     constexpr auto T_inds      = std::array< size_t, 1 >{0};
     constexpr auto T_grad_inds = std::array< size_t, 3 >{1, 2, 3};
     const auto field_inds_view = std::array{std::span< const size_t >{T_inds}, std::span< const size_t >{T_grad_inds}};
@@ -121,7 +122,8 @@ int main(int argc, char* argv[])
         return retval;
     };
 
-    auto alg_system = makeAlgebraicSystem(comm, my_partition, element_boundary_tag, probdef_ctwrpr, dirichletdef_ctwrpr);
+    auto alg_system =
+        makeAlgebraicSystem(comm, my_partition, element_boundary_tag, probdef_ctwrpr, dirichletdef_ctwrpr);
     alg_system->beginAssembly();
     alg_system->assembleDomainProblem(diffusion_kernel3d, my_partition, std::views::single(domain_id));
     alg_system->endAssembly(my_partition);
@@ -138,7 +140,7 @@ int main(int argc, char* argv[])
     alg_system->solve(solver, solution);
 
     L3STER_PROFILE_REGION_BEGIN("Solution management");
-    auto solution_manager = SolutionManager{my_partition, n_fields};
+    auto solution_manager = SolutionManager{my_partition, problem_def.n_fields};
     alg_system->updateSolution(my_partition, solution, dof_inds, solution_manager, field_inds);
     L3STER_PROFILE_REGION_END("Solution management");
 
@@ -158,5 +160,6 @@ int main(int argc, char* argv[])
     L3STER_PROFILE_REGION_BEGIN("Export results to VTK");
     auto exporter = PvtuExporter{my_partition};
     exporter.exportSolution("Cube_Diffusion.pvtu", comm, solution_manager, field_names, field_inds_view);
+    exporter.flushWriteQueue();
     L3STER_PROFILE_REGION_END("Export results to VTK");
 }

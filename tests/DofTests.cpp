@@ -11,7 +11,7 @@
 
 using namespace lstr;
 
-template < el_o_t... orders, CondensationPolicy CP, ProblemDef_c auto problem_def >
+template < el_o_t... orders, CondensationPolicy CP, ProblemDef problem_def >
 static auto makeLocalCondensationMap(const mesh::MeshPartition< orders... >& mesh,
                                      util::ConstexprValue< problem_def >     probdef_ctwrpr,
                                      CondensationPolicyTag< CP > = {}) -> dofs::NodeCondensationMap< CP >
@@ -30,8 +30,8 @@ TEMPLATE_TEST_CASE("Local node DOF interval calculation",
     constexpr auto   node_dist      = std::array{0., 1., 2.};
     const auto       mesh           = mesh::makeCubeMesh(node_dist);
     constexpr size_t n_fields       = 2;
-    constexpr auto   probdef_ctwrpr = util::ConstexprValue< std::array{
-        util::Pair{d_id_t{0}, std::array{true, false}}, util::Pair{d_id_t{1}, std::array{false, true}}} >{};
+    constexpr auto   problem_def    = ProblemDef{L3STER_DEFINE_DOMAIN(0, 0), L3STER_DEFINE_DOMAIN(1, 1)};
+    constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
     const auto       cond_map       = makeLocalCondensationMap(mesh, probdef_ctwrpr, TestType{});
     const auto       result         = dofs::detail::computeLocalDofIntervals(mesh, cond_map, probdef_ctwrpr);
     REQUIRE(result.size() == 2);
@@ -48,18 +48,18 @@ TEMPLATE_TEST_CASE("Node DOF intervals of parts sum up to whole",
                    CondensationPolicyTag< CondensationPolicy::None >,
                    CondensationPolicyTag< CondensationPolicy::ElementBoundary >)
 {
-    constexpr auto problem_def =
-        util::ConstexprValue< std::array{util::Pair{d_id_t{1}, std::array{false, false, false}},
-                                         util::Pair{d_id_t{2}, std::array{false, false, true}},
-                                         util::Pair{d_id_t{3}, std::array{false, true, false}},
-                                         util::Pair{d_id_t{4}, std::array{false, true, true}},
-                                         util::Pair{d_id_t{5}, std::array{true, false, false}},
-                                         util::Pair{d_id_t{6}, std::array{true, false, true}},
-                                         util::Pair{d_id_t{7}, std::array{true, true, false}},
-                                         util::Pair{d_id_t{8}, std::array{true, true, true}}} >{};
-    const auto mesh          = mesh::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube_multidom.msh), mesh::gmsh_tag);
-    const auto cond_map_full = makeLocalCondensationMap(mesh, problem_def, TestType{});
-    const auto unpartitioned_intervals = dofs::detail::computeLocalDofIntervals(mesh, cond_map_full, problem_def);
+    constexpr auto problem_def     = ProblemDef{L3STER_DEFINE_DOMAIN(1),
+                                            L3STER_DEFINE_DOMAIN(2, 2),
+                                            L3STER_DEFINE_DOMAIN(3, 1),
+                                            L3STER_DEFINE_DOMAIN(4, 1, 2),
+                                            L3STER_DEFINE_DOMAIN(5, 0),
+                                            L3STER_DEFINE_DOMAIN(6, 0, 2),
+                                            L3STER_DEFINE_DOMAIN(7, 0, 1),
+                                            L3STER_DEFINE_DOMAIN(8, 0, 1, 2)};
+    constexpr auto prob_def_ctwrpr = util::ConstexprValue< problem_def >{};
+    const auto     mesh = mesh::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube_multidom.msh), mesh::gmsh_tag);
+    const auto     cond_map_full       = makeLocalCondensationMap(mesh, prob_def_ctwrpr, TestType{});
+    const auto unpartitioned_intervals = dofs::detail::computeLocalDofIntervals(mesh, cond_map_full, prob_def_ctwrpr);
 
     std::vector< d_id_t > boundaries(24);
     std::iota(boundaries.begin(), boundaries.end(), 9);
@@ -76,7 +76,7 @@ TEMPLATE_TEST_CASE("Node DOF intervals of parts sum up to whole",
             std::ranges::sort(cond_ids);
             return dofs::NodeCondensationMap< TestType::value >{cond_ids, cond_ids};
         });
-        const auto intervals = dofs::detail::computeLocalDofIntervals(part, cond_map, problem_def);
+        const auto intervals = dofs::detail::computeLocalDofIntervals(part, cond_map, prob_def_ctwrpr);
         std::ranges::copy(intervals, std::back_inserter(partitioned_intervals));
     }
     dofs::detail::consolidateDofIntervals(partitioned_intervals);
@@ -186,7 +186,7 @@ TEMPLATE_TEST_CASE("Node to global DOF",
     const auto           mesh      = mesh::makeCubeMesh(node_dist);
     constexpr size_t     n_fields  = 3;
 
-    constexpr auto probdef_domain = util::ConstexprValue< std::array{util::Pair{d_id_t{0}, std::array{true}}} >{};
+    constexpr auto probdef_domain = util::ConstexprValue< ProblemDef{L3STER_DEFINE_DOMAIN(0, 0)} >{};
     const auto     cond_map_full  = makeLocalCondensationMap(mesh, probdef_domain, TestType{});
 
     SECTION("Non-contiguous DOF distribution")

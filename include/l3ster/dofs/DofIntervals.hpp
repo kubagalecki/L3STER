@@ -2,6 +2,7 @@
 #define L3STER_DOFS_DOFINTERVALS_HPP
 
 #include "l3ster/dofs/NodeCondensation.hpp"
+#include "l3ster/util/BitsetManip.hpp"
 #include "l3ster/util/Caliper.hpp"
 
 namespace lstr::dofs
@@ -39,14 +40,12 @@ auto computeDofIntervalsFromNodeData(const NodeCondensationMap< CP >&           
     return retval;
 }
 
-template < CondensationPolicy CP, ProblemDef_c auto problem_def, el_o_t... orders >
+template < CondensationPolicy CP, ProblemDef problem_def, el_o_t... orders >
 auto makeFieldCoverageVector(const mesh::MeshPartition< orders... >& mesh,
                              const NodeCondensationMap< CP >&        cond_map,
-                             util::ConstexprValue< problem_def >)
-    -> std::vector< std::bitset< lstr::detail::deduceNFields(problem_def) > >
+                             util::ConstexprValue< problem_def >) -> std::vector< std::bitset< problem_def.n_fields > >
 {
-    auto retval =
-        std::vector< std::bitset< lstr::detail::deduceNFields(problem_def) > >(cond_map.getCondensedIds().size());
+    auto retval = std::vector< std::bitset< problem_def.n_fields > >(cond_map.getCondensedIds().size());
     for (const auto& [dom_id, field_array] : problem_def)
     {
         const auto fields = util::toBitset(field_array);
@@ -63,11 +62,11 @@ auto makeFieldCoverageVector(const mesh::MeshPartition< orders... >& mesh,
     return retval;
 }
 
-template < CondensationPolicy CP, ProblemDef_c auto problem_def, el_o_t... orders >
+template < CondensationPolicy CP, ProblemDef problem_def, el_o_t... orders >
 auto computeLocalDofIntervals(const mesh::MeshPartition< orders... >& mesh,
                               const NodeCondensationMap< CP >&        cond_map,
                               util::ConstexprValue< problem_def >     problemdef_ctwrapper)
-    -> node_interval_vector_t< lstr::detail::deduceNFields(problem_def) >
+    -> node_interval_vector_t< problem_def.n_fields >
 {
     const auto field_coverage = makeFieldCoverageVector(mesh, cond_map, problemdef_ctwrapper);
     return computeDofIntervalsFromNodeData(cond_map, field_coverage);
@@ -294,12 +293,12 @@ I findNodeInterval(I begin, S end, n_id_t node)
 }
 } // namespace detail
 
-template < CondensationPolicy CP, ProblemDef_c auto problem_def, el_o_t... orders >
+template < CondensationPolicy CP, ProblemDef problem_def, el_o_t... orders >
 auto computeDofIntervals(const MpiComm&                          comm,
                          const mesh::MeshPartition< orders... >& mesh,
                          const NodeCondensationMap< CP >&        cond_map,
                          util::ConstexprValue< problem_def >     problemdef_ctwrapper)
-    -> detail::node_interval_vector_t< lstr::detail::deduceNFields(problem_def) >
+    -> detail::node_interval_vector_t< problem_def.n_fields >
 {
     L3STER_PROFILE_FUNCTION;
     const auto local_intervals = detail::computeLocalDofIntervals(mesh, cond_map, problemdef_ctwrapper);

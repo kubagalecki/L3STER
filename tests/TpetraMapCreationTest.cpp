@@ -10,20 +10,20 @@ using namespace lstr;
 template < CondensationPolicy CP >
 void test()
 {
-    const auto     comm  = MpiComm{MPI_COMM_WORLD};
-    constexpr auto order = 2;
-    const auto     mesh  = generateAndDistributeMesh< order >(comm,
+    const auto     comm            = MpiComm{MPI_COMM_WORLD};
+    constexpr auto order           = 2;
+    const auto     mesh            = generateAndDistributeMesh< order >(comm,
                                                          [] {
                                                              return mesh::makeCubeMesh(std::array{0., 1., 2., 3., 4.});
                                                          },
                                                          {});
-    constexpr auto probdef_ctwrpr =
-        util::ConstexprValue< std::array{util::Pair{d_id_t{0}, std::array{false, true}}} >{};
-    const auto cond_map        = dofs::makeCondensationMap< CP >(comm, mesh, probdef_ctwrpr);
-    auto       owned_condensed = cond_map.getCondensedOwnedNodesView(mesh);
-    const auto dof_intervals   = dofs::computeDofIntervals(comm, mesh, cond_map, probdef_ctwrpr);
-    const auto tpetra_map      = dofs::makeTpetraMap(owned_condensed, dof_intervals, comm);
-    const auto map_entries     = tpetra_map->getLocalElementList();
+    constexpr auto problem_def     = ProblemDef{L3STER_DEFINE_DOMAIN(0, 1)};
+    constexpr auto probdef_ctwrpr  = util::ConstexprValue< problem_def >{};
+    const auto     cond_map        = dofs::makeCondensationMap< CP >(comm, mesh, probdef_ctwrpr);
+    auto           owned_condensed = cond_map.getCondensedOwnedNodesView(mesh);
+    const auto     dof_intervals   = dofs::computeDofIntervals(comm, mesh, cond_map, probdef_ctwrpr);
+    const auto     tpetra_map      = dofs::makeTpetraMap(owned_condensed, dof_intervals, comm);
+    const auto     map_entries     = tpetra_map->getLocalElementList();
     REQUIRE(std::ranges::equal(owned_condensed, tpetra_map->getLocalElementList()));
     REQUIRE(tpetra_map->isOneToOne());
 }

@@ -37,17 +37,16 @@ void vtkExportTest2D()
                                                 [&] { return mesh::makeSquareMesh(node_distx, node_disty); },
                                                 {bot_boundary, top_boundary, left_boundary, right_boundary});
 
-    constexpr auto problem_def       = std::array{util::Pair{domain_id, std::array{false, true, false, true}},
-                                            util::Pair{bot_boundary, std::array{true, false, true, false}},
-                                            util::Pair{top_boundary, std::array{true, false, true, false}}};
+    constexpr auto problem_def       = ProblemDef{defineDomain< 4 >(domain_id, 1, 3),
+                                            defineDomain< 4 >(bot_boundary, 0, 2),
+                                            defineDomain< 4 >(top_boundary, 0, 2)};
     constexpr auto problemdef_ctwrpr = util::ConstexprValue< problem_def >{};
-    constexpr auto n_fields          = detail::deduceNFields(problem_def);
     constexpr auto scalar_inds       = std::array< size_t, 2 >{0, 2};
     constexpr auto vec_inds          = std::array< size_t, 2 >{1, 3};
-    constexpr auto all_field_inds    = util::makeIotaArray< size_t, n_fields >();
+    constexpr auto all_field_inds    = util::makeIotaArray< size_t, problem_def.n_fields >();
 
     const auto system_manager   = makeAlgebraicSystem(comm, my_partition, no_condensation_tag, problemdef_ctwrpr);
-    auto       solution_manager = SolutionManager{my_partition, n_fields};
+    auto       solution_manager = SolutionManager{my_partition, problem_def.n_fields};
 
     auto solution = system_manager->makeSolutionVector();
     {
@@ -108,19 +107,18 @@ void vtkExportTest3D()
         comm, [&] { return mesh::makeCubeMesh(node_dist); }, {1, 2, 3, 4, 5, 6});
     const auto boundary = my_partition.getBoundaryView(util::makeIotaArray< d_id_t, 6 >(1));
 
-    constexpr d_id_t domain_id = 0;
-    constexpr auto   problem_def =
-        std::array{util::Pair{d_id_t{domain_id}, std::array{true, true, true, false, false, false}},
-                   util::Pair{d_id_t{1}, std::array{false, false, false, true, true, true}},
-                   util::Pair{d_id_t{2}, std::array{false, false, false, true, true, true}},
-                   util::Pair{d_id_t{3}, std::array{false, false, false, true, true, true}},
-                   util::Pair{d_id_t{4}, std::array{false, false, false, true, true, true}},
-                   util::Pair{d_id_t{5}, std::array{false, false, false, true, true, true}},
-                   util::Pair{d_id_t{6}, std::array{false, false, false, true, true, true}}};
-    constexpr auto problemdef_ctwrpr   = util::ConstexprValue< problem_def >{};
-    constexpr auto n_fields            = detail::deduceNFields(problem_def);
-    constexpr auto domain_field_inds   = std::array< size_t, 3 >{0, 1, 2};
-    constexpr auto boundary_field_inds = std::array< size_t, 3 >{3, 4, 5};
+    constexpr d_id_t domain_id           = 0;
+    constexpr auto   problem_def         = ProblemDef{defineDomain< 6 >(domain_id, 0, 1, 2),
+                                            defineDomain< 6 >(1, 3, 4, 5),
+                                            defineDomain< 6 >(2, 3, 4, 5),
+                                            defineDomain< 6 >(3, 3, 4, 5),
+                                            defineDomain< 6 >(4, 3, 4, 5),
+                                            defineDomain< 6 >(5, 3, 4, 5),
+                                            defineDomain< 6 >(6, 3, 4, 5)};
+    constexpr auto   problemdef_ctwrpr   = util::ConstexprValue< problem_def >{};
+    constexpr auto   n_fields            = problem_def.n_fields;
+    constexpr auto   domain_field_inds   = std::array< size_t, 3 >{0, 1, 2};
+    constexpr auto   boundary_field_inds = std::array< size_t, 3 >{3, 4, 5};
 
     const auto system_manager   = makeAlgebraicSystem(comm, my_partition, no_condensation_tag, problemdef_ctwrpr);
     auto       solution_manager = SolutionManager{my_partition, n_fields};

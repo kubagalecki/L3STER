@@ -76,7 +76,7 @@ class StaticCondensationManager< CondensationPolicy::None > :
 {
 public:
     StaticCondensationManager() = default;
-    template < el_o_t... orders, size_t max_dofs_per_node, ProblemDef_c auto problem_def >
+    template < el_o_t... orders, size_t max_dofs_per_node, ProblemDef problem_def >
     StaticCondensationManager(const mesh::MeshPartition< orders... >&,
                               const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >&,
                               util::ConstexprValue< problem_def >)
@@ -144,7 +144,7 @@ class StaticCondensationManager< CondensationPolicy::ElementBoundary > :
 
 public:
     StaticCondensationManager() = default;
-    template < el_o_t... orders, size_t max_dofs_per_node, ProblemDef_c auto problem_def >
+    template < el_o_t... orders, size_t max_dofs_per_node, ProblemDef problem_def >
     StaticCondensationManager(const mesh::MeshPartition< orders... >&                mesh,
                               const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map,
                               util::ConstexprValue< problem_def >);
@@ -233,7 +233,7 @@ void StaticCondensationManagerInterface< Derived >::updateSolutionPrimaryDofs(
     });
 }
 
-template < el_o_t... orders, size_t max_dofs_per_node, ProblemDef_c auto problem_def >
+template < el_o_t... orders, size_t max_dofs_per_node, ProblemDef problem_def >
 StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensationManager(
     const mesh::MeshPartition< orders... >&                mesh,
     const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map,
@@ -277,7 +277,7 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
                                                     .upper_block{n_boundary_dofs, n_internal_dofs},
                                                     .rhs{n_internal_dofs, 1}});
         },
-        problem_def | std::views::transform([](const auto& pair) { return pair.first; }),
+        problem_def | std::views::transform([](const DomainDef< problem_def.n_fields >& d) { return d.domain; }),
         std::execution::seq);
     m_internal_dof_inds.shrink_to_fit();
     m_element_ids.reserve(m_elem_data_map.size());

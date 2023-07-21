@@ -37,12 +37,12 @@ auto computeNodeDofs(const mesh::MeshPartition< orders... >&              mesh,
     return {std::move(dofs), n_owned_dofs};
 }
 
-template < el_o_t... orders, auto problem_def, CondensationPolicy CP >
-auto computeDofGraph(const mesh::MeshPartition< orders... >&                       mesh,
-                     const dofs::NodeToGlobalDofMap< deduceNFields(problem_def) >& node_to_dof_map,
-                     const dofs::NodeCondensationMap< CP >&                        cond_map,
-                     std::span< const global_dof_t >                               owned_plus_shared_dofs,
-                     util::ConstexprValue< problem_def >                           problem_def_ctwrapper)
+template < el_o_t... orders, ProblemDef problem_def, CondensationPolicy CP >
+auto computeDofGraph(const mesh::MeshPartition< orders... >&                 mesh,
+                     const dofs::NodeToGlobalDofMap< problem_def.n_fields >& node_to_dof_map,
+                     const dofs::NodeCondensationMap< CP >&                  cond_map,
+                     std::span< const global_dof_t >                         owned_plus_shared_dofs,
+                     util::ConstexprValue< problem_def >                     probdef_ctwrpr)
     -> std::pair< util::CrsGraph< global_dof_t >, Kokkos::DualView< size_t*, tpetra_fecrsgraph_t::execution_space > >
 {
     L3STER_PROFILE_FUNCTION;
@@ -50,19 +50,19 @@ auto computeDofGraph(const mesh::MeshPartition< orders... >&                    
     const auto global_to_local_dof_map = util::IndexMap{owned_plus_shared_dofs};
     L3STER_PROFILE_REGION_END("Compute global to local DOF map");
 
-    const auto iterate_over_mesh = [&](auto&& element_kernel) {
+    constexpr auto n_fields          = problem_def.n_fields;
+    const auto     iterate_over_mesh = [&](auto&& element_kernel) {
         util::forEachConstexprParallel(
-            [&]< auto dom_def >(util::ConstexprValue< dom_def >) {
-                constexpr auto domain_id        = dom_def.first;
-                constexpr auto covered_dof_inds = util::getTrueInds< dom_def.second >();
+            [&]< DomainDef< n_fields > dom_def >(util::ConstexprValue< dom_def >) {
+                constexpr auto covered_dof_inds = util::getTrueInds< dom_def.active_fields >();
                 mesh.visit(
                     [&](const auto& element) {
                         std::invoke(element_kernel, element, util::ConstexprValue< covered_dof_inds >{});
                     },
-                    domain_id,
+                    dom_def.domain,
                     std::execution::par);
             },
-            problem_def_ctwrapper);
+            probdef_ctwrpr);
     };
 
     auto crs_row_sizes_dual_view = Kokkos::DualView< size_t*, tpetra_fecrsgraph_t::execution_space >{
@@ -143,13 +143,13 @@ inline auto initCrsGraph(const MpiComm&                                         
         std::move(owned_map), std::move(owned_plus_shared_map), std::move(row_sizes));
 }
 
-template < el_o_t... orders, ProblemDef_c auto problem_def, CondensationPolicy CP >
+template < el_o_t... orders, ProblemDef problem_def, CondensationPolicy CP >
 Teuchos::RCP< const tpetra_fecrsgraph_t >
-makeSparsityGraph(const MpiComm&                                                comm,
-                  const mesh::MeshPartition< orders... >&                       mesh,
-                  const dofs::NodeToGlobalDofMap< deduceNFields(problem_def) >& node_to_dof_map,
-                  const dofs::NodeCondensationMap< CP >&                        cond_map,
-                  util::ConstexprValue< problem_def >                           problemdef_ctwrapper)
+makeSparsityGraph(const MpiComm&                                          comm,
+                  const mesh::MeshPartition< orders... >&                 mesh,
+                  const dofs::NodeToGlobalDofMap< problem_def.n_fields >& node_to_dof_map,
+                  const dofs::NodeCondensationMap< CP >&                  cond_map,
+                  util::ConstexprValue< problem_def >                     problemdef_ctwrapper)
 {
     L3STER_PROFILE_FUNCTION;
     const auto [all_dofs, n_owned_dofs] = computeNodeDofs(mesh, node_to_dof_map, cond_map);

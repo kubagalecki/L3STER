@@ -64,7 +64,7 @@ consteval auto getNumPrimaryNodes(util::ValuePack< CP, ET, EO > = {}) -> size_t
         std::decay_t< decltype(getPrimaryNodesArray< CP >(std::declval< mesh::Element< ET, EO > >())) > >;
 };
 
-template < CondensationPolicy CP, ProblemDef_c auto problem_def, el_o_t... orders >
+template < CondensationPolicy CP, ProblemDef problem_def, el_o_t... orders >
 auto getActiveNodes(const mesh::MeshPartition< orders... >& mesh,
                     util::ConstexprValue< problem_def >,
                     CondensationPolicyTag< CP > = {}) -> std::vector< n_id_t >
@@ -75,7 +75,7 @@ auto getActiveNodes(const mesh::MeshPartition< orders... >& mesh,
             for (auto n : getPrimaryNodesView< CP >(element))
                 active_nodes_set.insert(n);
         },
-        problem_def | std::views::transform([](const auto& pair) { return pair.first; }));
+        problem_def | std::views::transform([](const DomainDef< problem_def.n_fields >& d) { return d.domain; }));
     auto retval = std::vector< n_id_t >{};
     retval.reserve(active_nodes_set.size());
     std::ranges::copy(active_nodes_set, std::back_inserter(retval));
@@ -243,7 +243,7 @@ private:
     robin_hood::unordered_flat_map< n_id_t, n_id_t > m_forward_map, m_inverse_map;
 };
 
-template < CondensationPolicy CP, ProblemDef_c auto problem_def, el_o_t... orders >
+template < CondensationPolicy CP, ProblemDef problem_def, el_o_t... orders >
 auto makeCondensationMap(const MpiComm&                          comm,
                          const mesh::MeshPartition< orders... >& mesh,
                          util::ConstexprValue< problem_def >     probdef_ctwrpr,

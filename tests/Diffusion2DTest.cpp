@@ -15,11 +15,11 @@ void test()
     const auto comm = MpiComm{MPI_COMM_WORLD};
 
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
-    constexpr auto   problem_def         = std::array{util::Pair{domain_id, std::array{true, true, true}}};
-    constexpr auto   probdef_ctwrpr      = util::ConstexprValue< problem_def >{};
-    constexpr auto   dirichlet_def       = std::array{util::Pair{left_boundary, std::array{true, false, false}},
-                                              util::Pair{right_boundary, std::array{true, false, false}}};
-    constexpr auto   dirichletdef_ctwrpr = util::ConstexprValue< dirichlet_def >{};
+    constexpr auto   problem_def    = ProblemDef{defineDomain< 3 >(domain_id, 0, 1, 2)};
+    constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
+    constexpr auto   dirichlet_def =
+        ProblemDef{defineDomain< 3 >(left_boundary, 0), defineDomain< 3 >(right_boundary, 0)};
+    constexpr auto dirichletdef_ctwrpr = util::ConstexprValue< dirichlet_def >{};
 
     constexpr auto node_dist  = std::array{0., 1., 2., 3., 4., 5., 6.};
     constexpr auto mesh_order = 2;
@@ -115,7 +115,7 @@ void test()
     auto solver   = solvers::Lapack{};
     auto solution = alg_sys->makeSolutionVector();
     alg_sys->solve(solver, solution);
-    auto solution_manager = SolutionManager{mesh, detail::deduceNFields(problem_def)};
+    auto solution_manager = SolutionManager{mesh, problem_def.n_fields};
     alg_sys->updateSolution(mesh, solution, dof_inds, solution_manager, dof_inds);
 
     // Check that the underlying data cache is still usable after the solve
