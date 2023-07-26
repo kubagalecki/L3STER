@@ -3,7 +3,7 @@
 static void BM_JacobianComputation(benchmark::State& state)
 {
     const auto element = getExampleHexElement< 1 >();
-    const auto point   = mesh::Point{.5, .5, .5};
+    const auto point   = Point{.5, .5, .5};
     for (auto _ : state)
     {
         const auto jacobi_mat_eval = map::getNatJacobiMatGenerator(element);
@@ -17,7 +17,7 @@ static void BM_ReferenceBasisComputation(benchmark::State& state)
 {
     constexpr auto   T     = mesh::ElementType::Hex;
     constexpr el_o_t O     = 1;
-    const auto       point = mesh::Point{.5, .5, .5};
+    const auto       point = Point{.5, .5, .5};
     for (auto _ : state)
     {
         const auto ders = basis::computeRefBasisDers< T, O, basis::BasisType::Lagrange >(point);
@@ -29,7 +29,7 @@ BENCHMARK(BM_ReferenceBasisComputation)->Name("Compute reference basis [hex 1]")
 static void BM_BasisPhysicalDerivativeComputation(benchmark::State& state)
 {
     const auto element  = getExampleHexElement< 1 >();
-    const auto point    = mesh::Point{.5, .5, .5};
+    const auto point    = Point{.5, .5, .5};
     const auto J        = map::getNatJacobiMatGenerator(element)(point);
     const auto ref_ders = basis::computeRefBasisDers< mesh::ElementType::Hex, 1, basis::BasisType::Lagrange >(point);
     for (auto _ : state)

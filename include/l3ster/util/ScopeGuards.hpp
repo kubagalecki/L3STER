@@ -2,7 +2,7 @@
 #define L3STER_UTIL_KOKKOSSCOPEGUARD_HPP
 
 #include "l3ster/comm/MpiComm.hpp"
-#include "l3ster/defs/TrilinosTypedefs.h"
+#include "l3ster/common/TrilinosTypedefs.h"
 #include "l3ster/util/GlobalResource.hpp"
 #include "l3ster/util/HwlocWrapper.hpp"
 #include "l3ster/util/SetStackSize.hpp"

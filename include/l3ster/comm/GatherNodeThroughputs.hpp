@@ -2,7 +2,7 @@
 #define L3STER_COMM_GATHERNODETHROUGHPUTS_HPP
 
 #include "l3ster/comm/MpiComm.hpp"
-#include "l3ster/defs/Typedefs.h"
+#include "l3ster/common/Typedefs.h"
 
 #include "oneapi/tbb.h"
 

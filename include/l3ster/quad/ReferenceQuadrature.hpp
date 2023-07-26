@@ -1,7 +1,7 @@
 #ifndef L3STER_QUADRATURE_REFERENCEQUADRATURE_HPP
 #define L3STER_QUADRATURE_REFERENCEQUADRATURE_HPP
 
-#include "l3ster/defs/Typedefs.h"
+#include "l3ster/common/Typedefs.h"
 #include "l3ster/math/ComputeGaussRule.hpp"
 #include "l3ster/quad/Quadrature.hpp"
 

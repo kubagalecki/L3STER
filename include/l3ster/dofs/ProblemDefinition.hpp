@@ -1,7 +1,7 @@
 #ifndef L3STER_DOFS_PROBLEMDEFINITION_HPP
 #define L3STER_DOFS_PROBLEMDEFINITION_HPP
 
-#include "l3ster/defs/Typedefs.h"
+#include "l3ster/common/Typedefs.h"
 
 #include <algorithm>
 #include <array>

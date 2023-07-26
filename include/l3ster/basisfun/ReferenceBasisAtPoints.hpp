@@ -19,11 +19,11 @@ struct ReferenceBasisAtPoints
 
 namespace detail
 {
-template < BasisType                                                                 BT,
-           mesh::ElementType                                                         ET,
-           el_o_t                                                                    EO,
-           std::convertible_to< mesh::Point< mesh::Element< ET, EO >::native_dim > > Point_t,
-           size_t                                                                    n_points >
+template < BasisType                                                           BT,
+           mesh::ElementType                                                   ET,
+           el_o_t                                                              EO,
+           std::convertible_to< Point< mesh::Element< ET, EO >::native_dim > > Point_t,
+           size_t                                                              n_points >
 auto evalRefBasisAtPoints(const std::array< Point_t, n_points >& points) -> ReferenceBasisAtPoints< ET, EO, n_points >
 {
     auto basis_vals = std::make_unique< typename ReferenceBasisAtPoints< ET, EO, n_points >::basis_vals_t >();

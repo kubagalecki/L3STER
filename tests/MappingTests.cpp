@@ -18,7 +18,7 @@ using namespace lstr::map;
 static auto getLineElement()
 {
     return mesh::Element< mesh::ElementType::Line, 1 >{
-        {0, 1}, mesh::ElementData< mesh::ElementType::Line, 1 >{{mesh::Point{0., 0., 0.}, mesh::Point{1., 0., 0.}}}, 0};
+        {0, 1}, mesh::ElementData< mesh::ElementType::Line, 1 >{{Point{0., 0., 0.}, Point{1., 0., 0.}}}, 0};
 }
 
 static auto getQuadElement()
@@ -27,7 +27,7 @@ static auto getQuadElement()
     return mesh::Element< mesh::ElementType::Quad, 1 >{
         {0, 1, 2, 3},
         mesh::ElementData< mesh::ElementType::Quad, 1 >{
-            {mesh::Point{0., 0., 0.}, mesh::Point{1., 0., 0.}, mesh::Point{0., 1., 0.}, mesh::Point{2., 2., 0.}}},
+            {Point{0., 0., 0.}, Point{1., 0., 0.}, Point{0., 1., 0.}, Point{2., 2., 0.}}},
         0};
 }
 
@@ -35,14 +35,14 @@ static auto getHexElement()
 {
     return mesh::Element< mesh::ElementType::Hex, 1 >{
         {0, 1, 2, 3, 4, 5, 6, 7},
-        mesh::ElementData< mesh::ElementType::Hex, 1 >{{mesh::Point{0., 0., 0.},
-                                                        mesh::Point{1., 0., 0.},
-                                                        mesh::Point{0., 1., 0.},
-                                                        mesh::Point{1., 1., 0.},
-                                                        mesh::Point{0., 0., 1.},
-                                                        mesh::Point{1., 0., 1.5},
-                                                        mesh::Point{0., 1., 1.5},
-                                                        mesh::Point{1., 1., 2.}}},
+        mesh::ElementData< mesh::ElementType::Hex, 1 >{{Point{0., 0., 0.},
+                                                        Point{1., 0., 0.},
+                                                        Point{0., 1., 0.},
+                                                        Point{1., 1., 0.},
+                                                        Point{0., 0., 1.},
+                                                        Point{1., 0., 1.5},
+                                                        Point{0., 1., 1.5},
+                                                        Point{1., 1., 2.}}},
         0};
 }
 
@@ -54,9 +54,9 @@ TEST_CASE("Reference to physical mapping", "[mesh]")
         constexpr auto el_t                      = mesh::ElementType::Line;
         using element_type                       = mesh::Element< el_t, el_o >;
         constexpr auto                  el_nodes = typename element_type::node_array_t{};
-        mesh::ElementData< el_t, el_o > data{{mesh::Point{1., 1., 1.}, mesh::Point{.5, .5, .5}}};
+        mesh::ElementData< el_t, el_o > data{{Point{1., 1., 1.}, Point{.5, .5, .5}}};
         const auto                      element = element_type{el_nodes, data, 0};
-        const auto                      mapped  = mapToPhysicalSpace(element, mesh::Point{0.});
+        const auto                      mapped  = mapToPhysicalSpace(element, Point{0.});
         CHECK(mapped.x() == Approx(.75).margin(1e-15));
         CHECK(mapped.y() == Approx(.75).margin(1e-15));
         CHECK(mapped.z() == Approx(.75).margin(1e-15));
@@ -68,9 +68,9 @@ TEST_CASE("Reference to physical mapping", "[mesh]")
         using element_type                       = mesh::Element< el_t, el_o >;
         constexpr auto                  el_nodes = typename element_type::node_array_t{};
         mesh::ElementData< el_t, el_o > data{
-            {mesh::Point{1., -1., 0.}, mesh::Point{2., -1., 0.}, mesh::Point{1., 1., 1.}, mesh::Point{2., 1., 1.}}};
+            {Point{1., -1., 0.}, Point{2., -1., 0.}, Point{1., 1., 1.}, Point{2., 1., 1.}}};
         const auto element = element_type{el_nodes, data, 0};
-        const auto mapped  = mapToPhysicalSpace(element, mesh::Point{.5, -.5});
+        const auto mapped  = mapToPhysicalSpace(element, Point{.5, -.5});
         CHECK(mapped.x() == Approx(1.75).margin(1e-15));
         CHECK(mapped.y() == Approx(-.5).margin(1e-15));
         CHECK(mapped.z() == Approx(.25).margin(1e-15));
@@ -81,16 +81,16 @@ TEST_CASE("Reference to physical mapping", "[mesh]")
         constexpr auto el_t                      = mesh::ElementType::Hex;
         using element_type                       = mesh::Element< el_t, el_o >;
         constexpr auto                  el_nodes = typename element_type::node_array_t{};
-        mesh::ElementData< el_t, el_o > data{{mesh::Point{.5, .5, .5},
-                                              mesh::Point{1., .5, .5},
-                                              mesh::Point{.5, 1., .5},
-                                              mesh::Point{1., 1., .5},
-                                              mesh::Point{.5, .5, 1.},
-                                              mesh::Point{1., .5, 1.},
-                                              mesh::Point{.5, 1., 1.},
-                                              mesh::Point{1., 1., 1.}}};
+        mesh::ElementData< el_t, el_o > data{{Point{.5, .5, .5},
+                                              Point{1., .5, .5},
+                                              Point{.5, 1., .5},
+                                              Point{1., 1., .5},
+                                              Point{.5, .5, 1.},
+                                              Point{1., .5, 1.},
+                                              Point{.5, 1., 1.},
+                                              Point{1., 1., 1.}}};
         const auto                      element = element_type{el_nodes, data, 0};
-        const auto                      mapped  = mapToPhysicalSpace(element, mesh::Point{0., 0., 0.});
+        const auto                      mapped  = mapToPhysicalSpace(element, Point{0., 0., 0.});
         CHECK(mapped.x() == Approx(.75).margin(1e-15));
         CHECK(mapped.y() == Approx(.75).margin(1e-15));
         CHECK(mapped.z() == Approx(.75).margin(1e-15));
@@ -103,7 +103,7 @@ TEST_CASE("Jacobi matrix computation", "[mapping]")
     {
         const auto element         = getLineElement();
         const auto jacobi_mat_eval = getNatJacobiMatGenerator(element);
-        const auto val             = jacobi_mat_eval(mesh::Point{.42});
+        const auto val             = jacobi_mat_eval(Point{.42});
         CHECK(val[0] == Approx(.5).margin(1e-13));
     }
 
@@ -111,7 +111,7 @@ TEST_CASE("Jacobi matrix computation", "[mapping]")
     {
         const auto element         = getQuadElement();
         const auto jacobi_mat_eval = getNatJacobiMatGenerator(element);
-        const auto val             = jacobi_mat_eval(mesh::Point{.5, .5});
+        const auto val             = jacobi_mat_eval(Point{.5, .5});
         CHECK(val(0, 0) == Approx(7. / 8.).margin(1e-13));
         CHECK(val(0, 1) == Approx(3. / 8.).margin(1e-13));
         CHECK(val(1, 0) == Approx(3. / 8.).margin(1e-13));
@@ -122,7 +122,7 @@ TEST_CASE("Jacobi matrix computation", "[mapping]")
     {
         const auto element         = getHexElement();
         const auto jacobi_mat_eval = getNatJacobiMatGenerator(element);
-        const auto val             = jacobi_mat_eval(mesh::Point{.5, .5, .5});
+        const auto val             = jacobi_mat_eval(Point{.5, .5, .5});
         CHECK(val(0, 0) == Approx(.5).margin(1e-13));
         CHECK(val(0, 1) == Approx(0.).margin(1e-13));
         CHECK(val(0, 2) == Approx(3. / 16.).margin(1e-13));
@@ -143,8 +143,8 @@ TEST_CASE("Boundary normal computation", "[mapping]")
         const auto jacobi_mat_eval = getNatJacobiMatGenerator(element);
         const auto left_view       = mesh::BoundaryElementView{element, 0};
         const auto right_view      = mesh::BoundaryElementView{element, 1};
-        const auto left_normal     = computeBoundaryNormal(left_view, jacobi_mat_eval(mesh::Point{0.}));
-        const auto right_normal    = computeBoundaryNormal(right_view, jacobi_mat_eval(mesh::Point{1.}));
+        const auto left_normal     = computeBoundaryNormal(left_view, jacobi_mat_eval(Point{0.}));
+        const auto right_normal    = computeBoundaryNormal(right_view, jacobi_mat_eval(Point{1.}));
         CHECK(left_normal[0] == Approx(-1.).margin(1e-13));
         CHECK(right_normal[0] == Approx(1.).margin(1e-13));
     }
@@ -156,10 +156,10 @@ TEST_CASE("Boundary normal computation", "[mapping]")
         const auto top_view        = mesh::BoundaryElementView{element, 1};
         const auto left_view       = mesh::BoundaryElementView{element, 2};
         const auto right_view      = mesh::BoundaryElementView{element, 3};
-        const auto bot_normal      = computeBoundaryNormal(bot_view, jacobi_mat_eval(mesh::Point{0., -1.}));
-        const auto top_normal      = computeBoundaryNormal(top_view, jacobi_mat_eval(mesh::Point{0., 1.}));
-        const auto left_normal     = computeBoundaryNormal(left_view, jacobi_mat_eval(mesh::Point{-1., 0.}));
-        const auto right_normal    = computeBoundaryNormal(right_view, jacobi_mat_eval(mesh::Point{1., 0.}));
+        const auto bot_normal      = computeBoundaryNormal(bot_view, jacobi_mat_eval(Point{0., -1.}));
+        const auto top_normal      = computeBoundaryNormal(top_view, jacobi_mat_eval(Point{0., 1.}));
+        const auto left_normal     = computeBoundaryNormal(left_view, jacobi_mat_eval(Point{-1., 0.}));
+        const auto right_normal    = computeBoundaryNormal(right_view, jacobi_mat_eval(Point{1., 0.}));
         CHECK(bot_normal[0] == Approx(0.).margin(1e-13));
         CHECK(bot_normal[1] == Approx(-1.).margin(1e-13));
         CHECK(top_normal[0] == Approx(-1. / std::sqrt(5.)).margin(1e-13));
@@ -179,12 +179,12 @@ TEST_CASE("Boundary normal computation", "[mapping]")
         const auto top_view        = mesh::BoundaryElementView{element, 3};
         const auto left_view       = mesh::BoundaryElementView{element, 4};
         const auto right_view      = mesh::BoundaryElementView{element, 5};
-        const auto front_normal    = computeBoundaryNormal(front_view, jacobi_mat_eval(mesh::Point{0., 0., -1.}));
-        const auto back_normal     = computeBoundaryNormal(back_view, jacobi_mat_eval(mesh::Point{0., 0., 1.}));
-        const auto bot_normal      = computeBoundaryNormal(bot_view, jacobi_mat_eval(mesh::Point{0., -1., 0.}));
-        const auto top_normal      = computeBoundaryNormal(top_view, jacobi_mat_eval(mesh::Point{0., 1., 0.}));
-        const auto left_normal     = computeBoundaryNormal(left_view, jacobi_mat_eval(mesh::Point{-1., 0., 0.}));
-        const auto right_normal    = computeBoundaryNormal(right_view, jacobi_mat_eval(mesh::Point{1., 0., 0.}));
+        const auto front_normal    = computeBoundaryNormal(front_view, jacobi_mat_eval(Point{0., 0., -1.}));
+        const auto back_normal     = computeBoundaryNormal(back_view, jacobi_mat_eval(Point{0., 0., 1.}));
+        const auto bot_normal      = computeBoundaryNormal(bot_view, jacobi_mat_eval(Point{0., -1., 0.}));
+        const auto top_normal      = computeBoundaryNormal(top_view, jacobi_mat_eval(Point{0., 1., 0.}));
+        const auto left_normal     = computeBoundaryNormal(left_view, jacobi_mat_eval(Point{-1., 0., 0.}));
+        const auto right_normal    = computeBoundaryNormal(right_view, jacobi_mat_eval(Point{1., 0., 0.}));
         CHECK(front_normal[0] == Approx(0.).margin(1e-13));
         CHECK(front_normal[1] == Approx(0.).margin(1e-13));
         CHECK(front_normal[2] == Approx(-1.).margin(1e-13));
@@ -218,10 +218,10 @@ TEST_CASE("Basis function values", "[mapping]")
         const ReferenceBasisFunction< ET, EO, 0, LB > basis0{};
         const ReferenceBasisFunction< ET, EO, 1, LB > basis1{};
 
-        CHECK(basis0(mesh::Point{-1.}) == Approx{1.}.margin(1e-13));
-        CHECK(basis0(mesh::Point{1.}) == Approx{0.}.margin(1e-13));
-        CHECK(basis1(mesh::Point{-1.}) == Approx{0.}.margin(1e-13));
-        CHECK(basis1(mesh::Point{1.}) == Approx{1.}.margin(1e-13));
+        CHECK(basis0(Point{-1.}) == Approx{1.}.margin(1e-13));
+        CHECK(basis0(Point{1.}) == Approx{0.}.margin(1e-13));
+        CHECK(basis1(Point{-1.}) == Approx{0.}.margin(1e-13));
+        CHECK(basis1(Point{1.}) == Approx{1.}.margin(1e-13));
     }
 
     SECTION("Quad")
@@ -234,9 +234,9 @@ TEST_CASE("Basis function values", "[mapping]")
         const ReferenceBasisFunction< ET, EO, 2, LB > basis2{};
         const ReferenceBasisFunction< ET, EO, 3, LB > basis3{};
 
-        const mesh::Point p0{-.5, -.5};
-        const mesh::Point p1{.5, .5};
-        const mesh::Point p2{1., 1.};
+        const Point p0{-.5, -.5};
+        const Point p1{.5, .5};
+        const Point p2{1., 1.};
 
         CHECK(basis0(p0) == Approx{.75 * .75}.margin(1e-13));
         CHECK(basis0(p1) == Approx{.25 * .25}.margin(1e-13));
@@ -269,10 +269,10 @@ TEST_CASE("Basis function values", "[mapping]")
         const ReferenceBasisFunction< ET, EO, 6, LB > basis6{};
         const ReferenceBasisFunction< ET, EO, 7, LB > basis7{};
 
-        const mesh::Point p0{-.5, -.5, -.5};
-        const mesh::Point p1{.5, .5, .5};
-        const mesh::Point p2{1., 1., -1.};
-        const mesh::Point p3{0., 1., 1.};
+        const Point p0{-.5, -.5, -.5};
+        const Point p1{.5, .5, .5};
+        const Point p2{1., 1., -1.};
+        const Point p3{0., 1., 1.};
 
         CHECK(basis0(p0) == Approx{.75 * .75 * .75}.margin(1e-13));
         CHECK(basis0(p1) == Approx{.25 * .25 * .25}.margin(1e-13));
@@ -323,7 +323,7 @@ TEST_CASE("Basis function derivatives", "[mapping]")
     SECTION("Line")
     {
         const auto element    = getLineElement();
-        const auto test_point = mesh::Point{0.};
+        const auto test_point = Point{0.};
         const auto jac        = getNatJacobiMatGenerator(element)(test_point);
         const auto ref_ders = computeRefBasisDers< decltype(element)::type, decltype(element)::order, LB >(test_point);
         const auto bf_der   = computePhysBasisDers(jac, ref_ders);
@@ -334,7 +334,7 @@ TEST_CASE("Basis function derivatives", "[mapping]")
     SECTION("Quad")
     {
         const auto element    = getQuadElement();
-        const auto test_point = mesh::Point{0., 0.};
+        const auto test_point = Point{0., 0.};
         const auto jac        = getNatJacobiMatGenerator(element)(test_point);
         const auto ref_ders = computeRefBasisDers< decltype(element)::type, decltype(element)::order, LB >(test_point);
         const auto bf_der   = computePhysBasisDers(jac, ref_ders);
@@ -352,16 +352,16 @@ TEST_CASE("Basis function derivatives", "[mapping]")
     {
         const auto element = mesh::Element< mesh::ElementType::Hex, 1 >{
             {0, 1, 2, 3, 4, 5, 6, 7},
-            mesh::ElementData< mesh::ElementType::Hex, 1 >{{mesh::Point{0., 0., 0.},
-                                                            mesh::Point{1., 0., 0.},
-                                                            mesh::Point{0., 1., 0.},
-                                                            mesh::Point{1., 1., 0.},
-                                                            mesh::Point{0., 0., 1.},
-                                                            mesh::Point{1., 0., 1.},
-                                                            mesh::Point{0., 1., 1.},
-                                                            mesh::Point{1., 1., 1.}}},
+            mesh::ElementData< mesh::ElementType::Hex, 1 >{{Point{0., 0., 0.},
+                                                            Point{1., 0., 0.},
+                                                            Point{0., 1., 0.},
+                                                            Point{1., 1., 0.},
+                                                            Point{0., 0., 1.},
+                                                            Point{1., 0., 1.},
+                                                            Point{0., 1., 1.},
+                                                            Point{1., 1., 1.}}},
             0};
-        const auto test_point = mesh::Point{0., 0., 0.};
+        const auto test_point = Point{0., 0., 0.};
         const auto jac        = getNatJacobiMatGenerator(element)(test_point);
         const auto ref_ders = computeRefBasisDers< decltype(element)::type, decltype(element)::order, LB >(test_point);
         const auto bf_der   = computePhysBasisDers(jac, ref_ders);
@@ -461,16 +461,15 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
             constexpr auto   ET  = mesh::ElementType::Line;
             constexpr el_o_t EO  = 1;
             constexpr q_o_t  QLO = 1;
-            const auto       el =
-                mesh::Element< ET, 1 >{std::array< n_id_t, 2 >{0, 1},
-                                       std::array< mesh::Point< 3 >, 2 >{mesh::Point{node_pos.front(), 0., 0.},
-                                                                         mesh::Point{node_pos.back(), 0., 0.}},
-                                       0};
+            const auto       el  = mesh::Element< ET, 1 >{
+                std::array< n_id_t, 2 >{0, 1},
+                std::array< Point< 3 >, 2 >{Point{node_pos.front(), 0., 0.}, Point{node_pos.back(), 0., 0.}},
+                0};
 
             const auto check_pos = [&](el_side_t side, val_t x_pos) {
                 const auto& ref_q  = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QLO >(side);
                 const auto& ref_p  = ref_q.quadrature.points.front();
-                const auto  phys_p = mapToPhysicalSpace(el, mesh::Point{ref_p});
+                const auto  phys_p = mapToPhysicalSpace(el, Point{ref_p});
                 CHECK(phys_p[0] == Approx{x_pos}.margin(1e-15));
                 CHECK(phys_p[1] == Approx{0.}.margin(1e-15));
                 CHECK(phys_p[2] == Approx{0.}.margin(1e-15));

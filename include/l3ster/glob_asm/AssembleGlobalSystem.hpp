@@ -1,5 +1,5 @@
-#ifndef L3STER_ASSEMBLY_ASSEMBLEGLOBALSYSTEM_HPP
-#define L3STER_ASSEMBLY_ASSEMBLEGLOBALSYSTEM_HPP
+#ifndef L3STER_GLOB_ASM_ASSEMBLEGLOBALSYSTEM_HPP
+#define L3STER_GLOB_ASM_ASSEMBLEGLOBALSYSTEM_HPP
 
 #include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 #include "l3ster/glob_asm/StaticCondensationManager.hpp"
@@ -22,8 +22,9 @@ struct AssemblyOptions
         return static_cast< q_o_t >(value_order * elem_order + derivative_order * (elem_order - 1));
     }
 };
+} // namespace lstr
 
-namespace glob_asm
+namespace lstr::glob_asm
 {
 // Checking whether the kernel is being invoked in a domain where it is valid is fundamentally a run-time endeavor.
 // What we can do at compile time is to assert that there at least exists a domain dimension for which it is valid.
@@ -201,6 +202,5 @@ void assembleGlobalBoundarySystem(auto&&                                        
     const auto max_par_guard = util::MaxParallelismGuard{};
     boundary.visit(process_element, std::execution::par);
 }
-} // namespace glob_asm
-} // namespace lstr
-#endif // L3STER_ASSEMBLY_ASSEMBLEGLOBALSYSTEM_HPP
+} // namespace lstr::glob_asm
+#endif // L3STER_GLOB_ASM_ASSEMBLEGLOBALSYSTEM_HPP

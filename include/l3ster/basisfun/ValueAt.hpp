@@ -6,9 +6,7 @@
 namespace lstr
 {
 template < basis::BasisType BT, mesh::ElementType T, el_o_t O, RandomAccessRangeOf< val_t > R >
-val_t valueAt(const mesh::Element< T, O >&,
-              R&&                                                     node_vals,
-              const mesh::Point< mesh::Element< T, O >::native_dim >& point)
+val_t valueAt(const mesh::Element< T, O >&, R&& node_vals, const Point< mesh::Element< T, O >::native_dim >& point)
 {
     return std::invoke(
         [&]< el_locind_t... I >(std::integer_sequence< el_locind_t, I... >) {

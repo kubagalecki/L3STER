@@ -1,5 +1,5 @@
-#ifndef L3STER_DEFS_TYPEDEFS_H
-#define L3STER_DEFS_TYPEDEFS_H
+#ifndef L3STER_COMMON_TYPEDEFS_H
+#define L3STER_COMMON_TYPEDEFS_H
 
 #include <cstdint>
 
@@ -21,4 +21,4 @@ using val_t        = double;            // floating point value type
 using global_dof_t = long long int;     // global DOF type
 using local_dof_t  = int;               // local DOF type
 } // namespace lstr
-#endif // L3STER_DEFS_TYPEDEFS_H
+#endif // L3STER_COMMON_TYPEDEFS_H

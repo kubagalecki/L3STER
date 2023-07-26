@@ -1,5 +1,5 @@
-#ifndef L3STER_DEFS_ENUMS_HPP
-#define L3STER_DEFS_ENUMS_HPP
+#ifndef L3STER_COMMON_ENUMS_HPP
+#define L3STER_COMMON_ENUMS_HPP
 
 namespace lstr
 {
@@ -16,4 +16,4 @@ enum struct Access
     ReadWrite
 };
 } // namespace lstr
-#endif // L3STER_DEFS_ENUMS_HPP
+#endif // L3STER_COMMON_ENUMS_HPP

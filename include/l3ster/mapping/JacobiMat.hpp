@@ -13,7 +13,7 @@ template < mesh::ElementType T, el_o_t O >
     requires(T == mesh::ElementType::Line or T == mesh::ElementType::Quad or T == mesh::ElementType::Hex)
 auto getNatJacobiMatGenerator(const mesh::Element< T, O >& element)
 {
-    return [&element](const mesh::Point< mesh::Element< T, O >::native_dim >& point) {
+    return [&element](const Point< mesh::Element< T, O >::native_dim >& point) {
         constexpr auto nat_dim    = mesh::Element< T, O >::native_dim;
         constexpr auto n_o1_nodes = mesh::Element< T, 1 >::n_nodes;
         using ret_t               = Eigen::Matrix< val_t, nat_dim, nat_dim >;

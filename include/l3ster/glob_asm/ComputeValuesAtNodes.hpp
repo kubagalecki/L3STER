@@ -1,5 +1,5 @@
-#ifndef L3STER_ASSEMBLY_COMPUTEVALUESATNODES_HPP
-#define L3STER_ASSEMBLY_COMPUTEVALUESATNODES_HPP
+#ifndef L3STER_GLOB_ASM_COMPUTEVALUESATNODES_HPP
+#define L3STER_GLOB_ASM_COMPUTEVALUESATNODES_HPP
 
 #include "l3ster/basisfun/ReferenceBasisAtNodes.hpp"
 #include "l3ster/glob_asm/AssembleGlobalSystem.hpp"
@@ -271,4 +271,4 @@ void computeValuesAtBoundaryNodes(auto&&                                        
     boundary.visit(process_element, std::execution::par);
 }
 } // namespace lstr::glob_asm
-#endif // L3STER_ASSEMBLY_COMPUTEVALUESATNODES_HPP
+#endif // L3STER_GLOB_ASM_COMPUTEVALUESATNODES_HPP

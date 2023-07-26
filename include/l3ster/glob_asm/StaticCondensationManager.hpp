@@ -1,5 +1,5 @@
-#ifndef L3STER_ASSEMBLY_STATICCONDENSATIONMANAGER_HPP
-#define L3STER_ASSEMBLY_STATICCONDENSATIONMANAGER_HPP
+#ifndef L3STER_GLOB_ASM_STATICCONDENSATIONMANAGER_HPP
+#define L3STER_GLOB_ASM_STATICCONDENSATIONMANAGER_HPP
 
 #include "l3ster/dofs/DofsFromNodes.hpp"
 #include "l3ster/glob_asm/ScatterLocalSystem.hpp"
@@ -496,4 +496,4 @@ auto StaticCondensationManager< CondensationPolicy::ElementBoundary >::computeLo
     return retval;
 }
 } // namespace lstr::glob_asm
-#endif // L3STER_ASSEMBLY_STATICCONDENSATIONMANAGER_HPP
+#endif // L3STER_GLOB_ASM_STATICCONDENSATIONMANAGER_HPP

@@ -1,5 +1,5 @@
-#ifndef L3STER_ASSEMBLY_SCATTERLOCALSYSTEM_HPP
-#define L3STER_ASSEMBLY_SCATTERLOCALSYSTEM_HPP
+#ifndef L3STER_GLOB_ASM_SCATTERLOCALSYSTEM_HPP
+#define L3STER_GLOB_ASM_SCATTERLOCALSYSTEM_HPP
 
 #include "l3ster/glob_asm/AssembleLocalSystem.hpp"
 #include "l3ster/util/TrilinosUtils.hpp"
@@ -47,4 +47,4 @@ void scatterLocalSystem(const util::eigen::RowMajorSquareMatrix< val_t, local_si
     }
 }
 } // namespace lstr::glob_asm
-#endif // L3STER_ASSEMBLY_SCATTERLOCALSYSTEM_HPP
+#endif // L3STER_GLOB_ASM_SCATTERLOCALSYSTEM_HPP

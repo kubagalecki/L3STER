@@ -1,7 +1,7 @@
 #ifndef L3STER_MAPPING_COMPUTEPHYSBASISDER_HPP
 #define L3STER_MAPPING_COMPUTEPHYSBASISDER_HPP
 
-#include "l3ster/defs/Typedefs.h"
+#include "l3ster/common/Typedefs.h"
 #include "l3ster/util/EigenUtils.hpp"
 
 namespace lstr::map

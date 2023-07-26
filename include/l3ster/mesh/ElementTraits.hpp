@@ -1,8 +1,8 @@
 #ifndef L3STER_MESH_ELEMENTTRAITS_HPP
 #define L3STER_MESH_ELEMENTTRAITS_HPP
 
+#include "l3ster/common/Structs.hpp"
 #include "l3ster/mesh/ElementType.hpp"
-#include "l3ster/mesh/Point.hpp"
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/ConstexprVector.hpp"
 

@@ -2,7 +2,7 @@
 #define L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP
 
 #include "l3ster/basisfun/ReferenceBasisAtQuadrature.hpp"
-#include "l3ster/glob_asm/SpaceTimePoint.hpp"
+#include "l3ster/common/Structs.hpp"
 #include "l3ster/mapping/BoundaryIntegralJacobian.hpp"
 #include "l3ster/mapping/BoundaryNormal.hpp"
 #include "l3ster/mapping/ComputePhysBasisDer.hpp"

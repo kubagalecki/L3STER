@@ -1,13 +1,13 @@
-#ifndef L3STER_ASSEMBLY_SPARSITYGRAPH_HPP
-#define L3STER_ASSEMBLY_SPARSITYGRAPH_HPP
+#ifndef L3STER_GLOB_ASM_SPARSITYGRAPH_HPP
+#define L3STER_GLOB_ASM_SPARSITYGRAPH_HPP
 
-#include "l3ster/dofs/DofsFromNodes.hpp"
-#include "l3ster/dofs/MakeTpetraMap.hpp"
-#include "l3ster/util/Caliper.hpp"
-#include "l3ster/util/CrsGraph.hpp"
-#include "l3ster/util/DynamicBitset.hpp"
-#include "l3ster/util/IndexMap.hpp"
-#include "l3ster/util/StaticVector.hpp"
+#include "../dofs/DofsFromNodes.hpp"
+#include "../dofs/MakeTpetraMap.hpp"
+#include "../util/Caliper.hpp"
+#include "../util/CrsGraph.hpp"
+#include "../util/DynamicBitset.hpp"
+#include "../util/IndexMap.hpp"
+#include "../util/StaticVector.hpp"
 
 namespace lstr::glob_asm
 {
@@ -176,4 +176,4 @@ makeSparsityGraph(const MpiComm&                                          comm,
     return retval;
 }
 } // namespace lstr::glob_asm
-#endif // L3STER_ASSEMBLY_SPARSITYGRAPH_HPP
+#endif // L3STER_GLOB_ASM_SPARSITYGRAPH_HPP

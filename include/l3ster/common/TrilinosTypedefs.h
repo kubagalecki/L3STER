@@ -1,7 +1,7 @@
-#ifndef L3STER_DEFS_TRILINOSTYPEDEFS_H
-#define L3STER_DEFS_TRILINOSTYPEDEFS_H
+#ifndef L3STER_COMMON_TRILINOSTYPEDEFS_H
+#define L3STER_COMMON_TRILINOSTYPEDEFS_H
 
-#include "l3ster/defs/Typedefs.h"
+#include "l3ster/common/Typedefs.h"
 
 #include <concepts>
 
@@ -42,4 +42,4 @@ using tpetra_multivector_t   = Tpetra::MultiVector< val_t, local_dof_t, global_d
 using tpetra_operator_t      = Tpetra::Operator< val_t, local_dof_t, global_dof_t >;
 using tpetra_vector_t        = Tpetra::Vector< val_t, local_dof_t, global_dof_t >;
 } // namespace lstr
-#endif // L3STER_DEFS_TRILINOSTYPEDEFS_H
+#endif // L3STER_COMMON_TRILINOSTYPEDEFS_H

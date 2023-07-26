@@ -1,7 +1,7 @@
 #ifndef L3STER_DOFS_NODETODOFMAP_HPP
 #define L3STER_DOFS_NODETODOFMAP_HPP
 
-#include "l3ster/defs/TrilinosTypedefs.h"
+#include "l3ster/common/TrilinosTypedefs.h"
 #include "l3ster/dofs/DofIntervals.hpp"
 #include "l3ster/util/RobinHoodHashTables.hpp"
 

@@ -133,11 +133,11 @@ static void BM_NS3DLocalAssembly(benchmark::State& state)
             return retval;
         };
 
-    constexpr auto required_stack_size = detail::KernelStackSizeDeductionHelper< decltype(ns3d_kernel), n_fields >::
+    constexpr auto required_stack_size = glob_asm::KernelStackSizeDeductionHelper< decltype(ns3d_kernel), n_fields >::
         template DeductionHelperDomain< mesh::ElementType::Hex, EO >::value;
     const auto stack_size_guard = util::StackSizeGuard{util::default_stack_size + required_stack_size};
     for (auto _ : state)
-        benchmark::DoNotOptimize(assembleLocalSystem(ns3d_kernel, element, nodal_vals, ref_bas_at_quad, 0.));
+        benchmark::DoNotOptimize(glob_asm::assembleLocalSystem(ns3d_kernel, element, nodal_vals, ref_bas_at_quad, 0.));
 
     const auto flops_per_qp = /* physical basis derivative computation */ n_nodes * 3 * 3 * 2 +
                               /* field value computation */ n_fields * n_nodes * 2 * 4 +

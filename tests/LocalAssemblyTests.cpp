@@ -22,7 +22,7 @@ TEST_CASE("Local system assembly", "[local_asm]")
         constexpr auto              BT       = basis::BasisType::Lagrange;
         constexpr auto              el_nodes = typename mesh::Element< ET, EO >::node_array_t{};
         mesh::ElementData< ET, EO > data{
-            {mesh::Point{1., -1., 0.}, mesh::Point{2., -1., 0.}, mesh::Point{1., 1., 1.}, mesh::Point{2., 1., 1.}}};
+            {Point{1., -1., 0.}, Point{2., -1., 0.}, Point{1., 1., 1.}, Point{2., 1., 1.}}};
         const auto element = mesh::Element< ET, EO >{el_nodes, data, 0};
 
         const auto& basis_at_q = basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
@@ -57,7 +57,7 @@ TEST_CASE("Local system assembly", "[local_asm]")
             return retval;
         };
 
-        constexpr auto solution = [](const mesh::Point< 3 >& p) {
+        constexpr auto solution = [](const Point< 3 >& p) {
             return p.x();
         };
 

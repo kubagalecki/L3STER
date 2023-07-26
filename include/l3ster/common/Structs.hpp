@@ -1,12 +1,10 @@
-#ifndef L3STER_MESH_POINT_HPP
-#define L3STER_MESH_POINT_HPP
+#ifndef L3STER_COMMON_STRUCTS_HPP
+#define L3STER_COMMON_STRUCTS_HPP
 
-#include "l3ster/defs/Typedefs.h"
+#include "l3ster/common/Typedefs.h"
 #include "l3ster/util/EigenUtils.hpp"
 
-#include <concepts>
-
-namespace lstr::mesh
+namespace lstr
 {
 template < dim_t DIM >
     requires(DIM <= 3)
@@ -73,5 +71,11 @@ bool operator==(const Point< DIM >& p1, const Point< DIM >& p2)
 {
     return static_cast< Point< DIM >::coords_array_t >(p1) == static_cast< Point< DIM >::coords_array_t >(p2);
 }
-} // namespace lstr::mesh
-#endif // L3STER_MESH_POINT_HPP
+
+struct SpaceTimePoint
+{
+    Point< 3 > space;
+    val_t      time;
+};
+} // namespace lstr
+#endif // L3STER_COMMON_STRUCTS_HPP

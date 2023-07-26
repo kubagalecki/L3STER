@@ -1,8 +1,8 @@
 #ifndef L3STER_MESH_NODEREFERENCELOCATION_HPP
 #define L3STER_MESH_NODEREFERENCELOCATION_HPP
 
+#include "l3ster/common/Structs.hpp"
 #include "l3ster/math/LobattoRuleAbsc.hpp"
-#include "l3ster/mesh/Point.hpp"
 
 namespace lstr::mesh
 {

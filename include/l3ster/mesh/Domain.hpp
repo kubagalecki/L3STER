@@ -1,7 +1,7 @@
 #ifndef L3STER_MESH_DOMAIN_HPP
 #define L3STER_MESH_DOMAIN_HPP
 
-#include "l3ster/defs/Enums.hpp"
+#include "l3ster/common/Enums.hpp"
 #include "l3ster/mesh/Element.hpp"
 #include "l3ster/mesh/ElementMeta.hpp"
 #include "l3ster/util/Common.hpp"

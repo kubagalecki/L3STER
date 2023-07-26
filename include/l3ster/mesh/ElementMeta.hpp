@@ -1,7 +1,7 @@
 #ifndef L3STER_MESH_ALIASES_HPP
 #define L3STER_MESH_ALIASES_HPP
 
-#include "l3ster/defs/Typedefs.h"
+#include "l3ster/common/Typedefs.h"
 #include "l3ster/mesh/ElementType.hpp"
 #include "l3ster/util/Algorithm.hpp"
 

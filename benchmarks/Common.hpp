@@ -14,14 +14,14 @@ auto getExampleHexElement()
     std::array< n_id_t, el_t::n_nodes > nodes;
     std::iota(begin(nodes), end(nodes), 0);
     el_t element{nodes,
-                 mesh::ElementData< mesh::ElementType::Hex, O >{{mesh::Point{0., 0., 0.},
-                                                                 mesh::Point{1., 0., 0.},
-                                                                 mesh::Point{0., 1., 0.},
-                                                                 mesh::Point{1., 1., 0.},
-                                                                 mesh::Point{0., 0., 1.},
-                                                                 mesh::Point{1., 0., 1.},
-                                                                 mesh::Point{0., 1., 1.},
-                                                                 mesh::Point{2., 2., 2.}}},
+                 mesh::ElementData< mesh::ElementType::Hex, O >{{Point{0., 0., 0.},
+                                                                 Point{1., 0., 0.},
+                                                                 Point{0., 1., 0.},
+                                                                 Point{1., 1., 0.},
+                                                                 Point{0., 0., 1.},
+                                                                 Point{1., 0., 1.},
+                                                                 Point{0., 1., 1.},
+                                                                 Point{2., 2., 2.}}},
                  0};
     return element;
 }

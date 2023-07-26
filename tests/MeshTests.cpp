@@ -70,7 +70,7 @@ TEST_CASE("Incorrect domain dim handling", "[mesh]")
 {
     auto domain = mesh::Domain< 1 >{};
 
-    auto data = mesh::ElementData< mesh::ElementType::Line, 1 >{{mesh::Point{0., 0., 0.}, mesh::Point{0., 0., 0.}}};
+    auto data = mesh::ElementData< mesh::ElementType::Line, 1 >{{Point{0., 0., 0.}, Point{0., 0., 0.}}};
     std::array< n_id_t, 2 > nodes{1, 2};
     el_id_t                 id = 1;
     domain.reserve< mesh::ElementType::Line, 1 >(1);
@@ -217,7 +217,7 @@ TEST_CASE("Element lookup by ID", "[mesh]")
     CHECK_FALSE(domain.find(1));
     CHECK_FALSE(std::as_const(domain).find(1));
 
-    auto data = mesh::ElementData< mesh::ElementType::Line, 1 >{{mesh::Point{0., 0., 0.}, mesh::Point{0., 0., 0.}}};
+    auto data = mesh::ElementData< mesh::ElementType::Line, 1 >{{Point{0., 0., 0.}, Point{0., 0., 0.}}};
     std::array< n_id_t, 2 > nodes{1, 2};
     el_id_t                 id = 1;
     domain.reserve< mesh::ElementType::Line, 1 >(1);
