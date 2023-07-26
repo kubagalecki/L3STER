@@ -27,8 +27,8 @@ public:
 
     NodeToGlobalDofMap() = default;
     template < CondensationPolicy CP >
-    NodeToGlobalDofMap(const detail::node_interval_vector_t< dofs_per_node >& dof_intervals,
-                       const NodeCondensationMap< CP >&                       cond_map);
+    NodeToGlobalDofMap(const node_interval_vector_t< dofs_per_node >& dof_intervals,
+                       const NodeCondensationMap< CP >&               cond_map);
 
     [[nodiscard]] inline payload_t operator()(n_id_t node) const noexcept;
     [[nodiscard]] bool             isContiguous() const noexcept
@@ -38,11 +38,11 @@ public:
 
 private:
     template < CondensationPolicy CP >
-    bool tryInitAsContiguous(const detail::node_interval_vector_t< dofs_per_node >& dof_ints,
-                             const NodeCondensationMap< CP >&                       cond_map);
+    bool tryInitAsContiguous(const node_interval_vector_t< dofs_per_node >& dof_ints,
+                             const NodeCondensationMap< CP >&               cond_map);
     template < CondensationPolicy CP >
-    void initNonContiguous(const detail::node_interval_vector_t< dofs_per_node >& dof_intervals,
-                           const NodeCondensationMap< CP >&                       cond_map);
+    void initNonContiguous(const node_interval_vector_t< dofs_per_node >& dof_intervals,
+                           const NodeCondensationMap< CP >&               cond_map);
 
     std::variant< map_t, ContiguousCaseInfo > m_data;
 };
@@ -94,8 +94,8 @@ concept NodeToDofMap_c = detail::is_node_map< T >;
 
 template < size_t dofs_per_node >
 template < CondensationPolicy CP >
-NodeToGlobalDofMap< dofs_per_node >::NodeToGlobalDofMap(
-    const detail::node_interval_vector_t< dofs_per_node >& dof_intervals, const NodeCondensationMap< CP >& cond_map)
+NodeToGlobalDofMap< dofs_per_node >::NodeToGlobalDofMap(const node_interval_vector_t< dofs_per_node >& dof_intervals,
+                                                        const NodeCondensationMap< CP >&               cond_map)
 {
     L3STER_PROFILE_FUNCTION;
     if (cond_map.getCondensedIds().empty())
@@ -127,7 +127,7 @@ NodeToGlobalDofMap< dofs_per_node >::operator()(n_id_t node) const noexcept
 template < size_t dofs_per_node >
 template < CondensationPolicy CP >
 bool NodeToGlobalDofMap< dofs_per_node >::tryInitAsContiguous(
-    const detail::node_interval_vector_t< dofs_per_node >& dof_intervals, const NodeCondensationMap< CP >& cond_map)
+    const node_interval_vector_t< dofs_per_node >& dof_intervals, const NodeCondensationMap< CP >& cond_map)
 {
     const auto min_node_in_partition = cond_map.getCondensedIds().front();
     const auto max_node_in_partition = cond_map.getCondensedIds().back();
@@ -154,10 +154,10 @@ bool NodeToGlobalDofMap< dofs_per_node >::tryInitAsContiguous(
 template < size_t dofs_per_node >
 template < CondensationPolicy CP >
 void NodeToGlobalDofMap< dofs_per_node >::initNonContiguous(
-    const detail::node_interval_vector_t< dofs_per_node >& dof_intervals, const NodeCondensationMap< CP >& cond_map)
+    const node_interval_vector_t< dofs_per_node >& dof_intervals, const NodeCondensationMap< CP >& cond_map)
 {
     auto&      map                 = m_data.template emplace< map_t >();
-    const auto dof_interval_starts = detail::computeIntervalStarts(dof_intervals);
+    const auto dof_interval_starts = computeIntervalStarts(dof_intervals);
     const auto compute_node_dofs   = [&](n_id_t node_id, ptrdiff_t interval_ind) {
         const auto dof_int_start = dof_interval_starts[interval_ind];
         const auto& [delim, cov] = dof_intervals[interval_ind];
@@ -172,7 +172,7 @@ void NodeToGlobalDofMap< dofs_per_node >::initNonContiguous(
     };
     for (auto search_it = begin(dof_intervals); auto n : cond_map.getCondensedIds())
     {
-        search_it               = detail::findNodeInterval(search_it, end(dof_intervals), n);
+        search_it               = findNodeInterval(search_it, end(dof_intervals), n);
         const auto interval_ind = std::distance(begin(dof_intervals), search_it);
         const auto node_dofs    = compute_node_dofs(n, interval_ind);
         map.emplace(n, node_dofs);

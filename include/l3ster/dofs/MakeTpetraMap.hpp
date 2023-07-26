@@ -6,8 +6,6 @@
 
 namespace lstr::dofs
 {
-namespace detail
-{
 template < size_t n_fields >
 auto writeNodeDofs(RangeOfConvertibleTo_c< n_id_t > auto&&   sorted_nodes,
                    const node_interval_vector_t< n_fields >& dof_intervals,
@@ -48,22 +46,21 @@ inline Tpetra::global_size_t getInvalidSize()
 {
     return Teuchos::OrdinalTraits< Tpetra::global_size_t >::invalid();
 }
-} // namespace detail
 
 inline Teuchos::RCP< const tpetra_map_t > makeTpetraMap(std::span< const global_dof_t > dofs, const MpiComm& comm)
 {
-    auto       teuchos_comm      = detail::makeTeuchosMpiComm(comm);
-    const auto compute_size      = detail::getInvalidSize();
+    auto       teuchos_comm      = makeTeuchosMpiComm(comm);
+    const auto compute_size      = getInvalidSize();
     const auto dofs_teuchos_view = util::asTeuchosView(dofs);
     return util::makeTeuchosRCP< const tpetra_map_t >(compute_size, dofs_teuchos_view, 0, std::move(teuchos_comm));
 }
 
 template < size_t n_fields >
-Teuchos::RCP< const tpetra_map_t > makeTpetraMap(RangeOfConvertibleTo_c< n_id_t > auto&&           nodes,
-                                                 const detail::node_interval_vector_t< n_fields >& dof_intervals,
-                                                 const MpiComm&                                    comm)
+Teuchos::RCP< const tpetra_map_t > makeTpetraMap(RangeOfConvertibleTo_c< n_id_t > auto&&   nodes,
+                                                 const node_interval_vector_t< n_fields >& dof_intervals,
+                                                 const MpiComm&                            comm)
 {
-    const auto dofs = detail::getNodeDofs(std::forward< decltype(nodes) >(nodes), dof_intervals);
+    const auto dofs = getNodeDofs(std::forward< decltype(nodes) >(nodes), dof_intervals);
     return makeTpetraMap(dofs, comm);
 }
 } // namespace lstr::dofs

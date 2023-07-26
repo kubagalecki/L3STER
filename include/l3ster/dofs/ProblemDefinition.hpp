@@ -32,7 +32,7 @@ namespace detail
 template < std::integral T >
 constexpr auto getNFields(std::initializer_list< T > list) -> size_t
 {
-    return std::max(list) + 1;
+    return static_cast< size_t >(std::max(list) + 1);
 }
 constexpr auto getNFields() -> size_t
 {
@@ -40,7 +40,7 @@ constexpr auto getNFields() -> size_t
 }
 } // namespace detail
 #define L3STER_DEFINE_DOMAIN(domain, ...)                                                                              \
-    defineDomain< detail::getNFields(__VA_OPT__({) __VA_ARGS__ __VA_OPT__(})) >(domain __VA_OPT__(, ) __VA_ARGS__)
+    defineDomain< ::lstr::detail::getNFields(__VA_OPT__({) __VA_ARGS__ __VA_OPT__(})) >(domain __VA_OPT__(, ) __VA_ARGS__)
 
 template < size_t domains, size_t fields >
 class ProblemDef

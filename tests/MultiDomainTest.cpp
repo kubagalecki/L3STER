@@ -9,6 +9,7 @@
 #include "TestDataPath.h"
 
 using namespace lstr;
+using namespace lstr::glob_asm;
 
 template < CondensationPolicy CP >
 void test()
@@ -42,7 +43,7 @@ void test()
             A2.setZero();
             return retval;
         };
-    static_assert(glob_asm::Kernel_c< decltype(const_kernel), 2, 0 >);
+    static_assert(Kernel_c< decltype(const_kernel), 2, 0 >);
 
     const auto assemble_problem_in_dom = [&]< auto dom_ind >(util::ConstexprValue< dom_ind >) {
         set_value = static_cast< double >(dom_ind + 1);

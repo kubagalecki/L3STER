@@ -26,8 +26,6 @@ inline constexpr auto element_boundary_tag = CondensationPolicyTag< Condensation
 
 namespace dofs
 {
-namespace detail
-{
 template < typename T >
 struct IsCondensationPolicyTag : std::false_type
 {};
@@ -197,7 +195,6 @@ void activateOwned(const MpiComm&                          comm,
         process_offrank_active_nodes(comm_buf);
     my_active_nodes.shrink_to_fit();
 }
-} // namespace detail
 
 template < CondensationPolicy >
 class NodeCondensationMap
@@ -249,9 +246,9 @@ auto makeCondensationMap(const MpiComm&                          comm,
                          util::ConstexprValue< problem_def >     probdef_ctwrpr,
                          CondensationPolicyTag< CP >             cp_tag = {}) -> NodeCondensationMap< CP >
 {
-    auto active_nodes = dofs::detail::getActiveNodes(mesh, probdef_ctwrpr, cp_tag);
-    detail::activateOwned(comm, mesh, active_nodes);
-    auto condensed_active_nodes = detail::computeCondensedActiveNodeIds(comm, mesh, active_nodes);
+    auto active_nodes = dofs::getActiveNodes(mesh, probdef_ctwrpr, cp_tag);
+    activateOwned(comm, mesh, active_nodes);
+    auto condensed_active_nodes = computeCondensedActiveNodeIds(comm, mesh, active_nodes);
     return {std::move(active_nodes), std::move(condensed_active_nodes)};
 }
 } // namespace dofs

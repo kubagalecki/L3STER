@@ -11,6 +11,7 @@
 #include <random>
 
 using namespace lstr;
+using namespace lstr::dofs;
 
 template < CondensationPolicy CP >
 void test(CondensationPolicyTag< CP > = {})
@@ -35,8 +36,8 @@ void test(CondensationPolicyTag< CP > = {})
                                                              : mesh::MeshPartition< mesh_order >{};
     const auto mesh_parted = std::invoke([&] { return distributeMesh(comm, mesh_full, {}, problemdef_ctwrpr); });
 
-    const auto cond_map                = dofs::makeCondensationMap< CP >(comm, mesh_parted, problemdef_ctwrpr);
-    const auto global_intervals        = dofs::computeDofIntervals(comm, mesh_parted, cond_map, problemdef_ctwrpr);
+    const auto cond_map                = makeCondensationMap< CP >(comm, mesh_parted, problemdef_ctwrpr);
+    const auto global_intervals        = computeDofIntervals(comm, mesh_parted, cond_map, problemdef_ctwrpr);
     const auto n_int_global            = global_intervals.size();
     auto       computed_glob_int_sizes = std::vector< size_t >(comm.getRank() == 0 ? comm.getSize() : 0);
     comm.gather(std::views::single(n_int_global), computed_glob_int_sizes.begin(), 0);
@@ -45,7 +46,7 @@ void test(CondensationPolicyTag< CP > = {})
 
     std::vector< unsigned long long > serial_int;
     serial_int.reserve(n_int_global * 3);
-    dofs::detail::serializeDofIntervals(global_intervals, std::back_inserter(serial_int));
+    serializeDofIntervals(global_intervals, std::back_inserter(serial_int));
     std::vector< unsigned long long > gather_buf(comm.getRank() == 0 ? serial_int.size() * comm.getSize() : 0);
     std::ranges::generate(gather_buf, [prng = std::mt19937{std::random_device{}()}]() mutable {
         return std::uniform_int_distribution< unsigned long long >{}(prng);
@@ -56,10 +57,9 @@ void test(CondensationPolicyTag< CP > = {})
         for (auto it = gather_buf.begin(); it != gather_buf.end(); std::advance(it, serial_int.size()))
             REQUIRE(std::ranges::equal(std::views::counted(it, serial_int.size()), serial_int));
 
-        const auto comm_self     = MpiComm{MPI_COMM_SELF};
-        const auto cond_map_self = dofs::makeCondensationMap< CP >(comm_self, mesh_full, problemdef_ctwrpr);
-        const auto intervals_expected =
-            dofs::detail::computeLocalDofIntervals(mesh_full, cond_map_self, problemdef_ctwrpr);
+        const auto comm_self          = MpiComm{MPI_COMM_SELF};
+        const auto cond_map_self      = makeCondensationMap< CP >(comm_self, mesh_full, problemdef_ctwrpr);
+        const auto intervals_expected = computeLocalDofIntervals(mesh_full, cond_map_self, problemdef_ctwrpr);
         REQUIRE(intervals_expected == global_intervals);
     }
 }

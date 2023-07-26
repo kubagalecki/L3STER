@@ -7,8 +7,6 @@
 
 namespace lstr::dofs
 {
-namespace detail
-{
 template < size_t n_fields >
 using node_interval_t = std::pair< std::array< n_id_t, 2 >, std::bitset< n_fields > >;
 template < size_t n_fields >
@@ -291,19 +289,18 @@ I findNodeInterval(I begin, S end, n_id_t node)
 {
     return std::ranges::lower_bound(begin, end, node, {}, [](const auto& interval) { return interval.first.back(); });
 }
-} // namespace detail
 
 template < CondensationPolicy CP, ProblemDef problem_def, el_o_t... orders >
 auto computeDofIntervals(const MpiComm&                          comm,
                          const mesh::MeshPartition< orders... >& mesh,
                          const NodeCondensationMap< CP >&        cond_map,
                          util::ConstexprValue< problem_def >     problemdef_ctwrapper)
-    -> detail::node_interval_vector_t< problem_def.n_fields >
+    -> node_interval_vector_t< problem_def.n_fields >
 {
     L3STER_PROFILE_FUNCTION;
-    const auto local_intervals = detail::computeLocalDofIntervals(mesh, cond_map, problemdef_ctwrapper);
-    auto       retval          = detail::gatherGlobalDofIntervals(comm, local_intervals);
-    detail::consolidateDofIntervals(retval);
+    const auto local_intervals = computeLocalDofIntervals(mesh, cond_map, problemdef_ctwrapper);
+    auto       retval          = gatherGlobalDofIntervals(comm, local_intervals);
+    consolidateDofIntervals(retval);
     return retval;
 }
 } // namespace lstr::dofs

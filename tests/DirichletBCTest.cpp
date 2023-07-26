@@ -10,6 +10,9 @@
 #include "Common.hpp"
 
 using namespace lstr;
+using namespace lstr::bcs;
+using namespace lstr::dofs;
+using namespace lstr::glob_asm;
 
 template < CondensationPolicy CP >
 void test()
@@ -28,15 +31,14 @@ void test()
     auto           my_partition  = distributeMesh(comm, mesh, {boundary});
     const auto     boundary_view = my_partition.getBoundaryView(boundary);
 
-    const auto cond_map            = dofs::makeCondensationMap< CP >(comm, my_partition, probdef_ctwrpr);
-    const auto dof_intervals       = dofs::computeDofIntervals(comm, my_partition, cond_map, probdef_ctwrpr);
-    const auto global_node_dof_map = dofs::NodeToGlobalDofMap{dof_intervals, cond_map};
-    const auto sparsity_graph =
-        glob_asm::makeSparsityGraph(comm, my_partition, global_node_dof_map, cond_map, probdef_ctwrpr);
+    const auto cond_map            = makeCondensationMap< CP >(comm, my_partition, probdef_ctwrpr);
+    const auto dof_intervals       = computeDofIntervals(comm, my_partition, cond_map, probdef_ctwrpr);
+    const auto global_node_dof_map = NodeToGlobalDofMap{dof_intervals, cond_map};
+    const auto sparsity_graph = makeSparsityGraph(comm, my_partition, global_node_dof_map, cond_map, probdef_ctwrpr);
 
-    const auto [owned_bcdofs, shared_bcdofs] = bcs::getDirichletDofs(
-        my_partition, sparsity_graph, global_node_dof_map, cond_map, probdef_ctwrpr, dirdef_ctwrpr);
-    const auto dirichlet_bc = bcs::DirichletBCAlgebraic{sparsity_graph, owned_bcdofs, shared_bcdofs};
+    const auto [owned_bcdofs, shared_bcdofs] =
+        getDirichletDofs(my_partition, sparsity_graph, global_node_dof_map, cond_map, probdef_ctwrpr, dirdef_ctwrpr);
+    const auto dirichlet_bc = DirichletBCAlgebraic{sparsity_graph, owned_bcdofs, shared_bcdofs};
 
     auto matrix         = util::makeTeuchosRCP< tpetra_fecrsmatrix_t >(sparsity_graph);
     auto input_vectors  = tpetra_femultivector_t{sparsity_graph->getRowMap(), sparsity_graph->getImporter(), 2};
@@ -45,7 +47,7 @@ void test()
     matrix->beginAssembly();
     input_vectors.beginAssembly();
 
-    const auto dof_map = dofs::NodeToLocalDofMap{
+    const auto dof_map = NodeToLocalDofMap{
         cond_map, global_node_dof_map, *matrix->getRowMap(), *matrix->getColMap(), *input_vectors.getMap()};
 
     {
@@ -55,7 +57,7 @@ void test()
             [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >& element) {
                 if constexpr (T == mesh::ElementType::Hex and O == 1)
                 {
-                    constexpr int n_dofs    = dofs::detail::getNumPrimaryNodes< CP, T, O >() * /* dofs per node */ 1;
+                    constexpr int n_dofs    = getNumPrimaryNodes< CP, T, O >() * /* dofs per node */ 1;
                     auto          local_mat = util::eigen::RowMajorSquareMatrix< val_t, n_dofs >{};
                     auto          local_vec = Eigen::Vector< val_t, n_dofs >{};
                     local_mat.setRandom();
@@ -64,8 +66,8 @@ void test()
 
                     constexpr auto dof_inds_wrpr = util::ConstexprValue< std::array{size_t{0}} >{};
                     const auto [row_dofs, col_dofs, rhs_dofs] =
-                        dofs::getUnsortedPrimaryDofs(element, dof_map, CondensationPolicyTag< CP >{}, dof_inds_wrpr);
-                    glob_asm::scatterLocalSystem(local_mat, local_vec, *matrix, rhs_view, row_dofs, col_dofs, rhs_dofs);
+                        getUnsortedPrimaryDofs(element, dof_map, CondensationPolicyTag< CP >{}, dof_inds_wrpr);
+                    scatterLocalSystem(local_mat, local_vec, *matrix, rhs_view, row_dofs, col_dofs, rhs_dofs);
                 }
             },
             std::views::single(domain_id));
