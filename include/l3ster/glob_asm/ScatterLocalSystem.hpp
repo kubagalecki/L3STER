@@ -6,7 +6,7 @@
 
 #include <atomic>
 
-namespace lstr::detail
+namespace lstr::glob_asm
 {
 consteval size_t eigenToSpanSize(int eigen_size)
 {
@@ -46,5 +46,5 @@ void scatterLocalSystem(const util::eigen::RowMajorSquareMatrix< val_t, local_si
         std::atomic_ref{global_vector[rhs_ind]}.fetch_add(rhs_val, std::memory_order_relaxed);
     }
 }
-} // namespace lstr::detail
+} // namespace lstr::glob_asm
 #endif // L3STER_ASSEMBLY_SCATTERLOCALSYSTEM_HPP

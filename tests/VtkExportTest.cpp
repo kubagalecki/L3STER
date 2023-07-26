@@ -54,13 +54,13 @@ void vtkExportTest2D()
         const double Re            = 40.;
         const double lambda        = Re / 2. - std::sqrt(Re * Re / 4. - 4. * pi * pi);
         const auto   bot_top_vals  = std::array< val_t, 2 >{1., pi};
-        computeValuesAtNodes(my_partition,
-                             std::array{bot_boundary, top_boundary},
-                             system_manager->getDofMap(),
-                             util::ConstexprValue< scalar_inds >{},
-                             bot_top_vals,
-                             solution_view);
-        computeValuesAtNodes(
+        glob_asm::computeValuesAtNodes(my_partition,
+                                       std::array{bot_boundary, top_boundary},
+                                       system_manager->getDofMap(),
+                                       util::ConstexprValue< scalar_inds >{},
+                                       bot_top_vals,
+                                       solution_view);
+        glob_asm::computeValuesAtNodes(
             [&]([[maybe_unused]] const auto& vals, [[maybe_unused]] const auto& ders, const SpaceTimePoint& p) {
                 Eigen::Vector2d retval;
                 // Kovasznay flow velocity field
@@ -126,7 +126,7 @@ void vtkExportTest3D()
     auto solution = system_manager->makeSolutionVector();
     {
         auto solution_view = solution->get1dViewNonConst();
-        computeValuesAtNodes(
+        glob_asm::computeValuesAtNodes(
             [&]([[maybe_unused]] const auto& vals, [[maybe_unused]] const auto& ders, const SpaceTimePoint& point) {
                 Eigen::Vector3d retval;
                 const auto&     p = point.space;
@@ -142,15 +142,15 @@ void vtkExportTest3D()
             util::ConstexprValue< domain_field_inds >{},
             empty_field_val_getter,
             solution_view);
-        computeValuesAtBoundaryNodes([&](const auto&,
-                                         const std::array< std::array< val_t, 0 >, 3 >&,
-                                         const auto&,
-                                         const Eigen::Vector3d& normal) -> Eigen::Vector3d { return normal; },
-                                     boundary,
-                                     system_manager->getDofMap(),
-                                     util::ConstexprValue< boundary_field_inds >{},
-                                     empty_field_val_getter,
-                                     solution_view);
+        glob_asm::computeValuesAtBoundaryNodes([&](const auto&,
+                                                   const std::array< std::array< val_t, 0 >, 3 >&,
+                                                   const auto&,
+                                                   const Eigen::Vector3d& normal) -> Eigen::Vector3d { return normal; },
+                                               boundary,
+                                               system_manager->getDofMap(),
+                                               util::ConstexprValue< boundary_field_inds >{},
+                                               empty_field_val_getter,
+                                               solution_view);
 
         solution->switchActiveMultiVector();
         solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);

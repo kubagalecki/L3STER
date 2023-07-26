@@ -32,7 +32,7 @@ void test()
     const auto dof_intervals       = dofs::computeDofIntervals(comm, my_partition, cond_map, probdef_ctwrpr);
     const auto global_node_dof_map = dofs::NodeToGlobalDofMap{dof_intervals, cond_map};
     const auto sparsity_graph =
-        detail::makeSparsityGraph(comm, my_partition, global_node_dof_map, cond_map, probdef_ctwrpr);
+        glob_asm::makeSparsityGraph(comm, my_partition, global_node_dof_map, cond_map, probdef_ctwrpr);
 
     const auto [owned_bcdofs, shared_bcdofs] = bcs::getDirichletDofs(
         my_partition, sparsity_graph, global_node_dof_map, cond_map, probdef_ctwrpr, dirdef_ctwrpr);
@@ -65,7 +65,7 @@ void test()
                     constexpr auto dof_inds_wrpr = util::ConstexprValue< std::array{size_t{0}} >{};
                     const auto [row_dofs, col_dofs, rhs_dofs] =
                         dofs::getUnsortedPrimaryDofs(element, dof_map, CondensationPolicyTag< CP >{}, dof_inds_wrpr);
-                    detail::scatterLocalSystem(local_mat, local_vec, *matrix, rhs_view, row_dofs, col_dofs, rhs_dofs);
+                    glob_asm::scatterLocalSystem(local_mat, local_vec, *matrix, rhs_view, row_dofs, col_dofs, rhs_dofs);
                 }
             },
             std::views::single(domain_id));

@@ -60,7 +60,7 @@ TEST_CASE("Local system assembly", "[local_asm]")
             return p.x();
         };
 
-        const auto& [K, F] = assembleLocalSystem(
+        const auto& [K, F] = glob_asm::assembleLocalSystem(
             diffusion_kernel_2d, element, Eigen::Matrix< val_t, element.n_nodes, 0 >{}, basis_at_q, 0.);
         auto u = F;
 

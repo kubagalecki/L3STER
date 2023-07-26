@@ -90,7 +90,7 @@ void test()
     const auto cond_map_full  = dofs::makeCondensationMap< CP >(MpiComm{MPI_COMM_SELF}, full_mesh, probdef_ctwrpr);
     const auto dof_intervals  = dofs::computeDofIntervals(comm, my_partition, cond_map, probdef_ctwrpr);
     const auto node_dof_map   = dofs::NodeToGlobalDofMap{dof_intervals, cond_map};
-    const auto sparsity_graph = detail::makeSparsityGraph(comm, my_partition, node_dof_map, cond_map, probdef_ctwrpr);
+    const auto sparsity_graph = glob_asm::makeSparsityGraph(comm, my_partition, node_dof_map, cond_map, probdef_ctwrpr);
 
     const auto num_all_dofs = dofs::detail::getNodeDofs(cond_map_full.getCondensedIds(), dof_intervals).size();
     const auto dense_graph  = DenseGraph{full_mesh, probdef_ctwrpr, dof_intervals, cond_map_full};

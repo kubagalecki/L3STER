@@ -22,15 +22,8 @@ struct AssemblyOptions
         return static_cast< q_o_t >(value_order * elem_order + derivative_order * (elem_order - 1));
     }
 };
-} // namespace lstr
 
-#define L3STER_MAKE_ASM_OPTS(...)                                                                                      \
-    lstr::ConstexprValue< lstr::AssemblyOptions{__VA_ARGS__} >                                                         \
-    {}
-
-namespace lstr
-{
-namespace detail
+namespace glob_asm
 {
 // Checking whether the kernel is being invoked in a domain where it is valid is fundamentally a run-time endeavor.
 // What we can do at compile time is to assert that there at least exists a domain dimension for which it is valid.
@@ -43,15 +36,15 @@ struct PotentiallyValidKernelDeductionHelper
         static constexpr bool value = Kernel_c< Kernel, mesh::Element< T, O >::native_dim, n_fields >;
     };
     static constexpr bool domain =
-        ::lstr::mesh::detail::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
+        mesh::detail::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
 
     template < mesh::ElementType T, el_o_t O >
     struct DeductionHelperBoundary
     {
         static constexpr bool value = BoundaryKernel_c< Kernel, mesh::Element< T, O >::native_dim, n_fields >;
     };
-    static constexpr bool boundary = ::lstr::mesh::detail::ElementDeductionHelper<
-        orders... >::template assert_any_element< DeductionHelperBoundary >;
+    static constexpr bool boundary =
+        mesh::detail::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperBoundary >;
 };
 template < typename Kernel, size_t n_fields, el_o_t... orders >
 concept PotentiallyValidKernel_c = PotentiallyValidKernelDeductionHelper< Kernel, n_fields, orders... >::domain;
@@ -99,15 +92,14 @@ struct KernelStackSizeDeductionHelper
 template < typename Kernel, size_t n_fields, el_o_t... orders >
 consteval auto deduceRequiredStackSizeDomain() -> size_t
 {
-    return detail::KernelStackSizeDeductionHelper< Kernel, n_fields, orders... >::domain;
+    return KernelStackSizeDeductionHelper< Kernel, n_fields, orders... >::domain;
 }
 
 template < typename Kernel, size_t n_fields, el_o_t... orders >
 consteval auto deduceRequiredStackSizeBoundary() -> size_t
 {
-    return detail::KernelStackSizeDeductionHelper< Kernel, n_fields, orders... >::boundary;
+    return KernelStackSizeDeductionHelper< Kernel, n_fields, orders... >::boundary;
 }
-} // namespace detail
 
 template < el_o_t... orders,
            size_t                   n_fields,
@@ -122,16 +114,16 @@ void assembleGlobalSystem(auto&&                                               k
                           tpetra_crsmatrix_t&                                  global_mat,
                           std::span< val_t >                                   global_rhs,
                           const dofs::NodeToLocalDofMap< dofs_per_node, 3 >&   dof_map,
-                          detail::StaticCondensationManager< CP >&             condensation_manager,
+                          StaticCondensationManager< CP >&                     condensation_manager,
                           util::ConstexprValue< field_inds >                   field_inds_ctwrpr,
                           util::ConstexprValue< asm_opts >,
                           val_t time = 0.)
-    requires detail::PotentiallyValidKernel_c< decltype(kernel), n_fields, orders... >
+    requires PotentiallyValidKernel_c< decltype(kernel), n_fields, orders... >
 {
     L3STER_PROFILE_FUNCTION;
     const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
         constexpr auto el_dim = mesh::Element< ET, EO >::native_dim;
-        if constexpr (detail::Kernel_c< decltype(kernel), el_dim, n_fields >)
+        if constexpr (Kernel_c< decltype(kernel), el_dim, n_fields >)
         {
             constexpr auto  BT             = asm_opts.basis_type;
             constexpr auto  QT             = asm_opts.quad_type;
@@ -153,7 +145,7 @@ void assembleGlobalSystem(auto&&                                               k
         }
     };
     constexpr auto required_stack_size =
-        util::default_stack_size + detail::deduceRequiredStackSizeDomain< decltype(kernel), n_fields, orders... >();
+        util::default_stack_size + deduceRequiredStackSizeDomain< decltype(kernel), n_fields, orders... >();
     util::requestStackSize< required_stack_size >();
     const auto max_par_guard = util::MaxParallelismGuard{};
     mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
@@ -171,17 +163,17 @@ void assembleGlobalBoundarySystem(auto&&                                        
                                   tpetra_crsmatrix_t&                                  global_mat,
                                   std::span< val_t >                                   global_rhs,
                                   const dofs::NodeToLocalDofMap< dofs_per_node, 3 >&   dof_map,
-                                  detail::StaticCondensationManager< CP >&             condensation_manager,
+                                  StaticCondensationManager< CP >&                     condensation_manager,
                                   util::ConstexprValue< field_inds >                   field_inds_ctwrpr,
                                   util::ConstexprValue< asm_opts >,
                                   val_t time = 0.)
-    requires detail::PotentiallyValidBoundaryKernel_c< decltype(kernel), n_fields, orders... >
+    requires PotentiallyValidBoundaryKernel_c< decltype(kernel), n_fields, orders... >
 {
     L3STER_PROFILE_FUNCTION;
     const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(
                                      const mesh::BoundaryElementView< ET, EO >& el_view) {
         constexpr auto el_dim = mesh::Element< ET, EO >::native_dim;
-        if constexpr (detail::BoundaryKernel_c< decltype(kernel), el_dim, n_fields >)
+        if constexpr (BoundaryKernel_c< decltype(kernel), el_dim, n_fields >)
         {
             constexpr auto  BT         = asm_opts.basis_type;
             constexpr auto  QT         = asm_opts.quad_type;
@@ -204,10 +196,11 @@ void assembleGlobalBoundarySystem(auto&&                                        
         };
     };
     constexpr auto required_stack_size =
-        util::default_stack_size + detail::deduceRequiredStackSizeBoundary< decltype(kernel), n_fields, orders... >();
+        util::default_stack_size + deduceRequiredStackSizeBoundary< decltype(kernel), n_fields, orders... >();
     util::requestStackSize< required_stack_size >();
     const auto max_par_guard = util::MaxParallelismGuard{};
     boundary.visit(process_element, std::execution::par);
 }
+} // namespace glob_asm
 } // namespace lstr
 #endif // L3STER_ASSEMBLY_ASSEMBLEGLOBALSYSTEM_HPP

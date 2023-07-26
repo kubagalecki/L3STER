@@ -1,5 +1,5 @@
-#ifndef L3STER_ASSEMBLY_ALGEBRAICSYSTEMMANAGER_HPP
-#define L3STER_ASSEMBLY_ALGEBRAICSYSTEMMANAGER_HPP
+#ifndef L3STER_GLOB_ASM_ALGEBRAICSYSTEMMANAGER_HPP
+#define L3STER_GLOB_ASM_ALGEBRAICSYSTEMMANAGER_HPP
 
 #include "l3ster/bcs/DirichletBC.hpp"
 #include "l3ster/bcs/GetDirichletDofs.hpp"
@@ -14,6 +14,8 @@
 #include "l3ster/util/WeakCache.hpp"
 
 namespace lstr
+{
+namespace glob_asm
 {
 template < size_t max_dofs_per_node, CondensationPolicy CP >
 class AlgebraicSystem
@@ -111,7 +113,7 @@ private:
     std::optional< const bcs::DirichletBCAlgebraic > m_dirichlet_bcs;
     Teuchos::RCP< tpetra_multivector_t >             m_dirichlet_values;
     dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >  m_node_dof_map;
-    detail::StaticCondensationManager< CP >          m_condensation_manager;
+    StaticCondensationManager< CP >                  m_condensation_manager;
     State                                            m_state;
 
     // Caching mechanism to enable the reuse of the system allocation. For example, an adjoint problem will have the
@@ -276,7 +278,7 @@ AlgebraicSystem< max_dofs_per_node, CP >::AlgebraicSystem(const MpiComm&        
     const auto cond_map            = dofs::makeCondensationMap< CP >(comm, mesh, problemdef_ctwrpr);
     const auto dof_intervals       = computeDofIntervals(comm, mesh, cond_map, problemdef_ctwrpr);
     const auto node_global_dof_map = dofs::NodeToGlobalDofMap{dof_intervals, cond_map};
-    m_sparsity_graph = detail::makeSparsityGraph(comm, mesh, node_global_dof_map, cond_map, problemdef_ctwrpr);
+    m_sparsity_graph               = makeSparsityGraph(comm, mesh, node_global_dof_map, cond_map, problemdef_ctwrpr);
 
     L3STER_PROFILE_REGION_BEGIN("Create Tpetra objects");
     m_matrix = util::makeTeuchosRCP< tpetra_fecrsmatrix_t >(m_sparsity_graph);
@@ -287,7 +289,7 @@ AlgebraicSystem< max_dofs_per_node, CP >::AlgebraicSystem(const MpiComm&        
 
     m_node_dof_map = dofs::NodeToLocalDofMap{
         cond_map, node_global_dof_map, *m_matrix->getRowMap(), *m_matrix->getColMap(), *m_rhs->getMap()};
-    m_condensation_manager = detail::StaticCondensationManager< CP >{mesh, m_node_dof_map, problemdef_ctwrpr};
+    m_condensation_manager = StaticCondensationManager< CP >{mesh, m_node_dof_map, problemdef_ctwrpr};
     m_condensation_manager.beginAssembly();
 
     if constexpr (dirichlet_def.n_domains != 0)
@@ -444,30 +446,23 @@ void AlgebraicSystem< max_dofs_per_node, CP >::describe(const MpiComm& comm, std
     }
     comm.barrier();
 }
-
-namespace detail
-{
-template < size_t domains, size_t fields >
-consteval auto makeEmptyDirichletBCDef(const ProblemDef< domains, fields >&) -> ProblemDef< 0, fields >
-{
-    return {};
-}
-} // namespace detail
+} // namespace glob_asm
 
 template < el_o_t... orders,
            CondensationPolicy CP,
            ProblemDef         problem_def,
-           ProblemDef         dirichlet_def = detail::makeEmptyDirichletBCDef(problem_def) >
+           ProblemDef         dirichlet_def = ProblemDef< 0, problem_def.n_fields >{} >
 auto makeAlgebraicSystem(const MpiComm&                          comm,
                          const mesh::MeshPartition< orders... >& mesh,
                          CondensationPolicyTag< CP >,
                          util::ConstexprValue< problem_def >   problemdef_ctwrpr,
                          util::ConstexprValue< dirichlet_def > dbcdef_ctwrpr = {})
-    -> std::shared_ptr< AlgebraicSystem< problem_def.n_fields, CP > >
+    -> std::shared_ptr< glob_asm::AlgebraicSystem< problem_def.n_fields, CP > >
 {
     L3STER_PROFILE_FUNCTION;
     constexpr auto max_dofs_per_node = problem_def.n_fields;
-    return AlgebraicSystem< max_dofs_per_node, CP >::makeAlgebraicSystem(comm, mesh, problemdef_ctwrpr, dbcdef_ctwrpr);
+    return glob_asm::AlgebraicSystem< max_dofs_per_node, CP >::makeAlgebraicSystem(
+        comm, mesh, problemdef_ctwrpr, dbcdef_ctwrpr);
 }
 } // namespace lstr
-#endif // L3STER_ASSEMBLY_ALGEBRAICSYSTEMMANAGER_HPP
+#endif // L3STER_GLOB_ASM_ALGEBRAICSYSTEMMANAGER_HPP

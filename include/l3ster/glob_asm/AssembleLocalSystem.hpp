@@ -13,9 +13,7 @@
 #include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/SetStackSize.hpp"
 
-namespace lstr
-{
-namespace detail
+namespace lstr::glob_asm
 {
 template < typename T >
 concept ValidKernelResult_c =
@@ -245,7 +243,6 @@ void LocalSystemManager< problem_size, update_size >::setZero()
     m_system->first.setZero();
     m_system->second.setZero();
 }
-} // namespace detail
 
 template < mesh::ElementType ET, el_o_t EO, q_l_t QL, int n_fields >
 const auto&
@@ -254,16 +251,16 @@ assembleLocalSystem(auto&&                                                      
                     const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, n_fields >& node_vals,
                     const basis::ReferenceBasisAtQuadrature< ET, EO, QL >& basis_at_qps,
                     val_t                                                  time)
-    requires detail::Kernel_c< decltype(kernel), mesh::Element< ET, EO >::native_dim, n_fields >
+    requires Kernel_c< decltype(kernel), mesh::Element< ET, EO >::native_dim, n_fields >
 {
     L3STER_PROFILE_FUNCTION;
     const auto jacobi_mat_generator = map::getNatJacobiMatGenerator(element);
-    auto&      local_system_manager = detail::getLocalSystemManager< decltype(kernel), ET, EO, n_fields >();
+    auto&      local_system_manager = getLocalSystemManager< decltype(kernel), ET, EO, n_fields >();
     const auto process_qp           = [&](auto point, val_t weight, const auto& bas_vals, const auto& ref_bas_ders) {
         const auto jacobi_mat         = jacobi_mat_generator(point);
         const auto phys_basis_ders    = map::computePhysBasisDers(jacobi_mat, ref_bas_ders);
-        const auto field_vals         = detail::computeFieldVals(bas_vals, node_vals);
-        const auto field_ders         = detail::computeFieldDers(ref_bas_ders, node_vals);
+        const auto field_vals         = computeFieldVals(bas_vals, node_vals);
+        const auto field_ders         = computeFieldDers(ref_bas_ders, node_vals);
         const auto phys_coords        = map::mapToPhysicalSpace(element, point);
         const auto [A, F]             = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time});
         const auto rank_update_weight = jacobi_mat.determinant() * weight;
@@ -284,16 +281,16 @@ const auto& assembleLocalBoundarySystem(
     const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, n_fields >& node_vals,
     const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                  basis_at_qps,
     val_t                                                                                   time)
-    requires detail::BoundaryKernel_c< Kernel, mesh::Element< ET, EO >::native_dim, n_fields >
+    requires BoundaryKernel_c< Kernel, mesh::Element< ET, EO >::native_dim, n_fields >
 {
     L3STER_PROFILE_FUNCTION;
     const auto jacobi_mat_generator = map::getNatJacobiMatGenerator(*el_view);
-    auto&      local_system_manager = detail::getLocalSystemManager< decltype(kernel), ET, EO, n_fields >();
+    auto&      local_system_manager = getLocalSystemManager< decltype(kernel), ET, EO, n_fields >();
     const auto process_qp           = [&](auto point, val_t weight, const auto& bas_vals, const auto& ref_bas_ders) {
         const auto jacobi_mat      = jacobi_mat_generator(point);
         const auto phys_basis_ders = map::computePhysBasisDers(jacobi_mat, ref_bas_ders);
-        const auto field_vals      = detail::computeFieldVals(bas_vals, node_vals);
-        const auto field_ders      = detail::computeFieldDers(ref_bas_ders, node_vals);
+        const auto field_vals      = computeFieldVals(bas_vals, node_vals);
+        const auto field_ders      = computeFieldDers(ref_bas_ders, node_vals);
         const auto phys_coords     = map::mapToPhysicalSpace(*el_view, point);
         const auto normal          = map::computeBoundaryNormal(el_view, jacobi_mat);
         const auto [A, F]    = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time}, normal);
@@ -308,5 +305,5 @@ const auto& assembleLocalBoundarySystem(
                    basis_at_qps.basis.derivatives[qp_ind]);
     return local_system_manager.getSystem();
 }
-} // namespace lstr
+} // namespace lstr::glob_asm
 #endif // L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP

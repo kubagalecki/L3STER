@@ -7,9 +7,7 @@
 
 #include <atomic>
 
-namespace lstr
-{
-namespace detail
+namespace lstr::glob_asm
 {
 template < typename Kernel, size_t n_fields, dim_t dim, size_t result_size >
 concept ValueAtNodeKernel_c =
@@ -120,7 +118,6 @@ auto initValsAndParents(const mesh::BoundaryView< orders... >&                  
     boundary.visit(process_element, std::execution::par);
     return retval;
 }
-} // namespace detail
 
 template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps >
 void computeValuesAtNodes(const mesh::MeshPartition< orders... >&                       mesh,
@@ -154,18 +151,16 @@ void computeValuesAtNodes(auto&&                                                
                           const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
                           std::span< val_t >                                            values,
                           val_t                                                         time = 0.)
-    requires detail::
-                 PotentiallyValidNodalKernel_c< decltype(kernel), n_fields, std::ranges::size(dof_inds), orders... > and
+    requires PotentiallyValidNodalKernel_c< decltype(kernel), n_fields, std::ranges::size(dof_inds), orders... > and
              (std::ranges::all_of(dof_inds, [](size_t dof) { return dof < max_dofs_per_node; }))
 {
     L3STER_PROFILE_FUNCTION;
-    const auto num_parents =
-        detail::initValsAndParents(mesh, domain_ids, map, dofinds_ctwrpr, field_val_getter, values);
+    const auto num_parents     = initValsAndParents(mesh, domain_ids, map, dofinds_ctwrpr, field_val_getter, values);
     const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
-        if constexpr (detail::ValueAtNodeKernel_c< decltype(kernel),
-                                                   n_fields,
-                                                   mesh::Element< ET, EO >::native_dim,
-                                                   std::ranges::size(dof_inds) >)
+        if constexpr (ValueAtNodeKernel_c< decltype(kernel),
+                                           n_fields,
+                                           mesh::Element< ET, EO >::native_dim,
+                                           std::ranges::size(dof_inds) >)
         {
             const auto& el_nodes       = element.getNodes();
             const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
@@ -180,8 +175,8 @@ void computeValuesAtNodes(auto&&                                                
                 const auto phys_coords = map::mapToPhysicalSpace(element, ref_coords);
                 const auto phys_basis_ders =
                     map::computePhysBasisDers(jacobi_mat, basis_at_nodes.derivatives[node_ind]);
-                const auto field_vals = detail::computeFieldVals(basis_at_nodes.values[node_ind], node_vals);
-                const auto field_ders = detail::computeFieldDers(phys_basis_ders, node_vals);
+                const auto field_vals = computeFieldVals(basis_at_nodes.values[node_ind], node_vals);
+                const auto field_ders = computeFieldDers(phys_basis_ders, node_vals);
                 const auto ker_res    = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time});
                 const auto node_dofs  = map(el_nodes[node_ind]).front();
                 for (size_t dof_ind = 0; auto dof : util::getValuesAtInds(node_dofs, dofinds_ctwrpr))
@@ -219,19 +214,19 @@ void computeValuesAtBoundaryNodes(auto&&                                        
                                   const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
                                   std::span< val_t >                                            values,
                                   val_t                                                         time = 0.)
-    requires detail::PotentiallyValidBoundaryNodalKernel_c< decltype(kernel),
-                                                            n_fields,
-                                                            std::ranges::size(dof_inds),
-                                                            orders... > and
+    requires PotentiallyValidBoundaryNodalKernel_c< decltype(kernel),
+                                                    n_fields,
+                                                    std::ranges::size(dof_inds),
+                                                    orders... > and
              (std::ranges::all_of(dof_inds, [](size_t dof) { return dof < max_dofs_per_node; }))
 {
     L3STER_PROFILE_FUNCTION;
-    const auto num_parents     = detail::initValsAndParents(boundary, map, dofinds_ctwrpr, field_val_getter, values);
+    const auto num_parents     = initValsAndParents(boundary, map, dofinds_ctwrpr, field_val_getter, values);
     const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(mesh::BoundaryElementView< ET, EO > el_view) {
-        if constexpr (detail::ValueAtNodeBoundaryKernel_c< decltype(kernel),
-                                                           n_fields,
-                                                           mesh::Element< ET, EO >::native_dim,
-                                                           std::ranges::size(dof_inds) >)
+        if constexpr (ValueAtNodeBoundaryKernel_c< decltype(kernel),
+                                                   n_fields,
+                                                   mesh::Element< ET, EO >::native_dim,
+                                                   std::ranges::size(dof_inds) >)
         {
             const auto& el_nodes       = el_view->getNodes();
             const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
@@ -247,8 +242,8 @@ void computeValuesAtBoundaryNodes(auto&&                                        
                 const auto normal      = map::computeBoundaryNormal(el_view, jacobi_mat);
                 const auto phys_basis_ders =
                     map::computePhysBasisDers(jacobi_mat, basis_at_nodes.derivatives[node_ind]);
-                const auto field_vals = detail::computeFieldVals(basis_at_nodes.values[node_ind], node_vals);
-                const auto field_ders = detail::computeFieldDers(phys_basis_ders, node_vals);
+                const auto field_vals = computeFieldVals(basis_at_nodes.values[node_ind], node_vals);
+                const auto field_ders = computeFieldDers(phys_basis_ders, node_vals);
                 const auto ker_res =
                     std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time}, normal);
                 const auto node_dofs = map(el_nodes[node_ind]).front();
@@ -275,5 +270,5 @@ void computeValuesAtBoundaryNodes(auto&&                                        
     };
     boundary.visit(process_element, std::execution::par);
 }
-} // namespace lstr
+} // namespace lstr::glob_asm
 #endif // L3STER_ASSEMBLY_COMPUTEVALUESATNODES_HPP

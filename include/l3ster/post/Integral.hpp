@@ -123,8 +123,8 @@ auto evalElementIntegral(
     const auto compute_value_at_qp = [&](ptrdiff_t qp_ind, auto ref_coords) noexcept -> result_t {
         const auto jacobi_mat    = jacobi_mat_generator(ref_coords);
         const auto phys_coords   = map::mapToPhysicalSpace(element, ref_coords);
-        const auto field_vals    = computeFieldVals(basis_at_qps.basis.values[qp_ind], node_vals);
-        const auto field_ders    = computeFieldDers(basis_at_qps.basis.derivatives[qp_ind], node_vals);
+        const auto field_vals    = glob_asm::computeFieldVals(basis_at_qps.basis.values[qp_ind], node_vals);
+        const auto field_ders    = glob_asm::computeFieldDers(basis_at_qps.basis.derivatives[qp_ind], node_vals);
         const auto kernel_result = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time});
         return jacobi_mat.determinant() * kernel_result;
     };
@@ -146,8 +146,8 @@ auto evalElementBoundaryIntegral(
         const auto jacobi_mat  = jacobi_mat_generator(ref_coords);
         const auto phys_coords = map::mapToPhysicalSpace(*el_view, ref_coords);
         const auto normal      = map::computeBoundaryNormal(el_view, jacobi_mat);
-        const auto field_vals  = computeFieldVals(basis_at_qps.basis.values[qp_ind], node_vals);
-        const auto field_ders  = computeFieldDers(basis_at_qps.basis.derivatives[qp_ind], node_vals);
+        const auto field_vals  = glob_asm::computeFieldVals(basis_at_qps.basis.values[qp_ind], node_vals);
+        const auto field_ders  = glob_asm::computeFieldDers(basis_at_qps.basis.derivatives[qp_ind], node_vals);
         const auto ker_res     = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time}, normal);
         const auto bound_jac   = map::computeBoundaryIntegralJacobian(el_view, jacobi_mat);
         return bound_jac * ker_res;

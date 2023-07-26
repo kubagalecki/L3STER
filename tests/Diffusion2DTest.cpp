@@ -62,7 +62,7 @@ void test()
             A2(3, 1) = -1.;
             return retval;
         };
-    static_assert(detail::Kernel_c< decltype(diffusion_kernel2d), 2, 0 >);
+    static_assert(glob_asm::Kernel_c< decltype(diffusion_kernel2d), 2, 0 >);
     constexpr auto neumann_bc_kernel =
         [](const auto&, const auto&, const auto&, const Eigen::Matrix< val_t, 2, 1 >& normal) noexcept {
             auto retval = std::pair< std::array< Eigen::Matrix< val_t, 1, 3 >, 3 >, Eigen::Vector< val_t, 1 > >{};

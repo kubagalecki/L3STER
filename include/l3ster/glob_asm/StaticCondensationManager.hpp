@@ -7,7 +7,7 @@
 #include "l3ster/util/ScopeGuards.hpp"
 #include "l3ster/util/TbbUtils.hpp"
 
-namespace lstr::detail
+namespace lstr::glob_asm
 {
 template < typename Derived >
 class StaticCondensationManagerInterface
@@ -104,7 +104,7 @@ public:
     {
         const auto [row_dofs, col_dofs, rhs_dofs] =
             dofs::getUnsortedPrimaryDofs(element, node_dof_map, no_condensation_tag, field_inds_ctwrpr);
-        detail::scatterLocalSystem(local_mat, local_vec, global_mat, global_rhs, row_dofs, col_dofs, rhs_dofs);
+        scatterLocalSystem(local_mat, local_vec, global_mat, global_rhs, row_dofs, col_dofs, rhs_dofs);
     }
     template < el_o_t... orders, size_t max_dofs_per_node >
     void recoverSolutionImpl(const mesh::MeshPartition< orders... >&,
@@ -315,7 +315,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemb
                 primary_upd_rhs = -(elem_data.upper_block * elem_data.diag_block_inv * elem_data.rhs);
                 const auto [row_dofs, col_dofs, rhs_dofs] =
                     dofs::getUnsortedPrimaryDofs(*element_ptr, dof_map, element_boundary_tag);
-                detail::scatterLocalSystem(primary_upd_mat, primary_upd_rhs, matrix, rhs, row_dofs, col_dofs, rhs_dofs);
+                scatterLocalSystem(primary_upd_mat, primary_upd_rhs, matrix, rhs, row_dofs, col_dofs, rhs_dofs);
             },
             element_ptr_variant);
     });
@@ -348,7 +348,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
             primary_upd_mat->operator()(row_ind, col_ind++) = local_mat(src_row, src_col);
         primary_upd_rhs[row_ind++] = local_vec[src_row];
     }
-    detail::scatterLocalSystem(*primary_upd_mat, primary_upd_rhs, global_mat, global_rhs, row_dofs, col_dofs, rhs_dofs);
+    scatterLocalSystem(*primary_upd_mat, primary_upd_rhs, global_mat, global_rhs, row_dofs, col_dofs, rhs_dofs);
 
     // Condensed diagonal block + RHS
     for (size_t row_ind = 0; auto src_row : dof_inds.cond_src_inds)
@@ -495,5 +495,5 @@ auto StaticCondensationManager< CondensationPolicy::ElementBoundary >::computeLo
     }
     return retval;
 }
-} // namespace lstr::detail
+} // namespace lstr::glob_asm
 #endif // L3STER_ASSEMBLY_STATICCONDENSATIONMANAGER_HPP

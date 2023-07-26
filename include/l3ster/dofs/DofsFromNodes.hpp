@@ -97,8 +97,7 @@ auto getUnsortedPrimaryDofs(const mesh::Element< ET, EO >&                      
                             const dofs::NodeCondensationMap< CP >&               cond_map,
                             util::ConstexprValue< dof_inds >                     dofinds_ctwrpr = {})
 {
-    return getDofsFromNodes(
-        lstr::dofs::detail::getPrimaryNodesArray< CP >(element), node_dof_map, cond_map, dofinds_ctwrpr);
+    return getDofsFromNodes(detail::getPrimaryNodesArray< CP >(element), node_dof_map, cond_map, dofinds_ctwrpr);
 }
 
 template < IndexRange_c auto  dof_inds,
@@ -112,8 +111,7 @@ auto getUnsortedPrimaryDofs(const mesh::Element< ET, EO >&                      
                             CondensationPolicyTag< CP >                                   cond_policy,
                             util::ConstexprValue< dof_inds >                              dofinds_ctwrpr = {})
 {
-    return getDofsFromNodes(
-        lstr::dofs::detail::getPrimaryNodesArray< CP >(element), node_dof_map, cond_policy, dofinds_ctwrpr);
+    return getDofsFromNodes(detail::getPrimaryNodesArray< CP >(element), node_dof_map, cond_policy, dofinds_ctwrpr);
 }
 
 template < mesh::ElementType ET, el_o_t EO, size_t max_dofs_per_node, CondensationPolicy CP >
@@ -121,7 +119,7 @@ auto getUnsortedPrimaryDofs(const mesh::Element< ET, EO >&                      
                             const dofs::NodeToGlobalDofMap< max_dofs_per_node >& node_dof_map,
                             const dofs::NodeCondensationMap< CP >&               cond_map)
 {
-    return getDofsFromNodes(lstr::dofs::detail::getPrimaryNodesArray< CP >(element), node_dof_map, cond_map);
+    return getDofsFromNodes(detail::getPrimaryNodesArray< CP >(element), node_dof_map, cond_map);
 }
 
 template < mesh::ElementType ET, el_o_t EO, size_t max_dofs_per_node, size_t num_maps, CondensationPolicy CP >
@@ -129,7 +127,7 @@ auto getUnsortedPrimaryDofs(const mesh::Element< ET, EO >&                      
                             const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& node_dof_map,
                             CondensationPolicyTag< CP >)
 {
-    return getDofsFromNodes(lstr::dofs::detail::getPrimaryNodesArray< CP >(element), node_dof_map);
+    return getDofsFromNodes(detail::getPrimaryNodesArray< CP >(element), node_dof_map);
 }
 } // namespace lstr::dofs
 #endif // L3STER_DOFS_DOFSFROMNODES_HPP

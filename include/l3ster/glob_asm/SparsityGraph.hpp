@@ -9,7 +9,7 @@
 #include "l3ster/util/IndexMap.hpp"
 #include "l3ster/util/StaticVector.hpp"
 
-namespace lstr::detail
+namespace lstr::glob_asm
 {
 struct NodeDofs
 {
@@ -175,5 +175,5 @@ makeSparsityGraph(const MpiComm&                                          comm,
     L3STER_PROFILE_REGION_END("Communicate data between ranks");
     return retval;
 }
-} // namespace lstr::detail
+} // namespace lstr::glob_asm
 #endif // L3STER_ASSEMBLY_SPARSITYGRAPH_HPP
