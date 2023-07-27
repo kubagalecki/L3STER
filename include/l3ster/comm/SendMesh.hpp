@@ -7,9 +7,7 @@
 #include <memory>
 #include <utility>
 
-namespace lstr
-{
-namespace detail
+namespace lstr::comm
 {
 inline auto sendNDoms(const MpiComm& comm, const mesh::SerializedPartition& part, int destination, int tag)
 {
@@ -49,7 +47,6 @@ inline auto sendSizes(const MpiComm& comm, const mesh::SerializedPartition& part
     auto msg = comm.sendAsync(size_info, destination, tag);
     return std::make_pair(std::move(size_info), std::move(msg));
 }
-} // namespace detail
 
 inline void sendPartition(const MpiComm& comm, const mesh::SerializedPartition& part, int destination)
 {
@@ -60,9 +57,9 @@ inline void sendPartition(const MpiComm& comm, const mesh::SerializedPartition& 
     messages.reserve(n_messages);
 
     // prelims
-    const auto n_dom_msg_and_data = detail::sendNDoms(comm, part, destination, msg_tag++);
-    const auto ids_msg_and_data   = detail::sendIds(comm, part, destination, msg_tag++);
-    const auto size_msg_and_data  = detail::sendSizes(comm, part, destination, msg_tag++);
+    const auto n_dom_msg_and_data = sendNDoms(comm, part, destination, msg_tag++);
+    const auto ids_msg_and_data   = sendIds(comm, part, destination, msg_tag++);
+    const auto size_msg_and_data  = sendSizes(comm, part, destination, msg_tag++);
 
     // domain data
     for (const auto& [id, dom] : part.m_domains)
@@ -78,5 +75,5 @@ inline void sendPartition(const MpiComm& comm, const mesh::SerializedPartition& 
     // nodes
     messages.emplace_back(comm.sendAsync(part.m_nodes, destination, msg_tag++));
 }
-} // namespace lstr
+} // namespace lstr::comm
 #endif // L3STER_COMM_SENDMESH_HPP

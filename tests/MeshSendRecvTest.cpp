@@ -7,15 +7,16 @@
 #include <iostream>
 
 using namespace lstr;
+using namespace lstr::comm;
+using namespace lstr::mesh;
 
 int main(int argc, char* argv[])
 {
-    using namespace lstr;
     L3sterScopeGuard scope_guard{argc, argv};
-    lstr::MpiComm    comm{MPI_COMM_WORLD};
+    MpiComm          comm{MPI_COMM_WORLD};
 
-    const auto read_mesh   = mesh::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::mesh::gmsh_tag);
-    const auto serial_part = mesh::SerializedPartition{read_mesh};
+    const auto read_mesh   = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::mesh::gmsh_tag);
+    const auto serial_part = SerializedPartition{read_mesh};
 
     if (comm.getSize() <= 1)
     {
@@ -27,10 +28,10 @@ int main(int argc, char* argv[])
     {
         if (comm.getRank() == 0)
             for (int j = 1; j < comm.getSize(); ++j)
-                lstr::sendPartition(comm, serial_part, j);
+                sendPartition(comm, serial_part, j);
         else
         {
-            const auto recv_part = lstr::receivePartition(comm, 0);
+            const auto recv_part = receivePartition(comm, 0);
             try
             {
                 if (recv_part.m_nodes != serial_part.m_nodes or

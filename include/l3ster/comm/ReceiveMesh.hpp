@@ -3,7 +3,7 @@
 
 #include "l3ster/comm/SendMesh.hpp"
 
-namespace lstr
+namespace lstr::comm
 {
 inline auto receivePartition(const MpiComm& comm, int source) -> mesh::SerializedPartition
 {
@@ -20,7 +20,7 @@ inline auto receivePartition(const MpiComm& comm, int source) -> mesh::Serialize
         return retval;
     });
     const auto sizes   = std::invoke([&] {
-        std::vector< size_t > retval(detail::getSizeMsgLength(n_doms));
+        std::vector< size_t > retval(getSizeMsgLength(n_doms));
         comm.receive(retval, source, msg_tag++);
         return retval;
     });
@@ -62,5 +62,5 @@ inline auto receivePartition(const MpiComm& comm, int source) -> mesh::Serialize
 
     return retval;
 }
-} // namespace lstr
+} // namespace lstr::comm
 #endif // L3STER_COMM_RECEIVEMESH_HPP
