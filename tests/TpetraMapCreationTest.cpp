@@ -19,9 +19,9 @@ void test()
                                                          {});
     constexpr auto problem_def     = ProblemDef{L3STER_DEFINE_DOMAIN(0, 1)};
     constexpr auto probdef_ctwrpr  = util::ConstexprValue< problem_def >{};
-    const auto     cond_map        = dofs::makeCondensationMap< CP >(comm, mesh, probdef_ctwrpr);
-    auto           owned_condensed = cond_map.getCondensedOwnedNodesView(mesh);
-    const auto     dof_intervals   = dofs::computeDofIntervals(comm, mesh, cond_map, probdef_ctwrpr);
+    const auto     cond_map        = dofs::makeCondensationMap< CP >(comm, *mesh, probdef_ctwrpr);
+    auto           owned_condensed = cond_map.getCondensedOwnedNodesView(*mesh);
+    const auto     dof_intervals   = dofs::computeDofIntervals(comm, *mesh, cond_map, probdef_ctwrpr);
     const auto     tpetra_map      = dofs::makeTpetraMap(owned_condensed, dof_intervals, comm);
     const auto     map_entries     = tpetra_map->getLocalElementList();
     REQUIRE(std::ranges::equal(owned_condensed, tpetra_map->getLocalElementList()));

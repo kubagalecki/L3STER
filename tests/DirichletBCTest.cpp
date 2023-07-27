@@ -27,17 +27,16 @@ void test()
     constexpr auto   dirdef_ctwrpr  = util::ConstexprValue< dirichlet_def >{};
 
     constexpr auto node_dist     = std::array{0., 1., 2., 3., 4., 5.};
-    const auto     mesh          = mesh::makeCubeMesh(node_dist);
-    auto           my_partition  = distributeMesh(comm, mesh, {boundary});
-    const auto     boundary_view = my_partition.getBoundaryView(boundary);
+    auto           my_partition  = distributeMesh(comm, mesh::makeCubeMesh(node_dist), {boundary});
+    const auto     boundary_view = my_partition->getBoundaryView(boundary);
 
-    const auto cond_map            = makeCondensationMap< CP >(comm, my_partition, probdef_ctwrpr);
-    const auto dof_intervals       = computeDofIntervals(comm, my_partition, cond_map, probdef_ctwrpr);
+    const auto cond_map            = makeCondensationMap< CP >(comm, *my_partition, probdef_ctwrpr);
+    const auto dof_intervals       = computeDofIntervals(comm, *my_partition, cond_map, probdef_ctwrpr);
     const auto global_node_dof_map = NodeToGlobalDofMap{dof_intervals, cond_map};
-    const auto sparsity_graph = makeSparsityGraph(comm, my_partition, global_node_dof_map, cond_map, probdef_ctwrpr);
+    const auto sparsity_graph = makeSparsityGraph(comm, *my_partition, global_node_dof_map, cond_map, probdef_ctwrpr);
 
     const auto [owned_bcdofs, shared_bcdofs] =
-        getDirichletDofs(my_partition, sparsity_graph, global_node_dof_map, cond_map, probdef_ctwrpr, dirdef_ctwrpr);
+        getDirichletDofs(*my_partition, sparsity_graph, global_node_dof_map, cond_map, probdef_ctwrpr, dirdef_ctwrpr);
     const auto dirichlet_bc = DirichletBCAlgebraic{sparsity_graph, owned_bcdofs, shared_bcdofs};
 
     auto matrix         = util::makeTeuchosRCP< tpetra_fecrsmatrix_t >(sparsity_graph);
@@ -53,7 +52,7 @@ void test()
     {
         auto rhs      = input_vectors.getVectorNonConst(0)->getDataNonConst();
         auto rhs_view = std::span{rhs};
-        my_partition.visit(
+        my_partition->visit(
             [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >& element) {
                 if constexpr (T == mesh::ElementType::Hex and O == 1)
                 {

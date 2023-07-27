@@ -44,7 +44,7 @@ int main(int argc, char* argv[])
         std::vector< d_id_t >(boundary_ids.begin(), boundary_ids.end()),
         {},
         probdef_ctwrpr);
-    const auto boundary_view = my_partition.getBoundaryView(boundary_ids);
+    const auto boundary_view = my_partition->getBoundaryView(boundary_ids);
 
     constexpr auto field_inds  = util::makeIotaArray< size_t, problem_def.n_fields >();
     constexpr auto T_inds      = std::array< size_t, 1 >{0};
@@ -125,13 +125,10 @@ int main(int argc, char* argv[])
     auto alg_system =
         makeAlgebraicSystem(comm, my_partition, element_boundary_tag, probdef_ctwrpr, dirichletdef_ctwrpr);
     alg_system->beginAssembly();
-    alg_system->assembleDomainProblem(diffusion_kernel3d, my_partition, std::views::single(domain_id));
-    alg_system->endAssembly(my_partition);
-
+    alg_system->assembleDomainProblem(diffusion_kernel3d, std::views::single(domain_id));
+    alg_system->endAssembly();
     alg_system->describe(comm);
-
-    alg_system->setDirichletBCValues(
-        dirichlet_bc_val_def, my_partition, boundary_ids, util::ConstexprValue< T_inds >{});
+    alg_system->setDirichletBCValues(dirichlet_bc_val_def, boundary_ids, util::ConstexprValue< T_inds >{});
     alg_system->applyDirichletBCs();
 
     solvers::CG solver{
@@ -140,13 +137,13 @@ int main(int argc, char* argv[])
     alg_system->solve(solver, solution);
 
     L3STER_PROFILE_REGION_BEGIN("Solution management");
-    auto solution_manager = SolutionManager{my_partition, problem_def.n_fields};
-    alg_system->updateSolution(my_partition, solution, dof_inds, solution_manager, field_inds);
+    auto solution_manager = SolutionManager{*my_partition, problem_def.n_fields};
+    alg_system->updateSolution(solution, dof_inds, solution_manager, field_inds);
     L3STER_PROFILE_REGION_END("Solution management");
 
     L3STER_PROFILE_REGION_BEGIN("Compute solution error");
     const auto fval_getter = solution_manager.makeFieldValueGetter(field_inds);
-    const auto error = computeNormL2(comm, error_kernel, my_partition, std::views::single(domain_id), fval_getter);
+    const auto error = computeNormL2(comm, error_kernel, *my_partition, std::views::single(domain_id), fval_getter);
     L3STER_PROFILE_REGION_END("Compute solution error");
 
     if (comm.getRank() == 0)
@@ -158,7 +155,7 @@ int main(int argc, char* argv[])
     }
 
     L3STER_PROFILE_REGION_BEGIN("Export results to VTK");
-    auto exporter = PvtuExporter{my_partition};
+    auto exporter = PvtuExporter{*my_partition};
     exporter.exportSolution("Cube_Diffusion.pvtu", comm, solution_manager, field_names, field_inds_view);
     exporter.flushWriteQueue();
     L3STER_PROFILE_REGION_END("Export results to VTK");

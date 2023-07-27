@@ -30,9 +30,9 @@ void test()
         {bot_boundary, top_boundary, left_boundary, right_boundary},
         {},
         probdef_ctwrpr);
-    const auto adiabatic_bound_view = mesh.getBoundaryView(std::array{bot_boundary, top_boundary});
+    const auto adiabatic_bound_view = mesh->getBoundaryView(std::array{bot_boundary, top_boundary});
     const auto whole_bound_view =
-        mesh.getBoundaryView(std::array{top_boundary, bot_boundary, left_boundary, right_boundary});
+        mesh->getBoundaryView(std::array{top_boundary, bot_boundary, left_boundary, right_boundary});
 
     auto alg_sys = makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr, dirichletdef_ctwrpr);
 
@@ -84,7 +84,7 @@ void test()
     };
 
     const auto assembleDomainProblem = [&] {
-        alg_sys->assembleDomainProblem(diffusion_kernel2d, mesh, std::views::single(domain_id));
+        alg_sys->assembleDomainProblem(diffusion_kernel2d, std::views::single(domain_id));
     };
     const auto assembleBoundaryProblem = [&] {
         alg_sys->assembleBoundaryProblem(neumann_bc_kernel, adiabatic_bound_view);
@@ -95,19 +95,19 @@ void test()
     assembleDomainProblem();
     assembleBoundaryProblem();
     CHECK_THROWS(alg_sys->applyDirichletBCs());
-    alg_sys->endAssembly(mesh);
+    alg_sys->endAssembly();
     alg_sys->describe(comm);
     CHECK_THROWS(assembleDomainProblem());
     CHECK_THROWS(assembleBoundaryProblem());
-    CHECK_THROWS(alg_sys->endAssembly(mesh));
+    CHECK_THROWS(alg_sys->endAssembly());
 
     alg_sys->setDirichletBCValues(
-        dirichlet_bc_val_def, mesh, std::array{left_boundary, right_boundary}, util::ConstexprValue< std::array{0} >{});
+        dirichlet_bc_val_def, std::array{left_boundary, right_boundary}, util::ConstexprValue< std::array{0} >{});
     alg_sys->applyDirichletBCs();
 
     {
         auto fake_problem = makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr);
-        fake_problem->endAssembly(mesh);
+        fake_problem->endAssembly();
         CHECK_THROWS(fake_problem->applyDirichletBCs());
     }
 
@@ -116,8 +116,8 @@ void test()
     auto solver   = solvers::Lapack{};
     auto solution = alg_sys->makeSolutionVector();
     alg_sys->solve(solver, solution);
-    auto solution_manager = SolutionManager{mesh, problem_def.n_fields};
-    alg_sys->updateSolution(mesh, solution, dof_inds, solution_manager, dof_inds);
+    auto solution_manager = SolutionManager{*mesh, problem_def.n_fields};
+    alg_sys->updateSolution(solution, dof_inds, solution_manager, dof_inds);
 
     // Check that the underlying data cache is still usable after the solve
     {
@@ -144,7 +144,7 @@ void test()
         };
     const auto fval_getter = solution_manager.makeFieldValueGetter(dof_inds);
 
-    const auto error          = computeNormL2(comm, compute_error, mesh, std::views::single(domain_id), fval_getter);
+    const auto error          = computeNormL2(comm, compute_error, *mesh, std::views::single(domain_id), fval_getter);
     const auto boundary_error = computeBoundaryNormL2(comm, compute_boundary_error, whole_bound_view, fval_getter);
     if (comm.getRank() == 0 and error.norm() >= 1e-10)
     {

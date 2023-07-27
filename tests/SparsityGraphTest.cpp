@@ -75,24 +75,25 @@ private:
 template < CondensationPolicy CP >
 void test()
 {
-    const auto comm         = MpiComm{MPI_COMM_WORLD};
-    const auto full_mesh    = std::invoke([] {
+    const auto comm           = MpiComm{MPI_COMM_WORLD};
+    auto       full_mesh      = std::invoke([] {
         constexpr auto node_dist = std::array{0., 1., 2., 3., 4.};
         auto           mesh      = mesh::makeCubeMesh(node_dist);
         mesh.initDualGraph();
         return convertMeshToOrder< 2 >(mesh);
     });
-    const auto my_partition = distributeMesh(comm, full_mesh, {1, 3});
+    auto       full_mesh_copy = full_mesh;
+    const auto my_partition   = distributeMesh(comm, std::move(full_mesh_copy), {1, 3});
 
     constexpr auto problem_def =
         ProblemDef{defineDomain< 2 >(0, 1), defineDomain< 2 >(1, 0), defineDomain< 2 >(3, 0, 1)};
     constexpr auto probdef_ctwrpr = util::ConstexprValue< problem_def >{};
 
-    const auto cond_map       = makeCondensationMap< CP >(comm, my_partition, probdef_ctwrpr);
+    const auto cond_map       = makeCondensationMap< CP >(comm, *my_partition, probdef_ctwrpr);
     const auto cond_map_full  = makeCondensationMap< CP >(MpiComm{MPI_COMM_SELF}, full_mesh, probdef_ctwrpr);
-    const auto dof_intervals  = computeDofIntervals(comm, my_partition, cond_map, probdef_ctwrpr);
+    const auto dof_intervals  = computeDofIntervals(comm, *my_partition, cond_map, probdef_ctwrpr);
     const auto node_dof_map   = NodeToGlobalDofMap{dof_intervals, cond_map};
-    const auto sparsity_graph = makeSparsityGraph(comm, my_partition, node_dof_map, cond_map, probdef_ctwrpr);
+    const auto sparsity_graph = makeSparsityGraph(comm, *my_partition, node_dof_map, cond_map, probdef_ctwrpr);
 
     const auto num_all_dofs = getNodeDofs(cond_map_full.getCondensedIds(), dof_intervals).size();
     const auto dense_graph  = DenseGraph{full_mesh, probdef_ctwrpr, dof_intervals, cond_map_full};

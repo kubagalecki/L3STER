@@ -47,7 +47,7 @@ void vtkExportTest2D()
     constexpr auto all_field_inds    = util::makeIotaArray< size_t, problem_def.n_fields >();
 
     const auto system_manager   = makeAlgebraicSystem(comm, my_partition, no_condensation_tag, problemdef_ctwrpr);
-    auto       solution_manager = SolutionManager{my_partition, problem_def.n_fields};
+    auto       solution_manager = SolutionManager{*my_partition, problem_def.n_fields};
 
     auto solution = system_manager->makeSolutionVector();
     {
@@ -55,7 +55,7 @@ void vtkExportTest2D()
         const double Re            = 40.;
         const double lambda        = Re / 2. - std::sqrt(Re * Re / 4. - 4. * pi * pi);
         const auto   bot_top_vals  = std::array< val_t, 2 >{1., pi};
-        computeValuesAtNodes(my_partition,
+        computeValuesAtNodes(*my_partition,
                              std::array{bot_boundary, top_boundary},
                              system_manager->getDofMap(),
                              util::ConstexprValue< scalar_inds >{},
@@ -69,7 +69,7 @@ void vtkExportTest2D()
                 retval[1] = lambda * std::exp(lambda * p.space.x()) * std::sin(2 * pi * p.space.y()) / (2. * pi);
                 return retval;
             },
-            my_partition,
+            *my_partition,
             std::views::single(domain_id),
             system_manager->getDofMap(),
             util::ConstexprValue< vec_inds >{},
@@ -79,9 +79,9 @@ void vtkExportTest2D()
     solution->switchActiveMultiVector();
     solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);
     solution->switchActiveMultiVector();
-    system_manager->updateSolution(my_partition, solution, all_field_inds, solution_manager, all_field_inds);
+    system_manager->updateSolution(solution, all_field_inds, solution_manager, all_field_inds);
 
-    auto       exporter        = PvtuExporter{my_partition};
+    auto       exporter        = PvtuExporter{*my_partition};
     const auto field_names     = std::array{"C1"sv, "Cpi"sv, "vel"sv};
     const auto field_comp_inds = std::array< std::span< const size_t >, 3 >{
         std::span{std::addressof(scalar_inds[0]), 1}, std::span{std::addressof(scalar_inds[1]), 1}, vec_inds};
@@ -106,7 +106,7 @@ void vtkExportTest3D()
     constexpr auto mesh_order   = 2;
     const auto     my_partition = generateAndDistributeMesh< mesh_order >(
         comm, [&] { return mesh::makeCubeMesh(node_dist); }, {1, 2, 3, 4, 5, 6});
-    const auto boundary = my_partition.getBoundaryView(util::makeIotaArray< d_id_t, 6 >(1));
+    const auto boundary = my_partition->getBoundaryView(util::makeIotaArray< d_id_t, 6 >(1));
 
     constexpr d_id_t domain_id           = 0;
     constexpr auto   problem_def         = ProblemDef{defineDomain< 6 >(domain_id, 0, 1, 2),
@@ -122,7 +122,7 @@ void vtkExportTest3D()
     constexpr auto   boundary_field_inds = std::array< size_t, 3 >{3, 4, 5};
 
     const auto system_manager   = makeAlgebraicSystem(comm, my_partition, no_condensation_tag, problemdef_ctwrpr);
-    auto       solution_manager = SolutionManager{my_partition, n_fields};
+    auto       solution_manager = SolutionManager{*my_partition, n_fields};
 
     auto solution = system_manager->makeSolutionVector();
     {
@@ -137,7 +137,7 @@ void vtkExportTest3D()
                 retval[2]         = p.z();
                 return retval;
             },
-            my_partition,
+            *my_partition,
             std::views::single(domain_id),
             system_manager->getDofMap(),
             util::ConstexprValue< domain_field_inds >{},
@@ -158,9 +158,9 @@ void vtkExportTest3D()
         solution->switchActiveMultiVector();
     }
     constexpr auto field_inds = util::makeIotaArray< size_t, n_fields >();
-    system_manager->updateSolution(my_partition, solution, field_inds, solution_manager, field_inds);
+    system_manager->updateSolution(solution, field_inds, solution_manager, field_inds);
 
-    auto       exporter    = PvtuExporter{my_partition};
+    auto       exporter    = PvtuExporter{*my_partition};
     const auto field_names = std::array{"vec3D"sv, "normal"sv};
     CHECK_THROWS(exporter.exportSolution("path/to/nonexistent/directory/test_results_3D",
                                          comm,

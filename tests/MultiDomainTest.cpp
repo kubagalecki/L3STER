@@ -48,7 +48,6 @@ void test()
     const auto assemble_problem_in_dom = [&]< auto dom_ind >(util::ConstexprValue< dom_ind >) {
         set_value = static_cast< double >(dom_ind + 1);
         alg_sys->assembleDomainProblem(const_kernel,
-                                       mesh,
                                        std::views::single(domains[dom_ind]),
                                        empty_field_val_getter,
                                        util::ConstexprValue< std::array{size_t{dom_ind}} >{});
@@ -59,17 +58,17 @@ void test()
     assemble_problem_in_dom(util::ConstexprValue< 1 >{});
     assemble_problem_in_dom(util::ConstexprValue< 2 >{});
     assemble_problem_in_dom(util::ConstexprValue< 3 >{});
-    alg_sys->endAssembly(mesh);
+    alg_sys->endAssembly();
 
     auto solver   = solvers::Lapack{};
     auto solution = alg_sys->makeSolutionVector();
     alg_sys->solve(solver, solution);
 
-    auto solution_manager = SolutionManager{mesh, problem_def.n_fields};
+    auto solution_manager = SolutionManager{*mesh, problem_def.n_fields};
     for (size_t i = 0; i != problem_def.n_fields; ++i)
         solution_manager.setField(i, static_cast< double >(i + 1));
     constexpr auto dof_inds = util::makeIotaArray< size_t, problem_def.n_fields >();
-    alg_sys->updateSolution(mesh, solution, dof_inds, solution_manager, dof_inds);
+    alg_sys->updateSolution(solution, dof_inds, solution_manager, dof_inds);
 
     for (size_t i = 0; i != problem_def.n_fields; ++i)
     {

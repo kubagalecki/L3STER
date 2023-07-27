@@ -13,7 +13,7 @@ int main(int argc, char* argv[])
 
     const auto part =
         readAndDistributeMesh< 2 >(comm, L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), mesh::gmsh_tag, {});
-    const size_t n_elems = part.getNElements();
+    const size_t n_elems = part->getNElements();
 
     size_t sum_elems{};
     comm.reduce(std::views::single(n_elems), &sum_elems, 0, MPI_SUM);
