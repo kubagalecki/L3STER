@@ -92,7 +92,7 @@ struct PotentiallyValidIntegralKernelDeductionHelper
         static constexpr bool value = IntegralKernel_c< Kernel, mesh::Element< T, O >::native_dim, n_fields >;
     };
     static constexpr bool domain =
-        mesh::detail::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
+        mesh::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
 
     template < mesh::ElementType T, el_o_t O >
     struct DeductionHelperBoundary
@@ -100,7 +100,7 @@ struct PotentiallyValidIntegralKernelDeductionHelper
         static constexpr bool value = BoundaryIntegralKernel_c< Kernel, mesh::Element< T, O >::native_dim, n_fields >;
     };
     static constexpr bool boundary =
-        mesh::detail::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperBoundary >;
+        mesh::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperBoundary >;
 };
 template < typename Kernel, size_t n_fields, el_o_t... orders >
 concept PotentiallyValidIntegralKernel_c =
@@ -158,7 +158,7 @@ auto evalElementBoundaryIntegral(
 template < el_o_t... orders, size_t n_fields, AssemblyOptions options >
 auto evalLocalIntegral(auto&&                                               kernel,
                        const mesh::MeshPartition< orders... >&              mesh,
-                       mesh::detail::DomainIdRange_c auto&&                 domain_ids,
+                       mesh::DomainIdRange_c auto&&                         domain_ids,
                        const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
                        util::ConstexprValue< options >,
                        val_t time)
@@ -233,7 +233,7 @@ template < el_o_t... orders, size_t n_fields = 0, AssemblyOptions opts = {} >
 auto evalIntegral(const MpiComm&                                       comm,
                   auto&&                                               kernel,
                   const mesh::MeshPartition< orders... >&              mesh,
-                  mesh::detail::DomainIdRange_c auto&&                 domain_ids,
+                  mesh::DomainIdRange_c auto&&                         domain_ids,
                   const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
                   util::ConstexprValue< opts >                         opts_ctwrpr      = {},
                   val_t                                                time             = 0.)

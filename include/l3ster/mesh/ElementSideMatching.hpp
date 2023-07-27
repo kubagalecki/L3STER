@@ -4,7 +4,7 @@
 #include "l3ster/mesh/ElementTraits.hpp"
 #include "l3ster/util/Algorithm.hpp"
 
-namespace lstr::mesh::detail
+namespace lstr::mesh
 {
 template < el_side_t I, typename Element, size_t N >
 constexpr bool matchSide(const Element& element, const std::array< n_id_t, N >& sorted_side_nodes)
@@ -48,5 +48,5 @@ constexpr el_side_t matchBoundaryNodesToElement(const Element< T, O >&         e
     constexpr auto n_sides = ElementTraits< Element< T, O > >::n_sides;
     return matchSidesRecursively< n_sides - 1 >(element, srt_boundary_nodes);
 }
-} // namespace lstr::mesh::detail
+} // namespace lstr::mesh
 #endif // L3STER_MESH_ELEMENTSIDEMATCHING_HPP

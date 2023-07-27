@@ -30,8 +30,7 @@ auto getNatJacobiMatGenerator(const mesh::Element< T, O >& element)
                                                                    1,
                                                                    shapefun_ind,
                                                                    basis::BasisType::Lagrange,
-                                                                   basis::detail::derivativeByIndex(derdim_ind) >{}(
-                                        point);
+                                                                   basis::derivativeByIndex(derdim_ind) >{}(point);
                                 jac_mat(derdim_ind, spacedim_ind) += vert_coord * shapefun_val;
                             },
                             std::make_integer_sequence< dim_t, nat_dim >{});

@@ -23,7 +23,7 @@ template < size_t n_fields = 0, AssemblyOptions opts = {}, el_o_t... orders >
 auto computeNormL2(const MpiComm&                                       comm,
                    auto&&                                               eval_residual,
                    const mesh::MeshPartition< orders... >&              mesh,
-                   mesh::detail::DomainIdRange_c auto&&                 domain_ids,
+                   mesh::DomainIdRange_c auto&&                         domain_ids,
                    const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
                    util::ConstexprValue< opts >                         options_ctwrpr   = {},
                    val_t                                                time             = 0.)

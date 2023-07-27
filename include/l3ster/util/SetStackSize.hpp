@@ -12,8 +12,6 @@ namespace lstr::util
 {
 inline constexpr std::size_t default_stack_size = 1u << 23;
 
-namespace detail
-{
 struct MaxStackSizeTracker
 {
     static size_t get() { return access(); }
@@ -22,6 +20,15 @@ struct MaxStackSizeTracker
         const auto prev_val = access();
         access()            = std::max(value, prev_val);
     }
+
+    template < size_t size >
+    struct MaxStackSizeRequest
+    {
+        inline static const bool _ = std::invoke([] {
+            MaxStackSizeTracker::set(size);
+            return false;
+        });
+    };
 
 private:
     static size_t& access()
@@ -32,19 +39,9 @@ private:
 };
 
 template < size_t size >
-struct MaxStackSizeRequest
-{
-    inline static const bool _ = std::invoke([] {
-        MaxStackSizeTracker::set(size);
-        return false;
-    });
-};
-} // namespace detail
-
-template < size_t size >
 void requestStackSize()
 {
-    [[maybe_unused]] const auto request = detail::MaxStackSizeRequest< size >{};
+    [[maybe_unused]] const auto request = MaxStackSizeTracker::MaxStackSizeRequest< size >{};
 }
 
 namespace detail

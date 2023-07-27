@@ -13,8 +13,6 @@
 
 namespace lstr::mesh
 {
-namespace detail
-{
 template < typename T, el_o_t... orders >
 concept DomainPredicate_c = requires(T op, DomainView< orders... > dv) {
     {
@@ -24,13 +22,12 @@ concept DomainPredicate_c = requires(T op, DomainView< orders... > dv) {
 
 template < typename T >
 concept DomainIdRange_c = SizedRangeOfConvertibleTo_c< T, d_id_t >;
-} // namespace detail
 
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 class MeshPartition
 {
-    using Constraint = detail::ElementDeductionHelper< orders... >;
+    using Constraint = ElementDeductionHelper< orders... >;
 
 public:
     using domain_map_t              = std::map< d_id_t, Domain< orders... > >;
@@ -69,22 +66,18 @@ public:
     void visit(F&& element_visitor, d_id_t domain_id, ExecPolicy&& policy = {}) const
         requires(Constraint::template invocable_on_const_elements< F >);
     template < typename F, SimpleExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    void
-    visit(F&& element_visitor, detail::DomainPredicate_c< orders... > auto&& domain_predicate, ExecPolicy&& policy = {})
+    void visit(F&& element_visitor, DomainPredicate_c< orders... > auto&& domain_predicate, ExecPolicy&& policy = {})
         requires(Constraint::template invocable_on_elements< F >);
     template < typename F, SimpleExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&&                                           element_visitor,
-               detail::DomainPredicate_c< orders... > auto&& domain_predicate,
-               ExecPolicy&&                                  policy = {}) const
+    void
+    visit(F&& element_visitor, DomainPredicate_c< orders... > auto&& domain_predicate, ExecPolicy&& policy = {}) const
         requires(Constraint::template invocable_on_const_elements< F >);
     template < typename F, SimpleExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    void
-    visit(F&& element_visitor, detail::DomainPredicate_c< orders... > auto&& domain_predicate, ExecPolicy&& policy = {})
+    void visit(F&& element_visitor, DomainPredicate_c< orders... > auto&& domain_predicate, ExecPolicy&& policy = {})
         requires(Constraint::template invocable_on_elements< F, DomainView< orders... > >);
     template < typename F, SimpleExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&&                                           element_visitor,
-               detail::DomainPredicate_c< orders... > auto&& domain_predicate,
-               ExecPolicy&&                                  policy = {}) const
+    void
+    visit(F&& element_visitor, DomainPredicate_c< orders... > auto&& domain_predicate, ExecPolicy&& policy = {}) const
         requires(Constraint::template invocable_on_const_elements< F, DomainView< orders... > >);
     template < typename F, SimpleExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
     void visit(F&& element_visitor, ExecPolicy&& policy = {})
@@ -93,27 +86,27 @@ public:
     void visit(F&& element_visitor, ExecPolicy&& policy = {}) const
         requires(Constraint::template invocable_on_const_elements< F, DomainView< orders... > >);
     template < typename F, SimpleExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, detail::DomainIdRange_c auto&& domain_ids, ExecPolicy&& policy = {})
+    void visit(F&& element_visitor, DomainIdRange_c auto&& domain_ids, ExecPolicy&& policy = {})
         requires(Constraint::template invocable_on_elements< F >);
     template < typename F, SimpleExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, detail::DomainIdRange_c auto&& domain_ids, ExecPolicy&& policy = {}) const
+    void visit(F&& element_visitor, DomainIdRange_c auto&& domain_ids, ExecPolicy&& policy = {}) const
         requires(Constraint::template invocable_on_const_elements< F >);
     template < typename F, SimpleExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, detail::DomainIdRange_c auto&& domain_ids, ExecPolicy&& policy = {})
+    void visit(F&& element_visitor, DomainIdRange_c auto&& domain_ids, ExecPolicy&& policy = {})
         requires(Constraint::template invocable_on_elements< F, DomainView< orders... > >);
     template < typename F, SimpleExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    void visit(F&& element_visitor, detail::DomainIdRange_c auto&& domain_ids, ExecPolicy&& policy = {}) const
+    void visit(F&& element_visitor, DomainIdRange_c auto&& domain_ids, ExecPolicy&& policy = {}) const
         requires(Constraint::template invocable_on_const_elements< F, DomainView< orders... > >);
 
     // Reduction over elements
     // Note: `zero` must be the identity element for the reduction (as opposed to, e.g., std::transform_reduce)
     // Note: The iteration order is indeterminate, even if std::execution::seq is passed
     template < SimpleExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    auto transformReduce(const auto&                    zero,
-                         auto&&                         reduction,
-                         auto&&                         transform,
-                         detail::DomainIdRange_c auto&& domain_ids,
-                         ExecPolicy&&                   policy = {}) const -> std::decay_t< decltype(zero) >
+    auto transformReduce(const auto&            zero,
+                         auto&&                 reduction,
+                         auto&&                 transform,
+                         DomainIdRange_c auto&& domain_ids,
+                         ExecPolicy&&           policy = {}) const -> std::decay_t< decltype(zero) >
         requires(Constraint::template invocable_on_const_elements_return< std::decay_t< decltype(zero) >,
                                                                           decltype(transform) > and
                  requires {
@@ -131,11 +124,11 @@ public:
     auto find(F&& predicate, ExecPolicy&& policy = {}) const -> const_find_result_t
         requires(Constraint::template invocable_on_const_elements_return< bool, F >);
     template < typename F, SimpleExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    auto find(F&& predicate, detail::DomainPredicate_c< orders... > auto&& domain_predicate, ExecPolicy&& policy = {})
+    auto find(F&& predicate, DomainPredicate_c< orders... > auto&& domain_predicate, ExecPolicy&& policy = {})
         -> find_result_t
         requires(Constraint::template invocable_on_const_elements_return< bool, F >);
     template < typename F, SimpleExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    auto find(F&& predicate, detail::DomainPredicate_c< orders... > auto&& domain_ids, ExecPolicy&& policy = {}) const
+    auto find(F&& predicate, DomainPredicate_c< orders... > auto&& domain_ids, ExecPolicy&& policy = {}) const
         -> const_find_result_t
         requires(Constraint::template invocable_on_const_elements_return< bool, F >);
     inline find_result_t       find(el_id_t id);
@@ -144,7 +137,7 @@ public:
     // boundary views
     template < ElementType T, el_o_t O >
     auto getElementBoundaryView(const Element< T, O >& el, d_id_t d) const -> el_boundary_view_result_t;
-    auto getBoundaryView(detail::DomainIdRange_c auto&& boundary_ids) const -> BoundaryView< orders... >;
+    auto getBoundaryView(DomainIdRange_c auto&& boundary_ids) const -> BoundaryView< orders... >;
     auto getBoundaryView(d_id_t id) const -> BoundaryView< orders... >
     {
         return getBoundaryView(std::views::single(id));
@@ -173,8 +166,7 @@ private:
 
     static inline auto constifyFindResult(find_result_t found) -> const_find_result_t;
 
-    static auto filterExistingDomainIds(const auto& domain_map, detail::DomainIdRange_c auto&& ids)
-        -> std::vector< d_id_t >;
+    static auto filterExistingDomainIds(const auto& domain_map, DomainIdRange_c auto&& ids) -> std::vector< d_id_t >;
     // Deduce constness based on the domain map, helps with deduplication. Idea similar to C++23 "deducing this"
     static void visitImpl(auto&& visitor, auto&& domain_map, auto&& domain_ids, SimpleExecutionPolicy_c auto&& policy);
 
@@ -269,9 +261,9 @@ void MeshPartition< orders... >::visit(F&& element_visitor, d_id_t domain_id, Ex
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 template < typename F, SimpleExecutionPolicy_c ExecPolicy >
-void MeshPartition< orders... >::visit(F&&                                           element_visitor,
-                                       detail::DomainPredicate_c< orders... > auto&& domain_predicate,
-                                       ExecPolicy&&                                  policy)
+void MeshPartition< orders... >::visit(F&&                                   element_visitor,
+                                       DomainPredicate_c< orders... > auto&& domain_predicate,
+                                       ExecPolicy&&                          policy)
     requires(Constraint::template invocable_on_elements< F >)
 {
     const auto visit_domain = [&](auto& map_entry) {
@@ -285,9 +277,9 @@ void MeshPartition< orders... >::visit(F&&                                      
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 template < typename F, SimpleExecutionPolicy_c ExecPolicy >
-void MeshPartition< orders... >::visit(F&&                                           element_visitor,
-                                       detail::DomainPredicate_c< orders... > auto&& domain_predicate,
-                                       ExecPolicy&&                                  policy) const
+void MeshPartition< orders... >::visit(F&&                                   element_visitor,
+                                       DomainPredicate_c< orders... > auto&& domain_predicate,
+                                       ExecPolicy&&                          policy) const
     requires(Constraint::template invocable_on_const_elements< F >)
 {
     const auto visit_domain = [&](const auto& map_entry) {
@@ -301,9 +293,9 @@ void MeshPartition< orders... >::visit(F&&                                      
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 template < typename F, SimpleExecutionPolicy_c ExecPolicy >
-void MeshPartition< orders... >::visit(F&&                                           element_visitor,
-                                       detail::DomainPredicate_c< orders... > auto&& domain_predicate,
-                                       ExecPolicy&&                                  policy)
+void MeshPartition< orders... >::visit(F&&                                   element_visitor,
+                                       DomainPredicate_c< orders... > auto&& domain_predicate,
+                                       ExecPolicy&&                          policy)
     requires(Constraint::template invocable_on_elements< F, DomainView< orders... > >)
 {
     const auto visit_domain = [&](auto& map_entry) {
@@ -318,9 +310,9 @@ void MeshPartition< orders... >::visit(F&&                                      
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 template < typename F, SimpleExecutionPolicy_c ExecPolicy >
-void MeshPartition< orders... >::visit(F&&                                           element_visitor,
-                                       detail::DomainPredicate_c< orders... > auto&& domain_predicate,
-                                       ExecPolicy&&                                  policy) const
+void MeshPartition< orders... >::visit(F&&                                   element_visitor,
+                                       DomainPredicate_c< orders... > auto&& domain_predicate,
+                                       ExecPolicy&&                          policy) const
     requires(Constraint::template invocable_on_const_elements< F, DomainView< orders... > >)
 {
     const auto visit_domain = [&](const auto& map_entry) {
@@ -387,9 +379,7 @@ void MeshPartition< orders... >::visit(F&& element_visitor, ExecPolicy&& policy)
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 template < typename F, SimpleExecutionPolicy_c ExecPolicy >
-void MeshPartition< orders... >::visit(F&&                            element_visitor,
-                                       detail::DomainIdRange_c auto&& domain_ids,
-                                       ExecPolicy&&                   policy)
+void MeshPartition< orders... >::visit(F&& element_visitor, DomainIdRange_c auto&& domain_ids, ExecPolicy&& policy)
     requires(Constraint::template invocable_on_elements< F >)
 {
     const auto visit_domain = [&](auto& map_entry) {
@@ -401,9 +391,9 @@ void MeshPartition< orders... >::visit(F&&                            element_vi
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 template < typename F, SimpleExecutionPolicy_c ExecPolicy >
-void MeshPartition< orders... >::visit(F&&                            element_visitor,
-                                       detail::DomainIdRange_c auto&& domain_ids,
-                                       ExecPolicy&&                   policy) const
+void MeshPartition< orders... >::visit(F&&                    element_visitor,
+                                       DomainIdRange_c auto&& domain_ids,
+                                       ExecPolicy&&           policy) const
     requires(Constraint::template invocable_on_const_elements< F >)
 {
     const auto visit_domain = [&](const auto& map_entry) {
@@ -415,9 +405,7 @@ void MeshPartition< orders... >::visit(F&&                            element_vi
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 template < typename F, SimpleExecutionPolicy_c ExecPolicy >
-void MeshPartition< orders... >::visit(F&&                            element_visitor,
-                                       detail::DomainIdRange_c auto&& domain_ids,
-                                       ExecPolicy&&                   policy)
+void MeshPartition< orders... >::visit(F&& element_visitor, DomainIdRange_c auto&& domain_ids, ExecPolicy&& policy)
     requires(Constraint::template invocable_on_elements< F, DomainView< orders... > >)
 {
     const auto visit_domain = [&](auto& map_entry) {
@@ -430,9 +418,9 @@ void MeshPartition< orders... >::visit(F&&                            element_vi
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 template < typename F, SimpleExecutionPolicy_c ExecPolicy >
-void MeshPartition< orders... >::visit(F&&                            element_visitor,
-                                       detail::DomainIdRange_c auto&& domain_ids,
-                                       ExecPolicy&&                   policy) const
+void MeshPartition< orders... >::visit(F&&                    element_visitor,
+                                       DomainIdRange_c auto&& domain_ids,
+                                       ExecPolicy&&           policy) const
     requires(Constraint::template invocable_on_const_elements< F, DomainView< orders... > >)
 {
     const auto visit_domain = [&](const auto& map_entry) {
@@ -445,11 +433,9 @@ void MeshPartition< orders... >::visit(F&&                            element_vi
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 template < SimpleExecutionPolicy_c ExecPolicy >
-auto MeshPartition< orders... >::transformReduce(const auto&                    zero,
-                                                 auto&&                         reduction,
-                                                 auto&&                         transform,
-                                                 detail::DomainIdRange_c auto&& domain_ids,
-                                                 ExecPolicy&& policy) const -> std::decay_t< decltype(zero) >
+auto MeshPartition< orders... >::transformReduce(
+    const auto& zero, auto&& reduction, auto&& transform, DomainIdRange_c auto&& domain_ids, ExecPolicy&& policy) const
+    -> std::decay_t< decltype(zero) >
     requires(Constraint::template invocable_on_const_elements_return< std::decay_t< decltype(zero) >,
                                                                       decltype(transform) > and
              requires {
@@ -500,9 +486,9 @@ auto MeshPartition< orders... >::find(F&& predicate, ExecPolicy&& policy) const 
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 template < typename F, SimpleExecutionPolicy_c ExecPolicy >
-auto MeshPartition< orders... >::find(F&&                                           predicate,
-                                      detail::DomainPredicate_c< orders... > auto&& domain_predicate,
-                                      ExecPolicy&&                                  policy) -> find_result_t
+auto MeshPartition< orders... >::find(F&&                                   predicate,
+                                      DomainPredicate_c< orders... > auto&& domain_predicate,
+                                      ExecPolicy&&                          policy) -> find_result_t
     requires(Constraint::template invocable_on_const_elements_return< bool, F >)
 {
     find_result_t result;
@@ -525,9 +511,9 @@ auto MeshPartition< orders... >::find(F&&                                       
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 template < typename F, SimpleExecutionPolicy_c ExecPolicy >
-auto MeshPartition< orders... >::find(F&&                                           predicate,
-                                      detail::DomainPredicate_c< orders... > auto&& domain_ids,
-                                      ExecPolicy&&                                  policy) const -> const_find_result_t
+auto MeshPartition< orders... >::find(F&&                                   predicate,
+                                      DomainPredicate_c< orders... > auto&& domain_ids,
+                                      ExecPolicy&&                          policy) const -> const_find_result_t
     requires(Constraint::template invocable_on_const_elements_return< bool, F >)
 {
     return constifyFindResult(const_cast< MeshPartition* >(this)->find(std::forward< decltype(predicate) >(predicate),
@@ -568,7 +554,7 @@ auto MeshPartition< orders... >::getElementBoundaryViewImpl(const Element< T, O 
 
     const auto boundary_nodes = util::getSortedArray(el.getNodes());
     const auto match_side     = [&]< ElementType T_, el_o_t O_ >(const Element< T_, O_ >* domain_element) {
-        return detail::matchBoundaryNodesToElement(*domain_element, boundary_nodes);
+        return mesh::matchBoundaryNodesToElement(*domain_element, boundary_nodes);
     };
 
     const auto adjacent_elems = m_dual_graph->getElementAdjacent(el.getId());
@@ -595,7 +581,7 @@ auto MeshPartition< orders... >::getElementBoundaryViewFallback(const Element< T
     el_side_t  side_index     = 0;
 
     const auto is_domain_element = [&]< ElementType T_, el_o_t O_ >(const Element< T_, O_ >& domain_element) {
-        side_index = detail::matchBoundaryNodesToElement(domain_element, boundary_nodes);
+        side_index = mesh::matchBoundaryNodesToElement(domain_element, boundary_nodes);
         return side_index != std::numeric_limits< el_side_t >::max();
     };
 
@@ -619,8 +605,7 @@ auto MeshPartition< orders... >::getElementBoundaryView(const Element< T, O >& e
 
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
-auto MeshPartition< orders... >::getBoundaryView(detail::DomainIdRange_c auto&& boundary_ids) const
-    -> BoundaryView< orders... >
+auto MeshPartition< orders... >::getBoundaryView(DomainIdRange_c auto&& boundary_ids) const -> BoundaryView< orders... >
 {
     size_t n_boundary_els = 0;
     for (d_id_t id : boundary_ids)
@@ -773,7 +758,7 @@ void MeshPartition< orders... >::visitImpl(auto&&                         visito
 
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
-auto MeshPartition< orders... >::filterExistingDomainIds(const auto& domain_map, detail::DomainIdRange_c auto&& ids)
+auto MeshPartition< orders... >::filterExistingDomainIds(const auto& domain_map, DomainIdRange_c auto&& ids)
     -> std::vector< d_id_t >
 {
     std::vector< d_id_t > retval;

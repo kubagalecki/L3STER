@@ -16,7 +16,7 @@ template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 class BoundaryView
 {
-    using Constraint = detail::ElementDeductionHelper< orders... >;
+    using Constraint = ElementDeductionHelper< orders... >;
 
 public:
     using boundary_element_view_variant_t =

@@ -56,7 +56,7 @@ public:
                el_o_t... orders >
     void assembleDomainProblem(auto&&                                               kernel,
                                const mesh::MeshPartition< orders... >&              mesh,
-                               mesh::detail::DomainIdRange_c auto&&                 domain_ids,
+                               mesh::DomainIdRange_c auto&&                         domain_ids,
                                const SolutionManager::FieldValueGetter< n_fields >& fval_getter       = {},
                                util::ConstexprValue< field_inds >                   field_inds_ctwrpr = {},
                                util::ConstexprValue< asm_opts >                     assembly_options  = {},
@@ -78,7 +78,7 @@ public:
                el_o_t... orders >
     void setDirichletBCValues(auto&&                                               kernel,
                               const mesh::MeshPartition< orders... >&              mesh,
-                              mesh::detail::DomainIdRange_c auto&&                 domain_ids,
+                              mesh::DomainIdRange_c auto&&                         domain_ids,
                               util::ConstexprValue< dof_inds >                     dofinds_ctwrpr   = {},
                               const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
                               val_t                                                time             = 0.);
@@ -179,7 +179,7 @@ template < IndexRange_c auto dof_inds, size_t n_fields, el_o_t... orders >
 void AlgebraicSystem< max_dofs_per_node, CP >::setDirichletBCValues(
     auto&&                                               kernel,
     const mesh::MeshPartition< orders... >&              mesh,
-    mesh::detail::DomainIdRange_c auto&&                 domain_ids,
+    mesh::DomainIdRange_c auto&&                         domain_ids,
     util::ConstexprValue< dof_inds >                     dofinds_ctwrpr,
     const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
     val_t                                                time)
@@ -350,7 +350,7 @@ template < ArrayOf_c< size_t > auto field_inds, size_t n_fields, AssemblyOptions
 void AlgebraicSystem< max_dofs_per_node, CP >::assembleDomainProblem(
     auto&&                                               kernel,
     const mesh::MeshPartition< orders... >&              mesh,
-    mesh::detail::DomainIdRange_c auto&&                 domain_ids,
+    mesh::DomainIdRange_c auto&&                         domain_ids,
     const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
     util::ConstexprValue< field_inds >                   field_inds_ctwrpr,
     util::ConstexprValue< asm_opts >                     assembly_options,

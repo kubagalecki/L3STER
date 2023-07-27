@@ -40,7 +40,7 @@ MpiScopeGuard::MpiScopeGuard(int& argc, char**& argv)
     constexpr auto        check_mpi_thread_support = [] {
         int        provided_mode{};
         const auto err_code = MPI_Query_thread(&provided_mode);
-        lstr::detail::mpi::handleMPIError(err_code, "`MPI_Query_thread` failed");
+        mpi::handleMPIError(err_code, "`MPI_Query_thread` failed");
         util::throwingAssert(provided_mode >= required_mode,
                              "The provided MPI installation appears not to have the required threading support: "
                                     "`MPI_THREAD_FUNNELED`\nIf you are initializing MPI yourself (i.e. not via L3STER scope "
@@ -50,20 +50,20 @@ MpiScopeGuard::MpiScopeGuard(int& argc, char**& argv)
     constexpr auto check_initialized = []() -> bool {
         int        retval{};
         const auto err_code = MPI_Initialized(&retval);
-        lstr::detail::mpi::handleMPIError(err_code, "`MPI_Initialized` failed");
+        mpi::handleMPIError(err_code, "`MPI_Initialized` failed");
         return retval;
     };
     constexpr auto check_not_finalized = [] {
         int        finalized{};
         const auto err_code = MPI_Finalized(&finalized);
-        lstr::detail::mpi::handleMPIError(err_code, "`MPI_Finalized` failed");
+        mpi::handleMPIError(err_code, "`MPI_Finalized` failed");
         util::terminatingAssert(
             not finalized, "You are attempting to create `lstr::MpiScopeGuard` after `MPI_Finalize` has been called");
     };
     const auto initialize = [&] {
         int        dummy{};
         const auto err_code = MPI_Init_thread(&argc, &argv, required_mode, &dummy);
-        lstr::detail::mpi::handleMPIError(err_code, "`MPI_Init_thread` failed");
+        mpi::handleMPIError(err_code, "`MPI_Init_thread` failed");
     };
 
     check_not_finalized();
@@ -118,9 +118,7 @@ class L3sterScopeGuard
 {
 public:
     L3sterScopeGuard(int& argc, char** argv)
-        : m_mpi_guard{argc, argv},
-          m_kokkos_guard{argc, argv},
-          m_stack_size_guard{util::detail::MaxStackSizeTracker::get()}
+        : m_mpi_guard{argc, argv}, m_kokkos_guard{argc, argv}, m_stack_size_guard{util::MaxStackSizeTracker::get()}
     {
         (void)util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized();
     }

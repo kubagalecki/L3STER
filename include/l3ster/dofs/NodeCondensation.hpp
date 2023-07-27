@@ -83,7 +83,7 @@ auto getActiveNodes(const mesh::MeshPartition< orders... >& mesh,
 
 auto packRangeWithSizeForComm(std::ranges::range auto&& range, size_t alloc_size)
     -> util::ArrayOwner< std::ranges::range_value_t< decltype(range) > >
-    requires lstr::detail::mpi::MpiType_c< std::ranges::range_value_t< decltype(range) > > and
+    requires lstr::mpi::MpiType_c< std::ranges::range_value_t< decltype(range) > > and
              std::integral< std::ranges::range_value_t< decltype(range) > >
 {
     using range_value_t             = std::ranges::range_value_t< decltype(range) >;

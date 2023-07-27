@@ -37,7 +37,7 @@ struct PotentiallyValidKernelDeductionHelper
         static constexpr bool value = Kernel_c< Kernel, mesh::Element< T, O >::native_dim, n_fields >;
     };
     static constexpr bool domain =
-        mesh::detail::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
+        mesh::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
 
     template < mesh::ElementType T, el_o_t O >
     struct DeductionHelperBoundary
@@ -45,7 +45,7 @@ struct PotentiallyValidKernelDeductionHelper
         static constexpr bool value = BoundaryKernel_c< Kernel, mesh::Element< T, O >::native_dim, n_fields >;
     };
     static constexpr bool boundary =
-        mesh::detail::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperBoundary >;
+        mesh::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperBoundary >;
 };
 template < typename Kernel, size_t n_fields, el_o_t... orders >
 concept PotentiallyValidKernel_c = PotentiallyValidKernelDeductionHelper< Kernel, n_fields, orders... >::domain;
@@ -110,7 +110,7 @@ template < el_o_t... orders,
            AssemblyOptions          asm_opts >
 void assembleGlobalSystem(auto&&                                               kernel,
                           const mesh::MeshPartition< orders... >&              mesh,
-                          mesh::detail::DomainIdRange_c auto&&                 domain_ids,
+                          mesh::DomainIdRange_c auto&&                         domain_ids,
                           const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
                           tpetra_crsmatrix_t&                                  global_mat,
                           std::span< val_t >                                   global_rhs,

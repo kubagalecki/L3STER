@@ -51,7 +51,7 @@ struct PotentiallyValidNodalKernelDeductionHelper
             ValueAtNodeKernel_c< Kernel, n_fields, mesh::Element< T, O >::native_dim, results_size >;
     };
     static constexpr bool domain =
-        mesh::detail::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
+        mesh::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
 
     template < mesh::ElementType T, el_o_t O >
     struct DeductionHelperBoundary
@@ -60,7 +60,7 @@ struct PotentiallyValidNodalKernelDeductionHelper
             ValueAtNodeBoundaryKernel_c< Kernel, n_fields, mesh::Element< T, O >::native_dim, results_size >;
     };
     static constexpr bool boundary =
-        mesh::detail::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperBoundary >;
+        mesh::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperBoundary >;
 };
 template < typename Kernel, size_t n_fields, size_t results_size, el_o_t... orders >
 concept PotentiallyValidNodalKernel_c =
@@ -71,7 +71,7 @@ concept PotentiallyValidBoundaryNodalKernel_c =
 
 template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
 auto initValsAndParents(const mesh::MeshPartition< orders... >&                       mesh,
-                        mesh::detail::DomainIdRange_c auto&&                          domain_ids,
+                        mesh::DomainIdRange_c auto&&                                  domain_ids,
                         const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                         util::ConstexprValue< dof_inds >                              dofinds_ctwrpr,
                         const SolutionManager::FieldValueGetter< n_fields >&,
@@ -121,7 +121,7 @@ auto initValsAndParents(const mesh::BoundaryView< orders... >&                  
 
 template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps >
 void computeValuesAtNodes(const mesh::MeshPartition< orders... >&                       mesh,
-                          mesh::detail::DomainIdRange_c auto&&                          domain_ids,
+                          mesh::DomainIdRange_c auto&&                                  domain_ids,
                           const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                           util::ConstexprValue< dof_inds >                              dofinds_ctwrpr,
                           std::span< const val_t, std::ranges::size(dof_inds) >         values_in,
@@ -145,7 +145,7 @@ void computeValuesAtNodes(const mesh::MeshPartition< orders... >&               
 template < el_o_t... orders, size_t max_dofs_per_node, IndexRange_c auto dof_inds, size_t num_maps, size_t n_fields >
 void computeValuesAtNodes(auto&&                                                        kernel,
                           const mesh::MeshPartition< orders... >&                       mesh,
-                          mesh::detail::DomainIdRange_c auto&&                          domain_ids,
+                          mesh::DomainIdRange_c auto&&                                  domain_ids,
                           const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                           util::ConstexprValue< dof_inds >                              dofinds_ctwrpr,
                           const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,

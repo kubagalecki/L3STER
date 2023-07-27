@@ -23,7 +23,7 @@ template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 class Domain
 {
-    using Constraint = detail::ElementDeductionHelper< orders... >;
+    using Constraint = ElementDeductionHelper< orders... >;
 
 public:
     template < el_o_t... friend_orders >
@@ -104,9 +104,6 @@ private:
     element_vector_variant_vector_t m_element_vectors;
     dim_t                           m_dim = 0;
 };
-
-namespace detail
-{}
 
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)

@@ -199,8 +199,8 @@ struct ReferenceBasisFunction
 template < mesh::ElementType T, el_o_t O, BasisType BT >
 auto computeRefBasis(const Point< mesh::Element< T, O >::native_dim >& point)
 {
-    constexpr el_locind_t               n_basis_fun = mesh::Element< T, O >::n_nodes;
-    Eigen::Vector< val_t, n_basis_fun > retval; // NOLINT we want raw memory to be written to below
+    constexpr el_locind_t n_basis_fun = mesh::Element< T, O >::n_nodes;
+    auto                  retval      = Eigen::Vector< val_t, n_basis_fun >{};
     util::forConstexpr(
         [&]< el_locind_t I >(std::integral_constant< el_locind_t, I >) {
             const auto val = ReferenceBasisFunction< T, O, I, BT >{}(point);
@@ -210,13 +210,10 @@ auto computeRefBasis(const Point< mesh::Element< T, O >::native_dim >& point)
     return retval;
 }
 
-namespace detail
-{
 constexpr DerDim derivativeByIndex(dim_t d)
 {
     return static_cast< DerDim >(d + 1);
 }
-} // namespace detail
 
 template < mesh::ElementType T, el_o_t O, BasisType BT >
 auto computeRefBasisDers(const Point< mesh::Element< T, O >::native_dim >& point)
@@ -228,7 +225,7 @@ auto computeRefBasisDers(const Point< mesh::Element< T, O >::native_dim >& point
         [&]< el_locind_t I >(std::integral_constant< el_locind_t, I >) {
             util::forConstexpr(
                 [&]< dim_t D >(std::integral_constant< dim_t, D >) {
-                    retval(D, I) = ReferenceBasisFunction< T, O, I, BT, detail::derivativeByIndex(D) >{}(point);
+                    retval(D, I) = ReferenceBasisFunction< T, O, I, BT, derivativeByIndex(D) >{}(point);
                 },
                 std::make_integer_sequence< dim_t, nat_dim >{});
         },

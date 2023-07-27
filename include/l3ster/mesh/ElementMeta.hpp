@@ -1,5 +1,5 @@
-#ifndef L3STER_MESH_ALIASES_HPP
-#define L3STER_MESH_ALIASES_HPP
+#ifndef L3STER_MESH_ELEMENTMETA_HPP
+#define L3STER_MESH_ELEMENTMETA_HPP
 
 #include "l3ster/common/Typedefs.h"
 #include "l3ster/mesh/ElementType.hpp"
@@ -42,8 +42,6 @@ template < el_o_t... orders >
 using type_order_combinations =
     parametrize_type_over_element_types_and_orders_t< util::TypePack, type_order_set, orders... >;
 
-namespace detail
-{
 template < bool is_const, ElementType ET, el_o_t EO >
 using cond_const_elref_t = std::conditional_t< is_const, const Element< ET, EO >&, Element< ET, EO >& >;
 
@@ -108,6 +106,5 @@ public:
     template < typename R, typename F, typename... Args >
     static constexpr bool invocable_on_boundary_views_return = BoundaryInvokeReturnHelper< R, F, Args... >::value;
 };
-} // namespace detail
 } // namespace lstr::mesh
-#endif // L3STER_MESH_ALIASES_HPP
+#endif // L3STER_MESH_ELEMENTMETA_HPP
