@@ -6,7 +6,7 @@
 
 namespace lstr
 {
-namespace detail
+namespace post
 {
 template < typename T, dim_t dim, size_t n_fields >
 concept IntegralKernel_c = requires(T                                                int_kernel,
@@ -227,7 +227,7 @@ auto evalLocalBoundaryIntegral(auto&&                                           
     };
     return boundary.reduce(integral_t{integral_t::Zero()}, reduce_element, std::plus<>{}, std::execution::par);
 }
-} // namespace detail
+} // namespace post
 
 template < el_o_t... orders, size_t n_fields = 0, AssemblyOptions opts = {} >
 auto evalIntegral(const MpiComm&                                       comm,
@@ -239,12 +239,12 @@ auto evalIntegral(const MpiComm&                                       comm,
                   val_t                                                time             = 0.)
 {
     const util::eigen::Vector_c auto local_integral =
-        detail::evalLocalIntegral(std::forward< decltype(kernel) >(kernel),
-                                  mesh,
-                                  std::forward< decltype(domain_ids) >(domain_ids),
-                                  field_val_getter,
-                                  opts_ctwrpr,
-                                  time);
+        post::evalLocalIntegral(std::forward< decltype(kernel) >(kernel),
+                                mesh,
+                                std::forward< decltype(domain_ids) >(domain_ids),
+                                field_val_getter,
+                                opts_ctwrpr,
+                                time);
     using integral_t = std::remove_const_t< decltype(local_integral) >;
     integral_t global_integral;
     comm.allReduce(
@@ -260,7 +260,7 @@ auto evalBoundaryIntegral(const MpiComm&                                       c
                           util::ConstexprValue< opts >                         opts_ctwrpr      = {},
                           val_t                                                time             = 0.)
 {
-    const util::eigen::Vector_c auto local_integral = detail::evalLocalBoundaryIntegral(
+    const util::eigen::Vector_c auto local_integral = post::evalLocalBoundaryIntegral(
         std::forward< decltype(kernel) >(kernel), boundary, field_val_getter, opts_ctwrpr, time);
     using integral_t = std::remove_const_t< decltype(local_integral) >;
     integral_t global_integral;

@@ -560,7 +560,7 @@ TEST_CASE("Boundary integration", "[mapping]")
         const auto el_view    = mesh::BoundaryElementView{element, side};
         const auto basis_vals = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(side);
         const auto node_vals  = util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, 0 >{};
-        const auto area       = detail::evalElementBoundaryIntegral(integrand, el_view, node_vals, basis_vals, 0.)[0];
+        const auto area       = post::evalElementBoundaryIntegral(integrand, el_view, node_vals, basis_vals, 0.)[0];
         CHECK(area == Approx(expected_area).margin(1e-15));
     };
 

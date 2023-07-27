@@ -5,7 +5,7 @@
 
 namespace lstr
 {
-namespace detail
+namespace post
 {
 template < AssemblyOptions opts >
 consteval auto doubleQuadratureOrder(util::ConstexprValue< opts >)
@@ -17,8 +17,8 @@ consteval auto doubleQuadratureOrder(util::ConstexprValue< opts >)
         return retval;
     }) >{};
 }
-} // namespace detail
 
+} // namespace post
 template < size_t n_fields = 0, AssemblyOptions opts = {}, el_o_t... orders >
 auto computeNormL2(const MpiComm&                                       comm,
                    auto&&                                               eval_residual,
@@ -44,7 +44,7 @@ auto computeNormL2(const MpiComm&                                       comm,
                                                                  mesh,
                                                                  std::forward< decltype(domain_ids) >(domain_ids),
                                                                  field_val_getter,
-                                                                 detail::doubleQuadratureOrder(options_ctwrpr),
+                                                                 post::doubleQuadratureOrder(options_ctwrpr),
                                                                  time);
     using ret_t                                   = std::remove_const_t< decltype(squared_norm) >;
     return ret_t{squared_norm.cwiseSqrt()};
@@ -71,7 +71,7 @@ auto computeBoundaryNormL2(const MpiComm&                                       
         return ret_t{residual.unaryExpr([](val_t v) { return v * v; })};
     };
     const util::eigen::Vector_c auto squared_norm = evalBoundaryIntegral(
-        comm, compute_squared_norm, boundary, field_val_getter, detail::doubleQuadratureOrder(options_ctwrpr), time);
+        comm, compute_squared_norm, boundary, field_val_getter, post::doubleQuadratureOrder(options_ctwrpr), time);
     using ret_t = std::remove_const_t< decltype(squared_norm) >;
     return ret_t{squared_norm.cwiseSqrt()};
 }

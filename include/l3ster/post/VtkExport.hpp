@@ -70,7 +70,7 @@ private:
     std::vector< AsyncWrite > m_write_queue; // this needs to be destroyed before the encoded data
 };
 
-namespace detail::vtk
+namespace post::vtk
 {
 // The .pvtu top level file
 inline constexpr std::string_view pvtu_preamble  = R"(<?xml version="1.0"?>
@@ -462,7 +462,7 @@ auto encodeSolution(const SolutionManager&                                      
     auto   retval         = std::vector< util::ArrayOwner< char > >(std::ranges::size(field_components));
     auto&& grouping_range = std::forward< decltype(field_components) >(field_components) | std::views::common;
     util::tbb::parallelTransform(grouping_range, begin(retval), [&](std::span< const size_t > component_inds) {
-        return detail::vtk::encodeField(solution_manager, component_inds);
+        return post::vtk::encodeField(solution_manager, component_inds);
     });
     return retval;
 }
@@ -497,7 +497,7 @@ inline auto openVtuFile(std::string_view name, const MpiComm& comm)
 {
     return openFileForExport(makeVtuFileName(name, comm));
 }
-} // namespace detail::vtk
+} // namespace post::vtk
 
 template < el_o_t... orders >
 PvtuExporter::PvtuExporter(const mesh::MeshPartition< orders... >& mesh) : m_n_nodes{mesh.getAllNodes().size()}
@@ -531,13 +531,13 @@ template < el_o_t... orders >
 void PvtuExporter::updateNodeCoords(const mesh::MeshPartition< orders... >& mesh)
 {
     flushWriteQueue(); // Async write of previous coords may be in flight
-    m_encoded_coords = detail::vtk::makeCoordsSerialized(mesh);
+    m_encoded_coords = post::vtk::makeCoordsSerialized(mesh);
 }
 
 template < el_o_t... orders >
 void PvtuExporter::initTopo(const mesh::MeshPartition< orders... >& mesh)
 {
-    auto topo_serialization                                       = detail::vtk::serializeTopology(mesh);
+    auto topo_serialization                                       = post::vtk::serializeTopology(mesh);
     auto& [sizes, data]                                           = topo_serialization;
     const auto [num_cells, topo_sec_sz, offs_sec_sz, type_sec_sz] = sizes;
     m_n_cells                                                     = num_cells;
@@ -553,14 +553,14 @@ void PvtuExporter::enqueuePvtuFileWrite(
     SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
     SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds)
 {
-    auto&& n_field_components_view = detail::vtk::makeNumFieldComponentsView(field_component_inds);
+    auto&& n_field_components_view = post::vtk::makeNumFieldComponentsView(field_component_inds);
     auto   pvtu_contents =
-        detail::vtk::makePvtuFileContents(file_name,
-                                          comm.getSize(),
-                                          std::forward< decltype(field_names) >(field_names),
-                                          std::forward< decltype(n_field_components_view) >(n_field_components_view));
+        post::vtk::makePvtuFileContents(file_name,
+                                        comm.getSize(),
+                                        std::forward< decltype(field_names) >(field_names),
+                                        std::forward< decltype(n_field_components_view) >(n_field_components_view));
     const auto pvtu_name = std::filesystem::path(file_name).replace_extension("pvtu").string();
-    auto       pvtu_file = detail::vtk::openFileForExport(pvtu_name);
+    auto       pvtu_file = post::vtk::openFileForExport(pvtu_name);
     enqueueWrite(std::move(pvtu_file), 0, std::move(pvtu_contents));
 }
 
@@ -572,18 +572,18 @@ void PvtuExporter::enqueueVtuFileWrite(
     SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds)
 {
     const auto file_name_vtu_ext = std::filesystem::path{file_name}.replace_extension("vtu").string();
-    const auto vtu_file_handle   = detail::vtk::openVtuFile(file_name_vtu_ext, comm);
+    const auto vtu_file_handle   = post::vtk::openVtuFile(file_name_vtu_ext, comm);
     auto       enqueue_write     = [this, &vtu_file_handle, pos = MPI_Offset{0}](auto&& text) mutable {
         pos += enqueueWrite(vtu_file_handle, pos, std::forward< decltype(text) >(text));
     };
 
-    auto encoded_fields = detail::vtk::encodeSolution(solution_manager, field_component_inds);
+    auto encoded_fields = post::vtk::encodeSolution(solution_manager, field_component_inds);
     enqueue_write(makeDataDescription(field_names, field_component_inds, encoded_fields));
     enqueue_write(m_encoded_coords);
     enqueue_write(m_encoded_topo);
     for (auto& enc_fld : encoded_fields)
         enqueue_write(std::move(enc_fld));
-    enqueue_write(detail::vtk::vtu_postamble);
+    enqueue_write(post::vtk::vtu_postamble);
 }
 
 auto PvtuExporter::makeDataDescription(
@@ -591,12 +591,12 @@ auto PvtuExporter::makeDataDescription(
     SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds,
     const std::vector< util::ArrayOwner< char > >&                  encoded_fields) const -> std::string
 {
-    auto&& n_field_components  = detail::vtk::makeNumFieldComponentsView(field_component_inds);
-    auto&& encoded_field_sizes = detail::vtk::makeEncodedFieldSizeView(encoded_fields);
+    auto&& n_field_components  = post::vtk::makeNumFieldComponentsView(field_component_inds);
+    auto&& encoded_field_sizes = post::vtk::makeEncodedFieldSizeView(encoded_fields);
 
     std::string retval;
     retval.reserve(1u << 12);
-    retval += detail::vtk::vtu_preamble;
+    retval += post::vtk::vtu_preamble;
     auto append_data_array =
         [&retval,
          offset = size_t{}](std::string_view type, std::string_view name, size_t n_comps, size_t size_bytes) mutable {
