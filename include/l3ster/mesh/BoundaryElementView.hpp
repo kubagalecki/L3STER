@@ -3,6 +3,7 @@
 
 #include "l3ster/mesh/Element.hpp"
 #include "l3ster/mesh/ElementMeta.hpp"
+#include "l3ster/util/Ranges.hpp"
 
 namespace lstr::mesh
 {
@@ -17,18 +18,26 @@ public:
     [[nodiscard]] const Element< ET, EO >* operator->() const { return m_element_ptr; }
     [[nodiscard]] const Element< ET, EO >& operator*() const { return *m_element_ptr; }
     [[nodiscard]] auto                     getSide() const { return m_element_side; }
-    [[nodiscard]] inline auto              getSideNodeInds() const -> std::span< const el_locind_t >;
+    [[nodiscard]] inline auto              getSideNodesView() const;
 
 private:
+    [[nodiscard]] inline auto getSideNodeInds() const -> std::span< const el_locind_t >;
+
     const Element< ET, EO >* m_element_ptr;
     el_side_t                m_element_side;
 };
 
 template < ElementType ET, el_o_t EO >
+auto BoundaryElementView< ET, EO >::getSideNodesView() const
+{
+    return util::makeIndexedView(std::span{m_element_ptr->getNodes()}, getSideNodeInds());
+}
+
+template < ElementType ET, el_o_t EO >
 auto BoundaryElementView< ET, EO >::getSideNodeInds() const -> std::span< const el_locind_t >
 {
-    std::span< const el_locind_t > retval;
-    const auto                     fold_expr_helper = [&]< el_side_t side >(std::integral_constant< el_side_t, side >) {
+    auto       retval           = std::span< const el_locind_t >{};
+    const auto fold_expr_helper = [&]< el_side_t side >(std::integral_constant< el_side_t, side >) {
         if (side == getSide())
         {
             retval = std::get< side >(ElementTraits< Element< ET, EO > >::boundary_table);

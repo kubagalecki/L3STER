@@ -58,8 +58,8 @@ void vtkExportTest2D()
         computeValuesAtNodes(*my_partition,
                              std::array{bot_boundary, top_boundary},
                              system_manager->getDofMap(),
-                             util::ConstexprValue< scalar_inds >{},
-                             bot_top_vals,
+                             scalar_inds,
+                             std::span{bot_top_vals},
                              solution_view);
         computeValuesAtNodes(
             [&]([[maybe_unused]] const auto& vals, [[maybe_unused]] const auto& ders, const SpaceTimePoint& p) {
@@ -72,7 +72,7 @@ void vtkExportTest2D()
             *my_partition,
             std::views::single(domain_id),
             system_manager->getDofMap(),
-            util::ConstexprValue< vec_inds >{},
+            vec_inds,
             empty_field_val_getter,
             solution_view);
     }
@@ -140,7 +140,7 @@ void vtkExportTest3D()
             *my_partition,
             std::views::single(domain_id),
             system_manager->getDofMap(),
-            util::ConstexprValue< domain_field_inds >{},
+            domain_field_inds,
             empty_field_val_getter,
             solution_view);
         computeValuesAtBoundaryNodes([&](const auto&,
@@ -149,7 +149,7 @@ void vtkExportTest3D()
                                          const Eigen::Vector3d& normal) -> Eigen::Vector3d { return normal; },
                                      boundary,
                                      system_manager->getDofMap(),
-                                     util::ConstexprValue< boundary_field_inds >{},
+                                     boundary_field_inds,
                                      empty_field_val_getter,
                                      solution_view);
 

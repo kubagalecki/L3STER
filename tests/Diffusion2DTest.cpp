@@ -101,8 +101,7 @@ void test()
     CHECK_THROWS(assembleBoundaryProblem());
     CHECK_THROWS(alg_sys->endAssembly());
 
-    alg_sys->setDirichletBCValues(
-        dirichlet_bc_val_def, std::array{left_boundary, right_boundary}, util::ConstexprValue< std::array{0} >{});
+    alg_sys->setDirichletBCValues(dirichlet_bc_val_def, std::array{left_boundary, right_boundary}, std::array{0});
     alg_sys->applyDirichletBCs();
 
     {

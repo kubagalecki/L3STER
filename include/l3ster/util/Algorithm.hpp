@@ -258,8 +258,8 @@ Iter copyValuesAtInds(const std::array< T, N >& array, Iter out_iter, ConstexprV
 }
 
 template < IndexRange_c auto inds, typename T, size_t N >
-std::array< T, std::ranges::size(inds) > getValuesAtInds(const std::array< T, N >& array,
-                                                         ConstexprValue< inds >    inds_ctwrpr = {})
+auto getValuesAtInds(const std::array< T, N >& array, ConstexprValue< inds > inds_ctwrpr = {})
+    -> std::array< T, std::ranges::size(inds) >
     requires(std::ranges::all_of(inds, [](size_t i) { return i < N; }))
 {
     std::array< T, std::ranges::size(inds) > retval;

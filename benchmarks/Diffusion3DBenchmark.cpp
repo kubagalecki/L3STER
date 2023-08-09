@@ -128,7 +128,7 @@ int main(int argc, char* argv[])
     alg_system->assembleDomainProblem(diffusion_kernel3d, std::views::single(domain_id));
     alg_system->endAssembly();
     alg_system->describe(comm);
-    alg_system->setDirichletBCValues(dirichlet_bc_val_def, boundary_ids, util::ConstexprValue< T_inds >{});
+    alg_system->setDirichletBCValues(dirichlet_bc_val_def, boundary_ids, T_inds);
     alg_system->applyDirichletBCs();
 
     solvers::CG solver{

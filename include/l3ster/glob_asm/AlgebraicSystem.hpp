@@ -67,18 +67,20 @@ public:
                                  val_t                                                time              = 0.);
 
     inline void applyDirichletBCs();
-    template < IndexRange_c auto dof_inds = util::makeIotaArray< size_t, max_dofs_per_node >(), size_t n_fields = 0 >
-    void setDirichletBCValues(auto&&                                               kernel,
-                              mesh::DomainIdRange_c auto&&                         domain_ids,
-                              util::ConstexprValue< dof_inds >                     dofinds_ctwrpr   = {},
-                              const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
-                              val_t                                                time             = 0.);
-    template < IndexRange_c auto dof_inds = util::makeIotaArray< size_t, max_dofs_per_node >(), size_t n_fields = 0 >
-    void setDirichletBCValues(auto&&                                               kernel,
-                              const mesh::BoundaryView< orders... >&               mesh,
-                              util::ConstexprValue< dof_inds >                     dofinds_ctwrpr   = {},
-                              const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = 0,
-                              val_t                                                time             = 0.);
+    template < std::integral dofind_t = size_t, size_t n_dofs = max_dofs_per_node, size_t n_fields = 0 >
+    void setDirichletBCValues(
+        auto&&                                kernel,
+        mesh::DomainIdRange_c auto&&          domain_ids,
+        const std::array< dofind_t, n_dofs >& dof_inds = util::makeIotaArray< size_t, max_dofs_per_node >(),
+        const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
+        val_t                                                time             = 0.);
+    template < std::integral dofind_t = size_t, size_t n_dofs = max_dofs_per_node, size_t n_fields = 0 >
+    void setDirichletBCValues(
+        auto&&                                 kernel,
+        const mesh::BoundaryView< orders... >& mesh,
+        const std::array< dofind_t, n_dofs >&  dof_inds = util::makeIotaArray< size_t, max_dofs_per_node >(),
+        const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
+        val_t                                                time             = 0.);
 
     void solve(solvers::Solver_c auto& solver, const Teuchos::RCP< tpetra_femultivector_t >& solution) const;
 
@@ -163,41 +165,45 @@ void AlgebraicSystem< max_dofs_per_node, CP, orders... >::updateSolution(
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, el_o_t... orders >
-template < IndexRange_c auto dof_inds, size_t n_fields >
+template < std::integral dofind_t, size_t n_dofs, size_t n_fields >
 void AlgebraicSystem< max_dofs_per_node, CP, orders... >::setDirichletBCValues(
     auto&&                                               kernel,
     mesh::DomainIdRange_c auto&&                         domain_ids,
-    util::ConstexprValue< dof_inds >                     dofinds_ctwrpr,
+    const std::array< dofind_t, n_dofs >&                dof_inds,
     const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
     val_t                                                time)
 {
+    util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
+                         "The DOF indices are out of bounds for the problem");
     const auto vals_view =
         Kokkos::subview(m_dirichlet_values->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
     computeValuesAtNodes(std::forward< decltype(kernel) >(kernel),
                          *m_mesh,
                          std::forward< decltype(domain_ids) >(domain_ids),
                          m_node_dof_map,
-                         dofinds_ctwrpr,
+                         dof_inds,
                          std::forward< decltype(field_val_getter) >(field_val_getter),
                          util::asSpan(vals_view),
                          time);
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, el_o_t... orders >
-template < IndexRange_c auto dof_inds, size_t n_fields >
+template < std::integral dofind_t, size_t n_dofs, size_t n_fields >
 void AlgebraicSystem< max_dofs_per_node, CP, orders... >::setDirichletBCValues(
     auto&&                                               kernel,
     const mesh::BoundaryView< orders... >&               boundary_view,
-    util::ConstexprValue< dof_inds >                     dofinds_ctwrpr,
+    const std::array< dofind_t, n_dofs >&                dof_inds,
     const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
     val_t                                                time)
 {
+    util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
+                         "The DOF indices are out of bounds for the problem");
     const auto vals_view =
         Kokkos::subview(m_dirichlet_values->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
     computeValuesAtNodes(std::forward< decltype(kernel) >(kernel),
                          boundary_view,
                          m_node_dof_map,
-                         dofinds_ctwrpr,
+                         dof_inds,
                          std::forward< decltype(field_val_getter) >(field_val_getter),
                          util::asSpan(vals_view),
                          time);
