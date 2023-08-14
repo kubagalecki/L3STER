@@ -27,19 +27,9 @@ TEST_CASE("Local system assembly", "[local_asm]")
 
         const auto& basis_at_q = basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
 
-        constexpr size_t nf                  = 3;
-        constexpr size_t ne                  = 4;
-        constexpr size_t dim                 = 2;
-        constexpr auto   diffusion_kernel_2d = [](const auto&, const auto&, const auto&) noexcept {
-            using A_t   = Eigen::Matrix< val_t, ne, nf >;
-            using F_t   = Eigen::Matrix< val_t, ne, 1 >;
-            using ret_t = std::pair< std::array< A_t, dim + 1 >, F_t >;
-            ret_t retval;
-            auto& [A0, A1, A2] = retval.first;
-            auto& F            = retval.second;
-            for (auto& mat : retval.first)
-                mat.setZero();
-            F.setZero();
+        constexpr auto diffusion_kernel_2d = []([[maybe_unused]] const auto& in, auto& out) noexcept {
+            auto& [operators, rhs] = out;
+            auto& [A0, A1, A2]     = operators;
 
             constexpr double lambda = 1.;
 
@@ -53,16 +43,16 @@ TEST_CASE("Local system assembly", "[local_asm]")
             A2(0, 2) = lambda;
             A2(2, 0) = 1.;
             A2(3, 1) = -1.;
-
-            return retval;
         };
 
         constexpr auto solution = [](const Point< 3 >& p) {
             return p.x();
         };
 
-        const auto& [K, F] = assembleLocalSystem(
-            diffusion_kernel_2d, element, Eigen::Matrix< val_t, element.n_nodes, 0 >{}, basis_at_q, 0.);
+        constexpr auto ker_params = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3};
+        const auto     asm_kernel = wrapDomainKernel< ker_params >(diffusion_kernel_2d);
+        const auto& [K, F] =
+            assembleLocalSystem(asm_kernel, element, Eigen::Matrix< val_t, element.n_nodes, 0 >{}, basis_at_q, 0.);
         auto u = F;
 
         constexpr auto boundary_nodes = std::invoke([] {
@@ -91,13 +81,13 @@ TEST_CASE("Local system assembly", "[local_asm]")
         constexpr auto                            bc_inds    = std::invoke([&] {
             auto retval = boundary_nodes;
             for (auto& bc_ind : retval)
-                bc_ind *= nf;
+                bc_ind *= ker_params.n_unknowns;
             return retval;
         });
         constexpr auto                            nonbc_inds = std::invoke([&] {
-            std::array< ptrdiff_t, mesh::Element< ET, EO >::n_nodes * nf - bc_inds.size() > retval{};
+            std::array< ptrdiff_t, mesh::Element< ET, EO >::n_nodes * ker_params.n_unknowns - bc_inds.size() > retval{};
             std::ranges::set_difference(
-                std::views::iota(0u, mesh::Element< ET, EO >::n_nodes * nf), bc_inds, begin(retval));
+                std::views::iota(0u, mesh::Element< ET, EO >::n_nodes * ker_params.n_unknowns), bc_inds, begin(retval));
             return retval;
         });
         Eigen::Matrix< val_t, bc_inds.size(), 1 > bc_vals{};
@@ -116,7 +106,7 @@ TEST_CASE("Local system assembly", "[local_asm]")
         {
             const auto node_location = nodePhysicalLocation(element, node);
             const auto node_value    = solution(node_location);
-            const auto sys_index     = node * nf;
+            const auto sys_index     = node * ker_params.n_unknowns;
             CHECK(u[sys_index] == Approx{node_value});
         }
     }

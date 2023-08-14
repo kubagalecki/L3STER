@@ -43,40 +43,28 @@ void test()
         REQUIRE(alg_sys.get() == system_manager_shallow_copy.get());
     }
 
-    constexpr auto diffusion_kernel2d =
-        [](const auto&, const std::array< std::array< val_t, 0 >, 2 >&, const SpaceTimePoint&) noexcept {
-            auto retval           = std::pair< std::array< Eigen::Matrix< val_t, 4, 3 >, 3 >, Eigen::Vector4d >{};
-            auto& [matrices, rhs] = retval;
-            auto& [A0, A1, A2]    = matrices;
-            constexpr double k    = 1.; // diffusivity
-            A0.setZero();
-            A1.setZero();
-            A2.setZero();
-            rhs.setZero();
-            A0(1, 1) = -1.;
-            A0(2, 2) = -1.;
-            A1(0, 1) = k;
-            A1(1, 0) = 1.;
-            A1(3, 2) = 1.;
-            A2(0, 2) = k;
-            A2(2, 0) = 1.;
-            A2(3, 1) = -1.;
-            return retval;
-        };
-    static_assert(Kernel_c< decltype(diffusion_kernel2d), 2, 0 >);
-    constexpr auto neumann_bc_kernel =
-        [](const auto&, const auto&, const auto&, const Eigen::Matrix< val_t, 2, 1 >& normal) noexcept {
-            auto retval = std::pair< std::array< Eigen::Matrix< val_t, 1, 3 >, 3 >, Eigen::Vector< val_t, 1 > >{};
-            auto& [matrices, rhs] = retval;
-            auto& [A0, A1, A2]    = matrices;
-            A0.setZero();
-            A1.setZero();
-            A2.setZero();
-            rhs.setZero();
-            A0(0, 1) = normal[0];
-            A0(0, 2) = normal[1];
-            return retval;
-        };
+    constexpr auto diff_params        = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3};
+    constexpr auto diffusion_kernel2d = wrapDomainKernel< diff_params >([]([[maybe_unused]] const auto& in, auto& out) {
+        auto& [operators, rhs] = out;
+        auto& [A0, A1, A2]     = operators;
+        constexpr double k     = 1.; // diffusivity
+        A0(1, 1)               = -1.;
+        A0(2, 2)               = -1.;
+        A1(0, 1)               = k;
+        A1(1, 0)               = 1.;
+        A1(3, 2)               = 1.;
+        A2(0, 2)               = k;
+        A2(2, 0)               = 1.;
+        A2(3, 1)               = -1.;
+    });
+    constexpr auto bc_params          = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 3};
+    constexpr auto neumann_bc_kernel  = wrapBoundaryKernel< bc_params >([](const auto& in, auto& out) {
+        const auto& [vals, ders, point, normal] = in;
+        auto& [operators, rhs]                  = out;
+        auto& [A0, A1, A2]                      = operators;
+        A0(0, 1)                                = normal[0];
+        A0(0, 2)                                = normal[1];
+    });
     constexpr auto dirichlet_bc_val_def = [node_dist](const auto&, const auto&, const SpaceTimePoint& p) {
         auto retval = Eigen::Vector< val_t, 1 >{};
         retval[0]   = p.space.x() / node_dist.back();

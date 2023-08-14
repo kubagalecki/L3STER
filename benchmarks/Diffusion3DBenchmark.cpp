@@ -53,47 +53,36 @@ int main(int argc, char* argv[])
     constexpr auto field_names = std::array{"T"sv, "gradT"sv};
     constexpr auto dof_inds    = field_inds;
 
-    constexpr auto diffusion_kernel3d =
-        []< typename T >(const auto&, const std::array< T, 3 >&, const SpaceTimePoint&) noexcept {
-            using mat_t = Eigen::Matrix< val_t, 7, 4 >;
-            using vec_t = Eigen::Vector< double, 7 >;
-            std::pair< std::array< mat_t, 4 >, vec_t > retval;
-            auto& [matrices, rhs]  = retval;
-            auto& [A0, Ax, Ay, Az] = matrices;
+    constexpr auto dom_params         = KernelParams{.dimension = 3, .n_equations = 7, .n_unknowns = 4};
+    constexpr auto diffusion_kernel3d = wrapDomainKernel< dom_params >([](const auto& in, auto& out) {
+        auto& [operators, rhs] = out;
+        auto& [A0, Ax, Ay, Az] = operators;
 
-            constexpr double k = 1.; // diffusivity
-            constexpr double s = 1.; // source
+        constexpr double k = 1.; // diffusivity
+        constexpr double s = 1.; // source
 
-            A0  = mat_t::Zero();
-            Ax  = mat_t::Zero();
-            Ay  = mat_t::Zero();
-            Az  = mat_t::Zero();
-            rhs = vec_t::Zero();
+        // -k * div q = s
+        Ax(0, 1) = -k;
+        Ay(0, 2) = -k;
+        Az(0, 3) = -k;
+        rhs[0]   = s;
 
-            // -k * div q = s
-            Ax(0, 1) = -k;
-            Ay(0, 2) = -k;
-            Az(0, 3) = -k;
-            rhs[0]   = s;
+        // grad T = q
+        A0(1, 1) = -1.;
+        Ax(1, 0) = 1.;
+        A0(2, 2) = -1.;
+        Ay(2, 0) = 1.;
+        A0(3, 3) = -1.;
+        Az(3, 0) = 1.;
 
-            // grad T = q
-            A0(1, 1) = -1.;
-            Ax(1, 0) = 1.;
-            A0(2, 2) = -1.;
-            Ay(2, 0) = 1.;
-            A0(3, 3) = -1.;
-            Az(3, 0) = 1.;
-
-            // rot q = 0
-            Ay(4, 3) = 1.;
-            Az(4, 2) = -1.;
-            Ax(5, 3) = -1.;
-            Az(5, 1) = 1.;
-            Ax(6, 2) = 1.;
-            Ay(6, 1) = -1.;
-
-            return retval;
-        };
+        // rot q = 0
+        Ay(4, 3) = 1.;
+        Az(4, 2) = -1.;
+        Ax(5, 3) = -1.;
+        Az(5, 1) = 1.;
+        Ax(6, 2) = 1.;
+        Ay(6, 1) = -1.;
+    });
     constexpr auto error_kernel =
         []< typename DerT >(const auto& vals, const std::array< DerT, 3 >& ders, const SpaceTimePoint& point) noexcept {
             Eigen::Matrix< val_t, 4, 1 > error;

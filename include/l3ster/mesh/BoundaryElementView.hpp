@@ -18,11 +18,10 @@ public:
     [[nodiscard]] const Element< ET, EO >* operator->() const { return m_element_ptr; }
     [[nodiscard]] const Element< ET, EO >& operator*() const { return *m_element_ptr; }
     [[nodiscard]] auto                     getSide() const { return m_element_side; }
+    [[nodiscard]] inline auto              getSideNodeInds() const -> std::span< const el_locind_t >;
     [[nodiscard]] inline auto              getSideNodesView() const;
 
 private:
-    [[nodiscard]] inline auto getSideNodeInds() const -> std::span< const el_locind_t >;
-
     const Element< ET, EO >* m_element_ptr;
     el_side_t                m_element_side;
 };

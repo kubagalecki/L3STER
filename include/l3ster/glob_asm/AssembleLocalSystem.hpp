@@ -2,6 +2,7 @@
 #define L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP
 
 #include "l3ster/basisfun/ReferenceBasisAtQuadrature.hpp"
+#include "l3ster/common/Interface.hpp"
 #include "l3ster/common/Structs.hpp"
 #include "l3ster/mapping/BoundaryIntegralJacobian.hpp"
 #include "l3ster/mapping/BoundaryNormal.hpp"
@@ -15,66 +16,6 @@
 
 namespace lstr::glob_asm
 {
-template < typename T >
-concept ValidKernelResult_c =
-    Pair_c< T > and Array_c< typename T::first_type > and
-    util::eigen::Matrix_c< typename T::first_type::value_type > and util::eigen::Vector_c< typename T::second_type > and
-    (T::first_type::value_type::RowsAtCompileTime == T::second_type::RowsAtCompileTime);
-
-template < typename K, dim_t dim, size_t n_fields >
-concept Kernel_c = requires(K                                                kernel,
-                            std::array< val_t, n_fields >                    node_vals,
-                            std::array< std::array< val_t, n_fields >, dim > node_ders,
-                            SpaceTimePoint                                   point) {
-    {
-        std::invoke(kernel, node_vals, node_ders, point)
-    } noexcept -> ValidKernelResult_c;
-};
-
-template < typename K, dim_t dim, size_t n_fields >
-concept BoundaryKernel_c = requires(K                                                kernel,
-                                    std::array< val_t, n_fields >                    node_vals,
-                                    std::array< std::array< val_t, n_fields >, dim > node_ders,
-                                    SpaceTimePoint                                   point,
-                                    Eigen::Vector< val_t, dim >                      normal) {
-    {
-        std::invoke(kernel, node_vals, node_ders, point, normal)
-    } noexcept -> ValidKernelResult_c;
-};
-
-template < typename Kernel, dim_t dim, size_t n_fields >
-    requires Kernel_c< Kernel, dim, n_fields > or BoundaryKernel_c< Kernel, dim, n_fields >
-struct kernel_result
-{};
-template < typename Kernel, dim_t dim, size_t n_fields >
-    requires Kernel_c< Kernel, dim, n_fields >
-struct kernel_result< Kernel, dim, n_fields >
-{
-    using type = std::invoke_result_t< Kernel,
-                                       std::array< val_t, n_fields >,
-                                       std::array< std::array< val_t, n_fields >, dim >,
-                                       SpaceTimePoint >;
-};
-template < typename Kernel, dim_t dim, size_t n_fields >
-    requires BoundaryKernel_c< Kernel, dim, n_fields >
-struct kernel_result< Kernel, dim, n_fields >
-{
-    using type = std::invoke_result_t< Kernel,
-                                       std::array< val_t, n_fields >,
-                                       std::array< std::array< val_t, n_fields >, dim >,
-                                       SpaceTimePoint,
-                                       Eigen::Vector< val_t, dim > >;
-};
-template < typename Kernel, dim_t dim, size_t n_fields >
-    requires Kernel_c< Kernel, dim, n_fields > or BoundaryKernel_c< Kernel, dim, n_fields >
-using kernel_result_t = typename kernel_result< Kernel, dim, n_fields >::type;
-template < typename Kernel, dim_t dim, size_t n_fields >
-inline constexpr std::size_t n_unknowns =
-    kernel_result_t< Kernel, dim, n_fields >::first_type::value_type::ColsAtCompileTime;
-template < typename Kernel, dim_t dim, size_t n_fields >
-inline constexpr std::size_t n_equations =
-    kernel_result_t< Kernel, dim, n_fields >::first_type::value_type::RowsAtCompileTime;
-
 template < int n_nodes, int n_fields >
 auto computeFieldVals(const Eigen::Vector< val_t, n_nodes >&                         basis_vals,
                       const util::eigen::RowMajorMatrix< val_t, n_nodes, n_fields >& node_vals)
@@ -111,13 +52,15 @@ class LocalSystemManager
     using batch_update_matrix_t = Eigen::Matrix< val_t, problem_size, batch_update_size, Eigen::ColMajor >;
 
 public:
+    LocalSystemManager() { util::requestStackSize< util::default_stack_size + required_stack_size >(); }
+
     using matrix_t = util::eigen::RowMajorSquareMatrix< val_t, problem_size >;
     using vector_t = Eigen::Vector< val_t, problem_size >;
     using system_t = std::pair< matrix_t, vector_t >;
 
     static constexpr size_t required_stack_size = 2 * problem_size * batch_update_size * sizeof(val_t);
 
-    inline void            setZero();
+    inline auto            setZero() -> LocalSystemManager&;
     inline const system_t& getSystem();
 
     template < int n_unknowns, int n_bases, int dim >
@@ -191,15 +134,12 @@ void LocalSystemManager< problem_size, update_size >::update(
         flushFullBuf(batch_matrix, batch_size, is_wgt_positive ? 1. : -1.);
 }
 
-template < typename Kernel, mesh::ElementType ET, el_o_t EO, size_t n_fields >
+template < KernelParams params, size_t n_nodes >
 auto& getLocalSystemManager()
 {
-    constexpr auto dim                = mesh::Element< ET, EO >::native_dim;
-    constexpr auto local_problem_size = mesh::Element< ET, EO >::n_nodes * n_unknowns< Kernel, dim, n_fields >;
-    constexpr auto update_size        = n_equations< Kernel, dim, n_fields >;
-    auto&          retval             = util::getThreadLocal< LocalSystemManager< local_problem_size, update_size > >();
-    retval.setZero();
-    return retval;
+    constexpr auto local_problem_size = n_nodes * params.n_unknowns;
+    using local_system_t              = LocalSystemManager< local_problem_size, params.n_equations >;
+    return util::getThreadLocal< local_system_t >().setZero();
 }
 
 template < size_t problem_size, size_t update_size >
@@ -238,31 +178,35 @@ void LocalSystemManager< problem_size, update_size >::flushFullBuf(
 }
 
 template < size_t problem_size, size_t update_size >
-void LocalSystemManager< problem_size, update_size >::setZero()
+auto LocalSystemManager< problem_size, update_size >::setZero() -> LocalSystemManager&
 {
     m_system->first.setZero();
     m_system->second.setZero();
+    return *this;
 }
 
-template < mesh::ElementType ET, el_o_t EO, q_l_t QL, int n_fields >
-const auto&
-assembleLocalSystem(auto&&                                                                                  kernel,
-                    const mesh::Element< ET, EO >&                                                          element,
-                    const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, n_fields >& node_vals,
-                    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >& basis_at_qps,
-                    val_t                                                  time)
-    requires Kernel_c< decltype(kernel), mesh::Element< ET, EO >::native_dim, n_fields >
+template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >
+const auto& assembleLocalSystem(
+    const DomainKernel< Kernel, params >&                                                          kernel,
+    const mesh::Element< ET, EO >&                                                                 element,
+    const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, params.n_fields >& node_vals,
+    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,
+    val_t                                                                                          time)
 {
+    static_assert(params.dimension == mesh::ElementTraits< mesh::Element< ET, EO > >::native_dim);
+
     L3STER_PROFILE_FUNCTION;
     const auto jacobi_mat_generator = map::getNatJacobiMatGenerator(element);
-    auto&      local_system_manager = getLocalSystemManager< decltype(kernel), ET, EO, n_fields >();
+    auto&      local_system_manager = getLocalSystemManager< params, mesh::Element< ET, EO >::n_nodes >();
     const auto process_qp           = [&](auto point, val_t weight, const auto& bas_vals, const auto& ref_bas_ders) {
-        const auto jacobi_mat         = jacobi_mat_generator(point);
-        const auto phys_basis_ders    = map::computePhysBasisDers(jacobi_mat, ref_bas_ders);
-        const auto field_vals         = computeFieldVals(bas_vals, node_vals);
-        const auto field_ders         = computeFieldDers(ref_bas_ders, node_vals);
-        const auto phys_coords        = map::mapToPhysicalSpace(element, point);
-        const auto [A, F]             = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time});
+        const auto jacobi_mat      = jacobi_mat_generator(point);
+        const auto phys_basis_ders = map::computePhysBasisDers(jacobi_mat, ref_bas_ders);
+        const auto field_vals      = computeFieldVals(bas_vals, node_vals);
+        const auto field_ders      = computeFieldDers(ref_bas_ders, node_vals);
+        const auto phys_coords     = map::mapToPhysicalSpace(element, point);
+        const auto eval_point      = SpaceTimePoint{phys_coords, time};
+        const auto kernel_in = typename KernelInterface< params >::DomainInput{field_vals, field_ders, eval_point};
+        const auto [A, F]    = kernel(kernel_in);
         const auto rank_update_weight = jacobi_mat.determinant() * weight;
         local_system_manager.update(A, F, bas_vals, phys_basis_ders, rank_update_weight);
     };
@@ -274,27 +218,31 @@ assembleLocalSystem(auto&&                                                      
     return local_system_manager.getSystem();
 }
 
-template < typename Kernel, mesh::ElementType ET, el_o_t EO, q_l_t QL, int n_fields >
+template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >
 const auto& assembleLocalBoundarySystem(
-    Kernel&&                                                                                kernel,
-    mesh::BoundaryElementView< ET, EO >                                                     el_view,
-    const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, n_fields >& node_vals,
-    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                  basis_at_qps,
-    val_t                                                                                   time)
-    requires BoundaryKernel_c< Kernel, mesh::Element< ET, EO >::native_dim, n_fields >
+    const BoundaryKernel< Kernel, params >&                                                        kernel,
+    mesh::BoundaryElementView< ET, EO >                                                            el_view,
+    const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, params.n_fields >& node_vals,
+    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,
+    val_t                                                                                          time)
 {
+    static_assert(params.dimension == mesh::ElementTraits< mesh::Element< ET, EO > >::native_dim);
+
     L3STER_PROFILE_FUNCTION;
     const auto jacobi_mat_generator = map::getNatJacobiMatGenerator(*el_view);
-    auto&      local_system_manager = getLocalSystemManager< decltype(kernel), ET, EO, n_fields >();
+    auto&      local_system_manager = getLocalSystemManager< params, mesh::Element< ET, EO >::n_nodes >();
     const auto process_qp           = [&](auto point, val_t weight, const auto& bas_vals, const auto& ref_bas_ders) {
         const auto jacobi_mat      = jacobi_mat_generator(point);
         const auto phys_basis_ders = map::computePhysBasisDers(jacobi_mat, ref_bas_ders);
         const auto field_vals      = computeFieldVals(bas_vals, node_vals);
         const auto field_ders      = computeFieldDers(ref_bas_ders, node_vals);
         const auto phys_coords     = map::mapToPhysicalSpace(*el_view, point);
+        const auto eval_point      = SpaceTimePoint{phys_coords, time};
         const auto normal          = map::computeBoundaryNormal(el_view, jacobi_mat);
-        const auto [A, F]    = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time}, normal);
-        const auto bound_jac = map::computeBoundaryIntegralJacobian(el_view, jacobi_mat);
+        const auto kernel_in =
+            typename KernelInterface< params >::BoundaryInput{field_vals, field_ders, eval_point, normal};
+        const auto [A, F]             = kernel(kernel_in);
+        const auto bound_jac          = map::computeBoundaryIntegralJacobian(el_view, jacobi_mat);
         const auto rank_update_weight = bound_jac * weight;
         local_system_manager.update(A, F, bas_vals, phys_basis_ders, rank_update_weight);
     };

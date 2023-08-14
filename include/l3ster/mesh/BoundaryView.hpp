@@ -34,7 +34,7 @@ public:
                typename Proj,
                typename Red,
                ExecutionPolicy_c ExecPolicy = std::execution::sequenced_policy >
-    Zero reduce(Zero&& zero, Proj&& projection, Red&& reduction, ExecPolicy&& policy = {}) const
+    Zero reduce(Zero&& zero, Proj&& projection, Red&& reduction, ExecPolicy policy = {}) const
         requires(Constraint::template invocable_on_boundary_views_return< Zero, Proj > and
                  requires(std::remove_cvref_t< Zero > z, std::remove_cvref_t< Red > r) {
                      {
@@ -72,7 +72,7 @@ void BoundaryView< orders... >::visit(F&& visitor, ExecPolicy&& policy) const
 template < el_o_t... orders >
     requires(sizeof...(orders) > 0)
 template < typename Zero, typename Proj, typename Red, ExecutionPolicy_c ExecPolicy >
-Zero BoundaryView< orders... >::reduce(Zero&& zero, Proj&& projection, Red&& reduction, ExecPolicy&& policy) const
+Zero BoundaryView< orders... >::reduce(Zero&& zero, Proj&& projection, Red&& reduction, ExecPolicy policy) const
     requires(Constraint::template invocable_on_boundary_views_return< Zero, Proj > and
              requires(std::remove_cvref_t< Zero > z, std::remove_cvref_t< Red > r) {
                  {
@@ -81,7 +81,7 @@ Zero BoundaryView< orders... >::reduce(Zero&& zero, Proj&& projection, Red&& red
              })
 {
     return std::transform_reduce(
-        std::forward< ExecPolicy >(policy),
+        policy,
         begin(m_boundary_elements),
         end(m_boundary_elements),
         std::forward< Zero >(zero),

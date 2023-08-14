@@ -31,19 +31,14 @@ void test()
 
     auto alg_sys = makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr);
 
-    double     set_value = 1.;
-    const auto const_kernel =
-        [&set_value](const auto&, const std::array< std::array< val_t, 0 >, 2 >&, const SpaceTimePoint&) noexcept {
-            auto retval = std::pair< std::array< Eigen::Matrix< val_t, 1, 1 >, 3 >, Eigen::Vector< val_t, 1 > >{};
-            auto& [matrices, rhs] = retval;
-            auto& [A0, A1, A2]    = matrices;
-            A0(0, 0)              = 1.;
-            rhs[0]                = set_value;
-            A1.setZero();
-            A2.setZero();
-            return retval;
-        };
-    static_assert(Kernel_c< decltype(const_kernel), 2, 0 >);
+    constexpr auto ker_params = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1};
+    double         set_value  = 1.;
+    const auto const_kernel = wrapDomainKernel< ker_params >([&set_value]([[maybe_unused]] const auto& in, auto& out) {
+        auto& [operators, rhs] = out;
+        auto& [A0, A1, A2]     = operators;
+        A0(0, 0)               = 1.;
+        rhs[0]                 = set_value;
+    });
 
     const auto assemble_problem_in_dom = [&]< auto dom_ind >(util::ConstexprValue< dom_ind >) {
         set_value = static_cast< double >(dom_ind + 1);

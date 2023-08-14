@@ -47,19 +47,23 @@ public:
     inline void beginAssembly();
     inline void endAssembly();
 
-    template < ArrayOf_c< size_t > auto field_inds = util::makeIotaArray< size_t, max_dofs_per_node >(),
+    template < typename Kernel,
+               KernelParams             params,
+               ArrayOf_c< size_t > auto field_inds = util::makeIotaArray< size_t, max_dofs_per_node >(),
                size_t                   n_fields   = 0,
                AssemblyOptions          asm_opts   = AssemblyOptions{} >
-    void assembleDomainProblem(auto&&                                               kernel,
+    void assembleDomainProblem(const DomainKernel< Kernel, params >&                kernel,
                                mesh::DomainIdRange_c auto&&                         domain_ids,
                                const SolutionManager::FieldValueGetter< n_fields >& fval_getter       = {},
                                util::ConstexprValue< field_inds >                   field_inds_ctwrpr = {},
                                util::ConstexprValue< asm_opts >                     assembly_options  = {},
                                val_t                                                time              = 0.);
-    template < ArrayOf_c< size_t > auto field_inds = util::makeIotaArray< size_t, max_dofs_per_node >(),
+    template < typename Kernel,
+               KernelParams             params,
+               ArrayOf_c< size_t > auto field_inds = util::makeIotaArray< size_t, max_dofs_per_node >(),
                size_t                   n_fields   = 0,
                AssemblyOptions          asm_opts   = AssemblyOptions{} >
-    void assembleBoundaryProblem(auto&&                                               kernel,
+    void assembleBoundaryProblem(const BoundaryKernel< Kernel, params >&              kernel,
                                  const mesh::BoundaryView< orders... >&               boundary,
                                  const SolutionManager::FieldValueGetter< n_fields >& fval_getter       = {},
                                  util::ConstexprValue< field_inds >                   field_inds_ctwrpr = {},
@@ -328,9 +332,13 @@ void AlgebraicSystem< max_dofs_per_node, CP, orders... >::setToZero()
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, el_o_t... orders >
-template < ArrayOf_c< size_t > auto field_inds, size_t n_fields, AssemblyOptions asm_opts >
+template < typename Kernel,
+           KernelParams             params,
+           ArrayOf_c< size_t > auto field_inds,
+           size_t                   n_fields,
+           AssemblyOptions          asm_opts >
 void AlgebraicSystem< max_dofs_per_node, CP, orders... >::assembleDomainProblem(
-    auto&&                                               kernel,
+    const DomainKernel< Kernel, params >&                kernel,
     mesh::DomainIdRange_c auto&&                         domain_ids,
     const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
     util::ConstexprValue< field_inds >                   field_inds_ctwrpr,
@@ -354,9 +362,13 @@ void AlgebraicSystem< max_dofs_per_node, CP, orders... >::assembleDomainProblem(
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, el_o_t... orders >
-template < ArrayOf_c< size_t > auto field_inds, size_t n_fields, AssemblyOptions asm_opts >
+template < typename Kernel,
+           KernelParams             params,
+           ArrayOf_c< size_t > auto field_inds,
+           size_t                   n_fields,
+           AssemblyOptions          asm_opts >
 void AlgebraicSystem< max_dofs_per_node, CP, orders... >::assembleBoundaryProblem(
-    auto&&                                               kernel,
+    const BoundaryKernel< Kernel, params >&              kernel,
     const mesh::BoundaryView< orders... >&               boundary,
     const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
     util::ConstexprValue< field_inds >                   field_inds_ctwrpr,

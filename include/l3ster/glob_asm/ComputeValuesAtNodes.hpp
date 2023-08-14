@@ -75,8 +75,7 @@ auto getNodeDofsAtInds(const dofs::NodeToLocalDofMap< max_dofs_per_node, num_map
                        const std::array< dofind_t, n_dofs >&                         dof_inds,
                        n_id_t                                                        node)
 {
-    const auto node_dofs = std::span{map(node).front()};
-    return util::makeIndexedView(node_dofs, dof_inds);
+    return util::makeIndexedView(map(node).front(), dof_inds);
 }
 
 template < el_o_t... orders,
@@ -280,10 +279,9 @@ void computeValuesAtBoundaryNodes(auto&&                                        
                     std::atomic_ref{values[dof]}.fetch_add(update_value, std::memory_order_relaxed);
                 }
             };
-            std::ranges::for_each(std::views::iota(size_t{}, el_nodes.size()) |
-                                      std::views::filter([&](size_t node_ind) {
-                                          return not boundary.getParent()->isGhostNode(el_nodes[node_ind]);
-                                      }),
+            std::ranges::for_each(el_view.getSideNodeInds() | std::views::filter([&](size_t node_ind) {
+                                      return not boundary.getParent()->isGhostNode(el_nodes[node_ind]);
+                                  }),
                                   process_node);
         }
         else
