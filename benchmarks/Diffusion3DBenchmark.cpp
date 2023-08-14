@@ -1,4 +1,3 @@
-#define L3STER_ELEMENT_ORDERS 4
 #include "l3ster/l3ster.hpp"
 
 #include "DataPath.h"
@@ -37,7 +36,7 @@ int main(int argc, char* argv[])
         }
         return retval;
     });
-    constexpr auto mesh_order   = L3STER_ELEMENT_ORDERS;
+    constexpr auto mesh_order   = 4;
     const auto     my_partition = generateAndDistributeMesh< mesh_order >(
         comm,
         [&] { return mesh::makeCubeMesh(node_dist); },

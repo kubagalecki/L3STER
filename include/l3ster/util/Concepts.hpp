@@ -16,18 +16,6 @@ concept DecaysTo_c = std::same_as< std::decay_t< From >, To >;
 template < typename T >
 concept Arithmetic_c = std::integral< T > or std::floating_point< T >;
 
-// Designed to assert that a forwarding reference can be used to copy/move object `t`.
-// Works both for:
-// template <typename T> void foo(T&& t) requires ForwardConstructible_c<T> { auto t2 = std::forward<T>(t); }
-// void foo(auto&& t) requires ForwardConstructible_c<decltype(t)> { auto t2 = std::forward< decltype(t) >(t); }
-//
-//  std::unique_ptr<...> up;
-//  foo(up);             <- constraint failure, clear error message (hopefully)
-//  foo(std::move(up));  <- OK
-template < typename T >
-concept ForwardConstructible_c = std::move_constructible< std::decay_t< T > > and
-                                 (not std::is_lvalue_reference_v< T > or std::copy_constructible< std::decay_t< T > >);
-
 // Range concepts
 template < typename R, typename T >
 concept RangeOfConvertibleTo_c = std::ranges::range< R > and std::convertible_to< std::ranges::range_value_t< R >, T >;

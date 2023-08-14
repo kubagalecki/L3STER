@@ -62,70 +62,62 @@ auto initKernelResult() -> KernelInterface< params >::Result
 
 template < typename K, KernelParams params >
 concept DomainKernel_c =
-    ForwardConstructible_c< K > and std::invocable< std::add_const_t< std::decay_t< K > >,
-                                                    const typename KernelInterface< params >::DomainInput&,
-                                                    typename KernelInterface< params >::Result& >;
+    std::move_constructible< K > and std::invocable< std::add_const_t< std::decay_t< K > >,
+                                                     const typename KernelInterface< params >::DomainInput&,
+                                                     typename KernelInterface< params >::Result& >;
+
+template < typename K, KernelParams params >
+concept BoundaryKernel_c =
+    std::move_constructible< K > and std::invocable< std::add_const_t< std::decay_t< K > >,
+                                                     const typename KernelInterface< params >::BoundaryInput&,
+                                                     typename KernelInterface< params >::Result& >;
 
 template < typename Kernel, KernelParams params >
+    requires DomainKernel_c< Kernel, params >
 struct DomainKernel
 {
-    constexpr DomainKernel(auto&& kernel, util::ConstexprValue< params >)
-        requires DomainKernel_c< decltype(kernel), params >
-        : m_kernel{std::forward< decltype(kernel) >(kernel)}
-    {}
+    constexpr DomainKernel(Kernel kernel) : m_kernel{std::move(kernel)} {}
 
     auto operator()(const KernelInterface< params >::DomainInput& input) const -> KernelInterface< params >::Result
     {
         auto retval = detail::initKernelResult< params >();
-        std::invoke(std::as_const(m_kernel), input, retval);
+        std::invoke(m_kernel, input, retval);
         return retval;
     }
 
 private:
     Kernel m_kernel;
 };
-template < typename Kernel, KernelParams params >
-DomainKernel(Kernel&&, util::ConstexprValue< params >) -> DomainKernel< std::decay_t< Kernel >, params >;
-
-template < typename K, KernelParams params >
-concept BoundaryKernel_c =
-    ForwardConstructible_c< K > and std::invocable< std::add_const_t< std::decay_t< K > >,
-                                                    const typename KernelInterface< params >::BoundaryInput&,
-                                                    typename KernelInterface< params >::Result& >;
 
 template < typename Kernel, KernelParams params >
+    requires BoundaryKernel_c< Kernel, params >
 struct BoundaryKernel
 {
-    constexpr BoundaryKernel(auto&& kernel, util::ConstexprValue< params >)
-        requires BoundaryKernel_c< decltype(kernel), params >
-        : m_kernel{std::forward< decltype(kernel) >(kernel)}
-    {}
+    constexpr BoundaryKernel(Kernel kernel) : m_kernel{std::move(kernel)} {}
 
     auto operator()(const KernelInterface< params >::BoundaryInput& input) const -> KernelInterface< params >::Result
     {
         auto retval = detail::initKernelResult< params >();
-        std::invoke(std::as_const(m_kernel), input, retval);
+        std::invoke(m_kernel, input, retval);
         return retval;
     }
 
 private:
     Kernel m_kernel;
 };
-template < typename Kernel, KernelParams params >
-BoundaryKernel(Kernel&&, util::ConstexprValue< params >) -> BoundaryKernel< std::decay_t< Kernel >, params >;
 
 template < KernelParams params, typename Kernel >
-constexpr auto wrapDomainKernel(Kernel&& kernel, util::ConstexprValue< params > params_ctwrpr = {})
+constexpr auto wrapDomainKernel(Kernel kernel, util::ConstexprValue< params > = {})
     requires DomainKernel_c< Kernel, params >
 {
-    return DomainKernel{std::forward< Kernel >(kernel), params_ctwrpr};
+    return DomainKernel< std::remove_cvref_t< Kernel >, params >{std::move(kernel)};
 }
 
 template < KernelParams params, typename Kernel >
-constexpr auto wrapBoundaryKernel(Kernel&& kernel, util::ConstexprValue< params > params_ctwrpr = {})
+constexpr auto wrapBoundaryKernel(Kernel kernel, util::ConstexprValue< params > = {})
     requires BoundaryKernel_c< Kernel, params >
 {
-    return BoundaryKernel{std::forward< Kernel >(kernel), params_ctwrpr};
+    return BoundaryKernel< std::remove_cvref_t< Kernel >, params >{std::move(kernel)};
 }
 } // namespace lstr
 #endif // L3STER_COMMON_INTERFACE_HPP
