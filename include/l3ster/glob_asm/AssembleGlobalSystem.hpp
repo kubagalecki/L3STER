@@ -26,6 +26,34 @@ struct AssemblyOptions
 
 namespace lstr::glob_asm
 {
+template < el_o_t... orders >
+bool checkDomainDimension(const mesh::MeshPartition< orders... >& mesh, mesh::DomainIdRange_c auto&& ids, d_id_t dim)
+{
+    return std::ranges::all_of(std::forward< decltype(ids) >(ids), [&](auto id) {
+        try
+        {
+            const auto dom_view = mesh.getDomainView(id);
+            return dom_view.getDim() == dim;
+        }
+        catch (const std::out_of_range&) // Domain not present in partition means kernel will not be invoked
+        {
+            return true;
+        }
+    });
+}
+
+template < el_o_t... orders >
+bool checkBoundaryDimension(const mesh::BoundaryView< orders... >& boundary, d_id_t dim)
+{
+    return boundary.reduce(
+        true,
+        [&]< mesh::ElementType ET, el_o_t EO >(mesh::BoundaryElementView< ET, EO >) {
+            return mesh::Element< ET, EO >::native_dim == dim;
+        },
+        std::logical_and{},
+        std::execution::par);
+}
+
 template < typename Kernel,
            KernelParams params,
            el_o_t... orders,
@@ -47,17 +75,7 @@ void assembleGlobalSystem(const DomainKernel< Kernel, params >&                 
 {
     L3STER_PROFILE_FUNCTION;
 
-    const bool dim_match = std::ranges::all_of(domain_ids, [&](auto id) {
-        try
-        {
-            const auto dom_view = mesh.getDomainView(id);
-            return dom_view.getDim() == params.dimension;
-        }
-        catch (const std::out_of_range&) // Domain not present in partition means kernel will not be invoked
-        {
-            return true;
-        }
-    });
+    const bool dim_match = checkDomainDimension(mesh, domain_ids, params.dimension);
     util::throwingAssert(dim_match, "The dimension of the kernel does not match the dimension of the domain");
 
     const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
@@ -73,7 +91,8 @@ void assembleGlobalSystem(const DomainKernel< Kernel, params >&                 
                 dof_map, global_mat, global_rhs, loc_mat, loc_rhs, element, field_inds_ctwrpr);
         }
     };
-    const auto max_par_guard = util::MaxParallelismGuard{};
+    const auto n_cores       = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNCores();
+    const auto max_par_guard = util::MaxParallelismGuard{n_cores};
     mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
 }
 
@@ -97,13 +116,8 @@ void assembleGlobalBoundarySystem(const BoundaryKernel< Kernel, params >&       
 {
     L3STER_PROFILE_FUNCTION;
 
-    const bool dim_match = boundary.reduce(
-        true,
-        [&]< mesh::ElementType ET, el_o_t EO >(mesh::BoundaryElementView< ET, EO >) {
-            return mesh::Element< ET, EO >::native_dim == params.dimension;
-        },
-        std::logical_and{});
-    util::throwingAssert(dim_match, "The dimension of the kernel does not match the dimension of the domain");
+    const bool dim_match = checkBoundaryDimension(boundary, params.dimension);
+    util::throwingAssert(dim_match, "The dimension of the kernel does not match the dimension of the boundary");
 
     const auto process_element =
         [&]< mesh::ElementType ET, el_o_t EO >(const mesh::BoundaryElementView< ET, EO >& el_view) {
@@ -119,7 +133,8 @@ void assembleGlobalBoundarySystem(const BoundaryKernel< Kernel, params >&       
                     dof_map, global_mat, global_rhs, loc_mat, loc_rhs, *el_view, field_inds_ctwrpr);
             }
         };
-    const auto max_par_guard = util::MaxParallelismGuard{};
+    const auto n_cores       = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNCores();
+    const auto max_par_guard = util::MaxParallelismGuard{n_cores};
     boundary.visit(process_element, std::execution::par);
 }
 } // namespace lstr::glob_asm

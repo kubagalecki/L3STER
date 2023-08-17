@@ -61,20 +61,20 @@ void vtkExportTest2D()
                              scalar_inds,
                              std::span{bot_top_vals},
                              solution_view);
-        computeValuesAtNodes(
-            [&]([[maybe_unused]] const auto& vals, [[maybe_unused]] const auto& ders, const SpaceTimePoint& p) {
-                Eigen::Vector2d retval;
-                // Kovasznay flow velocity field
-                retval[0] = 1. - std::exp(lambda * p.space.x()) * std::cos(2. * pi * p.space.y());
-                retval[1] = lambda * std::exp(lambda * p.space.x()) * std::sin(2 * pi * p.space.y()) / (2. * pi);
-                return retval;
-            },
-            *my_partition,
-            std::views::single(domain_id),
-            system_manager->getDofMap(),
-            vec_inds,
-            empty_field_val_getter,
-            solution_view);
+        constexpr auto params = KernelParams{.dimension = 2, .n_equations = 2};
+        const auto     kernel = wrapResidualDomainKernel< params >([&](const auto& in, auto& out) {
+            // Kovasznay flow velocity field
+            const auto& p = in.point.space;
+            out[0]        = 1. - std::exp(lambda * p.x()) * std::cos(2. * pi * p.y());
+            out[1]        = lambda * std::exp(lambda * p.x()) * std::sin(2 * pi * p.y()) / (2. * pi);
+        });
+        computeValuesAtNodes(kernel,
+                             *my_partition,
+                             std::views::single(domain_id),
+                             system_manager->getDofMap(),
+                             vec_inds,
+                             empty_field_val_getter,
+                             solution_view);
     }
     solution->switchActiveMultiVector();
     solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);
@@ -126,27 +126,27 @@ void vtkExportTest3D()
 
     auto solution = system_manager->makeSolutionVector();
     {
-        auto solution_view = solution->get1dViewNonConst();
-        computeValuesAtNodes(
-            [&]([[maybe_unused]] const auto& vals, [[maybe_unused]] const auto& ders, const SpaceTimePoint& point) {
-                Eigen::Vector3d retval;
-                const auto&     p = point.space;
-                const auto      r = std::sqrt(p.x() * p.x() + p.y() * p.y() + p.z() * p.z());
-                retval[0]         = r;
-                retval[1]         = p.y();
-                retval[2]         = p.z();
-                return retval;
-            },
-            *my_partition,
-            std::views::single(domain_id),
-            system_manager->getDofMap(),
-            domain_field_inds,
-            empty_field_val_getter,
-            solution_view);
-        computeValuesAtBoundaryNodes([&](const auto&,
-                                         const std::array< std::array< val_t, 0 >, 3 >&,
-                                         const auto&,
-                                         const Eigen::Vector3d& normal) -> Eigen::Vector3d { return normal; },
+        auto           solution_view = solution->get1dViewNonConst();
+        constexpr auto ker_params    = KernelParams{.dimension = 3, .n_equations = 3};
+
+        const auto dom_kernel = wrapResidualDomainKernel< ker_params >([&](const auto& in, auto& out) {
+            const auto& p = in.point.space;
+            const auto  r = std::sqrt(p.x() * p.x() + p.y() * p.y() + p.z() * p.z());
+            out[0]        = r;
+            out[1]        = p.y();
+            out[2]        = p.z();
+        });
+        computeValuesAtNodes(dom_kernel,
+                             *my_partition,
+                             std::views::single(domain_id),
+                             system_manager->getDofMap(),
+                             domain_field_inds,
+                             empty_field_val_getter,
+                             solution_view);
+
+        const auto bnd_kernel =
+            wrapResidualBoundaryKernel< ker_params >([&](const auto& in, auto& out) { out = in.normal; });
+        computeValuesAtBoundaryNodes(bnd_kernel,
                                      boundary,
                                      system_manager->getDofMap(),
                                      boundary_field_inds,

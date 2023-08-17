@@ -57,19 +57,18 @@ void test()
         A2(2, 0)               = 1.;
         A2(3, 1)               = -1.;
     });
-    constexpr auto bc_params          = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 3};
-    constexpr auto neumann_bc_kernel  = wrapBoundaryKernel< bc_params >([](const auto& in, auto& out) {
+    constexpr auto neubc_params       = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 3};
+    constexpr auto neumann_bc_kernel  = wrapBoundaryKernel< neubc_params >([](const auto& in, auto& out) {
         const auto& [vals, ders, point, normal] = in;
         auto& [operators, rhs]                  = out;
         auto& [A0, A1, A2]                      = operators;
         A0(0, 1)                                = normal[0];
         A0(0, 2)                                = normal[1];
     });
-    constexpr auto dirichlet_bc_val_def = [node_dist](const auto&, const auto&, const SpaceTimePoint& p) {
-        auto retval = Eigen::Vector< val_t, 1 >{};
-        retval[0]   = p.space.x() / node_dist.back();
-        return retval;
-    };
+
+    constexpr auto dirbc_params        = KernelParams{.dimension = 2, .n_equations = 1};
+    constexpr auto dirichlet_bc_kernel = wrapResidualBoundaryKernel< dirbc_params >(
+        [node_dist](const auto& in, auto& out) { out[0] = in.point.space.x() / node_dist.back(); });
 
     const auto assembleDomainProblem = [&] {
         alg_sys->assembleDomainProblem(diffusion_kernel2d, std::views::single(domain_id));
@@ -89,7 +88,8 @@ void test()
     CHECK_THROWS(assembleBoundaryProblem());
     CHECK_THROWS(alg_sys->endAssembly());
 
-    alg_sys->setDirichletBCValues(dirichlet_bc_val_def, std::array{left_boundary, right_boundary}, std::array{0});
+    const auto dirbc_bound_view = mesh->getBoundaryView(std::array{left_boundary, right_boundary});
+    alg_sys->setDirichletBCValues(dirichlet_bc_kernel, dirbc_bound_view, std::array{0});
     alg_sys->applyDirichletBCs();
 
     {

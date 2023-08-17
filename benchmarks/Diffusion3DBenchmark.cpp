@@ -104,11 +104,9 @@ int main(int argc, char* argv[])
             error[3] = T_z - qz;
             return error;
         };
-    constexpr auto dirichlet_bc_val_def = [](const auto&, const auto&, const SpaceTimePoint& p) {
-        Eigen::Vector< val_t, 1 > retval;
-        retval[0] = 0.;
-        return retval;
-    };
+    constexpr auto dbc_params = KernelParams{.dimension = 3, .n_equations = 1};
+    constexpr auto dirichlet_bc_kernel =
+        wrapResidualDomainKernel< dbc_params >([](const auto& in, auto& out) { out[0] = 0.; });
 
     auto alg_system =
         makeAlgebraicSystem(comm, my_partition, element_boundary_tag, probdef_ctwrpr, dirichletdef_ctwrpr);
@@ -116,7 +114,7 @@ int main(int argc, char* argv[])
     alg_system->assembleDomainProblem(diffusion_kernel3d, std::views::single(domain_id));
     alg_system->endAssembly();
     alg_system->describe(comm);
-    alg_system->setDirichletBCValues(dirichlet_bc_val_def, boundary_ids, T_inds);
+    alg_system->setDirichletBCValues(dirichlet_bc_kernel, boundary_ids, T_inds);
     alg_system->applyDirichletBCs();
 
     solvers::CG solver{

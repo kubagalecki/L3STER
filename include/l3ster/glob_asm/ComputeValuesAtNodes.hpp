@@ -10,66 +10,6 @@
 
 namespace lstr::glob_asm
 {
-template < typename Kernel, size_t n_fields, dim_t dim, size_t result_size >
-concept ValueAtNodeKernel_c =
-    requires(Kernel                                           kernel,
-             std::array< val_t, n_fields >                    vals,
-             std::array< std::array< val_t, n_fields >, dim > ders,
-             SpaceTimePoint                                   p) {
-        {
-            std::invoke(kernel, vals, ders, p)
-        } -> util::eigen::Vector_c;
-    } and
-    (std::invoke_result_t< Kernel,
-                           std::array< val_t, n_fields >,
-                           std::array< std::array< val_t, n_fields >, dim >,
-                           SpaceTimePoint >::RowsAtCompileTime == result_size);
-
-template < typename Kernel, size_t n_fields, dim_t dim, size_t result_size >
-concept ValueAtNodeBoundaryKernel_c =
-    requires(Kernel                                           kernel,
-             std::array< val_t, n_fields >                    vals,
-             std::array< std::array< val_t, n_fields >, dim > ders,
-             SpaceTimePoint                                   p,
-             Eigen::Vector< val_t, dim >                      normal) {
-        {
-            std::invoke(kernel, vals, ders, p, normal)
-        } -> util::eigen::Vector_c;
-    } and
-    (std::invoke_result_t< Kernel,
-                           std::array< val_t, n_fields >,
-                           std::array< std::array< val_t, n_fields >, dim >,
-                           SpaceTimePoint,
-                           Eigen::Vector< val_t, dim > >::RowsAtCompileTime == result_size);
-
-template < typename Kernel, size_t n_fields, size_t results_size, el_o_t... orders >
-struct PotentiallyValidNodalKernelDeductionHelper
-{
-    template < mesh::ElementType T, el_o_t O >
-    struct DeductionHelperDomain
-    {
-        static constexpr bool value =
-            ValueAtNodeKernel_c< Kernel, n_fields, mesh::Element< T, O >::native_dim, results_size >;
-    };
-    static constexpr bool domain =
-        mesh::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
-
-    template < mesh::ElementType T, el_o_t O >
-    struct DeductionHelperBoundary
-    {
-        static constexpr bool value =
-            ValueAtNodeBoundaryKernel_c< Kernel, n_fields, mesh::Element< T, O >::native_dim, results_size >;
-    };
-    static constexpr bool boundary =
-        mesh::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperBoundary >;
-};
-template < typename Kernel, size_t n_fields, size_t results_size, el_o_t... orders >
-concept PotentiallyValidNodalKernel_c =
-    PotentiallyValidNodalKernelDeductionHelper< Kernel, n_fields, results_size, orders... >::domain;
-template < typename Kernel, size_t n_fields, size_t results_size, el_o_t... orders >
-concept PotentiallyValidBoundaryNodalKernel_c =
-    PotentiallyValidNodalKernelDeductionHelper< Kernel, n_fields, results_size, orders... >::boundary;
-
 template < size_t max_dofs_per_node, std::integral dofind_t, size_t n_dofs, size_t num_maps >
 auto getNodeDofsAtInds(const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& map,
                        const std::array< dofind_t, n_dofs >&                         dof_inds,
@@ -163,26 +103,30 @@ void computeValuesAtNodes(const mesh::MeshPartition< orders... >&               
     mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
 }
 
-template < el_o_t... orders,
+template < typename Kernel,
+           KernelParams params,
+           el_o_t... orders,
            size_t        max_dofs_per_node,
            std::integral dofind_t,
-           size_t        n_dofs,
            size_t        num_maps,
            size_t        n_fields >
-void computeValuesAtNodes(auto&&                                                        kernel,
+void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&                 kernel,
                           const mesh::MeshPartition< orders... >&                       mesh,
                           mesh::DomainIdRange_c auto&&                                  domain_ids,
                           const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& dof_map,
-                          const std::array< dofind_t, n_dofs >&                         dof_inds,
+                          const std::array< dofind_t, params.n_equations >&             dof_inds,
                           const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
                           std::span< val_t >                                            values,
                           val_t                                                         time = 0.)
-    requires PotentiallyValidNodalKernel_c< decltype(kernel), n_fields, n_dofs, orders... >
 {
     L3STER_PROFILE_FUNCTION;
+
+    const bool dim_match = checkDomainDimension(mesh, domain_ids, params.dimension);
+    util::throwingAssert(dim_match, "The dimension of the kernel does not match the dimension of the domain");
+
     const auto num_parents     = initValsAndParents(mesh, domain_ids, dof_map, dof_inds, field_val_getter, values);
     const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
-        if constexpr (ValueAtNodeKernel_c< decltype(kernel), n_fields, mesh::Element< ET, EO >::native_dim, n_dofs >)
+        if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
         {
             const auto& el_nodes       = element.getNodes();
             const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
@@ -200,7 +144,9 @@ void computeValuesAtNodes(auto&&                                                
                     map::computePhysBasisDers(jacobi_mat, basis_at_nodes.derivatives[node_ind]);
                 const auto field_vals = computeFieldVals(basis_at_nodes.values[node_ind], node_vals);
                 const auto field_ders = computeFieldDers(phys_basis_ders, node_vals);
-                const auto ker_res    = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time});
+                const auto point      = SpaceTimePoint{phys_coords, time};
+                const auto kernel_in  = typename KernelInterface< params >::DomainInput{field_vals, field_ders, point};
+                const auto ker_res    = kernel(kernel_in);
                 for (size_t i = 0; auto dof : getNodeDofsAtInds(dof_map, dof_inds, node))
                     if constexpr (n_fields != 0)
                     {
@@ -216,42 +162,33 @@ void computeValuesAtNodes(auto&&                                                
                     std::views::filter([&](size_t node_ind) { return not mesh.isGhostNode(el_nodes[node_ind]); }),
                 process_node);
         }
-        else
-        {
-            util::terminatingAssert(
-                false,
-                "Attempting to compute nodal values for an element for which the passed kernel is invalid. Please "
-                "check the kernel was defined correctly, and that you are setting nodal values in the correct "
-                "domain "
-                "(e.g. that you're not trying to evaluate a 2D kernel in a 3D domain). This process will now "
-                "terminate.");
-        }
     };
     mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
 }
 
-template < el_o_t... orders,
+template < typename Kernel,
+           KernelParams params,
+           el_o_t... orders,
            size_t        max_dofs_per_node,
            std::integral dofind_t,
-           size_t        n_dofs,
            size_t        num_maps,
            size_t        n_fields >
-void computeValuesAtBoundaryNodes(auto&&                                                        kernel,
+void computeValuesAtBoundaryNodes(const ResidualBoundaryKernel< Kernel, params >&               kernel,
                                   const mesh::BoundaryView< orders... >&                        boundary,
                                   const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& dof_map,
-                                  const std::array< dofind_t, n_dofs >&                         dof_inds,
+                                  const std::array< dofind_t, params.n_equations >&             dof_inds,
                                   const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
                                   std::span< val_t >                                            values,
                                   val_t                                                         time = 0.)
-    requires PotentiallyValidBoundaryNodalKernel_c< decltype(kernel), n_fields, n_dofs, orders... >
 {
     L3STER_PROFILE_FUNCTION;
+
+    const bool dim_match = checkBoundaryDimension(boundary, params.dimension);
+    util::throwingAssert(dim_match, "The dimension of the kernel does not match the dimension of the boundary");
+
     const auto num_parents     = initValsAndParents(boundary, dof_map, dof_inds, field_val_getter, values);
     const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(mesh::BoundaryElementView< ET, EO > el_view) {
-        if constexpr (ValueAtNodeBoundaryKernel_c< decltype(kernel),
-                                                   n_fields,
-                                                   mesh::Element< ET, EO >::native_dim,
-                                                   n_dofs >)
+        if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
         {
             const auto& el_nodes       = el_view->getNodes();
             const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
@@ -270,8 +207,10 @@ void computeValuesAtBoundaryNodes(auto&&                                        
                     map::computePhysBasisDers(jacobi_mat, basis_at_nodes.derivatives[node_ind]);
                 const auto field_vals = computeFieldVals(basis_at_nodes.values[node_ind], node_vals);
                 const auto field_ders = computeFieldDers(phys_basis_ders, node_vals);
-                const auto ker_res =
-                    std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time}, normal);
+                const auto point      = SpaceTimePoint{phys_coords, time};
+                const auto kernel_in =
+                    typename KernelInterface< params >::BoundaryInput{field_vals, field_ders, point, normal};
+                const auto ker_res = kernel(kernel_in);
                 for (size_t i = 0; auto dof : getNodeDofsAtInds(dof_map, dof_inds, node))
                 {
                     const auto np_fp        = static_cast< double >(num_parents[dof]);
@@ -283,17 +222,6 @@ void computeValuesAtBoundaryNodes(auto&&                                        
                                       return not boundary.getParent()->isGhostNode(el_nodes[node_ind]);
                                   }),
                                   process_node);
-        }
-        else
-        {
-            util::terminatingAssert(false,
-                                    "Attempting to compute boundary nodal values for an element for which the "
-                                    "passed kernel is invalid. "
-                                    "Please check the kernel was defined correctly, and that you are setting "
-                                    "nodal values in the correct "
-                                    "domain (e.g. that you're not trying to evaluate a 2D kernel in a 3D "
-                                    "domain). This process will now "
-                                    "terminate.");
         }
     };
     boundary.visit(process_element, std::execution::par);

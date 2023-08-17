@@ -11,6 +11,7 @@ template < ElementType ET, el_o_t EO >
 class BoundaryElementView
 {
 public:
+    BoundaryElementView() = default;
     BoundaryElementView(const Element< ET, EO >& element, const el_side_t side)
         : m_element_ptr{std::addressof(element)}, m_element_side{side}
     {}
@@ -22,9 +23,11 @@ public:
     [[nodiscard]] inline auto              getSideNodesView() const;
 
 private:
-    const Element< ET, EO >* m_element_ptr;
-    el_side_t                m_element_side;
+    const Element< ET, EO >* m_element_ptr{};
+    el_side_t                m_element_side{};
 };
+template < ElementType ET, el_o_t EO >
+BoundaryElementView(const Element< ET, EO >& element, const el_side_t side) -> BoundaryElementView< ET, EO >;
 
 template < ElementType ET, el_o_t EO >
 auto BoundaryElementView< ET, EO >::getSideNodesView() const
