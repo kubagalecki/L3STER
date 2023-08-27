@@ -304,7 +304,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemb
     const auto max_par_guard = util::MaxParallelismGuard{};
     util::tbb::parallelFor(m_element_ids, [&](el_id_t id) {
         auto&      elem_data           = m_elem_data_map.at(id);
-        const auto element_ptr_variant = mesh.find(id)->first;
+        const auto element_ptr_variant = mesh.find(id).value();
         std::visit(
             [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >* element_ptr) {
                 elem_data.diag_block_inv = elem_data.diag_block.inverse();
@@ -400,7 +400,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSo
         thread_local std::vector< size_t >                  valid_internal_inds;
 
         auto&      elem_data           = m_elem_data_map.at(id);
-        const auto element_ptr_variant = mesh.find(id)->first;
+        const auto element_ptr_variant = mesh.find(id).value();
         std::visit(
             [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >* element_ptr) {
                 const auto [row_dofs, col_dofs, rhs_dofs] =

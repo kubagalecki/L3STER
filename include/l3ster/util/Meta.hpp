@@ -84,35 +84,7 @@ template < std::integral T, T first, T last >
     requires(first <= last)
 using int_seq_interval = decltype(detail::int_seq_from_array< detail::make_interval_array< T, first, last >() >());
 
-namespace detail
-{
-template < typename T >
-struct Constify
-{
-    const T operator()(const T& in)
-        requires(not std::is_pointer_v< T >)
-    {
-        return in;
-    }
-    std::add_const_t< typename std::pointer_traits< T >::element_type >* operator()(T in)
-        requires(std::is_pointer_v< T >)
-    {
-        return in;
-    }
-    using type = decltype(std::declval< Constify< T > >()(std::declval< T >()));
-};
-} // namespace detail
-
-template < typename... T >
-constexpr auto constifyVariant(const std::variant< T... >& v)
-    requires UniqueTypePack_c< TypePack< T... > >
-{
-    using const_variant_t = std::variant< typename detail::Constify< T >::type... >;
-    return std::visit< const_variant_t >(OverloadSet{detail::Constify< T >{}...}, v);
-}
-
 // Functionality related to parametrizing over all combinations of a pack of nttp arrays
-
 template < typename T, T... V >
 constexpr auto makeArrayFromValueSet(ValuePack< V... >)
 {

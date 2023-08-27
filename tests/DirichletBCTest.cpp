@@ -13,6 +13,7 @@ using namespace lstr;
 using namespace lstr::bcs;
 using namespace lstr::dofs;
 using namespace lstr::glob_asm;
+using namespace lstr::mesh;
 
 template < CondensationPolicy CP >
 void test()
@@ -27,8 +28,8 @@ void test()
     constexpr auto   dirdef_ctwrpr  = util::ConstexprValue< dirichlet_def >{};
 
     constexpr auto node_dist     = std::array{0., 1., 2., 3., 4., 5.};
-    auto           my_partition  = distributeMesh(comm, mesh::makeCubeMesh(node_dist), {boundary});
-    const auto     boundary_view = my_partition->getBoundaryView(boundary);
+    auto           my_partition  = distributeMesh(comm, makeCubeMesh(node_dist), {boundary});
+    const auto     boundary_view = BoundaryView{*my_partition, std::views::single(boundary)};
 
     const auto cond_map            = makeCondensationMap< CP >(comm, *my_partition, probdef_ctwrpr);
     const auto dof_intervals       = computeDofIntervals(comm, *my_partition, cond_map, probdef_ctwrpr);
@@ -53,8 +54,8 @@ void test()
         auto rhs      = input_vectors.getVectorNonConst(0)->getDataNonConst();
         auto rhs_view = std::span{rhs};
         my_partition->visit(
-            [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >& element) {
-                if constexpr (T == mesh::ElementType::Hex and O == 1)
+            [&]< ElementType T, el_o_t O >(const Element< T, O >& element) {
+                if constexpr (T == ElementType::Hex and O == 1)
                 {
                     constexpr int n_dofs    = getNumPrimaryNodes< CP, T, O >() * /* dofs per node */ 1;
                     auto          local_mat = util::eigen::RowMajorSquareMatrix< val_t, n_dofs >{};

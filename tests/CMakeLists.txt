@@ -91,7 +91,8 @@ add_mpi_test( DirichletBCTest.cpp Dirichlet_BC_Application "1;2;4" )
 add_mpi_test( Diffusion2DTest.cpp Solve_2D_diffusion_problem "1;2;4" )
 add_mpi_test( EmptyPartitionTest.cpp Handle_Empty_Partition "4" )
 add_mpi_test( MultiDomainTest.cpp Solve_Multi_Domain_Problem "1;2;4" )
-add_mpi_test( VtkExportTest.cpp Export_results_to_VTK "1;2;4" )
+add_mpi_test( VtkExportTest2D.cpp Export_results_to_VTK_2D "1;2;4" )
+add_mpi_test( VtkExportTest3D.cpp Export_results_to_VTK_3D "1;2;4" )
 
 #######################################################################################################################
 

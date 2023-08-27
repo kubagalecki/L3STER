@@ -48,6 +48,10 @@ template < typename T >
 inline constexpr bool is_pair = false;
 template < typename T1, typename T2 >
 inline constexpr bool is_pair< std::pair< T1, T2 > > = true;
+template < typename >
+inline constexpr bool is_vector = false;
+template < typename T, typename Alloc >
+inline constexpr bool is_vector< std::vector< T, Alloc > > = true;
 } // namespace detail
 
 // Tuple-related cocnepts
@@ -56,9 +60,11 @@ concept Array_c = detail::is_array< T >;
 template < typename T, typename V >
 concept ArrayOf_c = Array_c< T > and std::same_as< typename T::value_type, V >;
 template < typename T >
-concept Tuple_c = detail::is_tuple< T >;
+concept Tuple_c = detail::is_tuple< std::remove_cvref_t< T > >;
 template < typename T >
-concept Pair_c = detail::is_pair< T >;
+concept Pair_c = detail::is_pair< std::remove_cvref_t< T > >;
+template < typename T >
+concept Vector_c = detail::is_vector< std::remove_cvref_t< T > >;
 
 namespace detail
 {

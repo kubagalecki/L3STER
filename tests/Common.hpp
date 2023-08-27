@@ -2,7 +2,7 @@
 #define L3STER_TESTS_COMMON_HPP
 
 #include "l3ster/comm/MpiComm.hpp"
-#include "l3ster/mesh/MeshPartition.hpp"
+#include "l3ster/mesh/BoundaryView.hpp"
 #include "l3ster/util/Assertion.hpp"
 
 #include <iostream>

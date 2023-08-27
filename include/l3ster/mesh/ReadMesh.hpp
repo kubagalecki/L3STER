@@ -299,8 +299,9 @@ inline auto readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
                 auto& block_domain = domain_map[entity_data.first[entity_dim].at(entity_tag)];
 
                 const auto push_elements = [&]< size_t I >(std::integral_constant< size_t, I >) {
-                    constexpr auto el_type = detail::lookupElt< I >();
-                    std::generate_n(block_domain.getBackInserter< el_type, 1 >(), block_size, [&] {
+                    constexpr auto el_type       = detail::lookupElt< I >();
+                    const auto     back_inserter = std::back_inserter(block_domain.getElementVector< el_type, 1 >());
+                    const auto     push_element  = [&] {
                         size_t element_tag;
                         file >> element_tag; // discard tag
                         std::array< n_id_t, Element< el_type, 1 >::n_nodes > nodes;
@@ -310,7 +311,8 @@ inline auto readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
                         std::ranges::transform(nodes, begin(data), lookup_node_coords);
                         std::ranges::for_each(nodes, [&](auto& n) { n = node_contig_index(n); });
                         return Element< el_type, 1 >{nodes, ElementData< el_type, 1 >{data}, element_id++};
-                    });
+                    };
+                    std::generate_n(back_inserter, block_size, push_element);
                 };
 
                 switch (element_type)
@@ -331,6 +333,10 @@ inline auto readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
                 }
             }
             skip_until_section("$EndElements");
+
+            for (auto& domain : domain_map | std::views::values)
+                domain.sort();
+
             return {std::move(domain_map)};
         };
 

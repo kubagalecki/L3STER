@@ -3,6 +3,7 @@
 
 #include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 #include "l3ster/glob_asm/StaticCondensationManager.hpp"
+#include "l3ster/mesh/BoundaryView.hpp"
 #include "l3ster/post/SolutionManager.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
@@ -26,10 +27,10 @@ struct AssemblyOptions
 
 namespace lstr::glob_asm
 {
-template < el_o_t... orders >
-bool checkDomainDimension(const mesh::MeshPartition< orders... >& mesh, mesh::DomainIdRange_c auto&& ids, d_id_t dim)
+template < el_o_t... orders, mesh::DomainIdRange_c Ids >
+bool checkDomainDimension(const mesh::MeshPartition< orders... >& mesh, Ids&& ids, d_id_t dim)
 {
-    return std::ranges::all_of(std::forward< decltype(ids) >(ids), [&](auto id) {
+    const auto check_domain_dim = [&](d_id_t id) {
         try
         {
             const auto dom_view = mesh.getDomainView(id);
@@ -39,19 +40,14 @@ bool checkDomainDimension(const mesh::MeshPartition< orders... >& mesh, mesh::Do
         {
             return true;
         }
-    });
+    };
+    return std::ranges::all_of(std::forward< Ids >(ids), check_domain_dim);
 }
 
 template < el_o_t... orders >
 bool checkBoundaryDimension(const mesh::BoundaryView< orders... >& boundary, d_id_t dim)
 {
-    return boundary.reduce(
-        true,
-        [&]< mesh::ElementType ET, el_o_t EO >(mesh::BoundaryElementView< ET, EO >) {
-            return mesh::Element< ET, EO >::native_dim == dim;
-        },
-        std::logical_and{},
-        std::execution::par);
+    return checkDomainDimension(*boundary.getParent(), boundary.getIds(), dim - 1);
 }
 
 template < typename Kernel,

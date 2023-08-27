@@ -79,7 +79,6 @@ void test()
     auto       full_mesh      = std::invoke([] {
         constexpr auto node_dist = std::array{0., 1., 2., 3., 4.};
         auto           mesh      = mesh::makeCubeMesh(node_dist);
-        mesh.initDualGraph();
         return convertMeshToOrder< 2 >(mesh);
     });
     auto       full_mesh_copy = full_mesh;

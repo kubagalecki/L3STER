@@ -9,6 +9,7 @@
 
 using namespace lstr;
 using namespace lstr::glob_asm;
+using namespace lstr::mesh;
 
 template < CondensationPolicy CP >
 void test()
@@ -26,13 +27,14 @@ void test()
     constexpr auto mesh_order = 2;
     const auto     mesh       = generateAndDistributeMesh< mesh_order >(
         comm,
-        [&] { return mesh::makeSquareMesh(node_dist); },
+        [&] { return makeSquareMesh(node_dist); },
         {bot_boundary, top_boundary, left_boundary, right_boundary},
         {},
         probdef_ctwrpr);
-    const auto adiabatic_bound_view = mesh->getBoundaryView(std::array{bot_boundary, top_boundary});
-    const auto whole_bound_view =
-        mesh->getBoundaryView(std::array{top_boundary, bot_boundary, left_boundary, right_boundary});
+    constexpr auto adiabatic_bound_ids  = std::array{bot_boundary, top_boundary};
+    constexpr auto whole_bound_ids      = std::array{top_boundary, bot_boundary, left_boundary, right_boundary};
+    const auto     adiabatic_bound_view = BoundaryView{*mesh, adiabatic_bound_ids};
+    const auto     whole_bound_view     = BoundaryView{*mesh, whole_bound_ids};
 
     auto alg_sys = makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr, dirichletdef_ctwrpr);
 
@@ -88,7 +90,8 @@ void test()
     CHECK_THROWS(assembleBoundaryProblem());
     CHECK_THROWS(alg_sys->endAssembly());
 
-    const auto dirbc_bound_view = mesh->getBoundaryView(std::array{left_boundary, right_boundary});
+    constexpr auto dirichlet_bound_ids = std::array{left_boundary, right_boundary};
+    const auto     dirbc_bound_view    = BoundaryView{*mesh, dirichlet_bound_ids};
     alg_sys->setDirichletBCValues(dirichlet_bc_kernel, dirbc_bound_view, std::array{0});
     alg_sys->applyDirichletBCs();
 

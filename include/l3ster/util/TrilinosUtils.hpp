@@ -10,8 +10,10 @@
 
 namespace lstr::util
 {
-auto asTeuchosView(std::ranges::contiguous_range auto&& range)
-    requires std::ranges::sized_range< decltype(range) > and std::ranges::borrowed_range< decltype(range) >
+template < typename R >
+auto asTeuchosView(R&& range)
+    requires std::ranges::contiguous_range< R > and std::ranges::sized_range< R > and
+             std::ranges::borrowed_range< decltype(range) >
 {
     return Teuchos::ArrayView{std::ranges::data(range), std::ranges::ssize(range)};
 }
@@ -27,7 +29,7 @@ auto asSpan(const Kokkos::View< T*, Layout, Params... >& view) -> std::span< T >
 template < typename T, typename... Args >
 auto subview1D(const Kokkos::View< T*, Args... >& v, size_t offset, size_t count = std::dynamic_extent)
 {
-    return Kokkos::subview(v, std::pair{offset, count != std::dynamic_extent ? (offset + count) : v.extent(0)});
+    return Kokkos::subview(v, std::pair{offset, count == std::dynamic_extent ? v.extent(0) : (offset + count)});
 }
 
 template < typename T, typename... Args >

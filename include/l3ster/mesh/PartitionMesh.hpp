@@ -2,7 +2,7 @@
 #define L3STER_MESH_PARTITIONMESH_HPP
 
 #include "l3ster/dofs/ProblemDefinition.hpp"
-#include "l3ster/mesh/MeshPartition.hpp"
+#include "l3ster/mesh/MeshUtils.hpp"
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
@@ -68,7 +68,7 @@ template < el_o_t... orders >
 auto getDomainIds(const MeshPartition< orders... >& mesh, const std::vector< d_id_t >& boundary_ids)
     -> std::vector< d_id_t >
 {
-    std::vector< d_id_t > retval;
+    auto retval = std::vector< d_id_t >{};
     std::ranges::copy(mesh.getDomainIds() | std::views::filter([&](auto id) {
                           return std::ranges::find(boundary_ids, id) == end(boundary_ids);
                       }),
@@ -245,10 +245,15 @@ auto makeDomainMaps(const MeshPartition< orders... >& part,
                     const std::vector< idx_t >&       epart,
                     const std::vector< d_id_t >&      domain_ids)
 {
-    auto   retval = std::vector< typename MeshPartition< orders... >::domain_map_t >(n_parts);
-    size_t index  = 0;
-    for (auto id : domain_ids)
-        part.visit([&](const auto& element) { retval[epart[index++]][id].push(element); }, id);
+    auto retval = std::vector< typename MeshPartition< orders... >::domain_map_t >(n_parts);
+    for (size_t index = 0; auto id : domain_ids)
+    {
+        const auto push_to_domain_map = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
+            auto& domain = retval[epart[index++]][id];
+            domain.template getElementVector< ET, EO >().push_back(element);
+        };
+        part.visit(push_to_domain_map, id);
+    }
     return retval;
 }
 
@@ -288,16 +293,42 @@ void assignBoundaryElements(const MeshPartition< orders... >&                   
     auto element_ids = getElementIds(part, n_elements, domain_ids);
     sortElementsById(element_ids, epart);
     const auto lookup_el_part = [&](size_t el_id) {
-        return epart[std::distance(cbegin(element_ids),
-                                   std::lower_bound(cbegin(element_ids), cend(element_ids), el_id))];
+        const auto el_it  = std::lower_bound(cbegin(element_ids), cend(element_ids), el_id);
+        const auto el_pos = std::distance(cbegin(element_ids), el_it);
+        return epart.at(el_pos);
     };
-    part.visit(
-        [&](const auto& boundary_el, DomainView< orders... > dv) {
-            const auto domain_el   = part.getElementBoundaryView(boundary_el, dv.getID()).first->first;
-            const auto domain_part = lookup_el_part(std::visit([](const auto& el) { return el->getId(); }, domain_el));
-            new_domain_maps[domain_part][dv.getID()].push(boundary_el);
-        },
-        boundary_ids);
+
+    const auto         dim_dom_map = makeDimToDomainMap(part);
+    std::atomic_size_t n_boundary_elements{0}, n_assigned{0};
+    auto               insertion_mutex = std::mutex{};
+    const auto         assign_boundary = [&](d_id_t boundary_id) {
+        const auto boundary_view = part.getDomainView(boundary_id);
+        n_boundary_elements.fetch_add(boundary_view.getNElements(), std::memory_order_relaxed);
+        const auto assign_from_domain = [&](d_id_t domain_id) {
+            const auto assign_boundary_els = [&]< ElementType ET, el_o_t EO >(
+                                                 const Element< ET, EO >& boundary_element) {
+                const auto dom_el_opt = findDomainElement(part, boundary_element, std::views::single(domain_id));
+                if (dom_el_opt)
+                {
+                    n_assigned.fetch_add(1, std::memory_order_relaxed);
+                    const auto dom_el_id = std::visit([](const auto& el) { return el->getId(); }, dom_el_opt->first);
+                    const auto domain_element_partition = lookup_el_part(dom_el_id);
+
+                    const auto lock   = std::lock_guard{insertion_mutex};
+                    auto&      domain = new_domain_maps[domain_element_partition][boundary_id];
+                    domain.template getElementVector< ET, EO >().push_back(boundary_element);
+                }
+            };
+            part.visit(assign_boundary_els, std::views::single(boundary_id));
+        };
+        const auto& potential_dom_ids = dim_dom_map.at(boundary_view.getDim() + 1);
+        util::tbb::parallelFor(potential_dom_ids, assign_from_domain);
+    };
+    util::tbb::parallelFor(boundary_ids, assign_boundary);
+    util::throwingAssert(
+        n_assigned.load() == n_boundary_elements.load(),
+        "The mesh partitioner could not assign all edge/face elements to the partitions of their corresponding "
+        "area/volume elements. Make sure that you have correctly specified the boundary IDs.");
 }
 
 // Fix behavior where METIS sometimes ends up putting nodes in partitions where no elements contain them

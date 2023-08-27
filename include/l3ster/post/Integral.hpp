@@ -187,10 +187,10 @@ auto evalLocalIntegral(auto&&                                               kern
             std::terminate();
         }
     };
-    return mesh.transformReduce(integral_t{integral_t::Zero()},
-                                std::plus<>{},
+    return mesh.transformReduce(std::forward< decltype(domain_ids) >(domain_ids),
+                                integral_t{integral_t::Zero()},
                                 reduce_element,
-                                std::forward< decltype(domain_ids) >(domain_ids),
+                                std::plus<>{},
                                 std::execution::par);
 }
 

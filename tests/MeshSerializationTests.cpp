@@ -9,28 +9,29 @@ using namespace lstr;
 template < el_o_t... orders >
 bool compareEqual(const mesh::MeshPartition< orders... >& p1, const mesh::MeshPartition< orders... >& p2)
 {
+    if (not std::ranges::equal(p1.getDomainIds(), p2.getDomainIds()))
+        return false;
+
     bool result = true;
-
-    p1.visit(
-        [&]< mesh::ElementType T1, el_o_t O1 >(const mesh::Element< T1, O1 >& el1, mesh::DomainView< orders... > dv) {
-            const auto matched = p2.find(el1.getId());
-
-            if (not matched or dv.getID() != matched->second)
-            {
-                result = false;
-                return;
-            }
-
-            std::visit(
-                [&]< mesh::ElementType T2, el_o_t O2 >(const mesh::Element< T2, O2 >* el2) {
-                    if constexpr (T1 != T2 or O1 != O2)
-                        result = false;
-                    else if (el1.getNodes() != el2->getNodes() or el1.getData().vertices != el2->getData().vertices)
-                        result = false;
-                },
-                matched->first);
-        });
-
+    for (d_id_t domain_id : p1.getDomainIds())
+        p1.visit(
+            [&]< mesh::ElementType T1, el_o_t O1 >(const mesh::Element< T1, O1 >& el1) {
+                const auto matched = p2.getDomain(domain_id).find(el1.getId());
+                if (not matched)
+                {
+                    result = false;
+                    return;
+                }
+                std::visit(
+                    [&]< mesh::ElementType T2, el_o_t O2 >(const mesh::Element< T2, O2 >* el2) {
+                        if constexpr (T1 != T2 or O1 != O2)
+                            result = false;
+                        else if (el1.getNodes() != el2->getNodes() or el1.getData().vertices != el2->getData().vertices)
+                            result = false;
+                    },
+                    *matched);
+            },
+            std::views::single(domain_id));
     return result;
 }
 

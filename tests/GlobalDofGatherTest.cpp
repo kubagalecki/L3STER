@@ -30,7 +30,6 @@ void test(CondensationPolicyTag< CP > = {})
     const auto              mesh_full      = comm.getRank() == 0 ? std::invoke([] {
         constexpr std::array dist{0., 1., 2.};
         auto                 retval = mesh::makeCubeMesh(dist);
-        retval.initDualGraph();
         return mesh::convertMeshToOrder< mesh_order >(retval);
     })
                                                                  : mesh::MeshPartition< mesh_order >{};

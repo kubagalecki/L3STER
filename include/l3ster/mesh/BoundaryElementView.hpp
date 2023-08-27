@@ -12,8 +12,8 @@ class BoundaryElementView
 {
 public:
     BoundaryElementView() = default;
-    BoundaryElementView(const Element< ET, EO >& element, const el_side_t side)
-        : m_element_ptr{std::addressof(element)}, m_element_side{side}
+    BoundaryElementView(const Element< ET, EO >* element_ptr, const el_side_t side)
+        : m_element_ptr{element_ptr}, m_element_side{side}
     {}
 
     [[nodiscard]] const Element< ET, EO >* operator->() const { return m_element_ptr; }
@@ -26,8 +26,6 @@ private:
     const Element< ET, EO >* m_element_ptr{};
     el_side_t                m_element_side{};
 };
-template < ElementType ET, el_o_t EO >
-BoundaryElementView(const Element< ET, EO >& element, const el_side_t side) -> BoundaryElementView< ET, EO >;
 
 template < ElementType ET, el_o_t EO >
 auto BoundaryElementView< ET, EO >::getSideNodesView() const
@@ -38,21 +36,18 @@ auto BoundaryElementView< ET, EO >::getSideNodesView() const
 template < ElementType ET, el_o_t EO >
 auto BoundaryElementView< ET, EO >::getSideNodeInds() const -> std::span< const el_locind_t >
 {
-    auto       retval           = std::span< const el_locind_t >{};
-    const auto fold_expr_helper = [&]< el_side_t side >(std::integral_constant< el_side_t, side >) {
-        if (side == getSide())
-        {
-            retval = std::get< side >(ElementTraits< Element< ET, EO > >::boundary_table);
-            return true;
-        }
-        else
-            return false;
+    auto           retval    = std::span< const el_locind_t >{};
+    constexpr auto side_inds = std::make_integer_sequence< el_side_t, ElementTraits< Element< ET, EO > >::n_sides >{};
+    const auto     fold_side_inds = [&]< el_side_t... sides >(std::integer_sequence< el_side_t, sides... >) {
+        const auto try_side_ind = [&]< el_side_t side >(std::integral_constant< el_side_t, side >) {
+            const bool match = side == getSide();
+            if (match)
+                retval = std::get< side >(ElementTraits< Element< ET, EO > >::boundary_table);
+            return match;
+        };
+        (try_side_ind(std::integral_constant< el_side_t, sides >{}) or ...);
     };
-    std::invoke(
-        [&]< el_side_t... sides >(std::integer_sequence< el_side_t, sides... >) {
-            (fold_expr_helper(std::integral_constant< el_side_t, sides >{}) or ...);
-        },
-        std::make_integer_sequence< el_side_t, ElementTraits< Element< ET, EO > >::n_sides >{});
+    std::invoke(fold_side_inds, side_inds);
     return retval;
 }
 } // namespace lstr::mesh

@@ -5,13 +5,12 @@ static void BM_OwnerOrSharedNodeDeterminationNotGhost(benchmark::State& state)
 {
     auto       mesh            = mesh::readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), mesh::gmsh_tag);
     const auto n_nodes_visited = mesh.transformReduce(
-        0ul,
-        std::plus<>{},
-        [](const auto& element) { return element.getNodes().size(); },
         std::views::single(1),
+        size_t{},
+        [](const auto& element) { return element.getNodes().size(); },
+        std::plus<>{},
         std::execution::par);
 
-    mesh.initDualGraph();
     const auto n_parts    = state.range(0);
     const auto partitions = partitionMesh(mesh, n_parts, {2});
 
@@ -39,13 +38,12 @@ static void BM_OwnerOrSharedNodeDeterminationShared(benchmark::State& state)
 {
     auto       mesh            = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), mesh::gmsh_tag);
     const auto n_nodes_visited = mesh.transformReduce(
-        0ul,
-        std::plus<>{},
-        [](const auto& element) { return element.getNodes().size(); },
         std::views::single(1),
+        size_t{},
+        [](const auto& element) { return element.getNodes().size(); },
+        std::plus<>{},
         std::execution::par);
 
-    mesh.initDualGraph();
     const auto n_parts    = state.range(0);
     const auto partitions = partitionMesh(mesh, n_parts, {2});
 

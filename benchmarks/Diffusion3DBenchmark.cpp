@@ -43,7 +43,7 @@ int main(int argc, char* argv[])
         std::vector< d_id_t >(boundary_ids.begin(), boundary_ids.end()),
         {},
         probdef_ctwrpr);
-    const auto boundary_view = my_partition->getBoundaryView(boundary_ids);
+    const auto boundary_view = mesh::BoundaryView{*my_partition, boundary_ids};
 
     constexpr auto field_inds  = util::makeIotaArray< size_t, problem_def.n_fields >();
     constexpr auto T_inds      = std::array< size_t, 1 >{0};
@@ -106,7 +106,8 @@ int main(int argc, char* argv[])
         };
     constexpr auto dbc_params = KernelParams{.dimension = 3, .n_equations = 1};
     constexpr auto dirichlet_bc_kernel =
-        wrapResidualDomainKernel< dbc_params >([](const auto& in, auto& out) { out[0] = 0.; });
+        wrapResidualBoundaryKernel< dbc_params >([](const auto& in, auto& out) { out[0] = 0.; });
+    const auto dbc_boundary = mesh::BoundaryView{*my_partition, boundary_ids};
 
     auto alg_system =
         makeAlgebraicSystem(comm, my_partition, element_boundary_tag, probdef_ctwrpr, dirichletdef_ctwrpr);
@@ -114,7 +115,7 @@ int main(int argc, char* argv[])
     alg_system->assembleDomainProblem(diffusion_kernel3d, std::views::single(domain_id));
     alg_system->endAssembly();
     alg_system->describe(comm);
-    alg_system->setDirichletBCValues(dirichlet_bc_kernel, boundary_ids, T_inds);
+    alg_system->setDirichletBCValues(dirichlet_bc_kernel, dbc_boundary, T_inds);
     alg_system->applyDirichletBCs();
 
     solvers::CG solver{

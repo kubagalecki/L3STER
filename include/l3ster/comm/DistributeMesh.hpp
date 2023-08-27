@@ -130,7 +130,6 @@ auto readAndConvertMesh(std::string_view mesh_file, mesh::MeshFormatTag< mesh_fo
     -> mesh::MeshPartition< order >
 {
     auto mesh = readMesh(mesh_file, format_tag);
-    mesh.initDualGraph();
     return convertMeshToOrder< order >(mesh);
 }
 } // namespace comm
@@ -189,10 +188,7 @@ auto generateAndDistributeMesh(const MpiComm&               comm,
                               if constexpr (order == 1)
                                   return generated_mesh;
                               else
-                              {
-                                  generated_mesh.initDualGraph();
                                   return convertMeshToOrder< order >(generated_mesh);
-                              }
                           })
                                               : mesh::MeshPartition< order >{},
                           boundaries,

@@ -78,7 +78,7 @@ consteval auto makeElementEdgeTable()
 template < ElementType T, el_o_t O >
 consteval auto getElementIndices()
 {
-    return std::make_tuple(util::consecutiveIndices(std::integral_constant< el_locind_t, Element< T, O >::n_nodes >{}));
+    return std::make_tuple(util::makeIndexArray(std::integral_constant< el_locind_t, Element< T, O >::n_nodes >{}));
 }
 
 template < ElementType T, el_o_t O, dim_t DIM >
@@ -115,6 +115,7 @@ consteval dim_t getHighestMatchableDim()
 
 template < dim_t DIM, el_o_t O, ElementType T1, ElementType T2 >
 auto elementIntersectionSpansAtDim(const Element< T1, 1 >& el1, const Element< T2, 1 >& el2)
+    -> std::array< std::span< const el_locind_t >, 2 >
 {
     using span_t = std::span< const el_locind_t >;
     span_t           intersect_inds1, intersect_inds2;
@@ -125,38 +126,38 @@ auto elementIntersectionSpansAtDim(const Element< T1, 1 >& el1, const Element< T
     constexpr size_t f1_size = std::tuple_size_v< std::decay_t< decltype(f1_o1) > >;
     constexpr size_t f2_size = std::tuple_size_v< std::decay_t< decltype(f2_o1) > >;
 
-    std::invoke(
-        [&]< size_t... I1 >(std::index_sequence< I1... >) {
-            const auto iterate_over_f1 = [&]< size_t Ind1 >(std::integral_constant< size_t, Ind1 >) {
-                auto nodes1 = util::arrayAtInds(el1.getNodes(), std::get< Ind1 >(f1_o1));
-                std::ranges::sort(nodes1);
-                return std::invoke(
-                    [&]< size_t... I2 >(std::index_sequence< I2... >) {
-                        const auto iterate_over_f2 = [&]< size_t Ind2 >(std::integral_constant< size_t, Ind2 >) {
-                            auto nodes2 = util::arrayAtInds(el2.getNodes(), std::get< Ind2 >(f2_o1));
-                            std::ranges::sort(nodes2);
-                            const bool is_matched = std::ranges::equal(nodes1, nodes2);
-                            if (is_matched)
-                            {
-                                intersect_inds1 = span_t{std::get< Ind1 >(f1_oN)};
-                                intersect_inds2 = span_t{std::get< Ind2 >(f2_oN)};
-                            }
-                            return is_matched;
-                        };
-                        return (iterate_over_f2(std::integral_constant< size_t, I2 >{}) or ...);
-                    },
-                    std::make_index_sequence< f2_size >{});
+    // Try to match every feature from 1 with every feature from 2, with early return
+    // This gets a bit ugly since indices need to be deduced for std::get<i>, as opposed to passed to operator[i]
+    const auto fold_f1 = [&]< size_t... I1 >(std::index_sequence< I1... >) {
+        const auto f1_iteration = [&]< size_t Ind1 >(std::integral_constant< size_t, Ind1 >) {
+            auto nodes1 = util::arrayAtInds(el1.getNodes(), std::get< Ind1 >(f1_o1));
+            std::ranges::sort(nodes1);
+            const auto fold_f2 = [&]< size_t... I2 >(std::index_sequence< I2... >) {
+                const auto f2_iteration = [&]< size_t Ind2 >(std::integral_constant< size_t, Ind2 >) {
+                    auto nodes2 = util::arrayAtInds(el2.getNodes(), std::get< Ind2 >(f2_o1));
+                    std::ranges::sort(nodes2);
+                    const bool is_matched = std::ranges::equal(nodes1, nodes2);
+                    if (is_matched)
+                    {
+                        intersect_inds1 = span_t{std::get< Ind1 >(f1_oN)};
+                        intersect_inds2 = span_t{std::get< Ind2 >(f2_oN)};
+                    }
+                    return is_matched;
+                };
+                return (f2_iteration(std::integral_constant< size_t, I2 >{}) or ...);
             };
-            (iterate_over_f1(std::integral_constant< size_t, I1 >{}) or ...);
-        },
-        std::make_index_sequence< f1_size >{});
+            return std::invoke(fold_f2, std::make_index_sequence< f2_size >{});
+        };
+        (f1_iteration(std::integral_constant< size_t, I1 >{}) or ...);
+    };
+    std::invoke(fold_f1, std::make_index_sequence< f1_size >{});
 
-    return std::make_pair(intersect_inds1, intersect_inds2);
+    return {intersect_inds1, intersect_inds2};
 }
 
 template < el_o_t O, ElementType T1, ElementType T2 >
-std::pair< std::span< const el_locind_t >, std::span< const el_locind_t > >
-elementIntersection(const Element< T1, 1 >& el1, const Element< T2, 1 >& el2)
+auto elementIntersection(const Element< T1, 1 >& el1, const Element< T2, 1 >& el2)
+    -> std::array< std::span< const el_locind_t >, 2 >
 {
     constexpr auto highest_matchable = detail::getHighestMatchableDim< T1, T2 >();
 
@@ -169,7 +170,7 @@ elementIntersection(const Element< T1, 1 >& el1, const Element< T2, 1 >& el2)
         else // highest_matchable == 2
         {
             const auto match_dim2 = detail::elementIntersectionSpansAtDim< 2, O >(el1, el2);
-            if (not match_dim2.first.empty())
+            if (not match_dim2.front().empty())
                 return match_dim2;
             else
                 return detail::elementIntersectionSpansAtDim< 1, O >(el1, el2);
@@ -197,7 +198,7 @@ constexpr void updateMatchMask(const Element< T, 1 >&                   el_o1,
     util::matchingPermutation(el_oN_nodelocs, el_o1_nodelocs, begin(matched_inds), detail::getPointMatcher());
     for (size_t i = 0; auto ind : matched_inds)
     {
-        mask[ind]  = true;
+        mask.set(ind);
         nodes[ind] = el_o1.getNodes()[i++];
     }
 }
@@ -212,7 +213,7 @@ constexpr void updateMatchMask(const Element< T_converted, 1 >&                 
     const auto [pattern_inds, match_inds] = detail::elementIntersection< O >(pattern_o1_el, match_o1_el);
     std::array< size_t, std::tuple_size_v< std::decay_t< decltype(nodes) > > > match_buffer;
     const Element< T_converting, O > match_oN_el{{}, match_o1_el.getData(), {}};
-    auto filtered_match_inds = match_inds | std::views::filter([&](auto ind) { return not mask[ind]; });
+    auto filtered_match_inds = match_inds | std::views::filter([&](auto ind) { return not mask.test(ind); });
 
     util::matchingPermutation(
         pattern_inds | std::views::transform([&](auto ind) { return nodePhysicalLocation(pattern_oN_el, ind); }),
@@ -222,7 +223,7 @@ constexpr void updateMatchMask(const Element< T_converted, 1 >&                 
 
     for (size_t i = 0u; auto m_ind : filtered_match_inds)
     {
-        mask[m_ind]  = true;
+        mask.set(m_ind);
         nodes[m_ind] = pattern_oN_el.getNodes()[pattern_inds[match_buffer[i++]]];
     }
 }

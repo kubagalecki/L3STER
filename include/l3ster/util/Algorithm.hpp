@@ -93,17 +93,18 @@ constexpr void forEachTuple(auto&& t, auto&& f)
 }
 
 template < std::unsigned_integral T >
-std::vector< T > consecutiveIndices(T n)
+auto makeIndexVector(T n) -> std::vector< T >
 {
-    std::vector< T > retval(n);
-    std::iota(begin(retval), end(retval), T{0});
+    auto retval = std::vector< T >{};
+    retval.reserve(static_cast< size_t >(n));
+    std::ranges::copy(std::views::iota(T{0}, n), std::back_inserter(retval));
     return retval;
 }
 
 template < std::unsigned_integral T, T N >
-constexpr std::array< T, N > consecutiveIndices(std::integral_constant< T, N >)
+constexpr auto makeIndexArray(std::integral_constant< T, N >) -> std::array< T, N >
 {
-    std::array< T, N > retval;
+    auto retval = std::array< T, N >{};
     std::iota(begin(retval), end(retval), T{0});
     return retval;
 }
