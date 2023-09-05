@@ -113,7 +113,7 @@ auto gatherGlobalDofIntervals(const MpiComm& comm, const node_interval_vector_t<
     });
     const size_t max_msg_size           = max_n_intervals_global * serial_interval_size + 1u;
     auto         serial_local_intervals = std::invoke([&] {
-        auto retval    = util::ArrayOwner< unsigned long long >{max_msg_size};
+        auto retval    = util::ArrayOwner< unsigned long long >(max_msg_size);
         retval.front() = n_intervals_local;
         serializeDofIntervals(local_intervals, std::next(retval.begin()));
         return retval;
@@ -121,7 +121,7 @@ auto gatherGlobalDofIntervals(const MpiComm& comm, const node_interval_vector_t<
 
     node_interval_vector_t< n_fields > retval;
     retval.reserve(comm_size * max_n_intervals_global);
-    auto       proc_buf     = util::ArrayOwner< unsigned long long >{max_msg_size};
+    auto       proc_buf     = util::ArrayOwner< unsigned long long >(max_msg_size);
     const auto process_data = [&](int sender_rank) {
         if (sender_rank != my_rank)
         {
@@ -134,7 +134,7 @@ auto gatherGlobalDofIntervals(const MpiComm& comm, const node_interval_vector_t<
     };
 
     auto msg_buf =
-        my_rank == 0 ? std::move(serial_local_intervals) : util::ArrayOwner< unsigned long long >{max_msg_size};
+        my_rank == 0 ? std::move(serial_local_intervals) : util::ArrayOwner< unsigned long long >(max_msg_size);
     auto request = comm.broadcastAsync(msg_buf, 0);
     for (int root_rank = 1; root_rank < comm_size; ++root_rank)
     {

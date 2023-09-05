@@ -57,7 +57,7 @@ inline auto receivePartition(const MpiComm& comm, int source) -> mesh::Serialize
 
     const auto nodes_size  = *size_it++;
     retval.m_n_owned_nodes = *size_it++;
-    retval.m_nodes.resize(nodes_size);
+    retval.m_nodes         = util::ArrayOwner< n_id_t >(nodes_size);
     messages.emplace_back(comm.receiveAsync(retval.m_nodes, source, msg_tag++));
 
     return retval;

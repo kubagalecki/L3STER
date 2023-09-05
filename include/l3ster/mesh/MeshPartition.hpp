@@ -3,6 +3,7 @@
 
 #include "l3ster/mesh/Domain.hpp"
 #include "l3ster/util/Algorithm.hpp"
+#include "l3ster/util/ArrayOwner.hpp"
 #include "l3ster/util/MetisUtils.hpp"
 #include "l3ster/util/Ranges.hpp"
 
@@ -12,13 +13,6 @@
 
 namespace lstr::mesh
 {
-template < typename T, el_o_t... orders >
-concept DomainPredicate_c = requires(T op, DomainView< orders... > dv) {
-    {
-        std::invoke(op, dv)
-    } -> std::convertible_to< bool >;
-};
-
 template < el_o_t... orders >
 class MeshPartition
 {
@@ -32,10 +26,12 @@ public:
     using node_span_t         = std::span< const n_id_t >;
 
     friend struct SerializedPartition;
+    template < el_o_t... O >
+    friend auto copy(const MeshPartition< O... >&) -> MeshPartition< O... >;
 
     MeshPartition() = default;
     inline MeshPartition(domain_map_t domains);
-    MeshPartition(domain_map_t domains, std::vector< n_id_t > nodes, size_t n_owned_nodes)
+    MeshPartition(domain_map_t domains, util::ArrayOwner< n_id_t > nodes, size_t n_owned_nodes)
         : m_domains{std::move(domains)}, m_nodes{std::move(nodes)}, m_n_owned_nodes{n_owned_nodes}
     {}
     template < SizedRangeOfConvertibleTo_c< n_id_t > Owned, SizedRangeOfConvertibleTo_c< n_id_t > Ghost >
@@ -50,26 +46,23 @@ public:
     void visit(Visitor&& element_visitor, d_id_t domain_id, ExecPolicy&& policy = {});
     template < ConstElementVisitor_c< orders... > Visitor, SimpleExecutionPolicy_c ExecPolicy = DefaultExec >
     void visit(Visitor&& element_visitor, d_id_t domain_id, ExecPolicy&& policy = {}) const;
-    template < MutableElementVisitor_c< orders... > F,
-               DomainIdRange_c                      Ids,
-               SimpleExecutionPolicy_c              ExecPolicy = DefaultExec >
-    void visit(F&& element_visitor, Ids&& domain_ids, ExecPolicy&& policy = {});
-    template < ConstElementVisitor_c< orders... > F,
-               DomainIdRange_c                    Ids,
-               SimpleExecutionPolicy_c            ExecPolicy = DefaultExec >
-    void visit(F&& element_visitor, Ids&& domain_ids, ExecPolicy&& policy = {}) const;
+    template < MutableElementVisitor_c< orders... > F, SimpleExecutionPolicy_c ExecPolicy = DefaultExec >
+    void visit(F&& element_visitor, const util::ArrayOwner< d_id_t >& domain_ids, ExecPolicy&& policy = {});
+    template < ConstElementVisitor_c< orders... > F, SimpleExecutionPolicy_c ExecPolicy = DefaultExec >
+    void visit(F&& element_visitor, const util::ArrayOwner< d_id_t >& domain_ids, ExecPolicy&& policy = {}) const;
 
     // Reduction over elements
     // Note: `zero` must be the identity element for the reduction (as opposed to, e.g., std::transform_reduce)
     // Note: The iteration order is indeterminate, even if std::execution::seq is passed
-    template < DomainIdRange_c         IdRange,
-               std::copy_constructible Zero,
+    template < std::copy_constructible Zero,
                std::copy_constructible Transform,
                std::copy_constructible Reduction  = std::plus<>,
                SimpleExecutionPolicy_c ExecPolicy = DefaultExec >
-    auto transformReduce(
-        IdRange&& domain_ids, Zero zero, Transform transform, Reduction reduction = {}, ExecPolicy&& policy = {}) const
-        -> Zero
+    auto transformReduce(const util::ArrayOwner< d_id_t >& domain_ids,
+                         Zero                              zero,
+                         Transform                         transform,
+                         Reduction                         reduction = {},
+                         ExecPolicy&&                      policy    = {}) const -> Zero
         requires TransformReducible_c< Zero, Transform, Reduction, orders... >;
 
     // find
@@ -78,14 +71,11 @@ public:
     auto find(F&& predicate, ExecPolicy&& policy = {}) -> find_result_t;
     template < ElementPredicate_c< orders... > F, SimpleExecutionPolicy_c ExecPolicy = DefaultExec >
     auto find(F&& predicate, ExecPolicy&& policy = {}) const -> const_find_result_t;
-    template < ElementPredicate_c< orders... > F,
-               DomainIdRange_c                 Ids,
-               SimpleExecutionPolicy_c         ExecPolicy = DefaultExec >
-    auto find(F&& predicate, Ids&& ids, ExecPolicy&& policy = {}) -> find_result_t;
-    template < ElementPredicate_c< orders... > F,
-               DomainIdRange_c                 Ids,
-               SimpleExecutionPolicy_c         ExecPolicy = DefaultExec >
-    auto                       find(F&& predicate, Ids&& ids, ExecPolicy&& policy = {}) const -> const_find_result_t;
+    template < ElementPredicate_c< orders... > F, SimpleExecutionPolicy_c ExecPolicy = DefaultExec >
+    auto find(F&& predicate, const util::ArrayOwner< d_id_t >& ids, ExecPolicy&& policy = {}) -> find_result_t;
+    template < ElementPredicate_c< orders... > F, SimpleExecutionPolicy_c ExecPolicy = DefaultExec >
+    auto find(F&& predicate, const util::ArrayOwner< d_id_t >& ids, ExecPolicy&& policy = {}) const
+        -> const_find_result_t;
     inline find_result_t       find(el_id_t id);
     inline const_find_result_t find(el_id_t id) const;
 
@@ -107,24 +97,36 @@ public:
     auto getConversionAlloc() const -> MeshPartition< O >::domain_map_t;
 
 private:
-    template < DomainIdRange_c Ids >
-    static auto filterExistingDomainIds(const domain_map_t& domain_map, Ids&& ids) -> std::vector< d_id_t >;
+    inline static auto filterExistingDomainIds(const domain_map_t& domain_map, const util::ArrayOwner< d_id_t >& ids)
+        -> util::ArrayOwner< d_id_t >;
     // Deduce constness based on the domain map, helps with deduplication. Idea similar to C++23 "deducing this"
-    static void visitImpl(auto&& visitor, auto&& domain_map, auto&& domain_ids, auto&& policy);
+    template < typename Visitor, typename DomainMap, typename Policy >
+    static void
+    visitImpl(Visitor&& visitor, DomainMap&& domain_map, const util::ArrayOwner< d_id_t >& domain_ids, Policy&& policy);
 
-    domain_map_t          m_domains;
-    std::vector< n_id_t > m_nodes;
-    size_t                m_n_owned_nodes;
+    domain_map_t               m_domains;
+    util::ArrayOwner< n_id_t > m_nodes;
+    size_t                     m_n_owned_nodes;
 };
 
 template < el_o_t... orders >
-MeshPartition< orders... >::MeshPartition(MeshPartition< orders... >::domain_map_t domains_)
-    : m_domains{std::move(domains_)}
+auto copy(const MeshPartition< orders... >& mesh) -> MeshPartition< orders... >
 {
-    robin_hood::unordered_flat_set< n_id_t > nodes;
-    visit([&](const auto& element) { std::ranges::for_each(element.getNodes(), [&](n_id_t n) { nodes.insert(n); }); });
-    m_nodes.reserve(nodes.size());
-    std::ranges::copy(nodes, std::back_inserter(m_nodes));
+    return {mesh.m_domains, copy(mesh.m_nodes), mesh.m_n_owned_nodes};
+}
+
+template < el_o_t... orders >
+MeshPartition< orders... >::MeshPartition(MeshPartition< orders... >::domain_map_t domains)
+    : m_domains{std::move(domains)}
+{
+    auto       nodes        = robin_hood::unordered_flat_set< n_id_t >{};
+    const auto insert_nodes = [&](const auto& element) {
+        for (n_id_t node : element.getNodes())
+            nodes.insert(node);
+    };
+    visit(insert_nodes);
+    m_nodes = util::ArrayOwner< n_id_t >(nodes.size());
+    std::ranges::copy(nodes, m_nodes.begin());
     std::ranges::sort(m_nodes);
     m_n_owned_nodes = m_nodes.size();
 }
@@ -132,12 +134,12 @@ MeshPartition< orders... >::MeshPartition(MeshPartition< orders... >::domain_map
 template < el_o_t... orders >
 template < SizedRangeOfConvertibleTo_c< n_id_t > Owned, SizedRangeOfConvertibleTo_c< n_id_t > Ghost >
 MeshPartition< orders... >::MeshPartition(domain_map_t domains, Owned&& owned_nodes, Ghost&& ghost_nodes)
-    : m_domains{std::move(domains)}, m_n_owned_nodes{std::ranges::size(owned_nodes)}
+    : m_domains{std::move(domains)},
+      m_nodes(std::ranges::size(owned_nodes) + std::ranges::size(ghost_nodes)),
+      m_n_owned_nodes{std::ranges::size(owned_nodes)}
 {
-    m_nodes.reserve(std::ranges::size(owned_nodes) + std::ranges::size(ghost_nodes));
-    auto back_inserter = std::back_inserter(m_nodes);
-    std::ranges::copy(std::forward< Owned >(owned_nodes), back_inserter);
-    std::ranges::copy(std::forward< Ghost >(ghost_nodes), back_inserter);
+    const auto ghost_pos = std::ranges::copy(std::forward< Owned >(owned_nodes), m_nodes.begin()).out;
+    std::ranges::copy(std::forward< Ghost >(ghost_nodes), ghost_pos);
 }
 
 // Implementation note: It should be possible to sequentially traverse elements in a deterministic order (e.g. the mesh
@@ -178,36 +180,36 @@ void MeshPartition< orders... >::visit(F&& element_visitor, ExecPolicy&& policy)
 }
 
 template < el_o_t... orders >
-template < MutableElementVisitor_c< orders... > F, DomainIdRange_c Ids, SimpleExecutionPolicy_c ExecPolicy >
-void MeshPartition< orders... >::visit(F&& element_visitor, Ids&& domain_ids, ExecPolicy&& policy)
+template < MutableElementVisitor_c< orders... > F, SimpleExecutionPolicy_c ExecPolicy >
+void MeshPartition< orders... >::visit(F&&                               element_visitor,
+                                       const util::ArrayOwner< d_id_t >& domain_ids,
+                                       ExecPolicy&&                      policy)
 {
-    visitImpl(std::forward< F >(element_visitor),
-              m_domains,
-              std::forward< Ids >(domain_ids),
-              std::forward< ExecPolicy >(policy));
+    visitImpl(std::forward< F >(element_visitor), m_domains, domain_ids, std::forward< ExecPolicy >(policy));
 }
 
 template < el_o_t... orders >
-template < ConstElementVisitor_c< orders... > F, DomainIdRange_c Ids, SimpleExecutionPolicy_c ExecPolicy >
-void MeshPartition< orders... >::visit(F&& element_visitor, Ids&& domain_ids, ExecPolicy&& policy) const
+template < ConstElementVisitor_c< orders... > F, SimpleExecutionPolicy_c ExecPolicy >
+void MeshPartition< orders... >::visit(F&&                               element_visitor,
+                                       const util::ArrayOwner< d_id_t >& domain_ids,
+                                       ExecPolicy&&                      policy) const
 {
-    visitImpl(std::forward< F >(element_visitor),
-              m_domains,
-              std::forward< Ids >(domain_ids),
-              std::forward< ExecPolicy >(policy));
+    visitImpl(std::forward< F >(element_visitor), m_domains, domain_ids, std::forward< ExecPolicy >(policy));
 }
 
 template < el_o_t... orders >
-template < DomainIdRange_c         IdRange,
-           std::copy_constructible Zero,
+template < std::copy_constructible Zero,
            std::copy_constructible Transform,
            std::copy_constructible Reduction,
            SimpleExecutionPolicy_c ExecPolicy >
-auto MeshPartition< orders... >::transformReduce(
-    IdRange&& domain_ids, Zero zero, Transform transform, Reduction reduction, ExecPolicy&& policy) const -> Zero
+auto MeshPartition< orders... >::transformReduce(const util::ArrayOwner< d_id_t >& domain_ids,
+                                                 Zero                              zero,
+                                                 Transform                         transform,
+                                                 Reduction                         reduction,
+                                                 ExecPolicy&&                      policy) const -> Zero
     requires TransformReducible_c< Zero, Transform, Reduction, orders... >
 {
-    const auto ids           = filterExistingDomainIds(m_domains, std::forward< IdRange >(domain_ids));
+    const auto ids           = filterExistingDomainIds(m_domains, domain_ids);
     const auto reduce_domain = [&](d_id_t id) {
         return m_domains.at(id).transformReduce(zero, transform, reduction, policy);
     };
@@ -231,22 +233,23 @@ auto MeshPartition< orders... >::find(F&& predicate, ExecPolicy&& policy) const 
 }
 
 template < el_o_t... orders >
-template < ElementPredicate_c< orders... > F, DomainIdRange_c Ids, SimpleExecutionPolicy_c ExecPolicy >
-auto MeshPartition< orders... >::find(F&& predicate, Ids&& ids, ExecPolicy&& policy) -> find_result_t
+template < ElementPredicate_c< orders... > F, SimpleExecutionPolicy_c ExecPolicy >
+auto MeshPartition< orders... >::find(F&& predicate, const util::ArrayOwner< d_id_t >& ids, ExecPolicy&& policy)
+    -> find_result_t
 {
-    const auto const_find = std::as_const(*this).find(
-        std::forward< F >(predicate), std::forward< Ids >(ids), std::forward< ExecPolicy >(policy));
+    const auto const_find =
+        std::as_const(*this).find(std::forward< F >(predicate), ids, std::forward< ExecPolicy >(policy));
     return detail::makeMutableFindResult< orders... >(const_find);
 }
 
 template < el_o_t... orders >
-template < ElementPredicate_c< orders... > F, DomainIdRange_c Ids, SimpleExecutionPolicy_c ExecPolicy >
-auto MeshPartition< orders... >::find(F&& predicate, Ids&& ids, ExecPolicy&& policy) const -> const_find_result_t
+template < ElementPredicate_c< orders... > F, SimpleExecutionPolicy_c ExecPolicy >
+auto MeshPartition< orders... >::find(F&& predicate, const util::ArrayOwner< d_id_t >& ids, ExecPolicy&& policy) const
+    -> const_find_result_t
 {
-    auto ids_common = std::forward< Ids >(ids) | std::views::common;
-    auto retval     = const_find_result_t{};
-    auto mut        = std::mutex{};
-    std::find_if(policy, ids_common.begin(), ids_common.end(), [&](d_id_t id) {
+    auto retval = const_find_result_t{};
+    auto mut    = std::mutex{};
+    std::find_if(policy, ids.begin(), ids.end(), [&](d_id_t id) {
         const auto map_entry_it = m_domains.find(id);
         if (map_entry_it == m_domains.end())
             return false;
@@ -301,8 +304,8 @@ auto MeshPartition< orders... >::getConversionAlloc() const -> MeshPartition< O 
 template < el_o_t... orders >
 size_t MeshPartition< orders... >::computeTopoHash() const
 {
-    constexpr auto hash_range = [](std::ranges::contiguous_range auto&& r) -> size_t {
-        const auto data = std::span{std::forward< decltype(r) >(r)};
+    constexpr auto hash_range = []< std::ranges::contiguous_range R >(R&& r) -> size_t {
+        const auto data = std::span{std::forward< R >(r)};
         return robin_hood::hash_bytes(data.data(), data.size_bytes());
     };
     const auto hash_element = [&](const auto& element) {
@@ -314,22 +317,29 @@ size_t MeshPartition< orders... >::computeTopoHash() const
 }
 
 template < el_o_t... orders >
-void MeshPartition< orders... >::visitImpl(auto&& visitor, auto&& domain_map, auto&& domain_ids, auto&& policy)
+template < typename Visitor, typename DomainMap, typename Policy >
+void MeshPartition< orders... >::visitImpl(Visitor&&                         visitor,
+                                           DomainMap&&                       domain_map,
+                                           const util::ArrayOwner< d_id_t >& domain_ids,
+                                           Policy&&                          policy)
 {
-    const auto ids_to_visit    = filterExistingDomainIds(domain_map, std::forward< decltype(domain_ids) >(domain_ids));
+    const auto ids_to_visit    = filterExistingDomainIds(domain_map, domain_ids);
     const auto visit_domain_id = [&](d_id_t id) {
         domain_map.at(id).visit(visitor, policy);
     };
-    std::for_each(std::forward< decltype(policy) >(policy), ids_to_visit.begin(), ids_to_visit.end(), visit_domain_id);
+    // std::for_each with sequential policy does not guarantee iteration order
+    if constexpr (std::same_as< std::remove_cvref_t< Policy >, std::execution::sequenced_policy >)
+        std::ranges::for_each(ids_to_visit, visit_domain_id);
+    else
+        std::for_each(policy, ids_to_visit.begin(), ids_to_visit.end(), visit_domain_id);
 }
 
 template < el_o_t... orders >
-template < DomainIdRange_c Ids >
-auto MeshPartition< orders... >::filterExistingDomainIds(const domain_map_t& domain_map, Ids&& ids)
-    -> std::vector< d_id_t >
+auto MeshPartition< orders... >::filterExistingDomainIds(const domain_map_t&               domain_map,
+                                                         const util::ArrayOwner< d_id_t >& ids)
+    -> util::ArrayOwner< d_id_t >
 {
-    return util::toVector(util::castView< d_id_t >(
-        std::forward< Ids >(ids) | std::views::filter([&](d_id_t id) { return domain_map.contains(id); })));
+    return ids | std::views::filter([&](d_id_t id) { return domain_map.contains(id); });
 }
 } // namespace lstr::mesh
 #endif // L3STER_MESH_MESHPARTITION_HPP

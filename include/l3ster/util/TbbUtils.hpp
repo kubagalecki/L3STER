@@ -2,6 +2,7 @@
 #define L3STER_UTIL_TBBUTILS_HPP
 
 #include "l3ster/util/Concepts.hpp"
+#include "l3ster/util/Ranges.hpp"
 
 #include "oneapi/tbb.h"
 
@@ -20,15 +21,15 @@ namespace detail
 template < std::ranges::sized_range Range >
 using blocked_iter_space_t = oneapi::tbb::blocked_range< std::ranges::range_difference_t< Range > >;
 
-auto makeBlockedIterSpace(std::ranges::sized_range auto&& range, size_t grain = 1)
-    -> blocked_iter_space_t< decltype(range) >
+template < std::ranges::sized_range Range >
+auto makeBlockedIterSpace(Range&& range, size_t grain = 1) -> blocked_iter_space_t< Range >
 {
     return {0, std::ranges::ssize(range), grain};
 }
 } // namespace detail
 
-void parallelFor(SizedRandomAccessRange_c auto&&                                            range,
-                 std::invocable< std::ranges::range_reference_t< decltype(range) > > auto&& kernel)
+template < SizedRandomAccessRange_c Range, std::invocable< std::ranges::range_reference_t< Range > > Kernel >
+void parallelFor(Range&& range, Kernel&& kernel)
 {
     const auto iter_space = detail::makeBlockedIterSpace(range);
     using iter_space_t    = decltype(iter_space);
@@ -41,13 +42,14 @@ void parallelFor(SizedRandomAccessRange_c auto&&                                
 
 namespace detail
 {
-inline size_t largeGrainSizeHeuristic(std::ranges::sized_range auto&& range)
+template < std::ranges::sized_range Range >
+size_t largeGrainSizeHeuristic(Range&& range)
 {
     const size_t par = oneapi::tbb::global_control::active_value(oneapi::tbb::global_control::max_allowed_parallelism);
     const auto   par_fp           = static_cast< double >(par);
     const size_t range_size       = std::ranges::size(range);
     const auto   range_size_fp    = static_cast< double >(range_size);
-    const auto   range_bytes_fp   = range_size_fp * sizeof(std::ranges::range_value_t< decltype(range) >);
+    const auto   range_bytes_fp   = range_size_fp * sizeof(std::ranges::range_value_t< Range >);
     const auto   bytes_per_worker = range_bytes_fp / par_fp;
 
     constexpr double shift                 = 1'250'000.;
@@ -65,16 +67,18 @@ inline size_t largeGrainSizeHeuristic(std::ranges::sized_range auto&& range)
 template < std::input_iterator Iterator >
 class IteratorCache
 {
-    static size_t nSlotsHeuristic(std::ranges::sized_range auto&& range)
+    template < std::ranges::sized_range Range >
+    static size_t nSlotsHeuristic(Range&& range)
     {
         // Checkpoint every 4kB worth of elements
-        constexpr size_t range_elem_size = sizeof(std::ranges::range_value_t< decltype(range) >);
+        constexpr size_t range_elem_size = sizeof(std::ranges::range_value_t< Range >);
         const size_t     range_size      = std::ranges::size(range);
         return std::max(size_t{1}, std::bit_ceil(range_size * range_elem_size >> 12));
     }
 
 public:
-    IteratorCache(std::ranges::sized_range auto&& range)
+    template < std::ranges::sized_range Range >
+    explicit IteratorCache(Range&& range)
         : m_n_slots{nSlotsHeuristic(range)},
           m_range_size{std::ranges::size(range)},
           m_slot_size_log2{static_cast< size_t >(
@@ -128,11 +132,12 @@ private:
     std::unique_ptr< std::atomic< Iterator* >[] > m_iter_ptrs;
 };
 
-IteratorCache(std::ranges::sized_range auto&& range) -> IteratorCache< std::ranges::iterator_t< decltype(range) > >;
+template < std::ranges::sized_range Range >
+IteratorCache(Range&& range) -> IteratorCache< std::ranges::iterator_t< Range > >;
 } // namespace detail
 
-void parallelFor(std::ranges::sized_range auto&&                                            range,
-                 std::invocable< std::ranges::range_reference_t< decltype(range) > > auto&& kernel)
+template < std::ranges::sized_range Range, std::invocable< std::ranges::range_reference_t< Range > > Kernel >
+void parallelFor(Range&& range, Kernel&& kernel)
 {
     auto       iter_cache = detail::IteratorCache{range};
     const auto grain      = detail::largeGrainSizeHeuristic(range);
@@ -148,38 +153,31 @@ void parallelFor(std::ranges::sized_range auto&&                                
     });
 }
 
-void parallelTransform(SizedRandomAccessRange_c auto&& input_range, auto output_iter, auto&& kernel)
-    requires std::random_access_iterator< decltype(output_iter) > and
-             requires(decltype(*std::ranges::cbegin(input_range)) input_element) {
-                 *output_iter = std::invoke(kernel, input_element);
-             }
+template < SizedRandomAccessRange_c Range, std::random_access_iterator Iter, typename Kernel >
+void parallelTransform(Range&& input_range, Iter output_iter, Kernel&& kernel)
+    requires std::invocable< Kernel, range_const_reference_t< Range > > and
+             std::output_iterator< Iter, std::invoke_result_t< Kernel, range_const_reference_t< Range > > >
 {
-    const auto iter_space = detail::makeBlockedIterSpace(input_range);
-    using iter_space_t    = decltype(iter_space);
-    oneapi::tbb::parallel_for(iter_space,
-                              [&, range_begin = std::ranges::cbegin(input_range)](const iter_space_t& subrange) {
-                                  for (auto i : std::views::iota(subrange.begin(), subrange.end()))
-                                      output_iter[i] = std::invoke(kernel, range_begin[i]);
-                              });
+    const auto iter_space  = detail::makeBlockedIterSpace(input_range);
+    using iter_space_t     = decltype(iter_space);
+    const auto range_begin = std::ranges::cbegin(input_range);
+    oneapi::tbb::parallel_for(iter_space, [&](const iter_space_t& subrange) {
+        for (auto i : std::views::iota(subrange.begin(), subrange.end()))
+            output_iter[i] = std::invoke(kernel, range_begin[i]);
+    });
 }
 
-template < typename Reduction = std::plus<>, typename Transform = std::identity >
-auto parallelTransformReduce(SizedRandomAccessRange_c auto&& range,
-                             const auto&                     identity,
-                             Reduction&&                     reduction = {},
-                             Transform&&                     transform = {}) -> std::decay_t< decltype(identity) >
-    requires requires(std::add_lvalue_reference_t< std::add_const_t< std::ranges::range_value_t< decltype(range) > > >
-                          range_element) {
-        {
-            std::invoke(transform, range_element)
-        } -> std::convertible_to< decltype(identity) >;
-        {
-            std::invoke(reduction, identity, identity)
-        } -> std::convertible_to< decltype(identity) >;
-        {
-            std::transform_reduce(std::ranges::cbegin(range), std::ranges::cend(range), identity, reduction, transform)
-        } -> std::convertible_to< decltype(identity) >;
-    }
+template < typename Value, typename Zero, typename Reduction, typename Transform >
+concept TransformReducible_c =
+    std::is_invocable_r_v< Zero, Transform, Value > and std::is_invocable_r_v< Zero, Reduction, Zero, Zero >;
+
+template < SizedRandomAccessRange_c Range,
+           typename Zero,
+           typename Reduction = std::plus<>,
+           typename Transform = std::identity >
+auto parallelTransformReduce(Range&& range, Zero identity, Reduction reduction = {}, Transform transform = {})
+    -> std::decay_t< Zero >
+    requires TransformReducible_c< range_const_reference_t< Range >, Zero, Reduction, Transform >
 {
     const auto iter_space = detail::makeBlockedIterSpace(range);
     return oneapi::tbb::parallel_reduce(
@@ -194,6 +192,6 @@ auto parallelTransformReduce(SizedRandomAccessRange_c auto&& range,
                                          transform);
         },
         reduction);
-}
+} // namespace lstr::util::tbb
 } // namespace lstr::util::tbb
 #endif // L3STER_UTIL_TBBUTILS_HPP

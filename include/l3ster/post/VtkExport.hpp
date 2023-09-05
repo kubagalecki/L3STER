@@ -18,11 +18,13 @@ class PvtuExporter
 public:
     template < el_o_t... orders >
     explicit PvtuExporter(const mesh::MeshPartition< orders... >& mesh);
-    void exportSolution(std::string_view                                                file_name,
-                        const MpiComm&                                                  comm,
-                        const SolutionManager&                                          solution_manager,
-                        SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
-                        SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds);
+    template < SizedRangeOfConvertibleTo_c< std::string_view >          Names,
+               SizedRangeOfConvertibleTo_c< std::span< const size_t > > CompIndRange >
+    void exportSolution(std::string_view       file_name,
+                        const MpiComm&         comm,
+                        const SolutionManager& solution_manager,
+                        Names&&                field_names,
+                        CompIndRange&&         field_component_inds);
     template < el_o_t... orders >
     void        updateNodeCoords(const mesh::MeshPartition< orders... >& mesh);
     inline void flushWriteQueue();
@@ -45,24 +47,29 @@ private:
     template < el_o_t... orders >
     void initTopo(const mesh::MeshPartition< orders... >& mesh);
 
-    void enqueuePvtuFileWrite(std::string_view                                                file_name,
-                              const MpiComm&                                                  comm,
-                              SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
-                              SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds);
-    void enqueueVtuFileWrite(std::string_view                                                file_name,
-                             const MpiComm&                                                  comm,
-                             const SolutionManager&                                          solution_manager,
-                             SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
-                             SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds);
-    auto makeDataDescription(RangeOfConvertibleTo_c< std::string_view > auto&&               names,
-                             SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds,
+    template < SizedRangeOfConvertibleTo_c< std::string_view >          Names,
+               SizedRangeOfConvertibleTo_c< std::span< const size_t > > CompInds >
+    void enqueuePvtuFileWrite(std::string_view file_name,
+                              const MpiComm&   comm,
+                              Names&&          field_names,
+                              CompInds&&       field_component_inds);
+    template < SizedRangeOfConvertibleTo_c< std::string_view >          Names,
+               SizedRangeOfConvertibleTo_c< std::span< const size_t > > CompInds >
+    void enqueueVtuFileWrite(std::string_view       file_name,
+                             const MpiComm&         comm,
+                             const SolutionManager& solution_manager,
+                             Names&&                field_names,
+                             CompInds&&             field_component_inds);
+    template < SizedRangeOfConvertibleTo_c< std::string_view >          Names,
+               SizedRangeOfConvertibleTo_c< std::span< const size_t > > CompInds >
+    auto makeDataDescription(Names&&                                        field_names,
+                             CompInds&&                                     field_component_inds,
                              const std::vector< util::ArrayOwner< char > >& encoded_fields) const -> std::string;
 
-    MPI_Offset enqueueWrite(std::shared_ptr< MpiComm::FileHandle > file,
-                            MPI_Offset                             pos,
-                            ContiguousSizedRangeOf< char > auto&&  text)
-        requires std::ranges::borrowed_range< decltype(text) > or std::same_as< std::string&&, decltype(text) > or
-                 std::same_as< util::ArrayOwner< char >&&, decltype(text) >;
+    template < ContiguousSizedRangeOf< char > Text >
+    MPI_Offset enqueueWrite(std::shared_ptr< MpiComm::FileHandle > file, MPI_Offset pos, Text&& text)
+        requires std::ranges::borrowed_range< Text > or std::same_as< std::string, Text > or
+                 std::same_as< util::ArrayOwner< char >, Text >;
 
     size_t                    m_n_cells, m_n_nodes;
     SectionSizes              m_section_sizes;
@@ -88,9 +95,8 @@ inline constexpr std::string_view pvtu_preamble  = R"(<?xml version="1.0"?>
 inline constexpr std::string_view pvtu_postamble = R"(</PUnstructuredGrid>
 </VTKFile>)";
 
-void appendPvtuPointDataDef(std::string&                                      str,
-                            RangeOfConvertibleTo_c< std::string_view > auto&& field_names,
-                            RangeOfConvertibleTo_c< size_t > auto&&           n_field_components)
+template < RangeOfConvertibleTo_c< std::string_view > Names, RangeOfConvertibleTo_c< size_t > FieldComps >
+void appendPvtuPointDataDef(std::string& str, Names&& field_names, FieldComps&& n_field_components)
 {
     bool scal_present = false, vec_present = false; // Only 1 scalar and 1 vector can be present in the header
     auto name_it = std::ranges::begin(field_names);
@@ -141,17 +147,14 @@ inline void appendPvtuPieceDataDef(std::string& str, std::string_view name, int 
     }
 }
 
-std::string makePvtuFileContents(std::string_view                                  name,
-                                 int                                               n_ranks,
-                                 RangeOfConvertibleTo_c< std::string_view > auto&& field_names,
-                                 RangeOfConvertibleTo_c< size_t > auto&&           n_field_components)
+template < RangeOfConvertibleTo_c< std::string_view > Names, RangeOfConvertibleTo_c< size_t > FieldComps >
+std::string
+makePvtuFileContents(std::string_view name, int n_ranks, Names&& field_names, FieldComps&& n_field_components)
 {
     std::string retval;
     retval.reserve(1u << 12);
     retval += pvtu_preamble;
-    appendPvtuPointDataDef(retval,
-                           std::forward< decltype(field_names) >(field_names),
-                           std::forward< decltype(n_field_components) >(n_field_components));
+    appendPvtuPointDataDef(retval, std::forward< Names >(field_names), std::forward< FieldComps >(n_field_components));
     appendPvtuPieceDataDef(retval, name, n_ranks);
     retval += pvtu_postamble;
     return retval;
@@ -385,7 +388,7 @@ inline auto encodeFieldImpl(std::span< const val_t > field_vals) -> util::ArrayO
 {
     const auto n_vals_to_encode = field_vals.size() + 1;
     const auto bytes_encoded    = util::getBase64EncodingSize< val_t >(n_vals_to_encode);
-    auto       retval           = util::ArrayOwner< char >{bytes_encoded};
+    auto       retval           = util::ArrayOwner< char >(bytes_encoded);
     auto       output_it        = retval.begin();
 
     // Prepend the size of the results in bytes. We need to create a prefix of size divisible by 3
@@ -402,12 +405,13 @@ inline auto encodeFieldImpl(std::span< const val_t > field_vals) -> util::ArrayO
     return retval;
 }
 
-auto encodeFieldImpl(SizedRangeOfConvertibleTo_c< std::span< const val_t > > auto&& fields) -> util::ArrayOwner< char >
+template < SizedRangeOfConvertibleTo_c< std::span< const val_t > > Fields >
+auto encodeFieldImpl(Fields&& fields) -> util::ArrayOwner< char >
 {
     // Move the node value spans into an array for easy random access
-    const auto                                n_fields = std::ranges::size(fields);
-    std::array< std::span< const val_t >, 3 > field_vals_array;
-    std::ranges::copy(std::forward< decltype(fields) >(fields), begin(field_vals_array));
+    const auto n_fields         = std::ranges::size(fields);
+    auto       field_vals_array = std::array< std::span< const val_t >, 3 >{};
+    std::ranges::copy(std::forward< Fields >(fields), begin(field_vals_array));
     const auto field_values = std::span{begin(field_vals_array), n_fields};
 
     constexpr size_t n_fields_to_export = 3; // Always export as 3D, pad 2D results with zeros
@@ -415,7 +419,7 @@ auto encodeFieldImpl(SizedRangeOfConvertibleTo_c< std::span< const val_t > > aut
     const size_t     n_field_vals       = n_fields_to_export * n_nodes;
     const size_t     n_vals_to_encode   = n_field_vals + 1;
 
-    auto alloc_to_encode = util::ArrayOwner< val_t >{n_vals_to_encode};
+    auto alloc_to_encode = util::ArrayOwner< val_t >(n_vals_to_encode);
     alloc_to_encode[0]   = std::bit_cast< val_t >(n_field_vals * sizeof(val_t));
     const auto node_vals = std::span{alloc_to_encode}.subspan(1);
 
@@ -429,13 +433,13 @@ auto encodeFieldImpl(SizedRangeOfConvertibleTo_c< std::span< const val_t > > aut
     });
 
     const auto bytes_encoded = util::getBase64EncodingSize< val_t >(n_vals_to_encode);
-    auto       retval        = util::ArrayOwner< char >{bytes_encoded};
+    auto       retval        = util::ArrayOwner< char >(bytes_encoded);
     util::encodeAsBase64(std::as_const(alloc_to_encode), retval.begin());
     return retval;
 }
 
-auto encodeField(const SolutionManager& solution_manager, IndexRange_c auto&& component_inds)
-    -> util::ArrayOwner< char >
+template < IndexRange_c Inds >
+auto encodeField(const SolutionManager& solution_manager, Inds&& component_inds) -> util::ArrayOwner< char >
 {
     const auto n_fields = std::ranges::size(component_inds);
     util::throwingAssert(n_fields != 0 and n_fields <= 3,
@@ -447,27 +451,29 @@ auto encodeField(const SolutionManager& solution_manager, IndexRange_c auto&& co
         return encodeFieldImpl(field_vals);
     }
     else // Values of fields in the group should be interleaved before encoding
-        return encodeFieldImpl(std::forward< decltype(component_inds) >(component_inds) |
+        return encodeFieldImpl(std::forward< Inds >(component_inds) |
                                std::views::transform([&solution_manager](size_t component_index) {
                                    return solution_manager.getFieldView(component_index);
                                }));
 }
 
-auto encodeSolution(const SolutionManager&                                          solution_manager,
-                    SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_components)
+template < SizedRangeOfConvertibleTo_c< std::span< const size_t > > FieldComps >
+auto encodeSolution(const SolutionManager& solution_manager, FieldComps&& field_components)
     -> std::vector< util::ArrayOwner< char > >
 {
-    auto   retval         = std::vector< util::ArrayOwner< char > >(std::ranges::size(field_components));
-    auto&& grouping_range = std::forward< decltype(field_components) >(field_components) | std::views::common;
+    auto retval         = std::vector< util::ArrayOwner< char > >(std::ranges::size(field_components));
+    auto grouping_range = std::forward< FieldComps >(field_components) | std::views::common;
     util::tbb::parallelTransform(grouping_range, begin(retval), [&](std::span< const size_t > component_inds) {
         return post::vtk::encodeField(solution_manager, component_inds);
     });
     return retval;
 }
 
-auto makeNumFieldComponentsView(SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds)
+template < SizedRangeOfConvertibleTo_c< std::span< const size_t > > CompInds >
+auto makeNumFieldComponentsView(CompInds&& field_component_inds)
 {
-    return field_component_inds | std::views::transform([](auto cmps) -> size_t { return cmps.size() == 1 ? 1 : 3; });
+    return std::forward< CompInds >(field_component_inds) |
+           std::views::transform([](auto cmps) -> size_t { return cmps.size() == 1 ? 1 : 3; });
 }
 
 inline auto makeEncodedFieldSizeView(const std::vector< util::ArrayOwner< char > >& encoded_fields)
@@ -504,12 +510,13 @@ PvtuExporter::PvtuExporter(const mesh::MeshPartition< orders... >& mesh) : m_n_n
     updateNodeCoords(mesh);
     initTopo(mesh);
 }
-
-void PvtuExporter::exportSolution(std::string_view                                                file_name,
-                                  const MpiComm&                                                  comm,
-                                  const SolutionManager&                                          solution_manager,
-                                  SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
-                                  SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds)
+template < SizedRangeOfConvertibleTo_c< std::string_view >          Names,
+           SizedRangeOfConvertibleTo_c< std::span< const size_t > > CompIndRange >
+void PvtuExporter::exportSolution(std::string_view       file_name,
+                                  const MpiComm&         comm,
+                                  const SolutionManager& solution_manager,
+                                  Names&&                field_names,
+                                  CompIndRange&&         field_component_inds)
 {
     L3STER_PROFILE_FUNCTION;
     util::throwingAssert(std::ranges::size(field_names) == std::ranges::size(field_component_inds),
@@ -521,8 +528,8 @@ void PvtuExporter::exportSolution(std::string_view                              
     enqueueVtuFileWrite(file_name,
                         comm,
                         solution_manager,
-                        std::forward< decltype(field_names) >(field_names),
-                        std::forward< decltype(field_component_inds) >(field_component_inds));
+                        std::forward< Names >(field_names),
+                        std::forward< CompIndRange >(field_component_inds));
 }
 
 template < el_o_t... orders >
@@ -545,29 +552,32 @@ void PvtuExporter::initTopo(const mesh::MeshPartition< orders... >& mesh)
     m_encoded_topo                                                = std::move(data);
 }
 
-void PvtuExporter::enqueuePvtuFileWrite(
-    std::string_view                                                file_name,
-    const MpiComm&                                                  comm,
-    SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
-    SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds)
+template < SizedRangeOfConvertibleTo_c< std::string_view >          Names,
+           SizedRangeOfConvertibleTo_c< std::span< const size_t > > CompInds >
+void PvtuExporter::enqueuePvtuFileWrite(std::string_view file_name,
+                                        const MpiComm&   comm,
+                                        Names&&          field_names,
+                                        CompInds&&       field_component_inds)
 {
-    auto&& n_field_components_view = post::vtk::makeNumFieldComponentsView(field_component_inds);
-    auto   pvtu_contents =
+    auto&& n_field_components_view =
+        post::vtk::makeNumFieldComponentsView(std::forward< CompInds >(field_component_inds));
+    auto pvtu_contents =
         post::vtk::makePvtuFileContents(file_name,
                                         comm.getSize(),
-                                        std::forward< decltype(field_names) >(field_names),
+                                        std::forward< Names >(field_names),
                                         std::forward< decltype(n_field_components_view) >(n_field_components_view));
     const auto pvtu_name = std::filesystem::path(file_name).replace_extension("pvtu").string();
     auto       pvtu_file = post::vtk::openFileForExport(pvtu_name);
     enqueueWrite(std::move(pvtu_file), 0, std::move(pvtu_contents));
 }
 
-void PvtuExporter::enqueueVtuFileWrite(
-    std::string_view                                                file_name,
-    const MpiComm&                                                  comm,
-    const SolutionManager&                                          solution_manager,
-    SizedRangeOfConvertibleTo_c< std::string_view > auto&&          field_names,
-    SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds)
+template < SizedRangeOfConvertibleTo_c< std::string_view >          Names,
+           SizedRangeOfConvertibleTo_c< std::span< const size_t > > CompInds >
+void PvtuExporter::enqueueVtuFileWrite(std::string_view       file_name,
+                                       const MpiComm&         comm,
+                                       const SolutionManager& solution_manager,
+                                       Names&&                field_names,
+                                       CompInds&&             field_component_inds)
 {
     const auto file_name_vtu_ext = std::filesystem::path{file_name}.replace_extension("vtu").string();
     const auto vtu_file_handle   = post::vtk::openVtuFile(file_name_vtu_ext, comm);
@@ -576,7 +586,7 @@ void PvtuExporter::enqueueVtuFileWrite(
     };
 
     auto encoded_fields = post::vtk::encodeSolution(solution_manager, field_component_inds);
-    enqueue_write(makeDataDescription(field_names, field_component_inds, encoded_fields));
+    enqueue_write(makeDataDescription(std::forward< Names >(field_names), field_component_inds, encoded_fields));
     enqueue_write(m_encoded_coords);
     enqueue_write(m_encoded_topo);
     for (auto& enc_fld : encoded_fields)
@@ -584,10 +594,12 @@ void PvtuExporter::enqueueVtuFileWrite(
     enqueue_write(post::vtk::vtu_postamble);
 }
 
-auto PvtuExporter::makeDataDescription(
-    RangeOfConvertibleTo_c< std::string_view > auto&&               names,
-    SizedRangeOfConvertibleTo_c< std::span< const size_t > > auto&& field_component_inds,
-    const std::vector< util::ArrayOwner< char > >&                  encoded_fields) const -> std::string
+template < SizedRangeOfConvertibleTo_c< std::string_view >          Names,
+           SizedRangeOfConvertibleTo_c< std::span< const size_t > > CompInds >
+auto PvtuExporter::makeDataDescription(Names&&                                        field_names,
+                                       CompInds&&                                     field_component_inds,
+                                       const std::vector< util::ArrayOwner< char > >& encoded_fields) const
+    -> std::string
 {
     auto&& n_field_components  = post::vtk::makeNumFieldComponentsView(field_component_inds);
     auto&& encoded_field_sizes = post::vtk::makeEncodedFieldSizeView(encoded_fields);
@@ -632,7 +644,7 @@ auto PvtuExporter::makeDataDescription(
         const auto first_scal     = std::ranges::find(n_field_components, 1);
         const auto first_scal_ind = std::distance(std::ranges::begin(n_field_components), first_scal);
         retval += " Scalars=\"";
-        retval += *std::next(std::ranges::begin(names), first_scal_ind);
+        retval += *std::next(std::ranges::begin(field_names), first_scal_ind);
         retval += "\"";
     }
     if (std::ranges::any_of(n_field_components, [](auto sz) { return sz > 1; }))
@@ -640,14 +652,14 @@ auto PvtuExporter::makeDataDescription(
         const auto first_vec     = std::ranges::find_if(n_field_components, [](auto sz) { return sz > 1; });
         const auto first_vec_ind = std::distance(std::ranges::begin(n_field_components), first_vec);
         retval += " Vectors=\"";
-        retval += *std::next(std::ranges::begin(names), first_vec_ind);
+        retval += *std::next(std::ranges::begin(field_names), first_vec_ind);
         retval += "\"";
     }
     retval += ">\n";
 
     auto sz_it    = std::ranges::begin(encoded_field_sizes);
     auto n_cmp_it = std::ranges::begin(n_field_components);
-    for (auto&& name : names)
+    for (std::string_view name : std::forward< Names >(field_names))
         append_data_array("Float64", name, *n_cmp_it++, *sz_it++);
 
     retval += "</PointData>\n";
@@ -659,22 +671,21 @@ auto PvtuExporter::makeDataDescription(
     return retval;
 }
 
-MPI_Offset PvtuExporter::enqueueWrite(std::shared_ptr< MpiComm::FileHandle > file,
-                                      MPI_Offset                             pos,
-                                      ContiguousSizedRangeOf< char > auto&&  text)
-    requires std::ranges::borrowed_range< decltype(text) > or std::same_as< std::string&&, decltype(text) > or
-             std::same_as< util::ArrayOwner< char >&&, decltype(text) >
+template < ContiguousSizedRangeOf< char > Text >
+MPI_Offset PvtuExporter::enqueueWrite(std::shared_ptr< MpiComm::FileHandle > file, MPI_Offset pos, Text&& text)
+    requires std::ranges::borrowed_range< Text > or std::same_as< std::string, Text > or
+             std::same_as< util::ArrayOwner< char >, Text >
 {
     const MPI_Offset write_length = std::ranges::ssize(text);
-    if constexpr (std::ranges::borrowed_range< decltype(text) >)
+    if constexpr (std::ranges::borrowed_range< Text >)
     {
-        auto request = file->writeAtAsync(std::forward< decltype(text) >(text), pos);
+        auto request = file->writeAtAsync(std::forward< Text >(text), pos);
         m_write_queue.emplace_back(std::move(file), std::monostate{}, std::move(request));
     }
     else
     {
         auto request = file->writeAtAsync(text, pos);
-        m_write_queue.emplace_back(std::move(file), std::forward< decltype(text) >(text), std::move(request));
+        m_write_queue.emplace_back(std::move(file), std::forward< Text >(text), std::move(request));
     }
     return write_length;
 }

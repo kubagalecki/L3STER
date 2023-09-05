@@ -546,14 +546,17 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
 
 TEST_CASE("Boundary integration", "[mapping]")
 {
-    constexpr auto  BT        = basis::BasisType::Lagrange;
-    constexpr auto  QT        = quad::QuadratureType::GaussLegendre;
-    constexpr q_o_t QO        = 10;
-    constexpr auto  integrand = [](const auto&, const auto&, const auto&, const auto&) noexcept {
-        return Eigen::Vector< val_t, 1 >(1.); // Compute boundary area/length
-    };
+    constexpr auto  BT = basis::BasisType::Lagrange;
+    constexpr auto  QT = quad::QuadratureType::GaussLegendre;
+    constexpr q_o_t QO = 10;
+
     const auto check_side_area =
         [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element, el_side_t side, val_t expected_area) {
+            constexpr auto params    = KernelParams{.dimension = Element< ET, EO >::native_dim, .n_equations = 1};
+            constexpr auto integrand = wrapResidualBoundaryKernel< params >([](const auto&, auto& out) {
+                out[0] = 1.; // Compute boundary area/length
+            });
+
             const auto el_view    = BoundaryElementView{&element, side};
             const auto basis_vals = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(side);
             const auto node_vals  = util::eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, 0 >{};

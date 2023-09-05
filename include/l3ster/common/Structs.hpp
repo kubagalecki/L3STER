@@ -7,10 +7,11 @@
 namespace lstr
 {
 template < dim_t DIM >
-    requires(DIM <= 3)
 class Point
 {
 public:
+    static_assert(DIM <= 3);
+
     using coords_array_t = Eigen::Vector< val_t, DIM >;
 
     Point() = default;
@@ -56,6 +57,11 @@ public:
 
     operator coords_array_t() const noexcept { return coords; }; // NOLINT implicit conversion intended
 
+    friend bool operator==(const Point< DIM >& p1, const Point< DIM >& p2)
+    {
+        return static_cast< Point< DIM >::coords_array_t >(p1) == static_cast< Point< DIM >::coords_array_t >(p2);
+    }
+
 private:
     coords_array_t coords;
 };
@@ -65,12 +71,6 @@ Point(const std::array< val_t, DIM >&) -> Point< DIM >;
 
 template < std::same_as< val_t >... T >
 Point(T...) -> Point< sizeof...(T) >;
-
-template < dim_t DIM >
-bool operator==(const Point< DIM >& p1, const Point< DIM >& p2)
-{
-    return static_cast< Point< DIM >::coords_array_t >(p1) == static_cast< Point< DIM >::coords_array_t >(p2);
-}
 
 struct SpaceTimePoint
 {

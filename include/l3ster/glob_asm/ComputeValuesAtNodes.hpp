@@ -25,7 +25,7 @@ template < el_o_t... orders,
            size_t        num_maps,
            size_t        n_fields >
 auto initValsAndParents(const mesh::MeshPartition< orders... >&                       mesh,
-                        mesh::DomainIdRange_c auto&&                                  domain_ids,
+                        const util::ArrayOwner< d_id_t >&                             domain_ids,
                         const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& dof_map,
                         const std::array< dofind_t, n_dofs >&                         dof_inds,
                         const SolutionManager::FieldValueGetter< n_fields >&,
@@ -45,7 +45,7 @@ auto initValsAndParents(const mesh::MeshPartition< orders... >&                 
                 }
             }
         };
-        mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
+        mesh.visit(process_element, domain_ids, std::execution::par);
         return retval;
     }
     else
@@ -84,7 +84,7 @@ auto initValsAndParents(const mesh::BoundaryView< orders... >&                  
 
 template < el_o_t... orders, size_t max_dofs_per_node, std::integral dofind_t, size_t n_dofs, size_t num_maps >
 void computeValuesAtNodes(const mesh::MeshPartition< orders... >&                       mesh,
-                          mesh::DomainIdRange_c auto&&                                  domain_ids,
+                          const util::ArrayOwner< d_id_t >&                             domain_ids,
                           const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& dof_map,
                           const std::array< dofind_t, n_dofs >&                         dof_inds,
                           std::span< const val_t, n_dofs >                              values_in,
@@ -100,7 +100,7 @@ void computeValuesAtNodes(const mesh::MeshPartition< orders... >&               
                                   std::views::filter([&](auto node) { return not mesh.isGhostNode(node); }),
                               process_node);
     };
-    mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
+    mesh.visit(process_element, domain_ids, std::execution::par);
 }
 
 template < typename Kernel,
@@ -112,7 +112,7 @@ template < typename Kernel,
            size_t        n_fields >
 void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&                 kernel,
                           const mesh::MeshPartition< orders... >&                       mesh,
-                          mesh::DomainIdRange_c auto&&                                  domain_ids,
+                          const util::ArrayOwner< d_id_t >&                             domain_ids,
                           const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& dof_map,
                           const std::array< dofind_t, params.n_equations >&             dof_inds,
                           const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
@@ -163,7 +163,7 @@ void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&         
                 process_node);
         }
     };
-    mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
+    mesh.visit(process_element, domain_ids, std::execution::par);
 }
 
 template < typename Kernel,

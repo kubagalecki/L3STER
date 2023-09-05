@@ -17,8 +17,8 @@ class CrsGraph
 public:
     CrsGraph() = default;
     template < std::ranges::range R >
-        requires std::convertible_to< std::ranges::range_value_t< R >, std::size_t >
-    CrsGraph(R&& adj_sizes);
+    explicit CrsGraph(R&& adj_sizes)
+        requires std::convertible_to< std::ranges::range_value_t< R >, std::size_t >;
 
     auto operator()(std::size_t vertex_ind) noexcept -> std::span< VertexType >;
     auto operator()(std::size_t vertex_ind) const noexcept -> std::span< const VertexType >;
@@ -26,7 +26,8 @@ public:
     auto getNEntries() const noexcept -> std::size_t { return m_adjacent.size(); }
 
 private:
-    auto initAdjOffsets(auto&& adj_sizes) -> ArrayOwner< std::size_t >;
+    template < typename R >
+    static auto initAdjOffsets(R&& adj_sizes) -> ArrayOwner< std::size_t >;
 
     ArrayOwner< std::size_t > m_adj_offsets;
     ArrayOwner< VertexType >  m_adjacent;
@@ -47,11 +48,12 @@ auto CrsGraph< VertexType >::operator()(std::size_t vertex_ind) const noexcept -
 }
 
 template < std::integral VertexType >
-auto CrsGraph< VertexType >::initAdjOffsets(auto&& adj_sizes) -> ArrayOwner< std::size_t >
+template < typename R >
+auto CrsGraph< VertexType >::initAdjOffsets(R&& adj_sizes) -> ArrayOwner< std::size_t >
 {
     auto retval           = ArrayOwner< std::size_t >(std::ranges::distance(adj_sizes) + 1);
     retval[0]             = 0;
-    auto adj_sizes_common = std::views::common(std::forward< decltype(adj_sizes) >(adj_sizes));
+    auto adj_sizes_common = std::forward< R >(adj_sizes) | std::views::common;
     std::inclusive_scan(std::execution::par,
                         std::ranges::cbegin(adj_sizes_common),
                         std::ranges::cend(adj_sizes_common),
@@ -61,9 +63,9 @@ auto CrsGraph< VertexType >::initAdjOffsets(auto&& adj_sizes) -> ArrayOwner< std
 
 template < std::integral VertexType >
 template < std::ranges::range R >
-    requires std::convertible_to< std::ranges::range_value_t< R >, std::size_t >
 CrsGraph< VertexType >::CrsGraph(R&& adj_sizes)
-    : m_adj_offsets{initAdjOffsets(std::forward< decltype(adj_sizes) >(adj_sizes))}, m_adjacent{m_adj_offsets.back()}
+    requires std::convertible_to< std::ranges::range_value_t< R >, std::size_t >
+    : m_adj_offsets(initAdjOffsets(std::forward< R >(adj_sizes))), m_adjacent(m_adj_offsets.back())
 {}
 } // namespace lstr::util
 #endif // L3STER_UTIL_CRSGRAPH_HPP

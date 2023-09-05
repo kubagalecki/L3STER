@@ -81,10 +81,11 @@ auto getActiveNodes(const mesh::MeshPartition< orders... >& mesh,
     return retval;
 }
 
-auto packRangeWithSizeForComm(std::ranges::range auto&& range, size_t alloc_size)
-    -> util::ArrayOwner< std::ranges::range_value_t< decltype(range) > >
-    requires lstr::comm::MpiType_c< std::ranges::range_value_t< decltype(range) > > and
-             std::integral< std::ranges::range_value_t< decltype(range) > >
+template < std::ranges::range Range >
+auto packRangeWithSizeForComm(Range&& range, size_t alloc_size)
+    -> util::ArrayOwner< std::ranges::range_value_t< Range > >
+    requires lstr::comm::MpiType_c< std::ranges::range_value_t< Range > > and
+             std::integral< std::ranges::range_value_t< Range > >
 {
     using range_value_t             = std::ranges::range_value_t< decltype(range) >;
     const size_t range_size         = std::ranges::distance(range);
@@ -200,12 +201,13 @@ template < CondensationPolicy >
 class NodeCondensationMap
 {
 public:
-    NodeCondensationMap(RangeOfConvertibleTo_c< n_id_t > auto&& nodes_to_condense, std::vector< n_id_t > condensed_ids)
+    template < RangeOfConvertibleTo_c< n_id_t > NodeRange >
+    NodeCondensationMap(NodeRange&& nodes_to_condense, std::vector< n_id_t > condensed_ids)
         : m_condensed_ids{std::move(condensed_ids)}
     {
         m_forward_map.reserve(m_condensed_ids.size());
         m_inverse_map.reserve(m_condensed_ids.size());
-        for (size_t i = 0; n_id_t uncond_node : nodes_to_condense)
+        for (size_t i = 0; n_id_t uncond_node : std::forward< NodeRange >(nodes_to_condense))
         {
             const auto condensed_id = m_condensed_ids[i++];
             m_forward_map.emplace(uncond_node, condensed_id);

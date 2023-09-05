@@ -33,29 +33,32 @@ auto subview1D(const Kokkos::View< T*, Args... >& v, size_t offset, size_t count
 }
 
 template < typename T, typename... Args >
-Teuchos::RCP< T > makeTeuchosRCP(Args&&... args)
+auto makeTeuchosRCP(Args&&... args) -> Teuchos::RCP< T >
     requires std::constructible_from< T, Args... >
 {
     return Teuchos::rcp(new T{std::forward< Args >(args)...});
 }
 
 inline auto getLocalRowView(const tpetra_crsgraph_t& graph, local_dof_t row)
+    -> tpetra_crsgraph_t::local_inds_host_view_type
 {
-    tpetra_crsgraph_t::local_inds_host_view_type retval;
+    auto retval = tpetra_crsgraph_t::local_inds_host_view_type{};
     graph.getLocalRowView(row, retval);
     return retval;
 }
 
 inline auto getLocalRowView(const tpetra_crsmatrix_t& matrix, local_dof_t row)
 {
-    std::pair< tpetra_crsmatrix_t::local_inds_host_view_type, tpetra_crsmatrix_t::values_host_view_type > retval;
+    using local_inds_t = tpetra_crsmatrix_t::local_inds_host_view_type;
+    using host_vals_t  = tpetra_crsmatrix_t::values_host_view_type;
+    auto retval        = std::pair< local_inds_t, host_vals_t >{};
     matrix.getLocalRowView(row, retval.first, retval.second);
     return retval;
 }
 
-auto getSubgraph(const Teuchos::RCP< const tpetra_crsgraph_t >& full_graph,
-                 std::predicate< global_dof_t > auto&&          is_row,
-                 std::predicate< global_dof_t > auto&&          is_col)
+template < std::predicate< global_dof_t > RowPred, std::predicate< global_dof_t > ColPred >
+auto getSubgraph(const Teuchos::RCP< const tpetra_crsgraph_t >& full_graph, RowPred&& is_row, ColPred&& is_col)
+    -> Teuchos::RCP< tpetra_crsgraph_t >
 {
     const auto full_num_rows   = full_graph->getLocalNumRows();
     const auto full_row_map    = full_graph->getRowMap();
@@ -66,7 +69,7 @@ auto getSubgraph(const Teuchos::RCP< const tpetra_crsgraph_t >& full_graph,
         full_graph->getGlobalRowCopy(global_row, row_cols, row_size);
         return std::span{row_cols.data(), row_size};
     };
-    const auto foreach_row = [&](std::invocable< local_dof_t, global_dof_t > auto&& fun) {
+    const auto foreach_row = [&]< std::invocable< local_dof_t, global_dof_t > F >(F&& fun) {
         const auto signed_num_rows = static_cast< local_dof_t >(full_num_rows);
         for (local_dof_t local_row = 0; local_row < signed_num_rows; ++local_row)
         {
@@ -86,7 +89,7 @@ auto getSubgraph(const Teuchos::RCP< const tpetra_crsgraph_t >& full_graph,
     });
     subgraph_row_sizes_dv.sync_device();
 
-    auto subgraph = makeTeuchosRCP< tpetra_crsgraph_t >(full_row_map, subgraph_row_sizes_dv);
+    auto retval = makeTeuchosRCP< tpetra_crsgraph_t >(full_row_map, subgraph_row_sizes_dv);
     foreach_row([&](local_dof_t local_row, global_dof_t global_row) {
         if (subgraph_row_sizes[local_row] == 0)
             return;
@@ -94,10 +97,10 @@ auto getSubgraph(const Teuchos::RCP< const tpetra_crsgraph_t >& full_graph,
         const auto subcols_end =
             std::ranges::remove_if(row_cols, [&](global_dof_t dof) { return not is_col(dof); }).begin();
         const Teuchos::ArrayView subcols{row_cols.data(), std::distance(row_cols.begin(), subcols_end)};
-        subgraph->insertGlobalIndices(global_row, subcols);
+        retval->insertGlobalIndices(global_row, subcols);
     });
-    subgraph->fillComplete();
-    return subgraph;
+    retval->fillComplete();
+    return retval;
 }
 } // namespace lstr::util
 #endif // L3STER_UTILS_TRILINOSUTILS_HPP

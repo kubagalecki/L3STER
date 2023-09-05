@@ -34,7 +34,8 @@ public:
     operator hwloc_bitmap_t() { return m_bitmap.get(); }
     operator hwloc_const_bitmap_t() const { return m_bitmap.get(); }
 
-    void forEachSetIndex(std::invocable< unsigned int > auto&& body) const
+    template < std::invocable< unsigned int > Body >
+    void forEachSetIndex(Body&& body) const
     {
         unsigned int i{};
         hwloc_bitmap_foreach_begin(i, m_bitmap.get())

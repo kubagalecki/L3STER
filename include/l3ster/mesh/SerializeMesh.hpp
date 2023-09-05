@@ -106,7 +106,7 @@ struct SerializedPartition
     SerializedPartition() = default;
     template < el_o_t... orders >
     explicit SerializedPartition(const mesh::MeshPartition< orders... >& part)
-        : m_nodes{part.m_nodes}, m_n_owned_nodes{part.m_n_owned_nodes}
+        : m_nodes{copy(part.m_nodes)}, m_n_owned_nodes{part.m_n_owned_nodes}
     {
         for (const auto& [id, dom] : part.m_domains)
             m_domains.emplace(id, dom);
@@ -120,7 +120,7 @@ struct SerializedPartition
     }
 
     std::map< d_id_t, SerializedDomain > m_domains;
-    std::vector< n_id_t >                m_nodes;
+    util::ArrayOwner< n_id_t >           m_nodes;
     size_t                               m_n_owned_nodes{};
 };
 } // namespace lstr::mesh

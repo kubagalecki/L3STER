@@ -88,12 +88,8 @@ int main(int argc, char* argv[])
     const auto field_names     = std::array{"C1"sv, "Cpi"sv, "vel"sv};
     const auto field_comp_inds = std::array< std::span< const size_t >, 3 >{
         std::span{std::addressof(scalar_inds[0]), 1}, std::span{std::addressof(scalar_inds[1]), 1}, vec_inds};
-    if (comm.getRank() == 0)
-    {
-        [[maybe_unused]] auto _ = system("mkdir -p 2D");
-    }
     comm.barrier();
-    exporter.exportSolution("2D/results", comm, solution_manager, field_names, field_comp_inds);
+    exporter.exportSolution("results", comm, solution_manager, field_names, field_comp_inds);
 
     // TODO: Programatically check whether the data was exported correctly. For the time being, check manually...
 }

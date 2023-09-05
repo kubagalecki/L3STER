@@ -46,9 +46,10 @@ template < bool is_const, ElementType ET, el_o_t EO >
 using cond_const_elref_t = std::conditional_t< is_const, const Element< ET, EO >&, Element< ET, EO >& >;
 
 template < el_o_t... orders >
-    requires(sizeof...(orders) > 0)
 class ElementDeductionHelper
 {
+    static_assert(sizeof...(orders) > 0);
+
 public:
     template < template < ElementType, el_o_t > typename Condition >
     static constexpr bool assert_all_elements =
@@ -71,8 +72,11 @@ private:
     struct InvokeReturnHelper
     {
         template < ElementType ET, el_o_t EO >
-        struct Helper : std::is_invocable_r< R, F, cond_const_elref_t< is_const, ET, EO >, Args... >
-        {};
+        struct Helper
+        {
+            using element_t             = cond_const_elref_t< is_const, ET, EO >;
+            static constexpr bool value = ReturnInvocable_c< F, R, element_t, Args... >;
+        };
         static constexpr bool value = assert_all_elements< Helper >;
     };
     template < typename F, typename... Args >
@@ -87,8 +91,11 @@ private:
     struct BoundaryInvokeReturnHelper
     {
         template < ElementType ET, el_o_t EO >
-        struct Helper : std::is_invocable_r< R, F, BoundaryElementView< ET, EO >, Args... >
-        {};
+        struct Helper
+        {
+            using bview_t               = BoundaryElementView< ET, EO >;
+            static constexpr bool value = ReturnInvocable_c< F, R, bview_t, Args... >;
+        };
         static constexpr bool value = assert_all_elements< Helper >;
     };
 

@@ -6,10 +6,9 @@
 
 namespace lstr::dofs
 {
-template < size_t n_fields >
-auto writeNodeDofs(RangeOfConvertibleTo_c< n_id_t > auto&&   sorted_nodes,
-                   const node_interval_vector_t< n_fields >& dof_intervals,
-                   std::weakly_incrementable auto            out_iter) -> decltype(out_iter)
+template < RangeOfConvertibleTo_c< n_id_t > NodeRange, size_t n_fields, std::weakly_incrementable Iter >
+auto writeNodeDofs(NodeRange&& sorted_nodes, const node_interval_vector_t< n_fields >& dof_intervals, Iter out_iter)
+    -> Iter
     requires requires(global_dof_t dof) { *out_iter++ = dof; }
 {
     const auto interval_dof_starts = computeIntervalStarts(dof_intervals);
@@ -25,29 +24,30 @@ auto writeNodeDofs(RangeOfConvertibleTo_c< n_id_t > auto&&   sorted_nodes,
     return out_iter;
 }
 
-template < size_t n_fields >
-auto getNodeDofs(RangeOfConvertibleTo_c< n_id_t > auto&&   sorted_nodes,
-                 const node_interval_vector_t< n_fields >& dof_intervals) -> std::vector< global_dof_t >
+template < RangeOfConvertibleTo_c< n_id_t > NodeRange, size_t n_fields >
+auto getNodeDofs(NodeRange&& sorted_nodes, const node_interval_vector_t< n_fields >& dof_intervals)
+    -> std::vector< global_dof_t >
 {
-    std::vector< global_dof_t > retval;
-    if constexpr (std::ranges::sized_range< decltype(sorted_nodes) >)
+    auto retval = std::vector< global_dof_t >{};
+    if constexpr (std::ranges::sized_range< NodeRange >)
         retval.reserve(std::ranges::size(sorted_nodes) * n_fields);
-    writeNodeDofs(std::forward< decltype(sorted_nodes) >(sorted_nodes), dof_intervals, std::back_inserter(retval));
+    writeNodeDofs(std::forward< NodeRange >(sorted_nodes), dof_intervals, std::back_inserter(retval));
     retval.shrink_to_fit();
     return retval;
 }
 
-inline Teuchos::RCP< const Teuchos::MpiComm< int > > makeTeuchosMpiComm(const MpiComm& comm)
+inline auto makeTeuchosMpiComm(const MpiComm& comm) -> Teuchos::RCP< const Teuchos::MpiComm< int > >
 {
     return util::makeTeuchosRCP< const Teuchos::MpiComm< int > >(comm.get());
 }
 
-inline Tpetra::global_size_t getInvalidSize()
+inline auto getInvalidSize() -> Tpetra::global_size_t
 {
     return Teuchos::OrdinalTraits< Tpetra::global_size_t >::invalid();
 }
 
-inline Teuchos::RCP< const tpetra_map_t > makeTpetraMap(std::span< const global_dof_t > dofs, const MpiComm& comm)
+inline auto makeTpetraMap(std::span< const global_dof_t > dofs, const MpiComm& comm)
+    -> Teuchos::RCP< const tpetra_map_t >
 {
     auto       teuchos_comm      = makeTeuchosMpiComm(comm);
     const auto compute_size      = getInvalidSize();
@@ -55,12 +55,11 @@ inline Teuchos::RCP< const tpetra_map_t > makeTpetraMap(std::span< const global_
     return util::makeTeuchosRCP< const tpetra_map_t >(compute_size, dofs_teuchos_view, 0, std::move(teuchos_comm));
 }
 
-template < size_t n_fields >
-Teuchos::RCP< const tpetra_map_t > makeTpetraMap(RangeOfConvertibleTo_c< n_id_t > auto&&   nodes,
-                                                 const node_interval_vector_t< n_fields >& dof_intervals,
-                                                 const MpiComm&                            comm)
+template < RangeOfConvertibleTo_c< n_id_t > Nodes, size_t n_fields >
+auto makeTpetraMap(Nodes&& nodes, const node_interval_vector_t< n_fields >& dof_intervals, const MpiComm& comm)
+    -> Teuchos::RCP< const tpetra_map_t >
 {
-    const auto dofs = getNodeDofs(std::forward< decltype(nodes) >(nodes), dof_intervals);
+    const auto dofs = getNodeDofs(std::forward< Nodes >(nodes), dof_intervals);
     return makeTpetraMap(dofs, comm);
 }
 } // namespace lstr::dofs

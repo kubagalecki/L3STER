@@ -81,7 +81,7 @@ void test()
         auto           mesh      = mesh::makeCubeMesh(node_dist);
         return convertMeshToOrder< 2 >(mesh);
     });
-    auto       full_mesh_copy = full_mesh;
+    auto       full_mesh_copy = copy(full_mesh);
     const auto my_partition   = distributeMesh(comm, std::move(full_mesh_copy), {1, 3});
 
     constexpr auto problem_def =

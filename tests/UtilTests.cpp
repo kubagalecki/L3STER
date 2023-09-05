@@ -170,6 +170,11 @@ TEMPLATE_TEST_CASE("Bitset (de-)serialization",
     }
 }
 
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wself-move"
+#endif
+
 TEST_CASE("MetisGraphWrapper", "[util]")
 {
     // Test data is a full graph of size n_nodes
@@ -195,15 +200,19 @@ TEST_CASE("MetisGraphWrapper", "[util]")
     auto test_obj3 = test_obj2;
 
     test_obj3 = test_obj2;
-    test_obj3 = test_obj3;
+    test_obj3 = test_obj3; // NOLINT
 
     auto test_obj4 = test_obj3;
     test_obj3      = std::move(test_obj4);
-    test_obj3      = std::move(test_obj3);
+    test_obj3      = std::move(test_obj3); // NOLINT
 
     CHECK(std::ranges::equal(test_obj2.getAdjncy(), test_obj3.getAdjncy()));
     CHECK(std::ranges::equal(test_obj2.getXadj(), test_obj3.getXadj()));
 }
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
 
 TEST_CASE("Consecutive reduce algo", "[util]")
 {

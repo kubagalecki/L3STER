@@ -61,6 +61,56 @@ endfunction()
 
 ###################################################################################################
 
+# --- check_package_version ---
+# CMake package version requirements are incomprehensible, so this is a simple hand-rolled utility
+# which compares the versions in lexicographical order, e.g., 1.1 >= 1.0 >= 0.9 >= 0.8.1 >= 0.8.1
+# No input validation is performed.
+
+function( check_package_version Name Required Provided )
+    string( COMPARE EQUAL ${Provided} "" ProvidedEmpty )
+    if ( ProvidedEmpty )
+        set( "${Name}_VERSION_OK" OFF PARENT_SCOPE )
+        return()
+    endif ()
+
+    string( REPLACE "." ";" RequiredParsed "${Required}" )
+    string( REPLACE "." ";" ProvidedParsed "${Provided}" )
+    while ( 1 )
+        list( LENGTH RequiredParsed ReqLen )
+        list( LENGTH ProvidedParsed ProvLen )
+        if (( ReqLen EQUAL 0 ) OR ( ProvLen EQUAL 0 ))
+            break()
+        endif ()
+        list( GET RequiredParsed 0 ReqFront )
+        list( GET ProvidedParsed 0 ProvFront )
+        if ( NOT ReqFront EQUAL ProvFront )
+            break()
+        endif ()
+        list( POP_BACK RequiredParsed )
+        list( POP_BACK ProvidedParsed )
+    endwhile ()
+
+    list( LENGTH RequiredParsed ReqLen )
+    list( LENGTH ProvidedParsed ProvLen )
+    if (( ReqLen EQUAL 0 ) OR ( ProvLen EQUAL 0 ))
+        if ( ProvLen GREATER_EQUAL ReqLen )
+            set( ${Name}_VERSION_OK ON PARENT_SCOPE )
+        else ()
+            set( ${Name}_VERSION_OK OFF PARENT_SCOPE )
+        endif ()
+    else ()
+        list( GET RequiredParsed 0 ReqFront )
+        list( GET ProvidedParsed 0 ProvFront )
+        if ( ProvFront GREATER_EQUAL ReqFront )
+            set( ${Name}_VERSION_OK ON PARENT_SCOPE )
+        else ()
+            set( ${Name}_VERSION_OK OFF PARENT_SCOPE )
+        endif ()
+    endif ()
+endfunction()
+
+###################################################################################################
+
 # ---  make_trilinos_target  ---
 # Convert variables exported by the `find_package(Trilinos)` call into a linkable CMake target
 #
@@ -98,7 +148,11 @@ function( define_trilinos_target Verbosity Version )
         list( APPEND CMAKE_MESSAGE_INDENT "  " )
     endif ()
 
-    find_package( Trilinos ${Version} REQUIRED )
+    find_package( Trilinos REQUIRED )
+    check_package_version( Trilinos "${Version}" "${Trilinos_VERSION}" )
+    if ( NOT Trilinos_VERSION_OK )
+        message( FATAL_ERROR "The provided version of Trilinos is less than the required version.\nProvided: ${Trilinos_VERSION}. Required: ${Version}" )
+    endif ()
 
     if ( NOT ${Trilinos_CXX_COMPILER} STREQUAL ${CMAKE_CXX_COMPILER} )
         message( WARNING " Detected different C++ compiler than the one Trilinos was built with.\n"

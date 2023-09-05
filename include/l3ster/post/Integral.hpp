@@ -8,168 +8,63 @@ namespace lstr
 {
 namespace post
 {
-template < typename T, dim_t dim, size_t n_fields >
-concept IntegralKernel_c = requires(T                                                int_kernel,
-                                    std::array< val_t, n_fields >                    node_vals,
-                                    std::array< std::array< val_t, n_fields >, dim > node_ders,
-                                    SpaceTimePoint                                   point) {
-    {
-        std::invoke(int_kernel, node_vals, node_ders, point)
-    } noexcept -> util::eigen::Vector_c;
-};
-
-template < typename T, dim_t dim, size_t n_fields >
-concept BoundaryIntegralKernel_c = requires(T                                                int_kernel,
-                                            std::array< val_t, n_fields >                    node_vals,
-                                            std::array< std::array< val_t, n_fields >, dim > node_ders,
-                                            SpaceTimePoint                                   point,
-                                            Eigen::Vector< val_t, dim >                      normal) {
-    {
-        std::invoke(int_kernel, node_vals, node_ders, point, normal)
-    } noexcept -> util::eigen::Vector_c;
-};
-
-template < typename IntKernel, dim_t dim, size_t n_fields >
-    requires IntegralKernel_c< IntKernel, dim, n_fields > or BoundaryIntegralKernel_c< IntKernel, dim, n_fields >
-struct integral_kernel_eval_result
-{};
-template < typename IntKernel, dim_t dim, size_t n_fields >
-    requires IntegralKernel_c< IntKernel, dim, n_fields >
-struct integral_kernel_eval_result< IntKernel, dim, n_fields >
-{
-    using type = std::invoke_result_t< IntKernel,
-                                       std::array< val_t, n_fields >,
-                                       std::array< std::array< val_t, n_fields >, dim >,
-                                       SpaceTimePoint >;
-};
-template < typename IntKernel, dim_t dim, size_t n_fields >
-    requires BoundaryIntegralKernel_c< IntKernel, dim, n_fields >
-struct integral_kernel_eval_result< IntKernel, dim, n_fields >
-{
-    using type = std::invoke_result_t< IntKernel,
-                                       std::array< val_t, n_fields >,
-                                       std::array< std::array< val_t, n_fields >, dim >,
-                                       SpaceTimePoint,
-                                       Eigen::Vector< val_t, dim > >;
-};
-template < typename IntKernel, dim_t dim, size_t n_fields >
-    requires IntegralKernel_c< IntKernel, dim, n_fields > or BoundaryIntegralKernel_c< IntKernel, dim, n_fields >
-using integral_kernel_eval_result_t = typename integral_kernel_eval_result< IntKernel, dim, n_fields >::type;
-template < typename IntKernel, dim_t dim, size_t n_fields >
-    requires IntegralKernel_c< IntKernel, dim, n_fields > or BoundaryIntegralKernel_c< IntKernel, dim, n_fields >
-inline constexpr auto deduce_n_integral_components =
-    integral_kernel_eval_result_t< IntKernel, dim, n_fields >::RowsAtCompileTime;
-template < typename IntKernel, size_t n_fields, el_o_t... orders >
-inline constexpr auto n_integral_components = std::invoke(
-    []< typename... TypeOrderPair >(util::TypePack< TypeOrderPair... >) {
-        constexpr auto invalid_nic = std::numeric_limits< int >::max();
-        constexpr auto deduce_nc   = []< mesh::ElementType ET, el_o_t EO >(util::ValuePack< ET, EO >) -> int {
-            constexpr auto dim = mesh::Element< ET, EO >::native_dim;
-            if constexpr (IntegralKernel_c< IntKernel, dim, n_fields > or
-                          BoundaryIntegralKernel_c< IntKernel, dim, n_fields >)
-                return deduce_n_integral_components< IntKernel, dim, n_fields >;
-            else
-                return invalid_nic;
-        };
-        constexpr auto int_comps_for_els = std::array< int, sizeof...(TypeOrderPair) >{deduce_nc(TypeOrderPair{})...};
-        constexpr auto is_valid_nic      = [](int nic) {
-            return nic != invalid_nic;
-        };
-        static_assert(std::ranges::find_if(int_comps_for_els, is_valid_nic) != end(int_comps_for_els));
-        constexpr auto n_int_comps = *std::ranges::find_if(int_comps_for_els, is_valid_nic);
-        static_assert(
-            std::ranges::all_of(int_comps_for_els, [](int nic) { return nic == n_int_comps or nic == invalid_nic; }));
-        return n_int_comps;
-    },
-    mesh::type_order_combinations< orders... >{});
-
-template < typename Kernel, size_t n_fields, el_o_t... orders >
-struct PotentiallyValidIntegralKernelDeductionHelper
-{
-    template < mesh::ElementType T, el_o_t O >
-    struct DeductionHelperDomain
-    {
-        static constexpr bool value = IntegralKernel_c< Kernel, mesh::Element< T, O >::native_dim, n_fields >;
-    };
-    static constexpr bool domain =
-        mesh::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperDomain >;
-
-    template < mesh::ElementType T, el_o_t O >
-    struct DeductionHelperBoundary
-    {
-        static constexpr bool value = BoundaryIntegralKernel_c< Kernel, mesh::Element< T, O >::native_dim, n_fields >;
-    };
-    static constexpr bool boundary =
-        mesh::ElementDeductionHelper< orders... >::template assert_any_element< DeductionHelperBoundary >;
-};
-template < typename Kernel, size_t n_fields, el_o_t... orders >
-concept PotentiallyValidIntegralKernel_c =
-    PotentiallyValidIntegralKernelDeductionHelper< Kernel, n_fields, orders... >::domain;
-template < typename Kernel, size_t n_fields, el_o_t... orders >
-concept PotentiallyValidBoundaryIntegralKernel_c =
-    PotentiallyValidIntegralKernelDeductionHelper< Kernel, n_fields, orders... >::boundary;
-
-template < mesh::ElementType ET, el_o_t EO, q_l_t QL, int n_fields >
+template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >
 auto evalElementIntegral(
-    auto&&                                                                                  kernel,
-    const mesh::Element< ET, EO >&                                                          element,
-    const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, n_fields >& node_vals,
-    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                  basis_at_qps,
-    val_t                                                                                   time)
-    requires IntegralKernel_c< decltype(kernel), mesh::Element< ET, EO >::native_dim, n_fields >
+    const ResidualDomainKernel< Kernel, params >&                                                  kernel,
+    const mesh::Element< ET, EO >&                                                                 element,
+    const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, params.n_fields >& node_vals,
+    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,
+    val_t time) -> KernelInterface< params >::Rhs
 {
     const auto jacobi_mat_generator = map::getNatJacobiMatGenerator(element);
-    using result_t = integral_kernel_eval_result_t< decltype(kernel), mesh::Element< ET, EO >::native_dim, n_fields >;
-    const auto compute_value_at_qp = [&](ptrdiff_t qp_ind, auto ref_coords) noexcept -> result_t {
+    const auto compute_value_at_qp  = [&](ptrdiff_t qp_ind, auto ref_coords) -> KernelInterface< params >::Rhs {
         const auto jacobi_mat    = jacobi_mat_generator(ref_coords);
         const auto phys_coords   = map::mapToPhysicalSpace(element, ref_coords);
         const auto field_vals    = glob_asm::computeFieldVals(basis_at_qps.basis.values[qp_ind], node_vals);
         const auto field_ders    = glob_asm::computeFieldDers(basis_at_qps.basis.derivatives[qp_ind], node_vals);
-        const auto kernel_result = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time});
+        const auto point         = SpaceTimePoint{phys_coords, time};
+        const auto kernel_input  = typename KernelInterface< params >::DomainInput{field_vals, field_ders, point};
+        const auto kernel_result = kernel(kernel_input);
         return jacobi_mat.determinant() * kernel_result;
     };
-    return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, result_t{result_t::Zero()});
+    return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, detail::initResidualKernelResult< params >());
 }
 
-template < mesh::ElementType ET, el_o_t EO, q_l_t QL, int n_fields >
+template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >
 auto evalElementBoundaryIntegral(
-    auto&&                                                                                  kernel,
-    const mesh::BoundaryElementView< ET, EO >&                                              el_view,
-    const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, n_fields >& node_vals,
-    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                  basis_at_qps,
-    val_t                                                                                   time)
-    requires BoundaryIntegralKernel_c< decltype(kernel), mesh::Element< ET, EO >::native_dim, n_fields >
+    const ResidualBoundaryKernel< Kernel, params >&                                                kernel,
+    const mesh::BoundaryElementView< ET, EO >&                                                     el_view,
+    const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, params.n_fields >& node_vals,
+    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,
+    val_t time) -> KernelInterface< params >::Rhs
 {
     const auto jacobi_mat_generator = map::getNatJacobiMatGenerator(*el_view);
-    using result_t = integral_kernel_eval_result_t< decltype(kernel), mesh::Element< ET, EO >::native_dim, n_fields >;
-    const auto compute_value_at_qp = [&](ptrdiff_t qp_ind, auto ref_coords) noexcept -> result_t {
-        const auto jacobi_mat  = jacobi_mat_generator(ref_coords);
-        const auto phys_coords = map::mapToPhysicalSpace(*el_view, ref_coords);
-        const auto normal      = map::computeBoundaryNormal(el_view, jacobi_mat);
-        const auto field_vals  = glob_asm::computeFieldVals(basis_at_qps.basis.values[qp_ind], node_vals);
-        const auto field_ders  = glob_asm::computeFieldDers(basis_at_qps.basis.derivatives[qp_ind], node_vals);
-        const auto ker_res     = std::invoke(kernel, field_vals, field_ders, SpaceTimePoint{phys_coords, time}, normal);
-        const auto bound_jac   = map::computeBoundaryIntegralJacobian(el_view, jacobi_mat);
+    const auto compute_value_at_qp  = [&](ptrdiff_t qp_ind, auto ref_coords) -> KernelInterface< params >::Rhs {
+        const auto jacobi_mat   = jacobi_mat_generator(ref_coords);
+        const auto phys_coords  = map::mapToPhysicalSpace(*el_view, ref_coords);
+        const auto normal       = map::computeBoundaryNormal(el_view, jacobi_mat);
+        const auto fld_vals     = glob_asm::computeFieldVals(basis_at_qps.basis.values[qp_ind], node_vals);
+        const auto fld_ders     = glob_asm::computeFieldDers(basis_at_qps.basis.derivatives[qp_ind], node_vals);
+        const auto point        = SpaceTimePoint{phys_coords, time};
+        const auto kernel_input = typename KernelInterface< params >::BoundaryInput{fld_vals, fld_ders, point, normal};
+        const auto ker_res      = kernel(kernel_input);
+        const auto bound_jac    = map::computeBoundaryIntegralJacobian(el_view, jacobi_mat);
         return bound_jac * ker_res;
     };
-    return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, result_t{result_t::Zero()});
+    return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, detail::initResidualKernelResult< params >());
 }
 
-template < el_o_t... orders, size_t n_fields, AssemblyOptions options >
-auto evalLocalIntegral(auto&&                                               kernel,
-                       const mesh::MeshPartition< orders... >&              mesh,
-                       mesh::DomainIdRange_c auto&&                         domain_ids,
-                       const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
+template < typename Kernel, KernelParams params, el_o_t... orders, AssemblyOptions options >
+auto evalLocalIntegral(const ResidualDomainKernel< Kernel, params >&               kernel,
+                       const mesh::MeshPartition< orders... >&                     mesh,
+                       const util::ArrayOwner< d_id_t >&                           domain_ids,
+                       const SolutionManager::FieldValueGetter< params.n_fields >& field_val_getter,
                        util::ConstexprValue< options >,
-                       val_t time)
-    requires PotentiallyValidIntegralKernel_c< decltype(kernel), n_fields, orders... >
+                       val_t time) -> KernelInterface< params >::Rhs
 {
-    constexpr auto n_components = n_integral_components< decltype(kernel), n_fields, orders... >;
-    using integral_t            = Eigen::Vector< val_t, n_components >;
-    const auto reduce_element =
-        [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) -> integral_t {
-        constexpr auto el_dim = mesh::Element< ET, EO >::native_dim;
-        if constexpr (IntegralKernel_c< decltype(kernel), el_dim, n_fields >)
+    const auto reduce_element = [&]< mesh::ElementType ET, el_o_t EO >(
+                                    const mesh::Element< ET, EO >& element) -> KernelInterface< params >::Rhs {
+        if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
         {
             constexpr auto BT         = options.basis_type;
             constexpr auto QT         = options.quad_type;
@@ -179,35 +74,23 @@ auto evalLocalIntegral(auto&&                                               kern
             return evalElementIntegral(kernel, element, field_vals, qbv, time);
         }
         else
-        {
-            std::cerr
-                << "Attempting to integrate over an element for which the integration kernel is invalid. Please check "
-                   "the kernel was defined correctly, and that you are integrating over the correct domain (e.g. that "
-                   "you're not trying to evaluate a 2D kernel in a 3D domain). The program will now terminate.\n";
-            std::terminate();
-        }
+            return {};
     };
-    return mesh.transformReduce(std::forward< decltype(domain_ids) >(domain_ids),
-                                integral_t{integral_t::Zero()},
-                                reduce_element,
-                                std::plus<>{},
-                                std::execution::par);
+    return mesh.transformReduce(
+        domain_ids, detail::initResidualKernelResult< params >(), reduce_element, std::plus{}, std::execution::par);
 }
 
-template < el_o_t... orders, size_t n_fields, AssemblyOptions options >
-auto evalLocalBoundaryIntegral(auto&&                                               kernel,
-                               const mesh::BoundaryView< orders... >&               boundary,
-                               const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
+template < typename Kernel, KernelParams params, el_o_t... orders, AssemblyOptions options >
+auto evalLocalBoundaryIntegral(const ResidualBoundaryKernel< Kernel, params >&             kernel,
+                               const mesh::BoundaryView< orders... >&                      boundary,
+                               const SolutionManager::FieldValueGetter< params.n_fields >& field_val_getter,
                                util::ConstexprValue< options >,
-                               val_t time)
-    requires PotentiallyValidBoundaryIntegralKernel_c< decltype(kernel), n_fields, orders... >
+                               val_t time) -> KernelInterface< params >::Rhs
 {
-    constexpr auto n_components = n_integral_components< decltype(kernel), n_fields, orders... >;
-    using integral_t            = Eigen::Vector< val_t, n_components >;
     const auto reduce_element =
-        [&]< mesh::ElementType ET, el_o_t EO >(const mesh::BoundaryElementView< ET, EO >& el_view) -> integral_t {
-        constexpr auto el_dim = mesh::Element< ET, EO >::native_dim;
-        if constexpr (BoundaryIntegralKernel_c< decltype(kernel), el_dim, n_fields >)
+        [&]< mesh::ElementType ET, el_o_t EO >(
+            const mesh::BoundaryElementView< ET, EO >& el_view) -> KernelInterface< params >::Rhs {
+        if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
         {
             constexpr auto BT         = options.basis_type;
             constexpr auto QT         = options.quad_type;
@@ -217,55 +100,41 @@ auto evalLocalBoundaryIntegral(auto&&                                           
             return evalElementBoundaryIntegral(kernel, el_view, field_vals, qbv, time);
         }
         else
-        {
-            std::cerr << "Attempting to integrate over an element boundary for which the integration kernel is "
-                         "invalid. Please check the kernel was defined correctly, and that you are integrating over "
-                         "the correct boundary (e.g. that you're not trying to evaluate a 2D kernel in a 3D domain). "
-                         "The program will now terminate.\n";
-            std::terminate();
-        }
+            return {};
     };
-    return boundary.reduce(integral_t{integral_t::Zero()}, reduce_element, std::plus<>{}, std::execution::par);
+    const auto zero = detail::initResidualKernelResult< params >();
+    return boundary.reduce(zero, reduce_element, std::plus{}, std::execution::par);
 }
 } // namespace post
 
-template < el_o_t... orders, size_t n_fields = 0, AssemblyOptions opts = {} >
-auto evalIntegral(const MpiComm&                                       comm,
-                  auto&&                                               kernel,
-                  const mesh::MeshPartition< orders... >&              mesh,
-                  mesh::DomainIdRange_c auto&&                         domain_ids,
-                  const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
-                  util::ConstexprValue< opts >                         opts_ctwrpr      = {},
-                  val_t                                                time             = 0.)
+template < typename Kernel, KernelParams params, el_o_t... orders, AssemblyOptions opts = {} >
+auto evalIntegral(const MpiComm&                                              comm,
+                  const ResidualDomainKernel< Kernel, params >&               kernel,
+                  const mesh::MeshPartition< orders... >&                     mesh,
+                  const util::ArrayOwner< d_id_t >&                           domain_ids,
+                  const SolutionManager::FieldValueGetter< params.n_fields >& field_val_getter = {},
+                  util::ConstexprValue< opts >                                opts_ctwrpr      = {},
+                  val_t                                                       time             = 0.)
 {
-    const util::eigen::Vector_c auto local_integral =
-        post::evalLocalIntegral(std::forward< decltype(kernel) >(kernel),
-                                mesh,
-                                std::forward< decltype(domain_ids) >(domain_ids),
-                                field_val_getter,
-                                opts_ctwrpr,
-                                time);
-    using integral_t = std::remove_const_t< decltype(local_integral) >;
-    integral_t global_integral;
-    comm.allReduce(
-        std::views::counted(local_integral.data(), integral_t::RowsAtCompileTime), global_integral.data(), MPI_SUM);
+    const auto local_integral  = post::evalLocalIntegral(kernel, mesh, domain_ids, field_val_getter, opts_ctwrpr, time);
+    auto       global_integral = detail::initResidualKernelResult< params >();
+    auto       comm_view       = std::views::counted(local_integral.data(), params.n_equations);
+    comm.allReduce(std::move(comm_view), global_integral.data(), MPI_SUM);
     return global_integral;
 }
 
-template < el_o_t... orders, size_t n_fields = 0, AssemblyOptions opts = {} >
-auto evalBoundaryIntegral(const MpiComm&                                       comm,
-                          auto&&                                               kernel,
-                          const mesh::BoundaryView< orders... >&               boundary,
-                          const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
-                          util::ConstexprValue< opts >                         opts_ctwrpr      = {},
-                          val_t                                                time             = 0.)
+template < typename Kernel, KernelParams params, el_o_t... orders, AssemblyOptions opts = {} >
+auto evalBoundaryIntegral(const MpiComm&                                              comm,
+                          const ResidualBoundaryKernel< Kernel, params >&             kernel,
+                          const mesh::BoundaryView< orders... >&                      boundary,
+                          const SolutionManager::FieldValueGetter< params.n_fields >& field_val_getter = {},
+                          util::ConstexprValue< opts >                                opts_ctwrpr      = {},
+                          val_t                                                       time             = 0.)
 {
-    const util::eigen::Vector_c auto local_integral = post::evalLocalBoundaryIntegral(
-        std::forward< decltype(kernel) >(kernel), boundary, field_val_getter, opts_ctwrpr, time);
-    using integral_t = std::remove_const_t< decltype(local_integral) >;
-    integral_t global_integral;
-    comm.allReduce(
-        std::views::counted(local_integral.data(), integral_t::RowsAtCompileTime), global_integral.data(), MPI_SUM);
+    const auto local_integral  = post::evalLocalBoundaryIntegral(kernel, boundary, field_val_getter, opts_ctwrpr, time);
+    auto       global_integral = detail::initResidualKernelResult< params >();
+    auto       comm_view       = std::views::counted(local_integral.data(), params.n_equations);
+    comm.allReduce(comm_view, global_integral.data(), MPI_SUM);
     return global_integral;
 }
 } // namespace lstr

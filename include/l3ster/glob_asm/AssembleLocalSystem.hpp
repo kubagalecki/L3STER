@@ -2,7 +2,7 @@
 #define L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP
 
 #include "l3ster/basisfun/ReferenceBasisAtQuadrature.hpp"
-#include "l3ster/common/Interface.hpp"
+#include "l3ster/common/KernelInterface.hpp"
 #include "l3ster/common/Structs.hpp"
 #include "l3ster/mapping/BoundaryIntegralJacobian.hpp"
 #include "l3ster/mapping/BoundaryNormal.hpp"

@@ -72,7 +72,8 @@ struct MpiBufView
     int          size;
 };
 
-auto parseMpiBuf(MpiBuf_c auto&& buf)
+template < MpiBuf_c Buffer >
+auto parseMpiBuf(Buffer&& buf)
 {
     return MpiBufView{MpiType< std::ranges::range_value_t< decltype(buf) > >::value(),
                       std::ranges::data(buf),
@@ -117,8 +118,10 @@ public:
         ~FileHandle() { closeIgnoreErr(); }
 
         inline void preallocate(MPI_Offset size) const;
-        auto        readAtAsync(comm::MpiBorrowedBuf_c auto&& data, MPI_Offset offset) const -> MpiComm::Request;
-        auto        writeAtAsync(comm::MpiBorrowedBuf_c auto&& data, MPI_Offset offset) const -> MpiComm::Request;
+        template < comm::MpiBorrowedBuf_c Data >
+        auto readAtAsync(Data&& data, MPI_Offset offset) const -> MpiComm::Request;
+        template < comm::MpiBorrowedBuf_c Data >
+        auto writeAtAsync(Data&& data, MPI_Offset offset) const -> MpiComm::Request;
 
     private:
         FileHandle() = default;
@@ -135,12 +138,16 @@ public:
     ~MpiComm() { freeOwnedComm(); }
 
     // send
-    void               send(comm::MpiBuf_c auto&& send_range, int dest, int tag = 0) const;
-    [[nodiscard]] auto sendAsync(comm::MpiBorrowedBuf_c auto&& data, int dest, int tag = 0) const -> Request;
+    template < comm::MpiBuf_c Data >
+    void send(Data&& send_range, int dest, int tag = 0) const;
+    template < comm::MpiBorrowedBuf_c Data >
+    [[nodiscard]] auto sendAsync(Data&& data, int dest, int tag = 0) const -> Request;
 
     // receive
-    void               receive(comm::MpiBuf_c auto&& recv_range, int src, int tag = 0) const;
-    [[nodiscard]] auto receiveAsync(comm::MpiBorrowedBuf_c auto&& data, int src, int tag = 0) const -> Request;
+    template < comm::MpiBuf_c Data >
+    void receive(Data&& recv_range, int src, int tag = 0) const;
+    template < comm::MpiBorrowedBuf_c Data >
+    [[nodiscard]] auto receiveAsync(Data&& data, int src, int tag = 0) const -> Request;
 
     // collectives
     void barrier() const { comm::handleMPIError(MPI_Barrier(m_comm), "MPI_Barrier failed"); }
@@ -163,11 +170,12 @@ public:
     [[nodiscard]] MPI_Comm   get() const { return m_comm; }
 
     // topology-related
-    [[nodiscard]] MpiComm distGraphCreate(ContiguousSizedRangeOf< int > auto&& sources,
-                                          ContiguousSizedRangeOf< int > auto&& degrees,
-                                          ContiguousSizedRangeOf< int > auto&& destinations,
-                                          ContiguousSizedRangeOf< int > auto&& weights,
-                                          bool                                 reorder) const;
+    template < ContiguousSizedRangeOf< int > Src,
+               ContiguousSizedRangeOf< int > Deg,
+               ContiguousSizedRangeOf< int > Dest,
+               ContiguousSizedRangeOf< int > Wgts >
+    [[nodiscard]] MpiComm
+    distGraphCreate(Src&& sources, Deg&& degrees, Dest&& destinations, Wgts&& weights, bool reorder) const;
 
     // misc
     inline FileHandle openFile(const char* file_name, int amode, MPI_Info info = MPI_INFO_NULL) const;
@@ -215,8 +223,8 @@ void MpiComm::FileHandle::preallocate(MPI_Offset size) const
     comm::handleMPIError(MPI_File_preallocate(m_file, size), "MPI_File_preallocate failed");
 }
 
-auto MpiComm::FileHandle::readAtAsync(comm::MpiBorrowedBuf_c auto&& read_range, MPI_Offset offset) const
-    -> MpiComm::Request
+template < comm::MpiBorrowedBuf_c Data >
+auto MpiComm::FileHandle::readAtAsync(Data&& read_range, MPI_Offset offset) const -> MpiComm::Request
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(read_range);
     MpiComm::Request request;
@@ -225,8 +233,8 @@ auto MpiComm::FileHandle::readAtAsync(comm::MpiBorrowedBuf_c auto&& read_range, 
     return request;
 }
 
-auto MpiComm::FileHandle::writeAtAsync(comm::MpiBorrowedBuf_c auto&& write_range, MPI_Offset offset) const
-    -> MpiComm::Request
+template < comm::MpiBorrowedBuf_c Data >
+auto MpiComm::FileHandle::writeAtAsync(Data&& write_range, MPI_Offset offset) const -> MpiComm::Request
 {
     const auto datatype = comm::MpiType< std::ranges::range_value_t< decltype(write_range) > >::value();
     auto       request  = MpiComm::Request{};
@@ -247,13 +255,15 @@ MpiComm::FileHandle MpiComm::openFile(const char* file_name, int amode, MPI_Info
     return fh;
 }
 
-void MpiComm::send(comm::MpiBuf_c auto&& send_range, int dest, int tag) const
+template < comm::MpiBuf_c Data >
+void MpiComm::send(Data&& send_range, int dest, int tag) const
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(send_range);
     comm::handleMPIError(MPI_Send(buf_begin, buf_size, datatype, dest, tag, m_comm), "MPI_Send failed");
 }
 
-auto MpiComm::sendAsync(comm::MpiBorrowedBuf_c auto&& data, int dest, int tag) const -> Request
+template < comm::MpiBorrowedBuf_c Data >
+auto MpiComm::sendAsync(Data&& data, int dest, int tag) const -> Request
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
     auto request                               = Request{};
@@ -262,14 +272,16 @@ auto MpiComm::sendAsync(comm::MpiBorrowedBuf_c auto&& data, int dest, int tag) c
     return request;
 }
 
-void MpiComm::receive(comm::MpiBuf_c auto&& recv_range, int source, int tag) const
+template < comm::MpiBuf_c Data >
+void MpiComm::receive(Data&& recv_range, int source, int tag) const
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(recv_range);
     comm::handleMPIError(MPI_Recv(buf_begin, buf_size, datatype, source, tag, m_comm, MPI_STATUS_IGNORE),
                          "MPI_Recv failed");
 }
 
-auto MpiComm::receiveAsync(comm::MpiBorrowedBuf_c auto&& data, int src, int tag) const -> Request
+template < comm::MpiBorrowedBuf_c Data >
+auto MpiComm::receiveAsync(Data&& data, int src, int tag) const -> Request
 
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
@@ -330,11 +342,11 @@ auto MpiComm::broadcastAsync(Data&& data, int root) const -> MpiComm::Request
     return request;
 }
 
-MpiComm MpiComm::distGraphCreate(ContiguousSizedRangeOf< int > auto&& sources,
-                                 ContiguousSizedRangeOf< int > auto&& degrees,
-                                 ContiguousSizedRangeOf< int > auto&& destinations,
-                                 ContiguousSizedRangeOf< int > auto&& weights,
-                                 bool                                 reorder) const
+template < ContiguousSizedRangeOf< int > Src,
+           ContiguousSizedRangeOf< int > Deg,
+           ContiguousSizedRangeOf< int > Dest,
+           ContiguousSizedRangeOf< int > Wgts >
+MpiComm MpiComm::distGraphCreate(Src&& sources, Deg&& degrees, Dest&& destinations, Wgts&& weights, bool reorder) const
 {
     auto retval = MpiComm{};
     comm::handleMPIError(MPI_Dist_graph_create(m_comm,

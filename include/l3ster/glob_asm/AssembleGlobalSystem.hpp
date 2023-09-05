@@ -27,8 +27,10 @@ struct AssemblyOptions
 
 namespace lstr::glob_asm
 {
-template < el_o_t... orders, mesh::DomainIdRange_c Ids >
-bool checkDomainDimension(const mesh::MeshPartition< orders... >& mesh, Ids&& ids, d_id_t dim)
+template < el_o_t... orders >
+bool checkDomainDimension(const mesh::MeshPartition< orders... >& mesh,
+                          const util::ArrayOwner< d_id_t >&       ids,
+                          d_id_t                                  dim)
 {
     const auto check_domain_dim = [&](d_id_t id) {
         try
@@ -41,7 +43,7 @@ bool checkDomainDimension(const mesh::MeshPartition< orders... >& mesh, Ids&& id
             return true;
         }
     };
-    return std::ranges::all_of(std::forward< Ids >(ids), check_domain_dim);
+    return std::ranges::all_of(ids, check_domain_dim);
 }
 
 template < el_o_t... orders >
@@ -59,7 +61,7 @@ template < typename Kernel,
            AssemblyOptions          asm_opts >
 void assembleGlobalSystem(const DomainKernel< Kernel, params >&                       kernel,
                           const mesh::MeshPartition< orders... >&                     mesh,
-                          mesh::DomainIdRange_c auto&&                                domain_ids,
+                          const util::ArrayOwner< d_id_t >&                           domain_ids,
                           const SolutionManager::FieldValueGetter< params.n_fields >& fval_getter,
                           tpetra_crsmatrix_t&                                         global_mat,
                           std::span< val_t >                                          global_rhs,
@@ -89,7 +91,7 @@ void assembleGlobalSystem(const DomainKernel< Kernel, params >&                 
     };
     const auto n_cores       = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNCores();
     const auto max_par_guard = util::MaxParallelismGuard{n_cores};
-    mesh.visit(process_element, std::forward< decltype(domain_ids) >(domain_ids), std::execution::par);
+    mesh.visit(process_element, domain_ids, std::execution::par);
 }
 
 template < typename Kernel,

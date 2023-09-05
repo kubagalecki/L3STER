@@ -93,12 +93,8 @@ int main(int argc, char* argv[])
                                          solution_manager,
                                          field_names,
                                          std::array{domain_field_inds, boundary_field_inds}));
-    if (comm.getRank() == 0)
-    {
-        [[maybe_unused]] auto _ = system("mkdir -p 3D");
-    }
     comm.barrier();
-    exporter.exportSolution("3D/results.nonsense_extension",
+    exporter.exportSolution("results.nonsense_extension",
                             comm,
                             solution_manager,
                             field_names,

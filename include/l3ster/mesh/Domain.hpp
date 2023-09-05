@@ -19,43 +19,17 @@
 
 namespace lstr::mesh
 {
-template < typename T >
-concept DomainIdRange_c = SizedRangeOfConvertibleTo_c< T, d_id_t >;
 template < typename F, el_o_t... orders >
-concept MutableElementVisitor_c = ElementDeductionHelper< orders... >::template invocable_on_const_elements< F >;
+concept MutableElementVisitor_c = ElementDeductionHelper< orders... >::template invocable_on_elements< F >;
 template < typename F, el_o_t... orders >
-concept ConstElementVisitor_c = ElementDeductionHelper< orders... >::template invocable_on_elements< F >;
+concept ConstElementVisitor_c = ElementDeductionHelper< orders... >::template invocable_on_const_elements< F >;
 template < typename F, el_o_t... orders >
 concept ElementPredicate_c =
     ElementDeductionHelper< orders... >::template invocable_on_const_elements_return< bool, F >;
-
-namespace detail
-{
-template < typename Transform, typename Zero, el_o_t... orders >
-struct TransformDeductionHelper
-{
-    template < ElementType ET, el_o_t EO >
-    struct AssertElement
-    {
-        static constexpr bool value = requires(Transform trans, const Element< ET, EO > element) {
-            {
-                std::invoke(trans, element)
-            } -> std::convertible_to< Zero >;
-        };
-    };
-    static constexpr bool value = ElementDeductionHelper< orders... >::template assert_all_elements< AssertElement >;
-};
-template < typename Zero, typename Transform, el_o_t... orders >
-concept ElementTransformToZero_c = TransformDeductionHelper< Transform, Zero, orders... >::value;
-} // namespace detail
-
 template < typename Zero, typename Transform, typename Reduction, el_o_t... orders >
 concept TransformReducible_c =
-    detail::ElementTransformToZero_c< Zero, Transform, orders... > and requires(Zero zero, Reduction red) {
-        {
-            std::invoke(red, zero, zero)
-        } -> std::convertible_to< Zero >;
-    };
+    ElementDeductionHelper< orders... >::template invocable_on_const_elements_return< Zero, Transform > and
+    ReductionFor_c< Reduction, Zero >;
 
 namespace detail
 {
@@ -127,7 +101,8 @@ public:
 
 private:
     // Deduce constness based on the elem vectors, helps with deduplication. Idea similar to C++23 "deducing this"
-    static void visitImpl(auto&& element_vectors, auto&& visitor, auto&& policy);
+    template < typename ElVecs, typename Visitor, typename Policy >
+    static void visitImpl(ElVecs&& element_vectors, Visitor&& visitor, Policy&& policy);
 
     element_vector_variant_vector_t m_element_vectors;
     dim_t                           m_dim = 0;
@@ -269,7 +244,8 @@ auto Domain< orders... >::find(el_id_t id) const -> const_find_result_t
 }
 
 template < el_o_t... orders >
-void Domain< orders... >::visitImpl(auto&& element_vectors, auto&& visitor, auto&& policy)
+template < typename ElVecs, typename Visitor, typename Policy >
+void Domain< orders... >::visitImpl(ElVecs&& element_vectors, Visitor&& visitor, Policy&& policy)
 {
     const auto visit_el_vec = [&](auto&& el_vec) {
         std::for_each(policy, el_vec.begin(), el_vec.end(), visitor);
@@ -277,7 +253,11 @@ void Domain< orders... >::visitImpl(auto&& element_vectors, auto&& visitor, auto
     const auto variant_dispatch = [&](auto&& variant) {
         std::visit(visit_el_vec, variant);
     };
-    std::for_each(policy, element_vectors.begin(), element_vectors.end(), variant_dispatch);
+    // std::for_each with sequential policy does not guarantee iteration order
+    if constexpr (std::same_as< std::remove_cvref_t< Policy >, std::execution::sequenced_policy >)
+        std::ranges::for_each(element_vectors, variant_dispatch);
+    else
+        std::for_each(policy, element_vectors.begin(), element_vectors.end(), variant_dispatch);
 }
 
 template < el_o_t... orders >

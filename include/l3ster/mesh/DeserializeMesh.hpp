@@ -62,24 +62,21 @@ auto deserializeDomain(const SerializedDomain& domain) -> mesh::Domain< orders..
     auto data_ptr = domain.element_data.data();
     auto id_ptr   = domain.element_ids.data();
 
-    size_t i = 0;
-    for (auto&& offset : domain.type_order_offsets)
+    for (size_t i = 0; auto offset : domain.type_order_offsets)
     {
-        auto& current_vec = elements.emplace_back(
-            initElementVectorVariant< orders... >(static_cast< mesh::ElementType >(domain.types[i]), domain.orders[i]));
-        std::visit(
-            [&]< mesh::ElementType T, el_o_t O >(std::vector< mesh::Element< T, O > >& v) {
-                v = deserializeElementVector< T, O >(node_ptr, data_ptr, id_ptr, offset);
-            },
-            current_vec);
+        const auto el_type = static_cast< mesh::ElementType >(domain.types[i]);
+        auto& current_vec  = elements.emplace_back(initElementVectorVariant< orders... >(el_type, domain.orders[i]));
+        const auto deserialize_vec = [&]< mesh::ElementType T, el_o_t O >(std::vector< mesh::Element< T, O > >& v) {
+            v = deserializeElementVector< T, O >(node_ptr, data_ptr, id_ptr, offset);
+        };
+        std::visit(deserialize_vec, current_vec);
         ++i;
     }
 
-    dim_t domain_dim = 0;
-    if (i > 0u)
-        std::visit([&]< mesh::ElementType T, el_o_t O >(
-                       const std::vector< mesh::Element< T, O > >&) { domain_dim = mesh::Element< T, O >::native_dim; },
-                   elements.front());
+    const auto get_dim = [&]< mesh::ElementType T, el_o_t O >(const std::vector< mesh::Element< T, O > >&) {
+        return mesh::Element< T, O >::native_dim;
+    };
+    const auto domain_dim = domain.type_order_offsets.size() > 0 ? std::visit(get_dim, elements.front()) : dim_t{0};
 
     return {std::move(elements), domain_dim};
 }
@@ -91,7 +88,7 @@ auto deserializePartition(const SerializedPartition& partition) -> mesh::MeshPar
     auto domain_map = typename mesh::MeshPartition< orders... >::domain_map_t{};
     for (const auto& [id, domain] : partition.m_domains)
         domain_map.emplace(id, detail::deserializeDomain< orders... >(domain));
-    return {std::move(domain_map), partition.m_nodes, partition.m_n_owned_nodes};
+    return {std::move(domain_map), copy(partition.m_nodes), partition.m_n_owned_nodes};
 }
 
 template < el_o_t... orders >

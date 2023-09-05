@@ -47,5 +47,8 @@ decltype(auto) toVector(V&& vector)
 {
     return std::forward< V >(vector);
 }
+
+template < std::ranges::range Range >
+using range_const_reference_t = std::add_lvalue_reference_t< std::add_const_t< std::ranges::range_value_t< Range > > >;
 } // namespace lstr::util
 #endif // L3STER_UTIL_RANGES_HPP

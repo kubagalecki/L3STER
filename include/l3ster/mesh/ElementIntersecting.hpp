@@ -78,7 +78,7 @@ consteval auto makeElementEdgeTable()
 template < ElementType T, el_o_t O >
 consteval auto getElementIndices()
 {
-    return std::make_tuple(util::makeIndexArray(std::integral_constant< el_locind_t, Element< T, O >::n_nodes >{}));
+    return std::make_tuple(util::makeIotaArray< el_locind_t, Element< T, O >::n_nodes >());
 }
 
 template < ElementType T, el_o_t O, dim_t DIM >

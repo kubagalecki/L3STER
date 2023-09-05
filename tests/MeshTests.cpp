@@ -185,10 +185,9 @@ TEST_CASE("Serial mesh partitioning", "[mesh]")
     REQUIRE_NOTHROW(partitionMesh(mesh, 1, {}));
     const auto partitions = partitionMesh(mesh, n_parts, {2, 3, 4, 5});
     REQUIRE(partitions.size() == n_parts);
-    REQUIRE(
-        std::transform_reduce(partitions.cbegin(), partitions.cend(), 0u, std::plus{}, [](const MeshPartition< 1 >& p) {
-            return p.getNElements();
-        }) == n_elements);
+    REQUIRE(std::transform_reduce(partitions.begin(), partitions.end(), 0u, std::plus{}, [](const auto& part) {
+                return part.getNElements();
+            }) == n_elements);
     CHECK(partitions.front().getNElements() == Approx(partitions.back().getNElements()).epsilon(.1));
     std::vector< n_id_t > intersects;
     std::ranges::set_intersection(
@@ -207,7 +206,7 @@ TEST_CASE("Boundary views in partitioned meshes", "[mesh]")
     constexpr auto n_parts          = 8u;
     constexpr auto node_dist        = std::array{0., 1., 2., 3., 4., 5., 6., 7., 8.};
     const auto     mesh             = makeCubeMesh(node_dist);
-    auto           partitions       = std::vector< MeshPartition< 1 > >{};
+    auto           partitions       = util::ArrayOwner< MeshPartition< 1 > >{};
     const auto     check_boundaries = [&] {
         for (auto&& part : partitions)
         {

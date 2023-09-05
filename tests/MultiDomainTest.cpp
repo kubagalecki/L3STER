@@ -40,12 +40,12 @@ void test()
         rhs[0]                 = set_value;
     });
 
-    const auto assemble_problem_in_dom = [&]< auto dom_ind >(util::ConstexprValue< dom_ind >) {
-        set_value = static_cast< double >(dom_ind + 1);
-        alg_sys->assembleDomainProblem(const_kernel,
-                                       std::views::single(domains[dom_ind]),
-                                       empty_field_val_getter,
-                                       util::ConstexprValue< std::array{size_t{dom_ind}} >{});
+    const auto assemble_problem_in_dom = [&]< int dom_ind >(util::ConstexprValue< dom_ind >) {
+        set_value                 = static_cast< double >(dom_ind + 1);
+        constexpr auto field_inds = std::array{size_t{dom_ind}};
+        constexpr auto dom_ids    = std::array{domains[dom_ind]};
+        alg_sys->assembleDomainProblem(
+            const_kernel, dom_ids, empty_field_val_getter, util::ConstexprValue< field_inds >{});
     };
 
     alg_sys->beginAssembly();

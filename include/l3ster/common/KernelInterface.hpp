@@ -58,6 +58,12 @@ auto initKernelResult() -> KernelInterface< params >::Result
     retval.rhs.setZero();
     return retval;
 }
+
+template < KernelParams params >
+auto initResidualKernelResult() -> KernelInterface< params >::Rhs
+{
+    return KernelInterface< params >::Rhs::Zero();
+}
 } // namespace detail
 
 template < typename K, KernelParams params >

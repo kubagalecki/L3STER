@@ -12,9 +12,10 @@ namespace lstr::bcs
 class DirichletBCAlgebraic
 {
 public:
+    template < SizedRangeOf_c< global_dof_t > Owned, SizedRangeOf_c< global_dof_t > Shared >
     DirichletBCAlgebraic(const Teuchos::RCP< const tpetra_crsgraph_t >& sparsity_graph,
-                         SizedRangeOf_c< global_dof_t > auto&&          owned_bc_dofs_sorted,
-                         SizedRangeOf_c< global_dof_t > auto&&          shared_bc_dofs_sorted);
+                         Owned&&                                        owned_bc_dofs_sorted,
+                         Shared&&                                       shared_bc_dofs_sorted);
 
     inline void apply(const tpetra_vector_t& bc_vals, tpetra_crsmatrix_t& matrix, tpetra_vector_t& rhs) const;
 
@@ -25,9 +26,10 @@ private:
     std::vector< local_dof_t >         m_owned_bc_dofs, m_bc_local_col_inds, m_bc_local_col_inds_offsets;
 };
 
+template < SizedRangeOf_c< global_dof_t > Owned, SizedRangeOf_c< global_dof_t > Shared >
 DirichletBCAlgebraic::DirichletBCAlgebraic(const Teuchos::RCP< const tpetra_crsgraph_t >& sparsity_graph,
-                                           SizedRangeOf_c< global_dof_t > auto&&          bc_rows,
-                                           SizedRangeOf_c< global_dof_t > auto&&          bc_cols)
+                                           Owned&&                                        bc_rows,
+                                           Shared&&                                       bc_cols)
 {
     const auto& row_map   = *sparsity_graph->getRowMap();
     const auto& col_map   = *sparsity_graph->getColMap();

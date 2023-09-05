@@ -39,10 +39,11 @@ public:
     [[nodiscard]] const auto& getDofMap() const { return m_node_dof_map; }
 
     [[nodiscard]] inline auto makeSolutionVector() const -> Teuchos::RCP< tpetra_femultivector_t >;
-    void                      updateSolution(const Teuchos::RCP< const tpetra_femultivector_t >& solution,
-                                             IndexRange_c auto&&                                 sol_inds,
-                                             SolutionManager&                                    sol_man,
-                                             IndexRange_c auto&&                                 sol_man_inds);
+    template < IndexRange_c SolInds, IndexRange_c SolManInds >
+    void updateSolution(const Teuchos::RCP< const tpetra_femultivector_t >& solution,
+                        SolInds&&                                           sol_inds,
+                        SolutionManager&                                    sol_man,
+                        SolManInds&&                                        sol_man_inds);
 
     inline void beginAssembly();
     inline void endAssembly();
@@ -53,7 +54,7 @@ public:
                size_t                   n_fields   = 0,
                AssemblyOptions          asm_opts   = AssemblyOptions{} >
     void assembleDomainProblem(const DomainKernel< Kernel, params >&                kernel,
-                               mesh::DomainIdRange_c auto&&                         domain_ids,
+                               const util::ArrayOwner< d_id_t >&                    domain_ids,
                                const SolutionManager::FieldValueGetter< n_fields >& fval_getter       = {},
                                util::ConstexprValue< field_inds >                   field_inds_ctwrpr = {},
                                util::ConstexprValue< asm_opts >                     assembly_options  = {},
@@ -64,7 +65,7 @@ public:
                size_t                   n_fields   = 0,
                AssemblyOptions          asm_opts   = AssemblyOptions{} >
     void assembleBoundaryProblem(const BoundaryKernel< Kernel, params >&              kernel,
-                                 const mesh::BoundaryView< orders... >&               boundary,
+                                 const util::ArrayOwner< d_id_t >&                    boundary_ids,
                                  const SolutionManager::FieldValueGetter< n_fields >& fval_getter       = {},
                                  util::ConstexprValue< field_inds >                   field_inds_ctwrpr = {},
                                  util::ConstexprValue< asm_opts >                     assembly_options  = {},
@@ -73,13 +74,13 @@ public:
     inline void applyDirichletBCs();
     template < typename Kernel, KernelParams params, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setDirichletBCValues(const ResidualDomainKernel< Kernel, params >&        kernel,
-                              mesh::DomainIdRange_c auto&&                         domain_ids,
+                              const util::ArrayOwner< d_id_t >&                    domain_ids,
                               const std::array< dofind_t, params.n_equations >&    dof_inds,
                               const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
                               val_t                                                time             = 0.);
     template < typename Kernel, KernelParams params, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setDirichletBCValues(const ResidualBoundaryKernel< Kernel, params >&      kernel,
-                              const mesh::BoundaryView< orders... >&               mesh,
+                              const util::ArrayOwner< d_id_t >&                    boundary_ids,
                               const std::array< dofind_t, params.n_equations >&    dof_inds,
                               const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
                               val_t                                                time             = 0.);
@@ -91,6 +92,8 @@ public:
 private:
     inline void setToZero();
 
+    inline auto getBoundaryView(const util::ArrayOwner< d_id_t >& ids) -> const mesh::BoundaryView< orders... >&;
+
     enum struct State
     {
         OpenForAssembly,
@@ -100,15 +103,16 @@ private:
                             std::string_view     err_msg,
                             std::source_location src_loc = std::source_location::current()) const;
 
-    std::shared_ptr< const mesh::MeshPartition< orders... > > m_mesh;
-    Teuchos::RCP< tpetra_fecrsmatrix_t >                      m_matrix;
-    Teuchos::RCP< tpetra_femultivector_t >                    m_rhs;
-    Teuchos::RCP< const tpetra_fecrsgraph_t >                 m_sparsity_graph;
-    std::optional< const bcs::DirichletBCAlgebraic >          m_dirichlet_bcs;
-    Teuchos::RCP< tpetra_multivector_t >                      m_dirichlet_values;
-    dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >           m_node_dof_map;
-    StaticCondensationManager< CP >                           m_condensation_manager;
-    State                                                     m_state;
+    std::shared_ptr< const mesh::MeshPartition< orders... > >               m_mesh;
+    std::map< util::ArrayOwner< d_id_t >, mesh::BoundaryView< orders... > > m_boundary_views;
+    Teuchos::RCP< tpetra_fecrsmatrix_t >                                    m_matrix;
+    Teuchos::RCP< tpetra_femultivector_t >                                  m_rhs;
+    Teuchos::RCP< const tpetra_fecrsgraph_t >                               m_sparsity_graph;
+    std::optional< const bcs::DirichletBCAlgebraic >                        m_dirichlet_bcs;
+    Teuchos::RCP< tpetra_multivector_t >                                    m_dirichlet_values;
+    dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >                         m_node_dof_map;
+    StaticCondensationManager< CP >                                         m_condensation_manager;
+    State                                                                   m_state;
 
     // Caching mechanism to enable the reuse of the system allocation. For example, an adjoint problem will have the
     // same structure as the primal problem. We can therefore reuse the assembly data structures from the primal.
@@ -133,6 +137,20 @@ private:
 };
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, el_o_t... orders >
+auto AlgebraicSystem< max_dofs_per_node, CP, orders... >::getBoundaryView(const util::ArrayOwner< d_id_t >& ids)
+    -> const mesh::BoundaryView< orders... >&
+{
+    const auto existing_it = m_boundary_views.find(ids);
+    if (existing_it != m_boundary_views.end())
+        return existing_it->second;
+    else
+    {
+        const auto [emplaced_it, _] = m_boundary_views.emplace(copy(ids), mesh::BoundaryView{*m_mesh, copy(ids)});
+        return emplaced_it->second;
+    }
+}
+
+template < size_t max_dofs_per_node, CondensationPolicy CP, el_o_t... orders >
 void AlgebraicSystem< max_dofs_per_node, CP, orders... >::solve(
     solvers::Solver_c auto& solver, const Teuchos::RCP< tpetra_femultivector_t >& solution) const
 {
@@ -144,11 +162,12 @@ void AlgebraicSystem< max_dofs_per_node, CP, orders... >::solve(
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, el_o_t... orders >
+template < IndexRange_c SolInds, IndexRange_c SolManInds >
 void AlgebraicSystem< max_dofs_per_node, CP, orders... >::updateSolution(
     const Teuchos::RCP< const tpetra_femultivector_t >& solution,
-    IndexRange_c auto&&                                 sol_inds,
+    SolInds&&                                           sol_inds,
     SolutionManager&                                    sol_man,
-    IndexRange_c auto&&                                 sol_man_inds)
+    SolManInds&&                                        sol_man_inds)
 {
     util::throwingAssert(std::ranges::distance(sol_man_inds) == std::ranges::distance(sol_inds),
                          "Source and destination indices length must match");
@@ -161,54 +180,46 @@ void AlgebraicSystem< max_dofs_per_node, CP, orders... >::updateSolution(
     m_condensation_manager.recoverSolution(*m_mesh,
                                            m_node_dof_map,
                                            util::asSpan(solution_view),
-                                           std::forward< decltype(sol_inds) >(sol_inds),
+                                           std::forward< SolInds >(sol_inds),
                                            sol_man,
-                                           std::forward< decltype(sol_man_inds) >(sol_man_inds));
+                                           std::forward< SolManInds >(sol_man_inds));
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, el_o_t... orders >
 template < typename Kernel, KernelParams params, std::integral dofind_t, size_t n_fields >
 void AlgebraicSystem< max_dofs_per_node, CP, orders... >::setDirichletBCValues(
     const ResidualDomainKernel< Kernel, params >&        kernel,
-    mesh::DomainIdRange_c auto&&                         domain_ids,
+    const util::ArrayOwner< d_id_t >&                    domain_ids,
     const std::array< dofind_t, params.n_equations >&    dof_inds,
     const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
     val_t                                                time)
 {
     util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
                          "The DOF indices are out of bounds for the problem");
+
     const auto vals_view =
         Kokkos::subview(m_dirichlet_values->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
-    computeValuesAtNodes(kernel,
-                         *m_mesh,
-                         std::forward< decltype(domain_ids) >(domain_ids),
-                         m_node_dof_map,
-                         dof_inds,
-                         std::forward< decltype(field_val_getter) >(field_val_getter),
-                         util::asSpan(vals_view),
-                         time);
+    computeValuesAtNodes(
+        kernel, *m_mesh, domain_ids, m_node_dof_map, dof_inds, field_val_getter, util::asSpan(vals_view), time);
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, el_o_t... orders >
 template < typename Kernel, KernelParams params, std::integral dofind_t, size_t n_fields >
 void AlgebraicSystem< max_dofs_per_node, CP, orders... >::setDirichletBCValues(
     const ResidualBoundaryKernel< Kernel, params >&      kernel,
-    const mesh::BoundaryView< orders... >&               boundary_view,
+    const util::ArrayOwner< d_id_t >&                    boundary_ids,
     const std::array< dofind_t, params.n_equations >&    dof_inds,
     const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
     val_t                                                time)
 {
     util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
                          "The DOF indices are out of bounds for the problem");
-    const auto vals_view =
+
+    const auto& boundary_view = getBoundaryView(boundary_ids);
+    const auto  vals_view =
         Kokkos::subview(m_dirichlet_values->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
-    computeValuesAtBoundaryNodes(kernel,
-                                 boundary_view,
-                                 m_node_dof_map,
-                                 dof_inds,
-                                 std::forward< decltype(field_val_getter) >(field_val_getter),
-                                 util::asSpan(vals_view),
-                                 time);
+    computeValuesAtBoundaryNodes(
+        kernel, boundary_view, m_node_dof_map, dof_inds, field_val_getter, util::asSpan(vals_view), time);
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, el_o_t... orders >
@@ -337,7 +348,7 @@ template < typename Kernel,
            AssemblyOptions          asm_opts >
 void AlgebraicSystem< max_dofs_per_node, CP, orders... >::assembleDomainProblem(
     const DomainKernel< Kernel, params >&                kernel,
-    mesh::DomainIdRange_c auto&&                         domain_ids,
+    const util::ArrayOwner< d_id_t >&                    domain_ids,
     const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
     util::ConstexprValue< field_inds >                   field_inds_ctwrpr,
     util::ConstexprValue< asm_opts >                     assembly_options,
@@ -346,10 +357,10 @@ void AlgebraicSystem< max_dofs_per_node, CP, orders... >::assembleDomainProblem(
     L3STER_PROFILE_FUNCTION;
     assertState(State::OpenForAssembly, "`assembleDomainProblem()` was called before `beginAssembly()`");
     const auto rhs_view = Kokkos::subview(m_rhs->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
-    assembleGlobalSystem(std::forward< decltype(kernel) >(kernel),
+    assembleGlobalSystem(kernel,
                          *m_mesh,
-                         std::forward< decltype(domain_ids) >(domain_ids),
-                         std::forward< decltype(fval_getter) >(fval_getter),
+                         domain_ids,
+                         fval_getter,
                          *m_matrix,
                          util::asSpan(rhs_view),
                          getDofMap(),
@@ -367,7 +378,7 @@ template < typename Kernel,
            AssemblyOptions          asm_opts >
 void AlgebraicSystem< max_dofs_per_node, CP, orders... >::assembleBoundaryProblem(
     const BoundaryKernel< Kernel, params >&              kernel,
-    const mesh::BoundaryView< orders... >&               boundary,
+    const util::ArrayOwner< d_id_t >&                    boundary_ids,
     const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
     util::ConstexprValue< field_inds >                   field_inds_ctwrpr,
     util::ConstexprValue< asm_opts >                     assembly_options,
@@ -375,10 +386,11 @@ void AlgebraicSystem< max_dofs_per_node, CP, orders... >::assembleBoundaryProble
 {
     L3STER_PROFILE_FUNCTION;
     assertState(State::OpenForAssembly, "`assembleBoundaryProblem()` was called before `beginAssembly()`");
-    const auto rhs_view = Kokkos::subview(m_rhs->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
-    assembleGlobalBoundarySystem(std::forward< decltype(kernel) >(kernel),
+    const auto& boundary = getBoundaryView(boundary_ids);
+    const auto  rhs_view = Kokkos::subview(m_rhs->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
+    assembleGlobalBoundarySystem(kernel,
                                  boundary,
-                                 std::forward< decltype(fval_getter) >(fval_getter),
+                                 fval_getter,
                                  *m_matrix,
                                  util::asSpan(rhs_view),
                                  getDofMap(),

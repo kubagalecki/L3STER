@@ -141,12 +141,27 @@ concept Mapping_c = requires(T f, Domain x) {
         f(x)
     } -> std::convertible_to< Range >;
 };
+template < typename G, typename V >
+concept GeneratorFor_c = std::is_invocable_r_v< V, G >;
 
 template < typename T, template < typename > typename Predicate >
 concept predicate_trait_specialized = requires {
     {
         Predicate< std::decay_t< T > >::value
     } -> std::convertible_to< bool >;
+};
+
+template < typename Fun, typename Ret, typename... Args >
+concept ReturnInvocable_c = std::invocable< Fun, Args... > and requires(Fun f, Args... args) {
+    {
+        std::invoke(f, args...)
+    } -> std::convertible_to< Ret >;
+};
+template < typename Reduction, typename Element >
+concept ReductionFor_c = requires(Reduction r, Element e) {
+    {
+        std::invoke(r, e, e)
+    } -> std::convertible_to< Element >;
 };
 
 // Execution policy concepts

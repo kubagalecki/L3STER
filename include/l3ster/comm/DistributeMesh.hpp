@@ -137,7 +137,7 @@ auto readAndConvertMesh(std::string_view mesh_file, mesh::MeshFormatTag< mesh_fo
 template < el_o_t... orders, ProblemDef problem_def = EmptyProblemDef{} >
 auto distributeMesh(const MpiComm&                      comm,
                     mesh::MeshPartition< orders... >&&  mesh,
-                    const std::vector< d_id_t >&        boundaries,
+                    const util::ArrayOwner< d_id_t >&   boundaries,
                     util::ConstexprValue< problem_def > probdef_ctwrpr = {})
     -> std::shared_ptr< mesh::MeshPartition< orders... > >
 {
@@ -148,7 +148,7 @@ auto distributeMesh(const MpiComm&                      comm,
     const auto node_throughputs = comm::gatherNodeThroughputs(comm);
     auto       mesh_parted      = comm.getRank() == 0
                                     ? partitionMesh(mesh, comm.getSize(), boundaries, node_throughputs, probdef_ctwrpr)
-                                    : std::vector< mesh::MeshPartition< orders... > >{};
+                                    : util::ArrayOwner< mesh::MeshPartition< orders... > >{};
     const auto permutation      = comm::computeDefaultRankPermutation(comm);
     // const auto permutation = detail::dist_mesh::computeOptimalRankPermutation(comm, mesh_parted, probdef_ctwrpr);
     if (comm.getRank() == 0)
@@ -173,18 +173,19 @@ auto distributeMesh(const MpiComm&                      comm,
             mesh::deserializePartition< orders... >(comm::receivePartition(comm, 0)));
 }
 
-template < el_o_t order, ProblemDef problem_def = EmptyProblemDef{} >
-auto generateAndDistributeMesh(const MpiComm&               comm,
-                               auto&&                       mesh_generator,
-                               const std::vector< d_id_t >& boundaries,
+template < el_o_t                                     order,
+           GeneratorFor_c< mesh::MeshPartition< 1 > > Generator,
+           ProblemDef                                 problem_def = EmptyProblemDef{} >
+auto generateAndDistributeMesh(const MpiComm&                    comm,
+                               Generator&&                       mesh_generator,
+                               const util::ArrayOwner< d_id_t >& boundaries,
                                util::ConstexprValue< order >                      = {},
                                util::ConstexprValue< problem_def > probdef_ctwrpr = {})
     -> std::shared_ptr< mesh::MeshPartition< order > >
-    requires std::is_invocable_r_v< mesh::MeshPartition< 1 >, decltype(mesh_generator) >
 {
     return distributeMesh(comm,
                           comm.getRank() == 0 ? std::invoke([&] {
-                              auto generated_mesh = std::invoke(mesh_generator);
+                              auto generated_mesh = std::invoke(std::forward< Generator >(mesh_generator));
                               if constexpr (order == 1)
                                   return generated_mesh;
                               else
@@ -199,7 +200,7 @@ template < el_o_t order, mesh::MeshFormat mesh_format, ProblemDef problem_def = 
 auto readAndDistributeMesh(const MpiComm&                     comm,
                            std::string_view                   mesh_file,
                            mesh::MeshFormatTag< mesh_format > format_tag,
-                           const std::vector< d_id_t >&       boundaries,
+                           const util::ArrayOwner< d_id_t >&  boundaries,
                            util::ConstexprValue< order >                      = {},
                            util::ConstexprValue< problem_def > probdef_ctwrpr = {})
     -> std::shared_ptr< mesh::MeshPartition< order > >

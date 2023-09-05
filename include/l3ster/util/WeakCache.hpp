@@ -15,8 +15,9 @@ class WeakCache
 public:
     [[nodiscard]] auto contains(const Key& key) const -> bool { return m_cache.find(key) != m_cache.end(); }
     inline auto        get(const Key& key) const -> std::shared_ptr< Value >;
-    auto               emplace(DecaysTo_c< Key > auto&& key, auto&&... args) -> std::shared_ptr< Value >
-        requires std::constructible_from< Value, decltype(args)... >;
+    template < DecaysTo_c< Key > K, typename... Args >
+    auto emplace(K&& key, Args&&... args) -> std::shared_ptr< Value >
+        requires std::constructible_from< Value, Args... >;
 
 private:
     std::unordered_map< Key, std::weak_ptr< Value >, Hash, Equal > m_cache;
@@ -31,14 +32,14 @@ auto WeakCache< Key, Value, Hash, Equal >::get(const Key& key) const -> std::sha
 }
 
 template < typename Key, typename Value, typename Hash, typename Equal >
-    requires Mapping_c< Hash, Key, size_t > and
-             std::predicate< Equal, Key, Key >
-             auto WeakCache< Key, Value, Hash, Equal >::emplace(DecaysTo_c< Key > auto&& key, auto&&... args)
-                 -> std::shared_ptr< Value >
-                 requires std::constructible_from< Value, decltype(args)... >
+    requires Mapping_c< Hash, Key, size_t > and std::predicate< Equal, Key, Key >
+                                            template < DecaysTo_c< Key > K, typename... Args >
+                                            auto WeakCache< Key, Value, Hash, Equal >::emplace(K&& key, Args&&... args)
+                                                -> std::shared_ptr< Value >
+                 requires std::constructible_from< Value, Args... >
 {
-    auto shared_ptr = std::make_shared< Value >(std::forward< decltype(args) >(args)...);
-    m_cache.insert_or_assign(std::forward< decltype(key) >(key), shared_ptr);
+    auto shared_ptr = std::make_shared< Value >(std::forward< Args >(args)...);
+    m_cache.insert_or_assign(std::forward< K >(key), shared_ptr);
     return shared_ptr;
 }
 } // namespace lstr::util

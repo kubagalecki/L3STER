@@ -85,28 +85,14 @@ constexpr auto makeTupleIf(T&&... arg)
     return std::tuple_cat(detail::tuplifyIf< TraitsPredicate >(std::forward< T >(arg))...);
 }
 
-constexpr void forEachTuple(auto&& t, auto&& f)
-    requires tuple_like< std::decay_t< decltype(t) > > and tuple_invocable< decltype(f), std::decay_t< decltype(t) > >
+template < typename Tup, typename F >
+constexpr void forEachTuple(Tup&& t, F&& f)
+    requires tuple_like< std::remove_cvref_t< Tup > > and tuple_invocable< F, std::remove_cvref_t< Tup > >
 {
-    std::invoke([&]< size_t... I >(std::index_sequence< I... >) { (std::invoke(f, std::get< I >(t)), ...); },
-                std::make_index_sequence< std::tuple_size_v< std::decay_t< decltype(t) > > >{});
-}
-
-template < std::unsigned_integral T >
-auto makeIndexVector(T n) -> std::vector< T >
-{
-    auto retval = std::vector< T >{};
-    retval.reserve(static_cast< size_t >(n));
-    std::ranges::copy(std::views::iota(T{0}, n), std::back_inserter(retval));
-    return retval;
-}
-
-template < std::unsigned_integral T, T N >
-constexpr auto makeIndexArray(std::integral_constant< T, N >) -> std::array< T, N >
-{
-    auto retval = std::array< T, N >{};
-    std::iota(begin(retval), end(retval), T{0});
-    return retval;
+    const auto visit_inds = [&]< size_t... I >(std::index_sequence< I... >) {
+        (std::invoke(f, std::get< I >(t)), ...);
+    };
+    std::invoke(visit_inds, std::make_index_sequence< std::tuple_size_v< std::remove_cvref_t< Tup > > >{});
 }
 
 template < std::copy_constructible T_a, std::integral T_filter, size_t N_a, size_t N_filter >

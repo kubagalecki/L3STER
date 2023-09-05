@@ -31,10 +31,9 @@ void test()
         {bot_boundary, top_boundary, left_boundary, right_boundary},
         {},
         probdef_ctwrpr);
-    constexpr auto adiabatic_bound_ids  = std::array{bot_boundary, top_boundary};
-    constexpr auto whole_bound_ids      = std::array{top_boundary, bot_boundary, left_boundary, right_boundary};
-    const auto     adiabatic_bound_view = BoundaryView{*mesh, adiabatic_bound_ids};
-    const auto     whole_bound_view     = BoundaryView{*mesh, whole_bound_ids};
+    constexpr auto adiabatic_bound_ids = std::array{bot_boundary, top_boundary};
+    constexpr auto whole_bound_ids     = std::array{top_boundary, bot_boundary, left_boundary, right_boundary};
+    const auto     whole_bound_view    = BoundaryView{*mesh, whole_bound_ids};
 
     auto alg_sys = makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr, dirichletdef_ctwrpr);
 
@@ -76,7 +75,7 @@ void test()
         alg_sys->assembleDomainProblem(diffusion_kernel2d, std::views::single(domain_id));
     };
     const auto assembleBoundaryProblem = [&] {
-        alg_sys->assembleBoundaryProblem(neumann_bc_kernel, adiabatic_bound_view);
+        alg_sys->assembleBoundaryProblem(neumann_bc_kernel, adiabatic_bound_ids);
     };
 
     // Check constraints on assembly state
@@ -91,8 +90,7 @@ void test()
     CHECK_THROWS(alg_sys->endAssembly());
 
     constexpr auto dirichlet_bound_ids = std::array{left_boundary, right_boundary};
-    const auto     dirbc_bound_view    = BoundaryView{*mesh, dirichlet_bound_ids};
-    alg_sys->setDirichletBCValues(dirichlet_bc_kernel, dirbc_bound_view, std::array{0});
+    alg_sys->setDirichletBCValues(dirichlet_bc_kernel, dirichlet_bound_ids, std::array{0});
     alg_sys->applyDirichletBCs();
 
     {
@@ -117,25 +115,21 @@ void test()
     }
 
     // Check results
-    constexpr auto compute_error =
-        [node_dist](const auto& vals, [[maybe_unused]] const auto& ders, const SpaceTimePoint& point) noexcept {
-            auto       error = Eigen::Matrix< val_t, 3, 1 >{};
-            const auto T     = vals[0];
-            const auto dT_dx = vals[1];
-            const auto dT_dy = vals[2];
-            error[0]         = T - point.space.x() / node_dist.back();
-            error[1]         = dT_dx - 1. / node_dist.back();
-            error[2]         = dT_dy;
-            return error;
-        };
-    constexpr auto compute_boundary_error =
-        [compute_error](const auto& vals, const auto& ders, const SpaceTimePoint& point, const auto&) noexcept {
-            return compute_error(vals, ders, point);
-        };
-    const auto fval_getter = solution_manager.makeFieldValueGetter(dof_inds);
+    constexpr auto params        = KernelParams{.dimension = 2, .n_equations = 3, .n_fields = 3};
+    constexpr auto compute_error = [node_dist](const auto& in, auto& error) {
+        const auto& point             = in.point;
+        const auto& vals              = in.field_vals;
+        const auto& [T, dT_dx, dT_dy] = vals;
+        error[0]                      = T - point.space.x() / node_dist.back();
+        error[1]                      = dT_dx - 1. / node_dist.back();
+        error[2]                      = dT_dy;
+    };
+    constexpr auto dom_error_kernel = wrapResidualDomainKernel< params >(compute_error);
+    constexpr auto bnd_error_kernel = wrapResidualBoundaryKernel< params >(compute_error);
+    const auto     fval_getter      = solution_manager.makeFieldValueGetter(dof_inds);
 
-    const auto error          = computeNormL2(comm, compute_error, *mesh, std::views::single(domain_id), fval_getter);
-    const auto boundary_error = computeBoundaryNormL2(comm, compute_boundary_error, whole_bound_view, fval_getter);
+    const auto error = computeNormL2(comm, dom_error_kernel, *mesh, std::views::single(domain_id), fval_getter);
+    const auto boundary_error = computeBoundaryNormL2(comm, bnd_error_kernel, whole_bound_view, fval_getter);
     if (comm.getRank() == 0 and error.norm() >= 1e-10)
     {
         std::stringstream error_msg;

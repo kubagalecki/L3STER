@@ -54,7 +54,7 @@ template < el_o_t... orders >
 auto makeDimToDomainMap(const MeshPartition< orders... >& mesh) -> std::map< dim_t, std::vector< d_id_t > >
 {
     auto retval = std::map< dim_t, std::vector< d_id_t > >{};
-    for (auto&& id : mesh.getDomainIds())
+    for (d_id_t id : mesh.getDomainIds())
     {
         const auto dom_dim = mesh.getDomainView(id).getDim();
         retval[dom_dim].push_back(id);
@@ -62,8 +62,10 @@ auto makeDimToDomainMap(const MeshPartition< orders... >& mesh) -> std::map< dim
     return retval;
 }
 
-template < el_o_t... orders, ElementType BET, el_o_t BEO, DomainIdRange_c Ids >
-auto findDomainElement(const MeshPartition< orders... >& mesh, const Element< BET, BEO >& bnd_el, Ids&& domain_ids)
+template < el_o_t... orders, ElementType BET, el_o_t BEO >
+auto findDomainElement(const MeshPartition< orders... >& mesh,
+                       const Element< BET, BEO >&        bnd_el,
+                       const util::ArrayOwner< d_id_t >& domain_ids)
     -> std::optional< std::pair< element_cptr_variant_t< orders... >, el_side_t > >
 {
     auto       retval              = std::optional< std::pair< element_cptr_variant_t< orders... >, el_side_t > >{};
@@ -84,7 +86,7 @@ auto findDomainElement(const MeshPartition< orders... >& mesh, const Element< BE
         else
             return false;
     };
-    mesh.find(match_domain_el, std::forward< Ids >(domain_ids), std::execution::par);
+    mesh.find(match_domain_el, domain_ids, std::execution::par);
     return retval;
 }
 

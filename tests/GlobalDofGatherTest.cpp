@@ -33,7 +33,7 @@ void test(CondensationPolicyTag< CP > = {})
         return mesh::convertMeshToOrder< mesh_order >(retval);
     })
                                                                  : mesh::MeshPartition< mesh_order >{};
-    auto                    mesh_full_copy = mesh_full;
+    auto                    mesh_full_copy = copy(mesh_full);
     const auto              mesh_parted    = distributeMesh(comm, std::move(mesh_full_copy), {}, problemdef_ctwrpr);
 
     const auto cond_map                = makeCondensationMap< CP >(comm, *mesh_parted, problemdef_ctwrpr);
