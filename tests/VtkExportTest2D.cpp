@@ -22,32 +22,30 @@ int main(int argc, char* argv[])
 
     const MpiComm comm{MPI_COMM_WORLD};
 
-    constexpr auto   node_distx = std::invoke([] {
+    constexpr auto node_distx = std::invoke([] {
         auto retval = std::array< double, 11 >{};
         for (size_t i = 0; i < retval.size(); ++i)
             retval[i] = -.5 + static_cast< double >(i) * 2.5 / (retval.size() - 1);
         return retval;
     });
-    constexpr auto   node_disty = std::invoke([] {
+    constexpr auto node_disty = std::invoke([] {
         auto retval = std::array< double, 15 >{};
         for (size_t i = 0; i < retval.size(); ++i)
             retval[i] = -.5 + static_cast< double >(i) * 2. / (retval.size() - 1);
         return retval;
     });
-    constexpr auto   mesh_order = 2;
-    constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
-    const auto       my_partition =
-        generateAndDistributeMesh< mesh_order >(comm,
-                                                [&] { return mesh::makeSquareMesh(node_distx, node_disty); },
-                                                {bot_boundary, top_boundary, left_boundary, right_boundary});
+    constexpr auto mesh_order = 2;
+    const auto     my_partition =
+        generateAndDistributeMesh< mesh_order >(comm, [&] { return mesh::makeSquareMesh(node_distx, node_disty); });
 
-    constexpr auto problem_def       = ProblemDef{defineDomain< 4 >(domain_id, 1, 3),
+    constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2;
+    constexpr auto   problem_def       = ProblemDef{defineDomain< 4 >(domain_id, 1, 3),
                                             defineDomain< 4 >(bot_boundary, 0, 2),
                                             defineDomain< 4 >(top_boundary, 0, 2)};
-    constexpr auto problemdef_ctwrpr = util::ConstexprValue< problem_def >{};
-    constexpr auto scalar_inds       = std::array< size_t, 2 >{0, 2};
-    constexpr auto vec_inds          = std::array< size_t, 2 >{1, 3};
-    constexpr auto all_field_inds    = util::makeIotaArray< size_t, problem_def.n_fields >();
+    constexpr auto   problemdef_ctwrpr = util::ConstexprValue< problem_def >{};
+    constexpr auto   scalar_inds       = std::array< size_t, 2 >{0, 2};
+    constexpr auto   vec_inds          = std::array< size_t, 2 >{1, 3};
+    constexpr auto   all_field_inds    = util::makeIotaArray< size_t, problem_def.n_fields >();
 
     const auto system_manager   = makeAlgebraicSystem(comm, my_partition, no_condensation_tag, problemdef_ctwrpr);
     auto       solution_manager = SolutionManager{*my_partition, problem_def.n_fields};

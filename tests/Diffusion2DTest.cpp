@@ -26,14 +26,9 @@ void test()
     constexpr auto node_dist  = std::array{0., 1., 2., 3., 4., 5., 6.};
     constexpr auto mesh_order = 2;
     const auto     mesh       = generateAndDistributeMesh< mesh_order >(
-        comm,
-        [&] { return makeSquareMesh(node_dist); },
-        {bot_boundary, top_boundary, left_boundary, right_boundary},
-        {},
-        probdef_ctwrpr);
+        comm, [&] { return makeSquareMesh(node_dist); }, {}, probdef_ctwrpr);
     constexpr auto adiabatic_bound_ids = std::array{bot_boundary, top_boundary};
-    constexpr auto whole_bound_ids     = std::array{top_boundary, bot_boundary, left_boundary, right_boundary};
-    const auto     whole_bound_view    = BoundaryView{*mesh, whole_bound_ids};
+    constexpr auto boundary_ids        = std::array{top_boundary, bot_boundary, left_boundary, right_boundary};
 
     auto alg_sys = makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr, dirichletdef_ctwrpr);
 
@@ -72,10 +67,10 @@ void test()
         [node_dist](const auto& in, auto& out) { out[0] = in.point.space.x() / node_dist.back(); });
 
     const auto assembleDomainProblem = [&] {
-        alg_sys->assembleDomainProblem(diffusion_kernel2d, std::views::single(domain_id));
+        alg_sys->assembleProblem(diffusion_kernel2d, std::views::single(domain_id));
     };
     const auto assembleBoundaryProblem = [&] {
-        alg_sys->assembleBoundaryProblem(neumann_bc_kernel, adiabatic_bound_ids);
+        alg_sys->assembleProblem(neumann_bc_kernel, adiabatic_bound_ids);
     };
 
     // Check constraints on assembly state
@@ -129,7 +124,7 @@ void test()
     const auto     fval_getter      = solution_manager.makeFieldValueGetter(dof_inds);
 
     const auto error = computeNormL2(comm, dom_error_kernel, *mesh, std::views::single(domain_id), fval_getter);
-    const auto boundary_error = computeBoundaryNormL2(comm, bnd_error_kernel, whole_bound_view, fval_getter);
+    const auto boundary_error = computeNormL2(comm, bnd_error_kernel, *mesh, boundary_ids, fval_getter);
     if (comm.getRank() == 0 and error.norm() >= 1e-10)
     {
         std::stringstream error_msg;

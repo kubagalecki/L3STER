@@ -16,7 +16,8 @@ using namespace lstr::mesh;
 
 TEST_CASE("2D mesh import", "[mesh]")
 {
-    auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag);
+    constexpr auto boundary_ids = util::makeIotaArray< d_id_t, 4 >(2);
+    auto           mesh         = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), boundary_ids, gmsh_tag);
 
     constexpr size_t expected_n_nodes = 121;
     size_t           max_node{};
@@ -32,47 +33,43 @@ TEST_CASE("2D mesh import", "[mesh]")
     REQUIRE(mesh.getGhostNodes().size() == 0);
 
     // BoundaryView
-    auto boundaries = std::vector< BoundaryView< 1 > >{};
-    boundaries.reserve(4);
-    for (d_id_t i = 2; i <= 5; ++i)
-        boundaries.emplace_back(mesh, std::views::single(i));
-    CHECK(boundaries[0].size() == 10);
-    CHECK(boundaries[1].size() == 10);
-    CHECK(boundaries[2].size() == 10);
-    CHECK(boundaries[3].size() == 10);
-    CHECK(BoundaryView{mesh, std::views::single(6)}.size() == 0);
+    for (auto bnd_id : boundary_ids)
+        CHECK(mesh.getBoundary(bnd_id).size() == 10);
+    CHECK_THROWS(mesh.getBoundary(boundary_ids.back() + 1));
+    CHECK(static_cast< size_t >(std::ranges::distance(mesh.getBoundaryIdsView())) == boundary_ids.size());
 }
 
 TEST_CASE("3D mesh import", "[mesh]")
 {
-    auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), gmsh_tag);
+    constexpr auto boundary_ids = util::makeIotaArray< d_id_t, 6 >(2);
+    auto           mesh         = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), boundary_ids, gmsh_tag);
 
     constexpr size_t expected_nvertices = 5885;
     constexpr size_t expected_nelements = 5664;
     CHECK(mesh.getNElements() == expected_nelements);
     CHECK(mesh.getOwnedNodes().size() == expected_nvertices);
 
-    for (d_id_t i = 2; i <= 7; ++i)
-        CHECK_NOTHROW(BoundaryView{mesh, std::views::single(i)});
-    CHECK(BoundaryView{mesh, std::views::single(42)}.size() == 0);
+    for (d_id_t id : boundary_ids)
+        CHECK_NOTHROW(mesh.getBoundary(id));
+    CHECK(static_cast< size_t >(std::ranges::distance(mesh.getBoundaryIdsView())) == boundary_ids.size());
 }
 
 TEST_CASE("Unsupported mesh formats, mesh I/O error handling", "[mesh]")
 {
-    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii2.msh), gmsh_tag));
-    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_bin2.msh), gmsh_tag));
-    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_bin4.msh), gmsh_tag));
-    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(nonexistent.msh), gmsh_tag));
-    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_triangle_mesh.msh), gmsh_tag));
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii2.msh), {}, gmsh_tag));
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_bin2.msh), {}, gmsh_tag));
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_bin4.msh), {}, gmsh_tag));
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(nonexistent.msh), {}, gmsh_tag));
+    CHECK_THROWS(readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_triangle_mesh.msh), {}, gmsh_tag));
 }
 
 TEST_CASE("Incorrect domain dim handling", "[mesh]")
 {
     auto domain = Domain< 1 >{};
 
-    auto                    data = ElementData< ElementType::Line, 1 >{{Point{0., 0., 0.}, Point{0., 0., 0.}}};
-    std::array< n_id_t, 2 > nodes{1, 2};
-    el_id_t                 id = 1;
+    const auto     data  = ElementData< ElementType::Line, 1 >{{Point{0., 0., 0.}, Point{0., 0., 0.}}};
+    constexpr auto nodes = std::array< n_id_t, 2 >{1, 2};
+    el_id_t        id    = 1;
     domain.getElementVector< ElementType::Line, 1 >().reserve(1);
     domain.getElementVector< ElementType::Line, 1 >().emplace_back(nodes, data, id++);
     domain.getElementVector< ElementType::Line, 1 >().reserve(1);
@@ -108,11 +105,15 @@ TEMPLATE_TEST_CASE("Iteration over elements",
     CHECK(count == n_faces + n_vols);
     count = 0;
 
-    mesh.visit(element_counter, std::array{1, 2, 3, 4, 5, 6, 7}, policy);
+    mesh.visit(element_counter, {1, 2, 3, 4, 5, 6, 7}, policy);
     CHECK(count == n_faces);
     count = 0;
 
-    std::as_const(mesh).visit(element_counter, std::array{1, 2, 3, 4, 5, 6}, policy);
+    std::as_const(mesh).visit(element_counter, {1, 2, 3, 4, 5, 6}, policy);
+    CHECK(count == n_faces);
+    count = 0;
+
+    std::as_const(mesh).visitBoundaries(element_counter, {1, 2, 3, 4, 5, 6, 7}, policy);
     CHECK(count == n_faces);
     count = 0;
 }
@@ -120,7 +121,7 @@ TEMPLATE_TEST_CASE("Iteration over elements",
 TEMPLATE_TEST_CASE("Element lookup", "[mesh]", std::execution::sequenced_policy, std::execution::parallel_policy)
 {
     const auto policy = TestType{};
-    auto       mesh   = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag);
+    auto       mesh   = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), {}, gmsh_tag);
 
     constexpr auto existing_nodes = std::array{54, 55, 63, 64};
     constexpr auto fake_nodes     = std::array{153, 213, 372, 821};
@@ -149,9 +150,9 @@ TEST_CASE("Element lookup by ID", "[mesh]")
     CHECK_FALSE(domain.find(1));
     CHECK_FALSE(std::as_const(domain).find(1));
 
-    auto    data  = ElementData< ElementType::Line, 1 >{{Point{0., 0., 0.}, Point{0., 0., 0.}}};
-    auto    nodes = std::array< n_id_t, 2 >{1, 2};
-    el_id_t id    = 1;
+    const auto data  = ElementData< ElementType::Line, 1 >{{Point{0., 0., 0.}, Point{0., 0., 0.}}};
+    auto       nodes = std::array< n_id_t, 2 >{1, 2};
+    el_id_t    id    = 1;
     domain.getElementVector< ElementType::Line, 1 >().reserve(1);
     CHECK_FALSE(domain.find(1));
     domain.getElementVector< ElementType::Line, 1 >().emplace_back(nodes, data, id++);
@@ -179,16 +180,25 @@ TEST_CASE("Element lookup by ID", "[mesh]")
 
 TEST_CASE("Serial mesh partitioning", "[mesh]")
 {
-    constexpr auto n_parts    = 2u;
-    const auto     mesh       = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag);
-    const auto     n_elements = mesh.getNElements();
-    REQUIRE_NOTHROW(partitionMesh(mesh, 1, {}));
-    const auto partitions = partitionMesh(mesh, n_parts, {2, 3, 4, 5});
+    constexpr auto boundary_ids = std::array< d_id_t, 4 >{2, 3, 4, 5};
+    constexpr auto n_parts      = 2;
+    const auto     mesh         = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), boundary_ids, gmsh_tag);
+    const auto     n_elements   = mesh.getNElements();
+    const auto     n_nodes      = mesh.getAllNodes().size();
+
+    // No elements lost
+    REQUIRE_NOTHROW(partitionMesh(mesh, 1));
+    const auto partitions = partitionMesh(mesh, n_parts);
     REQUIRE(partitions.size() == n_parts);
     REQUIRE(std::transform_reduce(partitions.begin(), partitions.end(), 0u, std::plus{}, [](const auto& part) {
                 return part.getNElements();
             }) == n_elements);
+
+    // Partitioning quality acceptable
     CHECK(partitions.front().getNElements() == Approx(partitions.back().getNElements()).epsilon(.1));
+
+    // Nodes partitioned correctly
+    CHECK(partitions.front().getOwnedNodes().size() + partitions.back().getOwnedNodes().size() == n_nodes);
     std::vector< n_id_t > intersects;
     std::ranges::set_intersection(
         partitions.front().getOwnedNodes(), partitions.back().getOwnedNodes(), std::back_inserter(intersects));
@@ -197,43 +207,25 @@ TEST_CASE("Serial mesh partitioning", "[mesh]")
     std::ranges::set_intersection(
         partitions.front().getGhostNodes(), partitions.back().getGhostNodes(), std::back_inserter(intersects));
     CHECK(intersects.empty());
-    for (const auto& part : partitions)
-        REQUIRE_THROWS(partitionMesh(part, 42, {}));
-}
 
-TEST_CASE("Boundary views in partitioned meshes", "[mesh]")
-{
-    constexpr auto n_parts          = 8u;
-    constexpr auto node_dist        = std::array{0., 1., 2., 3., 4., 5., 6., 7., 8.};
-    const auto     mesh             = makeCubeMesh(node_dist);
-    auto           partitions       = util::ArrayOwner< MeshPartition< 1 > >{};
-    const auto     check_boundaries = [&] {
-        for (auto&& part : partitions)
+    // Boundaries reconstructed correctly
+    constexpr auto get_bnd_size = [](const MeshPartition< 1 >& part, d_id_t bnd_id) -> size_t {
+        try
         {
-            const auto domain_ids = part.getDomainIds();
-            for (d_id_t boundary = 1; boundary <= 6; ++boundary)
-            {
-                if (std::ranges::find(domain_ids, boundary) == domain_ids.end())
-                    continue;
-                const auto boundary_view = BoundaryView{part, std::views::single(boundary)};
-                CHECK(part.getDomain(boundary).getNElements() == boundary_view.size());
-                size_t boundary_size = 0;
-                boundary_view.visit([&](const auto&) { ++std::atomic_ref{boundary_size}; }, std::execution::par);
-                CHECK(boundary_size == boundary_view.size());
-            }
+            return part.getBoundary(bnd_id).size();
+        }
+        catch (const std::out_of_range&)
+        {
+            return 0;
         }
     };
-    SECTION("Boundaries assigned correctly")
-    {
-        partitions = partitionMesh(mesh, n_parts, {1, 2, 3, 4, 5, 6});
-        CHECK_NOTHROW(check_boundaries());
-    }
+    for (d_id_t bnd_id : boundary_ids)
+        CHECK(get_bnd_size(partitions.front(), bnd_id) + get_bnd_size(partitions.back(), bnd_id) ==
+              get_bnd_size(mesh, bnd_id));
 
-    SECTION("Boundaries assigned incorrectly")
-    {
-        partitions = partitionMesh(mesh, n_parts, {});
-        CHECK_THROWS(check_boundaries());
-    }
+    // Check throws on repartitioning
+    for (const auto& part : partitions)
+        REQUIRE_THROWS(partitionMesh(part, 42));
 }
 
 TEST_CASE("Mesh conversion to higher order", "[mesh]")
@@ -241,7 +233,7 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
     SECTION("mesh imported from gmsh")
     {
         constexpr el_o_t order      = 2;
-        auto             mesh1      = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), gmsh_tag);
+        auto             mesh1      = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), {}, gmsh_tag);
         const auto       n_elements = mesh1.getNElements();
 
         auto mesh = convertMeshToOrder< order >(mesh1);

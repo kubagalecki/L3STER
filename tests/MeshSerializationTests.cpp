@@ -37,7 +37,7 @@ bool compareEqual(const mesh::MeshPartition< orders... >& p1, const mesh::MeshPa
 
 TEST_CASE("Mesh serialization", "[mesh-serial]")
 {
-    const auto mesh              = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::mesh::gmsh_tag);
+    const auto mesh              = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), {}, lstr::mesh::gmsh_tag);
     const auto serialized_mesh   = mesh::SerializedPartition{mesh};
     const auto deserialized_mesh = mesh::deserializePartition< 1 >(serialized_mesh);
 

@@ -38,12 +38,7 @@ int main(int argc, char* argv[])
     });
     constexpr auto mesh_order   = 4;
     const auto     my_partition = generateAndDistributeMesh< mesh_order >(
-        comm,
-        [&] { return mesh::makeCubeMesh(node_dist); },
-        std::vector< d_id_t >(boundary_ids.begin(), boundary_ids.end()),
-        {},
-        probdef_ctwrpr);
-    const auto boundary_view = mesh::BoundaryView{*my_partition, boundary_ids};
+        comm, [&] { return mesh::makeCubeMesh(node_dist); }, {}, probdef_ctwrpr);
 
     constexpr auto field_inds  = util::makeIotaArray< size_t, problem_def.n_fields >();
     constexpr auto T_inds      = std::array< size_t, 1 >{0};
@@ -82,40 +77,39 @@ int main(int argc, char* argv[])
         Ax(6, 2) = 1.;
         Ay(6, 1) = -1.;
     });
-    constexpr auto error_kernel =
-        []< typename DerT >(const auto& vals, const std::array< DerT, 3 >& ders, const SpaceTimePoint& point) noexcept {
-            Eigen::Matrix< val_t, 4, 1 > error;
-            const auto [T, qx, qy, qz]           = vals;
-            const auto& [x_ders, y_ders, z_ders] = ders;
+    constexpr auto err_params         = KernelParams{.dimension = 3, .n_equations = 4, .n_fields = 4};
+    constexpr auto error_kernel       = wrapResidualDomainKernel< err_params >([](const auto& in, auto& error) {
+        const auto& [vals, ders, point]      = in;
+        const auto& [T, qx, qy, qz]          = vals;
+        const auto& [x_ders, y_ders, z_ders] = ders;
 
-            const auto& q_xx = x_ders[1];
-            const auto& q_yy = y_ders[2];
-            const auto& q_zz = z_ders[3];
-            const auto& T_x  = x_ders[0];
-            const auto& T_y  = y_ders[0];
-            const auto& T_z  = z_ders[0];
+        const auto& q_xx = x_ders[1];
+        const auto& q_yy = y_ders[2];
+        const auto& q_zz = z_ders[3];
+        const auto& T_x  = x_ders[0];
+        const auto& T_y  = y_ders[0];
+        const auto& T_z  = z_ders[0];
 
-            constexpr double k = 1.;
-            constexpr double s = 1.;
+        constexpr double k = 1.;
+        constexpr double s = 1.;
 
-            error[0] = k * (q_xx + q_yy + q_zz) + s;
-            error[1] = T_x - qx;
-            error[2] = T_y - qy;
-            error[3] = T_z - qz;
-            return error;
-        };
-    constexpr auto dbc_params = KernelParams{.dimension = 3, .n_equations = 1};
+        error[0] = k * (q_xx + q_yy + q_zz) + s;
+        error[1] = T_x - qx;
+        error[2] = T_y - qy;
+        error[3] = T_z - qz;
+        return error;
+    });
+    constexpr auto dbc_params         = KernelParams{.dimension = 3, .n_equations = 1};
     constexpr auto dirichlet_bc_kernel =
         wrapResidualBoundaryKernel< dbc_params >([](const auto& in, auto& out) { out[0] = 0.; });
-    const auto dbc_boundary = mesh::BoundaryView{*my_partition, boundary_ids};
 
     auto alg_system =
         makeAlgebraicSystem(comm, my_partition, element_boundary_tag, probdef_ctwrpr, dirichletdef_ctwrpr);
     alg_system->beginAssembly();
-    alg_system->assembleDomainProblem(diffusion_kernel3d, std::views::single(domain_id));
+    alg_system->assembleProblem(diffusion_kernel3d, std::views::single(domain_id));
     alg_system->endAssembly();
     alg_system->describe(comm);
-    alg_system->setDirichletBCValues(dirichlet_bc_kernel, dbc_boundary, T_inds);
+    alg_system->setDirichletBCValues(dirichlet_bc_kernel, boundary_ids, T_inds);
     alg_system->applyDirichletBCs();
 
     solvers::CG solver{

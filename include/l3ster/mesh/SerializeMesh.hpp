@@ -106,22 +106,23 @@ struct SerializedPartition
     SerializedPartition() = default;
     template < el_o_t... orders >
     explicit SerializedPartition(const mesh::MeshPartition< orders... >& part)
-        : m_nodes{copy(part.m_nodes)}, m_n_owned_nodes{part.m_n_owned_nodes}
+        : nodes{copy(part.m_nodes)}, n_owned_nodes{part.m_n_owned_nodes}, boundaries{part.getBoundaryIdsCopy()}
     {
         for (const auto& [id, dom] : part.m_domains)
-            m_domains.emplace(id, dom);
+            domains.emplace(id, dom);
     }
     template < el_o_t... orders >
     explicit SerializedPartition(mesh::MeshPartition< orders... >&& part)
-        : m_nodes{std::move(part.m_nodes)}, m_n_owned_nodes{part.m_n_owned_nodes}
+        : nodes{std::move(part.m_nodes)}, n_owned_nodes{part.m_n_owned_nodes}, boundaries{part.getBoundaryIdsCopy()}
     {
         for (const auto& [id, dom] : part.m_domains)
-            m_domains.emplace(id, dom);
+            domains.emplace(id, dom);
     }
 
-    std::map< d_id_t, SerializedDomain > m_domains;
-    util::ArrayOwner< n_id_t >           m_nodes;
-    size_t                               m_n_owned_nodes{};
+    std::map< d_id_t, SerializedDomain > domains;
+    util::ArrayOwner< n_id_t >           nodes;
+    size_t                               n_owned_nodes{};
+    util::ArrayOwner< d_id_t >           boundaries;
 };
 } // namespace lstr::mesh
 #endif // L3STER_MESH_SERIALIZEMESH_HPP

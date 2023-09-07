@@ -86,18 +86,18 @@ template < el_o_t... orders >
 auto deserializePartition(const SerializedPartition& partition) -> mesh::MeshPartition< orders... >
 {
     auto domain_map = typename mesh::MeshPartition< orders... >::domain_map_t{};
-    for (const auto& [id, domain] : partition.m_domains)
+    for (const auto& [id, domain] : partition.domains)
         domain_map.emplace(id, detail::deserializeDomain< orders... >(domain));
-    return {std::move(domain_map), copy(partition.m_nodes), partition.m_n_owned_nodes};
+    return {std::move(domain_map), copy(partition.nodes), partition.n_owned_nodes, partition.boundaries};
 }
 
 template < el_o_t... orders >
 auto deserializePartition(SerializedPartition&& partition) -> mesh::MeshPartition< orders... >
 {
     auto domain_map = typename mesh::MeshPartition< orders... >::domain_map_t{};
-    for (const auto& [id, domain] : partition.m_domains)
+    for (const auto& [id, domain] : partition.domains)
         domain_map.emplace(id, detail::deserializeDomain< orders... >(domain));
-    return {std::move(domain_map), std::move(partition.m_nodes), partition.m_n_owned_nodes};
+    return {std::move(domain_map), std::move(partition.nodes), partition.n_owned_nodes, partition.boundaries};
 }
 } // namespace lstr::mesh
 #endif // L3STER_MESH_DESERIALIZEMESH_HPP

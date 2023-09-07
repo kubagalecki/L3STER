@@ -3,7 +3,7 @@
 
 static void BM_OwnerOrSharedNodeDeterminationNotGhost(benchmark::State& state)
 {
-    auto       mesh            = mesh::readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), mesh::gmsh_tag);
+    auto       mesh            = mesh::readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {}, mesh::gmsh_tag);
     const auto n_nodes_visited = mesh.transformReduce(
         std::views::single(1),
         size_t{},
@@ -12,7 +12,7 @@ static void BM_OwnerOrSharedNodeDeterminationNotGhost(benchmark::State& state)
         std::execution::par);
 
     const auto n_parts    = state.range(0);
-    const auto partitions = partitionMesh(mesh, n_parts, {2});
+    const auto partitions = partitionMesh(mesh, n_parts);
 
     for (auto _ : state)
     {
@@ -36,7 +36,7 @@ BENCHMARK(BM_OwnerOrSharedNodeDeterminationNotGhost)
 
 static void BM_OwnerOrSharedNodeDeterminationShared(benchmark::State& state)
 {
-    auto       mesh            = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), mesh::gmsh_tag);
+    auto       mesh            = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {}, mesh::gmsh_tag);
     const auto n_nodes_visited = mesh.transformReduce(
         std::views::single(1),
         size_t{},
@@ -45,7 +45,7 @@ static void BM_OwnerOrSharedNodeDeterminationShared(benchmark::State& state)
         std::execution::par);
 
     const auto n_parts    = state.range(0);
-    const auto partitions = partitionMesh(mesh, n_parts, {2});
+    const auto partitions = partitionMesh(mesh, n_parts);
 
     for (auto _ : state)
     {

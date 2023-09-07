@@ -49,6 +49,7 @@ TEMPLATE_TEST_CASE("Node DOF intervals of parts sum up to whole",
                    CondensationPolicyTag< CondensationPolicy::None >,
                    CondensationPolicyTag< CondensationPolicy::ElementBoundary >)
 {
+    constexpr auto boundaries      = util::makeIotaArray< d_id_t, 24 >(9);
     constexpr auto problem_def     = ProblemDef{L3STER_DEFINE_DOMAIN(1),
                                             L3STER_DEFINE_DOMAIN(2, 2),
                                             L3STER_DEFINE_DOMAIN(3, 1),
@@ -58,13 +59,12 @@ TEMPLATE_TEST_CASE("Node DOF intervals of parts sum up to whole",
                                             L3STER_DEFINE_DOMAIN(7, 0, 1),
                                             L3STER_DEFINE_DOMAIN(8, 0, 1, 2)};
     constexpr auto prob_def_ctwrpr = util::ConstexprValue< problem_def >{};
-    const auto     mesh = mesh::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube_multidom.msh), mesh::gmsh_tag);
-    const auto     cond_map_full           = makeLocalCondensationMap(mesh, prob_def_ctwrpr, TestType{});
-    const auto     unpartitioned_intervals = computeLocalDofIntervals(mesh, cond_map_full, prob_def_ctwrpr);
+    const auto     mesh =
+        mesh::readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube_multidom.msh), boundaries, mesh::gmsh_tag);
+    const auto cond_map_full           = makeLocalCondensationMap(mesh, prob_def_ctwrpr, TestType{});
+    const auto unpartitioned_intervals = computeLocalDofIntervals(mesh, cond_map_full, prob_def_ctwrpr);
 
-    std::vector< d_id_t > boundaries(24);
-    std::iota(boundaries.begin(), boundaries.end(), 9);
-    const auto partitions            = mesh::partitionMesh(mesh, 2, boundaries);
+    const auto partitions            = mesh::partitionMesh(mesh, 2);
     auto       partitioned_intervals = unpartitioned_intervals;
     partitioned_intervals.clear();
     for (const auto& part : partitions)

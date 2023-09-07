@@ -44,8 +44,7 @@ void test()
         set_value                 = static_cast< double >(dom_ind + 1);
         constexpr auto field_inds = std::array{size_t{dom_ind}};
         constexpr auto dom_ids    = std::array{domains[dom_ind]};
-        alg_sys->assembleDomainProblem(
-            const_kernel, dom_ids, empty_field_val_getter, util::ConstexprValue< field_inds >{});
+        alg_sys->assembleProblem(const_kernel, dom_ids, empty_field_val_getter, util::ConstexprValue< field_inds >{});
     };
 
     alg_sys->beginAssembly();

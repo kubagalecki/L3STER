@@ -126,10 +126,11 @@ inline auto computeDefaultRankPermutation(const MpiComm& comm)
 }
 
 template < el_o_t order, mesh::MeshFormat mesh_format >
-auto readAndConvertMesh(std::string_view mesh_file, mesh::MeshFormatTag< mesh_format > format_tag)
-    -> mesh::MeshPartition< order >
+auto readAndConvertMesh(std::string_view                   mesh_file,
+                        const util::ArrayOwner< d_id_t >&  boundary_ids,
+                        mesh::MeshFormatTag< mesh_format > format_tag) -> mesh::MeshPartition< order >
 {
-    auto mesh = readMesh(mesh_file, format_tag);
+    auto mesh = readMesh(mesh_file, boundary_ids, format_tag);
     return convertMeshToOrder< order >(mesh);
 }
 } // namespace comm
@@ -137,7 +138,6 @@ auto readAndConvertMesh(std::string_view mesh_file, mesh::MeshFormatTag< mesh_fo
 template < el_o_t... orders, ProblemDef problem_def = EmptyProblemDef{} >
 auto distributeMesh(const MpiComm&                      comm,
                     mesh::MeshPartition< orders... >&&  mesh,
-                    const util::ArrayOwner< d_id_t >&   boundaries,
                     util::ConstexprValue< problem_def > probdef_ctwrpr = {})
     -> std::shared_ptr< mesh::MeshPartition< orders... > >
 {
@@ -146,10 +146,9 @@ auto distributeMesh(const MpiComm&                      comm,
         return std::make_shared< mesh::MeshPartition< orders... > >(std::move(mesh));
 
     const auto node_throughputs = comm::gatherNodeThroughputs(comm);
-    auto       mesh_parted      = comm.getRank() == 0
-                                    ? partitionMesh(mesh, comm.getSize(), boundaries, node_throughputs, probdef_ctwrpr)
-                                    : util::ArrayOwner< mesh::MeshPartition< orders... > >{};
-    const auto permutation      = comm::computeDefaultRankPermutation(comm);
+    auto       mesh_parted = comm.getRank() == 0 ? partitionMesh(mesh, comm.getSize(), node_throughputs, probdef_ctwrpr)
+                                                 : util::ArrayOwner< mesh::MeshPartition< orders... > >{};
+    const auto permutation = comm::computeDefaultRankPermutation(comm);
     // const auto permutation = detail::dist_mesh::computeOptimalRankPermutation(comm, mesh_parted, probdef_ctwrpr);
     if (comm.getRank() == 0)
     {
@@ -176,9 +175,8 @@ auto distributeMesh(const MpiComm&                      comm,
 template < el_o_t                                     order,
            GeneratorFor_c< mesh::MeshPartition< 1 > > Generator,
            ProblemDef                                 problem_def = EmptyProblemDef{} >
-auto generateAndDistributeMesh(const MpiComm&                    comm,
-                               Generator&&                       mesh_generator,
-                               const util::ArrayOwner< d_id_t >& boundaries,
+auto generateAndDistributeMesh(const MpiComm& comm,
+                               Generator&&    mesh_generator,
                                util::ConstexprValue< order >                      = {},
                                util::ConstexprValue< problem_def > probdef_ctwrpr = {})
     -> std::shared_ptr< mesh::MeshPartition< order > >
@@ -192,7 +190,6 @@ auto generateAndDistributeMesh(const MpiComm&                    comm,
                                   return convertMeshToOrder< order >(generated_mesh);
                           })
                                               : mesh::MeshPartition< order >{},
-                          boundaries,
                           probdef_ctwrpr);
 }
 
@@ -206,9 +203,8 @@ auto readAndDistributeMesh(const MpiComm&                     comm,
     -> std::shared_ptr< mesh::MeshPartition< order > >
 {
     return distributeMesh(comm,
-                          comm.getRank() == 0 ? comm::readAndConvertMesh< order >(mesh_file, format_tag)
+                          comm.getRank() == 0 ? comm::readAndConvertMesh< order >(mesh_file, boundaries, format_tag)
                                               : mesh::MeshPartition< order >{},
-                          boundaries,
                           probdef_ctwrpr);
 }
 } // namespace lstr

@@ -27,9 +27,8 @@ void test()
     constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
     constexpr auto   dirdef_ctwrpr  = util::ConstexprValue< dirichlet_def >{};
 
-    constexpr auto node_dist     = std::array{0., 1., 2., 3., 4., 5.};
-    auto           my_partition  = distributeMesh(comm, makeCubeMesh(node_dist), {boundary});
-    const auto     boundary_view = BoundaryView{*my_partition, std::views::single(boundary)};
+    constexpr auto node_dist    = std::array{0., 1., 2., 3., 4., 5.};
+    auto           my_partition = distributeMesh(comm, makeCubeMesh(node_dist));
 
     const auto cond_map            = makeCondensationMap< CP >(comm, *my_partition, probdef_ctwrpr);
     const auto dof_intervals       = computeDofIntervals(comm, *my_partition, cond_map, probdef_ctwrpr);

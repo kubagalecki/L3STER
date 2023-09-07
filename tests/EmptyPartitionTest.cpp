@@ -23,7 +23,6 @@ void test()
         [&] {
             return mesh::makeSquareMesh(std::array{0., 1.});
         },
-        {1, 2, 3, 4},
         {},
         probdef_ctwrpr);
 

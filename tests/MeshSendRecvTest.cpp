@@ -15,7 +15,7 @@ int main(int argc, char* argv[])
     L3sterScopeGuard scope_guard{argc, argv};
     MpiComm          comm{MPI_COMM_WORLD};
 
-    const auto read_mesh   = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), lstr::mesh::gmsh_tag);
+    const auto read_mesh   = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), {}, lstr::mesh::gmsh_tag);
     const auto serial_part = SerializedPartition{read_mesh};
 
     if (comm.getSize() <= 1)
@@ -34,12 +34,11 @@ int main(int argc, char* argv[])
             const auto recv_part = receivePartition(comm, 0);
             try
             {
-                if (recv_part.m_nodes != serial_part.m_nodes or
-                    recv_part.m_n_owned_nodes != serial_part.m_n_owned_nodes)
+                if (recv_part.nodes != serial_part.nodes or recv_part.n_owned_nodes != serial_part.n_owned_nodes)
                     throw 1;
-                for (const auto& [id, dom] : recv_part.m_domains)
+                for (const auto& [id, dom] : recv_part.domains)
                 {
-                    const auto& dom_read = serial_part.m_domains.at(id);
+                    const auto& dom_read = serial_part.domains.at(id);
                     if (dom_read.element_nodes != dom.element_nodes or dom_read.element_data != dom.element_data or
                         dom_read.element_ids != dom.element_ids or dom_read.orders != dom.orders or
                         dom_read.types != dom.types or dom_read.type_order_offsets != dom.type_order_offsets)

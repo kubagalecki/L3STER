@@ -5,63 +5,6 @@
 
 namespace lstr::mesh
 {
-namespace detail
-{
-template < el_side_t side, ElementType ET, el_o_t EO, size_t N >
-constexpr bool doesSideMatch(const Element< ET, EO >& element, const std::array< n_id_t, N >& sorted_boundary_nodes)
-{
-    const auto&    side_node_inds = std::get< side >(ElementTraits< Element< ET, EO > >::boundary_table);
-    constexpr auto n_side_nodes   = std::tuple_size_v< std::remove_cvref_t< decltype(side_node_inds) > >;
-    if constexpr (n_side_nodes == N)
-    {
-        auto side_nodes = std::array< n_id_t, n_side_nodes >{};
-        std::ranges::copy(util::makeIndexedView(element.getNodes(), side_node_inds), side_nodes.begin());
-        std::ranges::sort(side_nodes);
-        return std::ranges::equal(side_nodes, sorted_boundary_nodes);
-    }
-    else
-        return false;
-}
-} // namespace detail
-
-template < ElementType ET, el_o_t EO, size_t N >
-constexpr auto matchBoundaryNodesToElement(const Element< ET, EO >&       element,
-                                           const std::array< n_id_t, N >& sorted_boundary_nodes)
-    -> std::optional< el_side_t >
-{
-    auto       matched_side   = el_side_t{};
-    const auto fold_side_inds = [&]< el_side_t... sides >(std::integer_sequence< el_side_t, sides... >) {
-        const auto match_side = [&]< el_side_t side >(std::integral_constant< el_side_t, side >) {
-            if (detail::doesSideMatch< side >(element, sorted_boundary_nodes))
-            {
-                matched_side = side;
-                return true;
-            }
-            else
-                return false;
-        };
-        return (match_side(std::integral_constant< el_side_t, sides >{}) or ...);
-    };
-    constexpr auto side_inds = std::make_integer_sequence< el_side_t, ElementTraits< Element< ET, EO > >::n_sides >{};
-    const auto     matched   = fold_side_inds(side_inds);
-    if (matched)
-        return {matched_side};
-    else
-        return std::nullopt;
-}
-
-template < el_o_t... orders >
-auto makeDimToDomainMap(const MeshPartition< orders... >& mesh) -> std::map< dim_t, std::vector< d_id_t > >
-{
-    auto retval = std::map< dim_t, std::vector< d_id_t > >{};
-    for (d_id_t id : mesh.getDomainIds())
-    {
-        const auto dom_dim = mesh.getDomainView(id).getDim();
-        retval[dom_dim].push_back(id);
-    }
-    return retval;
-}
-
 template < el_o_t... orders, ElementType BET, el_o_t BEO >
 auto findDomainElement(const MeshPartition< orders... >& mesh,
                        const Element< BET, BEO >&        bnd_el,
@@ -75,7 +18,7 @@ auto findDomainElement(const MeshPartition< orders... >& mesh,
         if constexpr (ElementTraits< Element< DET, DEO > >::native_dim ==
                       ElementTraits< Element< BET, BEO > >::native_dim + 1)
         {
-            const auto matched_side = matchBoundaryNodesToElement(domain_el, bnd_el_nodes_sorted);
+            const auto matched_side = detail::matchBoundaryNodesToElement(domain_el, bnd_el_nodes_sorted);
             if (matched_side)
             {
                 const auto lock = std::lock_guard{emplacement_mutex}; // In a correct scenario there is no contention

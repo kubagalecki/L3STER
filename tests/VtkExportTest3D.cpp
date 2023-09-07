@@ -30,9 +30,7 @@ int main(int argc, char* argv[])
         return retval;
     }();
     constexpr auto mesh_order = 2;
-    const auto     my_partition =
-        generateAndDistributeMesh< mesh_order >(comm, [&] { return makeCubeMesh(node_dist); }, {1, 2, 3, 4, 5, 6});
-    const auto boundary = BoundaryView{*my_partition, util::makeIotaArray< d_id_t, 6 >(1)};
+    const auto my_partition   = generateAndDistributeMesh< mesh_order >(comm, [&] { return makeCubeMesh(node_dist); });
 
     constexpr d_id_t domain_id           = 0;
     constexpr auto   problem_def         = ProblemDef{defineDomain< 6 >(domain_id, 0, 1, 2),
@@ -70,14 +68,16 @@ int main(int argc, char* argv[])
                              empty_field_val_getter,
                              solution_view);
 
-        const auto bnd_kernel =
-            wrapResidualBoundaryKernel< ker_params >([&](const auto& in, auto& out) { out = in.normal; });
-        computeValuesAtBoundaryNodes(bnd_kernel,
-                                     boundary,
-                                     system_manager->getDofMap(),
-                                     boundary_field_inds,
-                                     empty_field_val_getter,
-                                     solution_view);
+        constexpr auto boundary_ids = util::makeIotaArray< d_id_t, 6 >(1);
+        const auto     bnd_kernel =
+            wrapResidualBoundaryKernel< ker_params >([](const auto& in, auto& out) { out = in.normal; });
+        computeValuesAtNodes(bnd_kernel,
+                             *my_partition,
+                             boundary_ids,
+                             system_manager->getDofMap(),
+                             boundary_field_inds,
+                             empty_field_val_getter,
+                             solution_view);
 
         solution->switchActiveMultiVector();
         solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);

@@ -46,12 +46,6 @@ bool checkDomainDimension(const mesh::MeshPartition< orders... >& mesh,
     return std::ranges::all_of(ids, check_domain_dim);
 }
 
-template < el_o_t... orders >
-bool checkBoundaryDimension(const mesh::BoundaryView< orders... >& boundary, d_id_t dim)
-{
-    return checkDomainDimension(*boundary.getParent(), boundary.getIds(), dim - 1);
-}
-
 template < typename Kernel,
            KernelParams params,
            el_o_t... orders,
@@ -101,20 +95,21 @@ template < typename Kernel,
            size_t                   dofs_per_node,
            CondensationPolicy       CP,
            AssemblyOptions          asm_opts >
-void assembleGlobalBoundarySystem(const BoundaryKernel< Kernel, params >&                     kernel,
-                                  const mesh::BoundaryView< orders... >&                      boundary,
-                                  const SolutionManager::FieldValueGetter< params.n_fields >& fval_getter,
-                                  tpetra_crsmatrix_t&                                         global_mat,
-                                  std::span< val_t >                                          global_rhs,
-                                  const dofs::NodeToLocalDofMap< dofs_per_node, 3 >&          dof_map,
-                                  StaticCondensationManager< CP >&                            condensation_manager,
-                                  util::ConstexprValue< field_inds >                          field_inds_ctwrpr,
-                                  util::ConstexprValue< asm_opts >,
-                                  val_t time = 0.)
+void assembleGlobalSystem(const BoundaryKernel< Kernel, params >&                     kernel,
+                          const mesh::MeshPartition< orders... >&                     mesh,
+                          const util::ArrayOwner< d_id_t >&                           boundary_ids,
+                          const SolutionManager::FieldValueGetter< params.n_fields >& fval_getter,
+                          tpetra_crsmatrix_t&                                         global_mat,
+                          std::span< val_t >                                          global_rhs,
+                          const dofs::NodeToLocalDofMap< dofs_per_node, 3 >&          dof_map,
+                          StaticCondensationManager< CP >&                            condensation_manager,
+                          util::ConstexprValue< field_inds >                          field_inds_ctwrpr,
+                          util::ConstexprValue< asm_opts >,
+                          val_t time = 0.)
 {
     L3STER_PROFILE_FUNCTION;
 
-    const bool dim_match = checkBoundaryDimension(boundary, params.dimension);
+    const bool dim_match = checkDomainDimension(mesh, boundary_ids, params.dimension - 1);
     util::throwingAssert(dim_match, "The dimension of the kernel does not match the dimension of the boundary");
 
     const auto process_element =
@@ -133,7 +128,7 @@ void assembleGlobalBoundarySystem(const BoundaryKernel< Kernel, params >&       
         };
     const auto n_cores       = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNCores();
     const auto max_par_guard = util::MaxParallelismGuard{n_cores};
-    boundary.visit(process_element, std::execution::par);
+    mesh.visitBoundaries(process_element, boundary_ids, std::execution::par);
 }
 } // namespace lstr::glob_asm
 #endif // L3STER_GLOB_ASM_ASSEMBLEGLOBALSYSTEM_HPP

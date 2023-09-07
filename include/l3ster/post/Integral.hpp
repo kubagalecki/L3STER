@@ -81,11 +81,12 @@ auto evalLocalIntegral(const ResidualDomainKernel< Kernel, params >&            
 }
 
 template < typename Kernel, KernelParams params, el_o_t... orders, AssemblyOptions options >
-auto evalLocalBoundaryIntegral(const ResidualBoundaryKernel< Kernel, params >&             kernel,
-                               const mesh::BoundaryView< orders... >&                      boundary,
-                               const SolutionManager::FieldValueGetter< params.n_fields >& field_val_getter,
-                               util::ConstexprValue< options >,
-                               val_t time) -> KernelInterface< params >::Rhs
+auto evalLocalIntegral(const ResidualBoundaryKernel< Kernel, params >&             kernel,
+                       const mesh::MeshPartition< orders... >&                     mesh,
+                       const util::ArrayOwner< d_id_t >&                           boundary_ids,
+                       const SolutionManager::FieldValueGetter< params.n_fields >& field_val_getter,
+                       util::ConstexprValue< options >,
+                       val_t time) -> KernelInterface< params >::Rhs
 {
     const auto reduce_element =
         [&]< mesh::ElementType ET, el_o_t EO >(
@@ -103,7 +104,7 @@ auto evalLocalBoundaryIntegral(const ResidualBoundaryKernel< Kernel, params >&  
             return {};
     };
     const auto zero = detail::initResidualKernelResult< params >();
-    return boundary.reduce(zero, reduce_element, std::plus{}, std::execution::par);
+    return mesh.transformReduceBoundaries(boundary_ids, zero, reduce_element, std::plus{}, std::execution::par);
 }
 } // namespace post
 
@@ -124,16 +125,18 @@ auto evalIntegral(const MpiComm&                                              co
 }
 
 template < typename Kernel, KernelParams params, el_o_t... orders, AssemblyOptions opts = {} >
-auto evalBoundaryIntegral(const MpiComm&                                              comm,
-                          const ResidualBoundaryKernel< Kernel, params >&             kernel,
-                          const mesh::BoundaryView< orders... >&                      boundary,
-                          const SolutionManager::FieldValueGetter< params.n_fields >& field_val_getter = {},
-                          util::ConstexprValue< opts >                                opts_ctwrpr      = {},
-                          val_t                                                       time             = 0.)
+auto evalIntegral(const MpiComm&                                              comm,
+                  const ResidualBoundaryKernel< Kernel, params >&             kernel,
+                  const mesh::MeshPartition< orders... >&                     mesh,
+                  const util::ArrayOwner< d_id_t >&                           boundary_ids,
+                  const SolutionManager::FieldValueGetter< params.n_fields >& field_val_getter = {},
+                  util::ConstexprValue< opts >                                opts_ctwrpr      = {},
+                  val_t                                                       time             = 0.)
 {
-    const auto local_integral  = post::evalLocalBoundaryIntegral(kernel, boundary, field_val_getter, opts_ctwrpr, time);
-    auto       global_integral = detail::initResidualKernelResult< params >();
-    auto       comm_view       = std::views::counted(local_integral.data(), params.n_equations);
+    const auto local_integral =
+        post::evalLocalIntegral(kernel, mesh, boundary_ids, field_val_getter, opts_ctwrpr, time);
+    auto global_integral = detail::initResidualKernelResult< params >();
+    auto comm_view       = std::views::counted(local_integral.data(), params.n_equations);
     comm.allReduce(comm_view, global_integral.data(), MPI_SUM);
     return global_integral;
 }

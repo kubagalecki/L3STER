@@ -24,7 +24,7 @@ inline auto receivePartition(const MpiComm& comm, int source) -> mesh::Serialize
         comm.receive(retval, source, msg_tag++);
         return retval;
     });
-    auto       size_it = cbegin(sizes);
+    auto       size_it = sizes.begin();
 
     auto             retval              = mesh::SerializedPartition{};
     auto             messages            = std::vector< MpiComm::Request >{};
@@ -32,7 +32,7 @@ inline auto receivePartition(const MpiComm& comm, int source) -> mesh::Serialize
     messages.reserve(messages_per_domain * n_doms + 2);
     for (size_t i = 0; i < n_doms; ++i)
     {
-        auto& domain = retval.m_domains.emplace(dom_ids[i], mesh::SerializedDomain{}).first->second;
+        auto& domain = retval.domains.emplace(dom_ids[i], mesh::SerializedDomain{}).first->second;
 
         const auto node_msg_size = *size_it++;
         domain.element_nodes.resize(node_msg_size);
@@ -55,10 +55,14 @@ inline auto receivePartition(const MpiComm& comm, int source) -> mesh::Serialize
         messages.emplace_back(comm.receiveAsync(domain.orders, source, msg_tag++));
     }
 
-    const auto nodes_size  = *size_it++;
-    retval.m_n_owned_nodes = *size_it++;
-    retval.m_nodes         = util::ArrayOwner< n_id_t >(nodes_size);
-    messages.emplace_back(comm.receiveAsync(retval.m_nodes, source, msg_tag++));
+    const auto nodes_size = *size_it++;
+    retval.n_owned_nodes  = *size_it++;
+    retval.nodes          = util::ArrayOwner< n_id_t >(nodes_size);
+    messages.emplace_back(comm.receiveAsync(retval.nodes, source, msg_tag++));
+
+    const auto n_boundaries = *size_it++;
+    retval.boundaries       = util::ArrayOwner< d_id_t >(n_boundaries);
+    messages.emplace_back(comm.receiveAsync(retval.boundaries, source, msg_tag++));
 
     return retval;
 }

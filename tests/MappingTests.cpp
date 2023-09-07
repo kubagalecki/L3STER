@@ -446,7 +446,7 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
             for (auto qp : ref_q.points)
                 CHECK(mapToPhysicalSpace(*el_view, qp)[space_ind] == Approx{offs}.margin(1.e-15));
         };
-        view.visit(element_checker);
+        view.visit(element_checker, std::execution::seq);
     };
 
     SECTION("Generated")
@@ -478,10 +478,10 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
         {
             const auto mesh = makeSquareMesh(node_pos);
 
-            const auto b_bottom = BoundaryView{mesh, std::views::single(1)};
-            const auto b_top    = BoundaryView{mesh, std::views::single(2)};
-            const auto b_left   = BoundaryView{mesh, std::views::single(3)};
-            const auto b_right  = BoundaryView{mesh, std::views::single(4)};
+            const auto& b_bottom = mesh.getBoundary(1);
+            const auto& b_top    = mesh.getBoundary(2);
+            const auto& b_left   = mesh.getBoundary(3);
+            const auto& b_right  = mesh.getBoundary(4);
 
             check_all_in_plane(b_bottom, Space::Y, node_pos.front());
             check_all_in_plane(b_top, Space::Y, node_pos.back());
@@ -492,12 +492,12 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
         {
             const auto mesh = makeCubeMesh(node_pos);
 
-            const auto b_front  = BoundaryView{mesh, std::views::single(1)};
-            const auto b_back   = BoundaryView{mesh, std::views::single(2)};
-            const auto b_bottom = BoundaryView{mesh, std::views::single(3)};
-            const auto b_top    = BoundaryView{mesh, std::views::single(4)};
-            const auto b_left   = BoundaryView{mesh, std::views::single(5)};
-            const auto b_right  = BoundaryView{mesh, std::views::single(6)};
+            const auto& b_front  = mesh.getBoundary(1);
+            const auto& b_back   = mesh.getBoundary(2);
+            const auto& b_bottom = mesh.getBoundary(3);
+            const auto& b_top    = mesh.getBoundary(4);
+            const auto& b_left   = mesh.getBoundary(5);
+            const auto& b_right  = mesh.getBoundary(6);
 
             check_all_in_plane(b_front, Space::Z, node_pos.front());
             check_all_in_plane(b_back, Space::Z, node_pos.back());
@@ -511,12 +511,12 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
     {
         SECTION("2D")
         {
-            const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag);
+            const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), {2, 3, 4, 5}, gmsh_tag);
 
-            const auto b_bottom = BoundaryView{mesh, std::views::single(5)};
-            const auto b_top    = BoundaryView{mesh, std::views::single(3)};
-            const auto b_left   = BoundaryView{mesh, std::views::single(2)};
-            const auto b_right  = BoundaryView{mesh, std::views::single(4)};
+            const auto& b_bottom = mesh.getBoundary(5);
+            const auto& b_top    = mesh.getBoundary(3);
+            const auto& b_left   = mesh.getBoundary(2);
+            const auto& b_right  = mesh.getBoundary(4);
 
             check_all_in_plane(b_bottom, Space::Y, -.5);
             check_all_in_plane(b_top, Space::Y, .5);
@@ -525,14 +525,14 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
         }
         SECTION("3D")
         {
-            const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), gmsh_tag);
+            const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), {2, 3, 4, 5, 6, 7}, gmsh_tag);
 
-            const auto b_front  = BoundaryView{mesh, std::views::single(2)};
-            const auto b_back   = BoundaryView{mesh, std::views::single(3)};
-            const auto b_bottom = BoundaryView{mesh, std::views::single(4)};
-            const auto b_top    = BoundaryView{mesh, std::views::single(5)};
-            const auto b_left   = BoundaryView{mesh, std::views::single(7)};
-            const auto b_right  = BoundaryView{mesh, std::views::single(6)};
+            const auto& b_front  = mesh.getBoundary(2);
+            const auto& b_back   = mesh.getBoundary(3);
+            const auto& b_bottom = mesh.getBoundary(4);
+            const auto& b_top    = mesh.getBoundary(5);
+            const auto& b_left   = mesh.getBoundary(7);
+            const auto& b_right  = mesh.getBoundary(6);
 
             check_all_in_plane(b_front, Space::Z, -1.);
             check_all_in_plane(b_back, Space::Z, 1.);

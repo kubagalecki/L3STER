@@ -55,7 +55,9 @@ void reorderNodes(auto& nodes)
 }
 } // namespace detail
 
-inline auto readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh >) -> MeshPartition< 1 >
+inline auto readMesh(std::string_view                  file_path,
+                     const util::ArrayOwner< d_id_t >& boundary_ids,
+                     MeshFormatTag< MeshFormat::Gmsh >) -> MeshPartition< 1 >
 {
     L3STER_PROFILE_FUNCTION;
     const auto throw_error = [&file_path](std::string_view     message,
@@ -337,7 +339,7 @@ inline auto readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
             for (auto& domain : domain_map | std::views::values)
                 domain.sort();
 
-            return {std::move(domain_map)};
+            return {std::move(domain_map), boundary_ids};
         };
 
         return parse_elements_asciiv4();

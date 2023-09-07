@@ -27,6 +27,7 @@ auto getNormSquareComputer(const auto& kernel)
     };
 }
 } // namespace post
+
 template < AssemblyOptions opts = {}, typename Kernel, KernelParams params, el_o_t... orders >
 auto computeNormL2(const MpiComm&                                              comm,
                    const ResidualDomainKernel< Kernel, params >&               eval_residual,
@@ -44,17 +45,18 @@ auto computeNormL2(const MpiComm&                                              c
 }
 
 template < AssemblyOptions opts = {}, typename Kernel, KernelParams params, el_o_t... orders >
-auto computeBoundaryNormL2(const MpiComm&                                              comm,
-                           const ResidualBoundaryKernel< Kernel, params >&             eval_residual,
-                           const mesh::BoundaryView< orders... >&                      boundary,
-                           const SolutionManager::FieldValueGetter< params.n_fields >& field_val_getter = {},
-                           util::ConstexprValue< opts >                                options_ctwrpr   = {},
-                           val_t time = 0.) -> KernelInterface< params >::Rhs
+auto computeNormL2(const MpiComm&                                              comm,
+                   const ResidualBoundaryKernel< Kernel, params >&             eval_residual,
+                   const mesh::MeshPartition< orders... >&                     mesh,
+                   const util::ArrayOwner< d_id_t >&                           boundary_ids,
+                   const SolutionManager::FieldValueGetter< params.n_fields >& field_val_getter = {},
+                   util::ConstexprValue< opts >                                options_ctwrpr   = {},
+                   val_t time = 0.) -> KernelInterface< params >::Rhs
 {
     const auto compute_squared_norm = post::getNormSquareComputer(eval_residual);
     const auto wrapped_sqn  = wrapResidualBoundaryKernel(compute_squared_norm, util::ConstexprValue< params >{});
-    const auto squared_norm = evalBoundaryIntegral(
-        comm, wrapped_sqn, boundary, field_val_getter, post::doubleQuadratureOrder(options_ctwrpr), time);
+    const auto squared_norm = evalIntegral(
+        comm, wrapped_sqn, mesh, boundary_ids, field_val_getter, post::doubleQuadratureOrder(options_ctwrpr), time);
     return squared_norm.cwiseSqrt();
 }
 } // namespace lstr

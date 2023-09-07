@@ -87,7 +87,7 @@ auto convertMeshToOrder(const MeshPartition< 1 >& mesh, std::integral_constant< 
         std::iota(retval.begin(), retval.end(), n_id_t{0});
         return retval;
     };
-    return {std::move(new_domains), make_node_iota_array(max_node), max_node};
+    return {std::move(new_domains), make_node_iota_array(max_node), max_node, mesh.getBoundaryIdsCopy()};
 }
 } // namespace lstr::mesh
 #endif // L3STER_MESH_CONVERTMESHTOORDER_HPP

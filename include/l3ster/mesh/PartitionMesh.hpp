@@ -283,7 +283,7 @@ void assignBoundaryElements(const MeshPartition< orders... >&                   
         return epart.at(el_pos);
     };
 
-    const auto         dim_dom_map = makeDimToDomainMap(part);
+    const auto         dim_dom_map = detail::makeDimToDomainMap(part);
     std::atomic_size_t n_boundary_elements{0}, n_assigned{0};
     auto               insertion_mutex = std::mutex{};
     const auto         assign_boundary = [&](d_id_t boundary_id) {
@@ -390,13 +390,14 @@ auto assignNodes(idx_t                                                          
 template < el_o_t... orders >
 auto makeMeshFromPartitionComponents(
     util::ArrayOwner< std::map< d_id_t, Domain< orders... > > >&&                             dom_maps,
-    util::ArrayOwner< std::pair< util::ArrayOwner< n_id_t >, util::ArrayOwner< n_id_t > > >&& node_vecs)
-    -> util::ArrayOwner< MeshPartition< orders... > >
+    util::ArrayOwner< std::pair< util::ArrayOwner< n_id_t >, util::ArrayOwner< n_id_t > > >&& node_vecs,
+    const util::ArrayOwner< d_id_t >& bnd_ids) -> util::ArrayOwner< MeshPartition< orders... > >
 {
     auto retval = util::ArrayOwner< MeshPartition< orders... > >(dom_maps.size());
     for (size_t i = 0; auto& [owned, ghost] : node_vecs)
     {
-        retval[i] = MeshPartition< orders... >{std::move(dom_maps[i]), std::move(owned), std::move(ghost)};
+        auto part = MeshPartition< orders... >{std::move(dom_maps[i]), std::move(owned), std::move(ghost), bnd_ids};
+        retval[i] = std::move(part);
         ++i;
     }
     return retval;
@@ -416,14 +417,13 @@ auto partitionMeshImpl(const MeshPartition< orders... >& mesh,
     auto new_domain_maps = makeDomainMaps(mesh, n_parts, epart, domain_ids);
     assignBoundaryElements(mesh, epart, new_domain_maps, domain_ids, boundary_ids, domain_data.n_elements);
     auto node_vecs = assignNodes(n_parts, npart, new_domain_maps);
-    return makeMeshFromPartitionComponents(std::move(new_domain_maps), std::move(node_vecs));
+    return makeMeshFromPartitionComponents(std::move(new_domain_maps), std::move(node_vecs), boundary_ids);
 }
 } // namespace detail
 
 template < el_o_t... orders, ProblemDef problem_def = EmptyProblemDef{} >
 auto partitionMesh(const MeshPartition< orders... >&   mesh,
                    idx_t                               n_parts,
-                   const util::ArrayOwner< d_id_t >&   boundary_ids,
                    util::ArrayOwner< real_t >          part_weights   = {},
                    util::ConstexprValue< problem_def > probdef_ctwrpr = {})
     -> util::ArrayOwner< MeshPartition< orders... > >
@@ -441,7 +441,8 @@ auto partitionMesh(const MeshPartition< orders... >&   mesh,
         return retval;
     }
 
-    auto node_wgts = detail::computeNodeWeights(mesh, probdef_ctwrpr);
+    const auto boundary_ids = mesh.getBoundaryIdsCopy();
+    auto       node_wgts    = detail::computeNodeWeights(mesh, probdef_ctwrpr);
     return detail::partitionMeshImpl(mesh, n_parts, boundary_ids, std::move(part_weights), std::move(node_wgts));
 }
 } // namespace lstr::mesh
