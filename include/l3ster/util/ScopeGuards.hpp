@@ -7,6 +7,8 @@
 #include "l3ster/util/HwlocWrapper.hpp"
 #include "l3ster/util/SetStackSize.hpp"
 
+#include <optional>
+
 namespace lstr
 {
 namespace util
@@ -133,19 +135,57 @@ namespace util
 {
 class MaxParallelismGuard
 {
-public:
-    MaxParallelismGuard(
-        size_t max_threads = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNCores())
-        : m_max_threads{max_threads},
-          m_tbb_control{oneapi::tbb::global_control::max_allowed_parallelism, max_threads}
 #ifdef _OPENMP
-          ,
-          m_prev_omp_threads{omp_get_max_threads()}
-#endif
+    class OpenMPThreadGuard
     {
-#ifdef _OPENMP
-        omp_set_num_threads(static_cast< int >(m_max_threads));
+    public:
+        explicit OpenMPThreadGuard(int num_threads) : m_num_threads_previous{omp_get_max_threads()}
+        {
+            omp_set_num_threads(num_threads);
+        }
+        OpenMPThreadGuard(const OpenMPThreadGuard&)            = delete;
+        OpenMPThreadGuard& operator=(const OpenMPThreadGuard&) = delete;
+        OpenMPThreadGuard(OpenMPThreadGuard&&)                 = default;
+        OpenMPThreadGuard& operator=(OpenMPThreadGuard&&)      = default;
+        ~OpenMPThreadGuard() { omp_set_num_threads(m_num_threads_previous); }
+
+    private:
+        int m_num_threads_previous;
+    };
+#else
+    struct OpenMPThreadGuard
+    {
+        explicit OpenMPThreadGuard(int) {}
+    };
 #endif
+
+    class ThreadGuards
+    {
+    public:
+        explicit ThreadGuards(size_t threads)
+            : m_tbb_guard{oneapi::tbb::global_control::max_allowed_parallelism, threads},
+              m_openmp_guard{static_cast< int >(threads)}
+        {}
+
+    private:
+        oneapi::tbb::global_control m_tbb_guard;
+        OpenMPThreadGuard           m_openmp_guard;
+    };
+
+    static auto getCurrentMaxPar() -> size_t&
+    {
+        static size_t value = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNHwThreads();
+        return value;
+    }
+
+public:
+    explicit MaxParallelismGuard(size_t max_threads) : m_previous{getCurrentMaxPar()}
+    {
+        if (max_threads < m_previous)
+        {
+            m_thread_guards.emplace(max_threads);
+            getCurrentMaxPar() = max_threads;
+        }
     }
 
     MaxParallelismGuard(const MaxParallelismGuard&)            = delete;
@@ -154,17 +194,13 @@ public:
     MaxParallelismGuard& operator=(MaxParallelismGuard&&)      = default;
     ~MaxParallelismGuard()
     {
-#ifdef _OPENMP
-        omp_set_num_threads(m_prev_omp_threads);
-#endif
+        if (m_thread_guards)
+            getCurrentMaxPar() = m_previous;
     }
 
 private:
-    size_t                      m_max_threads;
-    oneapi::tbb::global_control m_tbb_control;
-#ifdef _OPENMP
-    int m_prev_omp_threads;
-#endif
+    std::optional< ThreadGuards > m_thread_guards;
+    size_t                        m_previous;
 };
 } // namespace util
 } // namespace lstr

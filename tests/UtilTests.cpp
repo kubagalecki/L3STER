@@ -659,14 +659,29 @@ TEST_CASE("Hwloc topology info", "[util, hwloc]")
     CHECK(threads_expected == topology.getNHwThreads());
 }
 
-#ifdef _OPENMP
-TEST_CASE("OpenMP num threads control", "[util]")
+TEST_CASE("Num threads control", "[util]")
 {
-    const auto max_threads_initial = omp_get_max_threads();
-    {
-        const auto max_par_guard = util::MaxParallelismGuard{1};
-        CHECK(omp_get_max_threads() == 1);
-    }
-    CHECK(omp_get_max_threads() == max_threads_initial);
-}
+    constexpr auto check_num_threads = [](size_t expected) {
+        const auto tbb_threads =
+            oneapi::tbb::global_control::active_value(oneapi::tbb::global_control::max_allowed_parallelism);
+        CHECK(tbb_threads == expected);
+#ifdef _OPENMP
+        CHECK(omp_get_max_threads() == static_cast< int >(expected));
 #endif
+    };
+
+    const auto n_hw_threads = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNHwThreads();
+    check_num_threads(n_hw_threads);
+
+    {
+        const auto guard = util::MaxParallelismGuard{1};
+        check_num_threads(1);
+    }
+    check_num_threads(n_hw_threads);
+
+    {
+        const auto guard = util::MaxParallelismGuard{2 * n_hw_threads};
+        check_num_threads(n_hw_threads);
+    }
+    check_num_threads(n_hw_threads);
+}
