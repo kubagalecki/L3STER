@@ -98,7 +98,7 @@ void test()
     constexpr auto dof_inds = util::makeIotaArray< size_t, 3 >();
 
     auto solver   = solvers::Lapack{};
-    auto solution = alg_sys->makeSolutionVector();
+    auto solution = alg_sys->initSolution();
     alg_sys->solve(solver, solution);
     auto solution_manager = SolutionManager{*mesh, problem_def.n_fields};
     alg_sys->updateSolution(solution, dof_inds, solution_manager, dof_inds);

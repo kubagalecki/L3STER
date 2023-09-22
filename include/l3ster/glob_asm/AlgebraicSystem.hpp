@@ -38,7 +38,7 @@ public:
     [[nodiscard]] inline auto getRhs() const -> Teuchos::RCP< const tpetra_multivector_t >;
     [[nodiscard]] const auto& getDofMap() const { return m_node_dof_map; }
 
-    [[nodiscard]] inline auto makeSolutionVector() const -> Teuchos::RCP< tpetra_femultivector_t >;
+    [[nodiscard]] inline auto initSolution(size_t n_rhs = 1) const -> Teuchos::RCP< tpetra_femultivector_t >;
     template < IndexRange_c SolInds, IndexRange_c SolManInds >
     void updateSolution(const Teuchos::RCP< const tpetra_femultivector_t >& solution,
                         SolInds&&                                           sol_inds,
@@ -142,6 +142,9 @@ void AlgebraicSystem< max_dofs_per_node, CP, orders... >::solve(
     solver.solve(m_matrix, m_rhs, solution);
     solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);
     solution->switchActiveMultiVector();
+#ifdef L3STER_PROFILE_EXECUTION
+    solution->getMap()->getComm()->barrier();
+#endif
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, el_o_t... orders >
@@ -219,11 +222,11 @@ auto AlgebraicSystem< max_dofs_per_node, CP, orders... >::getRhs() const -> Teuc
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, el_o_t... orders >
-auto AlgebraicSystem< max_dofs_per_node, CP, orders... >::makeSolutionVector() const
+auto AlgebraicSystem< max_dofs_per_node, CP, orders... >::initSolution(size_t n_rhs) const
     -> Teuchos::RCP< tpetra_femultivector_t >
 {
     return util::makeTeuchosRCP< tpetra_femultivector_t >(
-        m_sparsity_graph->getRowMap(), m_sparsity_graph->getImporter(), 1u);
+        m_sparsity_graph->getRowMap(), m_sparsity_graph->getImporter(), n_rhs);
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, el_o_t... orders >
@@ -260,7 +263,7 @@ AlgebraicSystem< max_dofs_per_node, CP, orders... >::AlgebraicSystem(
 
     L3STER_PROFILE_REGION_BEGIN("Create Tpetra objects");
     m_matrix = util::makeTeuchosRCP< tpetra_fecrsmatrix_t >(m_sparsity_graph);
-    m_rhs    = makeSolutionVector();
+    m_rhs    = initSolution();
     m_matrix->beginAssembly();
     m_rhs->beginAssembly();
     L3STER_PROFILE_REGION_END("Create Tpetra objects");
@@ -313,6 +316,10 @@ void AlgebraicSystem< max_dofs_per_node, CP, orders... >::endAssembly()
     m_matrix->endAssembly();
     L3STER_PROFILE_REGION_END("Matrix");
     m_state = State::Closed;
+
+#ifdef L3STER_PROFILE_EXECUTION
+    m_rhs->getMap()->getComm()->barrier();
+#endif
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, el_o_t... orders >
@@ -350,6 +357,10 @@ void AlgebraicSystem< max_dofs_per_node, CP, orders... >::assembleProblem(
                          field_inds_ctwrpr,
                          assembly_options,
                          time);
+
+#ifdef L3STER_PROFILE_EXECUTION
+    m_rhs->getMap()->getComm()->barrier();
+#endif
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, el_o_t... orders >
@@ -380,6 +391,10 @@ void AlgebraicSystem< max_dofs_per_node, CP, orders... >::assembleProblem(
                          field_inds_ctwrpr,
                          assembly_options,
                          time);
+
+#ifdef L3STER_PROFILE_EXECUTION
+    m_rhs->getMap()->getComm()->barrier();
+#endif
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, el_o_t... orders >
@@ -394,6 +409,10 @@ void AlgebraicSystem< max_dofs_per_node, CP, orders... >::applyDirichletBCs()
     m_dirichlet_bcs->apply(*m_dirichlet_values->getVector(0), *m_matrix, *m_rhs->getVectorNonConst(0));
     m_rhs->endModify();
     m_matrix->endModify();
+
+#ifdef L3STER_PROFILE_EXECUTION
+    m_rhs->getMap()->getComm()->barrier();
+#endif
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, el_o_t... orders >

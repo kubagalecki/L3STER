@@ -48,7 +48,7 @@ int main(int argc, char* argv[])
     const auto system_manager   = makeAlgebraicSystem(comm, my_partition, no_condensation_tag, problemdef_ctwrpr);
     auto       solution_manager = SolutionManager{*my_partition, n_fields};
 
-    auto solution = system_manager->makeSolutionVector();
+    auto solution = system_manager->initSolution();
     {
         auto           solution_view = solution->get1dViewNonConst();
         constexpr auto ker_params    = KernelParams{.dimension = 3, .n_equations = 3};

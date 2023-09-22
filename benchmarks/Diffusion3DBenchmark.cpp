@@ -115,7 +115,7 @@ int main(int argc, char* argv[])
     constexpr auto solver_opts  = IterSolverOpts{.verbosity = {.summary = true, .timing = true}};
     constexpr auto precond_opts = ChebyshevOpts{.degree = 3};
     auto           solver       = CG{solver_opts, precond_opts};
-    auto           solution     = alg_system->makeSolutionVector();
+    auto           solution     = alg_system->initSolution();
     alg_system->solve(solver, solution);
 
     L3STER_PROFILE_REGION_BEGIN("Solution management");

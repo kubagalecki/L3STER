@@ -56,7 +56,7 @@ void test()
     alg_sys->endAssembly();
 
     auto solver   = solvers::Lapack{};
-    auto solution = alg_sys->makeSolutionVector();
+    auto solution = alg_sys->initSolution();
     alg_sys->solve(solver, solution);
 
     auto solution_manager = SolutionManager{*mesh, problem_def.n_fields};

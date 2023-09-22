@@ -144,12 +144,12 @@ inline auto initCrsGraph(const MpiComm&                                         
 }
 
 template < el_o_t... orders, ProblemDef problem_def, CondensationPolicy CP >
-Teuchos::RCP< const tpetra_fecrsgraph_t >
-makeSparsityGraph(const MpiComm&                                          comm,
-                  const mesh::MeshPartition< orders... >&                 mesh,
-                  const dofs::NodeToGlobalDofMap< problem_def.n_fields >& node_to_dof_map,
-                  const dofs::NodeCondensationMap< CP >&                  cond_map,
-                  util::ConstexprValue< problem_def >                     problemdef_ctwrapper)
+auto makeSparsityGraph(const MpiComm&                                          comm,
+                       const mesh::MeshPartition< orders... >&                 mesh,
+                       const dofs::NodeToGlobalDofMap< problem_def.n_fields >& node_to_dof_map,
+                       const dofs::NodeCondensationMap< CP >&                  cond_map,
+                       util::ConstexprValue< problem_def >                     problemdef_ctwrapper)
+    -> Teuchos::RCP< const tpetra_fecrsgraph_t >
 {
     L3STER_PROFILE_FUNCTION;
     const auto [all_dofs, n_owned_dofs] = computeNodeDofs(mesh, node_to_dof_map, cond_map);
@@ -173,6 +173,9 @@ makeSparsityGraph(const MpiComm&                                          comm,
     L3STER_PROFILE_REGION_BEGIN("Communicate data between ranks");
     retval->endAssembly();
     L3STER_PROFILE_REGION_END("Communicate data between ranks");
+#ifdef L3STER_PROFILE_EXECUTION
+    comm.barrier();
+#endif
     return retval;
 }
 } // namespace lstr::glob_asm
