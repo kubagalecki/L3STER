@@ -27,10 +27,10 @@ int main(int argc, char* argv[])
 
         if (rank == 0)
         {
-            std::vector< char > in_msg(size);
+            auto in_msg = std::vector< char >(size);
             {
                 std::vector< MpiComm::Request > rcv_requests;
-                rcv_requests.reserve(size - 1);
+                rcv_requests.reserve(static_cast< size_t >(size - 1));
                 char message = 'z';
                 for (int src = 1; src < size; ++src)
                     rcv_requests.push_back(comm.receiveAsync(asRange(in_msg[src]), src));
@@ -39,7 +39,7 @@ int main(int argc, char* argv[])
                         throw std::logic_error{"Message received too soon"};
                 });
                 for (int dest = 1; dest < size; ++dest)
-                    comm.sendAsync(asRange(message), dest).wait();
+                    comm.sendAsync(asRange(message), dest, 0).wait();
             }
             std::for_each(in_msg.cbegin() + 1, in_msg.cend(), [](char in) {
                 if (in != 'a')
@@ -52,9 +52,9 @@ int main(int argc, char* argv[])
             comm.receiveAsync(asRange(msg_in), 0).wait();
             if (msg_in != 'z')
                 throw std::logic_error{"Message corrupted in transit"};
-            comm.sendAsync(asRange(msg_out), 0).wait();
+            comm.sendAsync(asRange(msg_out), 0, 0).wait();
         }
-        auto request_to_cancel = comm.sendAsync(asRange(argc), 0);
+        auto request_to_cancel = comm.sendAsync(asRange(argc), 0, 0);
         request_to_cancel.cancel();
         request_to_cancel.wait();
 

@@ -2,7 +2,6 @@
 #include "l3ster/glob_asm/AlgebraicSystem.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 #include "l3ster/post/NormL2.hpp"
-#include "l3ster/solve/Solvers.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
 #include "Common.hpp"
@@ -27,6 +26,13 @@ void test()
         probdef_ctwrpr);
 
     auto alg_sys = makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr);
+    alg_sys->describe(comm);
+
+    constexpr auto params       = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1};
+    constexpr auto dummy_kernel = wrapDomainEquationKernel< params >([](const auto&, auto&) {});
+    alg_sys->beginAssembly();
+    alg_sys->assembleProblem(dummy_kernel, std::views::single(domain_id));
+    alg_sys->endAssembly();
     alg_sys->describe(comm);
 }
 

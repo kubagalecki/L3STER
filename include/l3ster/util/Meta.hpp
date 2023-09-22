@@ -62,8 +62,8 @@ concept UniqueTypePack_c = TypePack_c< T > and detail::has_unique_types< T >;
 namespace detail
 {
 template < std::integral T, T first, T last >
+constexpr auto makeIntervalArray()
     requires(first <= last)
-constexpr auto make_interval_array()
 {
     std::array< T, last - first + 1 > interval;
     std::iota(interval.begin(), interval.end(), first);
@@ -71,26 +71,47 @@ constexpr auto make_interval_array()
 }
 
 template < std::array A >
+constexpr auto intSeqFromArray()
     requires std::integral< typename decltype(A)::value_type >
-constexpr auto int_seq_from_array()
 {
     return []< size_t... I >(std::index_sequence< I... >) {
         return std::integer_sequence< typename decltype(A)::value_type, A[I]... >{};
     }(std::make_index_sequence< A.size() >{});
 }
+
+template < std::array A >
+struct ArrayToValPackImpl
+{
+    template < size_t I >
+    static constexpr auto access = A[I];
+    using type                   = decltype([]< size_t... I >(std::index_sequence< I... >) {
+        return ValuePack< access< I >... >{};
+    }(std::make_index_sequence< A.size() >{}));
+};
 } // namespace detail
 
 template < std::integral T, T first, T last >
     requires(first <= last)
-using int_seq_interval = decltype(detail::int_seq_from_array< detail::make_interval_array< T, first, last >() >());
+using int_seq_interval = decltype(detail::intSeqFromArray< detail::makeIntervalArray< T, first, last >() >());
+
+template < std::array A >
+using convert_array_to_value_pack_t = detail::ArrayToValPackImpl< A >::type;
+
+namespace detail
+{
+template < ValuePack_c >
+struct SplitValuePackImpl
+{};
+template < auto... Vs >
+struct SplitValuePackImpl< ValuePack< Vs... > >
+{
+    using type = TypePack< ValuePack< Vs >... >;
+};
+} // namespace detail
+template < ValuePack_c VP >
+using split_value_pack_t = detail::SplitValuePackImpl< VP >::type;
 
 // Functionality related to parametrizing over all combinations of a pack of nttp arrays
-template < typename T, T... V >
-constexpr auto makeArrayFromValueSet(ValuePack< V... >)
-{
-    return std::array{V...};
-}
-
 namespace detail
 {
 template < std::array... Arrays >
@@ -106,8 +127,8 @@ constexpr inline auto repetitions = std::invoke([] {
 } // namespace detail
 
 template < std::array... Arrays >
-    requires(sizeof...(Arrays) > 0)
 constexpr auto getCartProdComponents()
+    requires(sizeof...(Arrays) > 0)
 {
     constexpr auto deduction_helper = []< std::size_t... ArrInd >(std::index_sequence< ArrInd... >) {
         constexpr auto repeat_by_ind = []< std::size_t Ind >(std::integral_constant< std::size_t, Ind >) {
@@ -152,28 +173,28 @@ auto zipArrays(ValuePack< V... >)
 namespace detail
 {
 template < template < auto... > typename T, ValuePack_c Params >
-struct ApplyValuesDeductionHelper;
+struct ApplyValuesImpl;
 template < template < auto... > typename T, auto... Params >
-struct ApplyValuesDeductionHelper< T, ValuePack< Params... > >
+struct ApplyValuesImpl< T, ValuePack< Params... > >
 {
     using type = T< Params... >;
 };
 } // namespace detail
 template < template < auto... > typename T, ValuePack_c Params >
-using apply_values_t = typename detail::ApplyValuesDeductionHelper< T, Params >::type;
+using apply_values_t = typename detail::ApplyValuesImpl< T, Params >::type;
 
 namespace detail
 {
 template < template < auto... > typename Inner, template < typename... > typename Outer, TypePack_c Params >
-struct ApplyInnerOuterDeductionHelper;
+struct ApplyInnerOuterImpl;
 template < template < auto... > typename Inner, template < typename... > typename Outer, ValuePack_c... Params >
-struct ApplyInnerOuterDeductionHelper< Inner, Outer, TypePack< Params... > >
+struct ApplyInnerOuterImpl< Inner, Outer, TypePack< Params... > >
 {
     using type = Outer< apply_values_t< Inner, Params >... >;
 };
 } // namespace detail
 template < template < auto... > typename Inner, template < typename... > typename Outer, TypePack_c Params >
-using apply_in_out_t = typename detail::ApplyInnerOuterDeductionHelper< Inner, Outer, Params >::type;
+using apply_in_out_t = typename detail::ApplyInnerOuterImpl< Inner, Outer, Params >::type;
 
 template < template < auto... > typename Inner, template < typename... > typename Outer, std::array... Params >
 using cart_prod_t = apply_in_out_t< Inner, Outer, decltype(zipArrays(getCartProdComponents< Params... >())) >;

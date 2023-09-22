@@ -2,7 +2,7 @@
 #include "l3ster/glob_asm/AlgebraicSystem.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 #include "l3ster/post/NormL2.hpp"
-#include "l3ster/solve/Solvers.hpp"
+#include "l3ster/solve/Amesos2Solvers.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
 #include "Common.hpp"
@@ -39,22 +39,23 @@ void test()
         REQUIRE(alg_sys.get() == system_manager_shallow_copy.get());
     }
 
-    constexpr auto diff_params        = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3};
-    constexpr auto diffusion_kernel2d = wrapDomainKernel< diff_params >([]([[maybe_unused]] const auto& in, auto& out) {
-        auto& [operators, rhs] = out;
-        auto& [A0, A1, A2]     = operators;
-        constexpr double k     = 1.; // diffusivity
-        A0(1, 1)               = -1.;
-        A0(2, 2)               = -1.;
-        A1(0, 1)               = k;
-        A1(1, 0)               = 1.;
-        A1(3, 2)               = 1.;
-        A2(0, 2)               = k;
-        A2(2, 0)               = 1.;
-        A2(3, 1)               = -1.;
-    });
-    constexpr auto neubc_params       = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 3};
-    constexpr auto neumann_bc_kernel  = wrapBoundaryKernel< neubc_params >([](const auto& in, auto& out) {
+    constexpr auto diff_params = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3};
+    constexpr auto diffusion_kernel2d =
+        wrapDomainEquationKernel< diff_params >([]([[maybe_unused]] const auto& in, auto& out) {
+            auto& [operators, rhs] = out;
+            auto& [A0, A1, A2]     = operators;
+            constexpr double k     = 1.; // diffusivity
+            A0(1, 1)               = -1.;
+            A0(2, 2)               = -1.;
+            A1(0, 1)               = k;
+            A1(1, 0)               = 1.;
+            A1(3, 2)               = 1.;
+            A2(0, 2)               = k;
+            A2(2, 0)               = 1.;
+            A2(3, 1)               = -1.;
+        });
+    constexpr auto neubc_params      = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 3};
+    constexpr auto neumann_bc_kernel = wrapBoundaryEquationKernel< neubc_params >([](const auto& in, auto& out) {
         const auto& [vals, ders, point, normal] = in;
         auto& [operators, rhs]                  = out;
         auto& [A0, A1, A2]                      = operators;
@@ -63,7 +64,7 @@ void test()
     });
 
     constexpr auto dirbc_params        = KernelParams{.dimension = 2, .n_equations = 1};
-    constexpr auto dirichlet_bc_kernel = wrapResidualBoundaryKernel< dirbc_params >(
+    constexpr auto dirichlet_bc_kernel = wrapBoundaryResidualKernel< dirbc_params >(
         [node_dist](const auto& in, auto& out) { out[0] = in.point.space.x() / node_dist.back(); });
 
     const auto assembleDomainProblem = [&] {
@@ -119,8 +120,8 @@ void test()
         error[1]                      = dT_dx - 1. / node_dist.back();
         error[2]                      = dT_dy;
     };
-    constexpr auto dom_error_kernel = wrapResidualDomainKernel< params >(compute_error);
-    constexpr auto bnd_error_kernel = wrapResidualBoundaryKernel< params >(compute_error);
+    constexpr auto dom_error_kernel = wrapDomainResidualKernel< params >(compute_error);
+    constexpr auto bnd_error_kernel = wrapBoundaryResidualKernel< params >(compute_error);
     const auto     fval_getter      = solution_manager.makeFieldValueGetter(dof_inds);
 
     const auto error = computeNormL2(comm, dom_error_kernel, *mesh, std::views::single(domain_id), fval_getter);

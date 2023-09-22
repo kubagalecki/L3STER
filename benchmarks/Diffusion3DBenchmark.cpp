@@ -48,7 +48,7 @@ int main(int argc, char* argv[])
     constexpr auto dof_inds    = field_inds;
 
     constexpr auto dom_params         = KernelParams{.dimension = 3, .n_equations = 7, .n_unknowns = 4};
-    constexpr auto diffusion_kernel3d = wrapDomainKernel< dom_params >([](const auto& in, auto& out) {
+    constexpr auto diffusion_kernel3d = wrapDomainEquationKernel< dom_params >([](const auto& in, auto& out) {
         auto& [operators, rhs] = out;
         auto& [A0, Ax, Ay, Az] = operators;
 
@@ -78,7 +78,7 @@ int main(int argc, char* argv[])
         Ay(6, 1) = -1.;
     });
     constexpr auto err_params         = KernelParams{.dimension = 3, .n_equations = 4, .n_fields = 4};
-    constexpr auto error_kernel       = wrapResidualDomainKernel< err_params >([](const auto& in, auto& error) {
+    constexpr auto error_kernel       = wrapDomainResidualKernel< err_params >([](const auto& in, auto& error) {
         const auto& [vals, ders, point]      = in;
         const auto& [T, qx, qy, qz]          = vals;
         const auto& [x_ders, y_ders, z_ders] = ders;
@@ -101,7 +101,7 @@ int main(int argc, char* argv[])
     });
     constexpr auto dbc_params         = KernelParams{.dimension = 3, .n_equations = 1};
     constexpr auto dirichlet_bc_kernel =
-        wrapResidualBoundaryKernel< dbc_params >([](const auto& in, auto& out) { out[0] = 0.; });
+        wrapBoundaryResidualKernel< dbc_params >([](const auto& in, auto& out) { out[0] = 0.; });
 
     auto alg_system =
         makeAlgebraicSystem(comm, my_partition, element_boundary_tag, probdef_ctwrpr, dirichletdef_ctwrpr);
@@ -112,9 +112,10 @@ int main(int argc, char* argv[])
     alg_system->setDirichletBCValues(dirichlet_bc_kernel, boundary_ids, T_inds);
     alg_system->applyDirichletBCs();
 
-    solvers::CG solver{
-        1e-6, 10'000, static_cast< Belos::MsgType >(Belos::Warnings + Belos::FinalSummary + Belos::TimingDetails)};
-    auto solution = alg_system->makeSolutionVector();
+    constexpr auto solver_opts  = IterSolverOpts{.verbosity = {.summary = true, .timing = true}};
+    constexpr auto precond_opts = ChebyshevOpts{.degree = 3};
+    auto           solver       = CG{solver_opts, precond_opts};
+    auto           solution     = alg_system->makeSolutionVector();
     alg_system->solve(solver, solution);
 
     L3STER_PROFILE_REGION_BEGIN("Solution management");

@@ -34,9 +34,9 @@ auto subview1D(const Kokkos::View< T*, Args... >& v, size_t offset, size_t count
 
 template < typename T, typename... Args >
 auto makeTeuchosRCP(Args&&... args) -> Teuchos::RCP< T >
-    requires std::constructible_from< T, Args... >
+    requires std::constructible_from< T, decltype(std::forward< Args >(args))... >
 {
-    return Teuchos::rcp(new T{std::forward< Args >(args)...});
+    return Teuchos::rcp(new T(std::forward< Args >(args)...));
 }
 
 inline auto getLocalRowView(const tpetra_crsgraph_t& graph, local_dof_t row)
@@ -102,5 +102,14 @@ auto getSubgraph(const Teuchos::RCP< const tpetra_crsgraph_t >& full_graph, RowP
     retval->fillComplete();
     return retval;
 }
+
+// The interface for diagonal-aware operators was only added in 14.0, but we can easily roll our own
+class DiagonalAwareOperator : virtual public tpetra_operator_t
+{
+public:
+    virtual Teuchos::RCP< tpetra_vector_t > initDiagonalCopy() const                 = 0;
+    virtual void                            fillDiagonalCopy(tpetra_vector_t&) const = 0;
+    virtual ~DiagonalAwareOperator()                                                 = default;
+};
 } // namespace lstr::util
 #endif // L3STER_UTILS_TRILINOSUTILS_HPP

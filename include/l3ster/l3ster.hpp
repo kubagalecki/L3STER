@@ -11,7 +11,8 @@
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 #include "l3ster/post/NormL2.hpp"
 #include "l3ster/post/VtkExport.hpp"
-#include "l3ster/solve/Solvers.hpp"
+#include "l3ster/solve/Amesos2Solvers.hpp"
+#include "l3ster/solve/BelosSolvers.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 #include "l3ster/util/SetStackSize.hpp"
 

@@ -4,7 +4,7 @@
 #include "l3ster/common/SparsityGraph.hpp"
 #include "l3ster/glob_asm/ScatterLocalSystem.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
-#include "l3ster/solve/Solvers.hpp"
+#include "l3ster/solve/Amesos2Solvers.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
 #include "Common.hpp"
@@ -109,9 +109,8 @@ void test()
     for (int i = 0; i < data_notransp.extent_int(0); ++i)
         REQUIRE(approx(data_notransp[i], data_transp[i]));
 
-    auto solver = Amesos2::KLU2< tpetra_crsmatrix_t, tpetra_multivector_t >{matrix, result_vector1, rhs_vector};
-    REQUIRE(solver.matrixShapeOK());
-    solver.preOrdering().symbolicFactorization().numericFactorization().solve();
+    auto solver = solvers::KLU2{};
+    solver.solve(matrix, rhs_vector, result_vector1);
 
     const auto solution_vals =
         Kokkos::subview(result_vector1->getLocalViewHost(Tpetra::Access::ReadOnly), Kokkos::ALL, 0);

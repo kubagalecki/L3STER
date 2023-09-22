@@ -187,7 +187,7 @@ auto LocalSystemManager< problem_size, update_size >::setZero() -> LocalSystemMa
 
 template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >
 const auto& assembleLocalSystem(
-    const DomainKernel< Kernel, params >&                                                          kernel,
+    const DomainEquationKernel< Kernel, params >&                                                          kernel,
     const mesh::Element< ET, EO >&                                                                 element,
     const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, params.n_fields >& node_vals,
     const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,
@@ -220,7 +220,7 @@ const auto& assembleLocalSystem(
 
 template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >
 const auto& assembleLocalBoundarySystem(
-    const BoundaryKernel< Kernel, params >&                                                        kernel,
+    const BoundaryEquationKernel< Kernel, params >&                                                        kernel,
     mesh::BoundaryElementView< ET, EO >                                                            el_view,
     const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, params.n_fields >& node_vals,
     const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,

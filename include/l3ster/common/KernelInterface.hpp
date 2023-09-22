@@ -11,17 +11,18 @@ namespace lstr
 {
 struct KernelParams
 {
-    dim_t  dimension{};
-    size_t n_equations{};
-    size_t n_unknowns{};
-    size_t n_fields{};
+    dim_t  dimension;
+    size_t n_equations;
+    size_t n_unknowns = 1;
+    size_t n_fields   = 0;
+    size_t n_rhs      = 1;
 };
 
 template < KernelParams params >
 struct KernelInterface
 {
     using Operator = Eigen::Matrix< val_t, params.n_equations, params.n_unknowns >;
-    using Rhs      = Eigen::Vector< val_t, params.n_equations >;
+    using Rhs      = Eigen::Matrix< val_t, params.n_equations, params.n_rhs >;
     struct Result
     {
         std::array< Operator, params.dimension + 1 > operators;
@@ -67,34 +68,34 @@ auto initResidualKernelResult() -> KernelInterface< params >::Rhs
 } // namespace detail
 
 template < typename K, KernelParams params >
-concept DomainKernel_c =
+concept DomainEquationKernel_c =
     std::move_constructible< K > and std::invocable< std::add_const_t< std::decay_t< K > >,
                                                      const typename KernelInterface< params >::DomainInput&,
                                                      typename KernelInterface< params >::Result& >;
 
 template < typename K, KernelParams params >
-concept BoundaryKernel_c =
+concept BoundaryEquationKernel_c =
     std::move_constructible< K > and std::invocable< std::add_const_t< std::decay_t< K > >,
                                                      const typename KernelInterface< params >::BoundaryInput&,
                                                      typename KernelInterface< params >::Result& >;
 
 template < typename K, KernelParams params >
-concept ResidualDomainKernel_c =
+concept DomainResidualKernel_c =
     std::move_constructible< K > and std::invocable< std::add_const_t< std::decay_t< K > >,
                                                      const typename KernelInterface< params >::DomainInput&,
                                                      typename KernelInterface< params >::Rhs& >;
 
 template < typename K, KernelParams params >
-concept ResidualBoundaryKernel_c =
+concept BoundaryResidualKernel_c =
     std::move_constructible< K > and std::invocable< std::add_const_t< std::decay_t< K > >,
                                                      const typename KernelInterface< params >::BoundaryInput&,
                                                      typename KernelInterface< params >::Rhs& >;
 
 template < typename Kernel, KernelParams params >
-    requires DomainKernel_c< Kernel, params >
-struct DomainKernel
+    requires DomainEquationKernel_c< Kernel, params >
+struct DomainEquationKernel
 {
-    constexpr DomainKernel(Kernel kernel) : m_kernel{std::move(kernel)} {}
+    constexpr DomainEquationKernel(Kernel kernel) : m_kernel{std::move(kernel)} {}
 
     auto operator()(const KernelInterface< params >::DomainInput& input) const -> KernelInterface< params >::Result
     {
@@ -108,10 +109,10 @@ private:
 };
 
 template < typename Kernel, KernelParams params >
-    requires BoundaryKernel_c< Kernel, params >
-struct BoundaryKernel
+    requires BoundaryEquationKernel_c< Kernel, params >
+struct BoundaryEquationKernel
 {
-    constexpr BoundaryKernel(Kernel kernel) : m_kernel{std::move(kernel)} {}
+    constexpr BoundaryEquationKernel(Kernel kernel) : m_kernel{std::move(kernel)} {}
 
     auto operator()(const KernelInterface< params >::BoundaryInput& input) const -> KernelInterface< params >::Result
     {
@@ -125,7 +126,7 @@ private:
 };
 
 template < typename Kernel, KernelParams params >
-    requires ResidualDomainKernel_c< Kernel, params >
+    requires DomainResidualKernel_c< Kernel, params >
 struct ResidualDomainKernel
 {
     constexpr ResidualDomainKernel(Kernel kernel) : m_kernel{std::move(kernel)} {}
@@ -142,7 +143,7 @@ private:
 };
 
 template < typename Kernel, KernelParams params >
-    requires ResidualBoundaryKernel_c< Kernel, params >
+    requires BoundaryResidualKernel_c< Kernel, params >
 struct ResidualBoundaryKernel
 {
     constexpr ResidualBoundaryKernel(Kernel kernel) : m_kernel{std::move(kernel)} {}
@@ -159,29 +160,29 @@ private:
 };
 
 template < KernelParams params, typename Kernel >
-constexpr auto wrapDomainKernel(Kernel kernel, util::ConstexprValue< params > = {})
-    requires DomainKernel_c< Kernel, params >
+constexpr auto wrapDomainEquationKernel(Kernel kernel, util::ConstexprValue< params > = {})
+    requires DomainEquationKernel_c< Kernel, params >
 {
-    return DomainKernel< std::remove_cvref_t< Kernel >, params >{std::move(kernel)};
+    return DomainEquationKernel< std::remove_cvref_t< Kernel >, params >{std::move(kernel)};
 }
 
 template < KernelParams params, typename Kernel >
-constexpr auto wrapBoundaryKernel(Kernel kernel, util::ConstexprValue< params > = {})
-    requires BoundaryKernel_c< Kernel, params >
+constexpr auto wrapBoundaryEquationKernel(Kernel kernel, util::ConstexprValue< params > = {})
+    requires BoundaryEquationKernel_c< Kernel, params >
 {
-    return BoundaryKernel< std::remove_cvref_t< Kernel >, params >{std::move(kernel)};
+    return BoundaryEquationKernel< std::remove_cvref_t< Kernel >, params >{std::move(kernel)};
 }
 
 template < KernelParams params, typename Kernel >
-constexpr auto wrapResidualDomainKernel(Kernel kernel, util::ConstexprValue< params > = {})
-    requires ResidualDomainKernel_c< Kernel, params >
+constexpr auto wrapDomainResidualKernel(Kernel kernel, util::ConstexprValue< params > = {})
+    requires DomainResidualKernel_c< Kernel, params >
 {
     return ResidualDomainKernel< std::remove_cvref_t< Kernel >, params >{std::move(kernel)};
 }
 
 template < KernelParams params, typename Kernel >
-constexpr auto wrapResidualBoundaryKernel(Kernel kernel, util::ConstexprValue< params > = {})
-    requires ResidualBoundaryKernel_c< Kernel, params >
+constexpr auto wrapBoundaryResidualKernel(Kernel kernel, util::ConstexprValue< params > = {})
+    requires BoundaryResidualKernel_c< Kernel, params >
 {
     return ResidualBoundaryKernel< std::remove_cvref_t< Kernel >, params >{std::move(kernel)};
 }

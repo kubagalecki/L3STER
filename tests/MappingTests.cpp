@@ -553,7 +553,7 @@ TEST_CASE("Boundary integration", "[mapping]")
     const auto check_side_area =
         [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element, el_side_t side, val_t expected_area) {
             constexpr auto params    = KernelParams{.dimension = Element< ET, EO >::native_dim, .n_equations = 1};
-            constexpr auto integrand = wrapResidualBoundaryKernel< params >([](const auto&, auto& out) {
+            constexpr auto integrand = wrapBoundaryResidualKernel< params >([](const auto&, auto& out) {
                 out[0] = 1.; // Compute boundary area/length
             });
 

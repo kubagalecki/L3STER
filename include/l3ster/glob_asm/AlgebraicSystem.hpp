@@ -53,7 +53,7 @@ public:
                ArrayOf_c< size_t > auto field_inds = util::makeIotaArray< size_t, max_dofs_per_node >(),
                size_t                   n_fields   = 0,
                AssemblyOptions          asm_opts   = AssemblyOptions{} >
-    void assembleProblem(const DomainKernel< Kernel, params >&                kernel,
+    void assembleProblem(const DomainEquationKernel< Kernel, params >&        kernel,
                          const util::ArrayOwner< d_id_t >&                    domain_ids,
                          const SolutionManager::FieldValueGetter< n_fields >& fval_getter       = {},
                          util::ConstexprValue< field_inds >                   field_inds_ctwrpr = {},
@@ -64,7 +64,7 @@ public:
                ArrayOf_c< size_t > auto field_inds = util::makeIotaArray< size_t, max_dofs_per_node >(),
                size_t                   n_fields   = 0,
                AssemblyOptions          asm_opts   = AssemblyOptions{} >
-    void assembleProblem(const BoundaryKernel< Kernel, params >&              kernel,
+    void assembleProblem(const BoundaryEquationKernel< Kernel, params >&      kernel,
                          const util::ArrayOwner< d_id_t >&                    boundary_ids,
                          const SolutionManager::FieldValueGetter< n_fields >& fval_getter       = {},
                          util::ConstexprValue< field_inds >                   field_inds_ctwrpr = {},
@@ -329,7 +329,7 @@ template < typename Kernel,
            size_t                   n_fields,
            AssemblyOptions          asm_opts >
 void AlgebraicSystem< max_dofs_per_node, CP, orders... >::assembleProblem(
-    const DomainKernel< Kernel, params >&                kernel,
+    const DomainEquationKernel< Kernel, params >&        kernel,
     const util::ArrayOwner< d_id_t >&                    domain_ids,
     const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
     util::ConstexprValue< field_inds >                   field_inds_ctwrpr,
@@ -359,7 +359,7 @@ template < typename Kernel,
            size_t                   n_fields,
            AssemblyOptions          asm_opts >
 void AlgebraicSystem< max_dofs_per_node, CP, orders... >::assembleProblem(
-    const BoundaryKernel< Kernel, params >&              kernel,
+    const BoundaryEquationKernel< Kernel, params >&      kernel,
     const util::ArrayOwner< d_id_t >&                    boundary_ids,
     const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
     util::ConstexprValue< field_inds >                   field_inds_ctwrpr,

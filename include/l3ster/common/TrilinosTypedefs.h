@@ -33,6 +33,7 @@ static_assert(std::same_as< global_dof_t, Tpetra::MultiVector<>::global_ordinal_
 // For now use default node argument, this may change in the future (to support easy config for CPU/GPU)
 using tpetra_crsgraph_t      = Tpetra::CrsGraph< local_dof_t, global_dof_t >;
 using tpetra_crsmatrix_t     = Tpetra::CrsMatrix< val_t, local_dof_t, global_dof_t >;
+using tpetra_operator_t      = Tpetra::Operator< val_t, local_dof_t, global_dof_t >;
 using tpetra_fecrsgraph_t    = Tpetra::FECrsGraph< local_dof_t, global_dof_t >;
 using tpetra_fecrsmatrix_t   = Tpetra::FECrsMatrix< val_t, local_dof_t, global_dof_t >;
 using tpetra_femultivector_t = Tpetra::FEMultiVector< val_t, local_dof_t, global_dof_t >;

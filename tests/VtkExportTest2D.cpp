@@ -63,7 +63,7 @@ int main(int argc, char* argv[])
                              std::span{bot_top_vals},
                              solution_view);
         constexpr auto params = KernelParams{.dimension = 2, .n_equations = 2};
-        const auto     kernel = wrapResidualDomainKernel< params >([&](const auto& in, auto& out) {
+        const auto     kernel = wrapDomainResidualKernel< params >([&](const auto& in, auto& out) {
             // Kovasznay flow velocity field
             const auto& p = in.point.space;
             out[0]        = 1. - std::exp(lambda * p.x()) * std::cos(2. * pi * p.y());

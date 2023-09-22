@@ -50,7 +50,7 @@ TEST_CASE("Local system assembly", "[local_asm]")
         };
 
         constexpr auto ker_params = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3};
-        const auto     asm_kernel = wrapDomainKernel< ker_params >(diffusion_kernel_2d);
+        const auto     asm_kernel = wrapDomainEquationKernel< ker_params >(diffusion_kernel_2d);
         const auto [K, F] =
             assembleLocalSystem(asm_kernel, element, Eigen::Matrix< val_t, element.n_nodes, 0 >{}, basis_at_q, 0.);
         auto u = F;

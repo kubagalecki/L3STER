@@ -93,15 +93,15 @@ public:
         Request& operator=(const Request&) = delete;
         inline Request(Request&&) noexcept;
         inline Request& operator=(Request&&) noexcept;
-        ~Request() { waitIgnoreErr(); }
+        ~Request() { waitImpl(); }
 
-        void wait() { comm::handleMPIError(MPI_Wait(&m_request, MPI_STATUS_IGNORE), "MPI_wait failed"); }
-        void cancel() { comm::handleMPIError(MPI_Cancel(&m_request), "MPI_Cancel failed"); }
+        void                      wait() { comm::handleMPIError(waitImpl(), "MPI_wait failed"); }
+        void                      cancel() { comm::handleMPIError(MPI_Cancel(&m_request), "MPI_Cancel failed"); }
         [[nodiscard]] inline bool test();
 
     private:
         Request() = default;
-        void waitIgnoreErr() noexcept { MPI_Wait(&m_request, MPI_STATUS_IGNORE); }
+        int waitImpl() noexcept { return MPI_Wait(&m_request, MPI_STATUS_IGNORE); }
 
         MPI_Request m_request = MPI_REQUEST_NULL;
     };
@@ -139,15 +139,15 @@ public:
 
     // send
     template < comm::MpiBuf_c Data >
-    void send(Data&& send_range, int dest, int tag = 0) const;
+    void send(Data&& send_range, int dest, int tag) const;
     template < comm::MpiBorrowedBuf_c Data >
-    [[nodiscard]] auto sendAsync(Data&& data, int dest, int tag = 0) const -> Request;
+    [[nodiscard]] auto sendAsync(Data&& data, int dest, int tag) const -> Request;
 
     // receive
     template < comm::MpiBuf_c Data >
-    void receive(Data&& recv_range, int src, int tag = 0) const;
+    void receive(Data&& recv_range, int source = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG) const;
     template < comm::MpiBorrowedBuf_c Data >
-    [[nodiscard]] auto receiveAsync(Data&& data, int src, int tag = 0) const -> Request;
+    [[nodiscard]] auto receiveAsync(Data&& data, int src = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG) const -> Request;
 
     // collectives
     void barrier() const { comm::handleMPIError(MPI_Barrier(m_comm), "MPI_Barrier failed"); }
@@ -195,7 +195,7 @@ MpiComm::Request::Request(MpiComm::Request&& other) noexcept : m_request(other.m
 
 MpiComm::Request& MpiComm::Request::operator=(MpiComm::Request&& other) noexcept
 {
-    waitIgnoreErr();
+    waitImpl();
     m_request = std::exchange(other.m_request, MPI_REQUEST_NULL);
     return *this;
 }
@@ -273,10 +273,10 @@ auto MpiComm::sendAsync(Data&& data, int dest, int tag) const -> Request
 }
 
 template < comm::MpiBuf_c Data >
-void MpiComm::receive(Data&& recv_range, int source, int tag) const
+void MpiComm::receive(Data&& recv_range, int src, int tag) const
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(recv_range);
-    comm::handleMPIError(MPI_Recv(buf_begin, buf_size, datatype, source, tag, m_comm, MPI_STATUS_IGNORE),
+    comm::handleMPIError(MPI_Recv(buf_begin, buf_size, datatype, src, tag, m_comm, MPI_STATUS_IGNORE),
                          "MPI_Recv failed");
 }
 

@@ -13,7 +13,8 @@ enum struct ElementType
     Hex  = 0,
     Quad = 1,
     Line = 2,
-    // Update count when adding new element types
+
+    // Update Count when adding new element types
     Count = 3
 };
 

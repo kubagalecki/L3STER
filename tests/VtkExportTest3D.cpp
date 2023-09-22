@@ -53,7 +53,7 @@ int main(int argc, char* argv[])
         auto           solution_view = solution->get1dViewNonConst();
         constexpr auto ker_params    = KernelParams{.dimension = 3, .n_equations = 3};
 
-        const auto dom_kernel = wrapResidualDomainKernel< ker_params >([&](const auto& in, auto& out) {
+        const auto dom_kernel = wrapDomainResidualKernel< ker_params >([&](const auto& in, auto& out) {
             const auto& p = in.point.space;
             const auto  r = std::sqrt(p.x() * p.x() + p.y() * p.y() + p.z() * p.z());
             out[0]        = r;
@@ -70,7 +70,7 @@ int main(int argc, char* argv[])
 
         constexpr auto boundary_ids = util::makeIotaArray< d_id_t, 6 >(1);
         const auto     bnd_kernel =
-            wrapResidualBoundaryKernel< ker_params >([](const auto& in, auto& out) { out = in.normal; });
+            wrapBoundaryResidualKernel< ker_params >([](const auto& in, auto& out) { out = in.normal; });
         computeValuesAtNodes(bnd_kernel,
                              *my_partition,
                              boundary_ids,

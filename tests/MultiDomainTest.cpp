@@ -2,7 +2,7 @@
 #include "l3ster/glob_asm/AlgebraicSystem.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 #include "l3ster/post/NormL2.hpp"
-#include "l3ster/solve/Solvers.hpp"
+#include "l3ster/solve/Amesos2Solvers.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
 #include "Common.hpp"
@@ -33,12 +33,13 @@ void test()
 
     constexpr auto ker_params = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1};
     double         set_value  = 1.;
-    const auto const_kernel = wrapDomainKernel< ker_params >([&set_value]([[maybe_unused]] const auto& in, auto& out) {
-        auto& [operators, rhs] = out;
-        auto& [A0, A1, A2]     = operators;
-        A0(0, 0)               = 1.;
-        rhs[0]                 = set_value;
-    });
+    const auto     const_kernel =
+        wrapDomainEquationKernel< ker_params >([&set_value]([[maybe_unused]] const auto& in, auto& out) {
+            auto& [operators, rhs] = out;
+            auto& [A0, A1, A2]     = operators;
+            A0(0, 0)               = 1.;
+            rhs[0]                 = set_value;
+        });
 
     const auto assemble_problem_in_dom = [&]< int dom_ind >(util::ConstexprValue< dom_ind >) {
         set_value                 = static_cast< double >(dom_ind + 1);

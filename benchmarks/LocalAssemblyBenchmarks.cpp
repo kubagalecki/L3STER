@@ -58,7 +58,7 @@ static void BM_NS3DLocalAssembly(benchmark::State& state)
         basis::getReferenceBasisAtDomainQuadrature< BT, mesh::ElementType::Hex, EO, QT, QO >();
 
     constexpr auto params      = KernelParams{.dimension = 3, .n_equations = 8, .n_unknowns = 7, .n_fields = 7};
-    constexpr auto ns3d_kernel = wrapDomainKernel< params >([](const auto& in, auto& out) {
+    constexpr auto ns3d_kernel = wrapDomainEquationKernel< params >([](const auto& in, auto& out) {
         const auto& [vals, ders, point]             = in;
         const auto& [u, v, w, p, ox, oy, oz]        = vals;
         const auto& [x_ders, y_ders, z_ders]        = ders;
