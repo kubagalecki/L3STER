@@ -216,5 +216,8 @@ constexpr auto getTrueInds(ConstexprValue< A > = {})
     std::ranges::copy(true_inds_sv, retval.begin());
     return retval;
 }
+
+template < auto... >
+inline constexpr bool always_false = false;
 } // namespace lstr::util
 #endif // L3STER_UTIL_META_HPP

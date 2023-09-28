@@ -1,5 +1,5 @@
-#ifndef L3STER_ASSEMBLY_MAKETPETRAMAP_HPP
-#define L3STER_ASSEMBLY_MAKETPETRAMAP_HPP
+#ifndef L3STER_GLOB_ASM_MAKETPETRAMAP_HPP
+#define L3STER_GLOB_ASM_MAKETPETRAMAP_HPP
 
 #include "l3ster/dofs/NodeToDofMap.hpp"
 #include "l3ster/util/TrilinosUtils.hpp"
@@ -63,4 +63,4 @@ auto makeTpetraMap(Nodes&& nodes, const node_interval_vector_t< n_fields >& dof_
     return makeTpetraMap(dofs, comm);
 }
 } // namespace lstr::dofs
-#endif // L3STER_ASSEMBLY_MAKETPETRAMAP_HPP
+#endif // L3STER_GLOB_ASM_MAKETPETRAMAP_HPP

@@ -26,7 +26,7 @@ int main(int argc, char* argv[])
     constexpr auto        dirichletdef_ctwrpr = util::ConstexprValue< dirichlet_def >{};
 
     constexpr auto node_dist    = std::invoke([] {
-        constexpr size_t                   edge_divs = 4;
+        constexpr size_t                   edge_divs = 5;
         constexpr auto                     dx        = 1. / static_cast< val_t >(edge_divs);
         std::array< val_t, edge_divs + 1 > retval{};
         for (double x = 0; auto& r : retval)
@@ -36,7 +36,7 @@ int main(int argc, char* argv[])
         }
         return retval;
     });
-    constexpr auto mesh_order   = 4;
+    constexpr auto mesh_order   = 6;
     const auto     my_partition = generateAndDistributeMesh< mesh_order >(
         comm, [&] { return mesh::makeCubeMesh(node_dist); }, {}, probdef_ctwrpr);
 

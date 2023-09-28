@@ -692,6 +692,8 @@ MPI_Offset PvtuExporter::enqueueWrite(std::shared_ptr< MpiComm::FileHandle > fil
 
 void PvtuExporter::flushWriteQueue()
 {
+    MpiComm::Request::waitAll(m_write_queue |
+                              std::views::transform([](AsyncWrite& aw) -> MpiComm::Request& { return aw.request; }));
     m_write_queue.clear();
 }
 } // namespace lstr

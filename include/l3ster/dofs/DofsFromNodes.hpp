@@ -5,11 +5,34 @@
 
 namespace lstr::dofs
 {
+template < IndexRange_c auto dof_inds, size_t n_nodes, size_t max_dofs_per_node, CondensationPolicy CP >
+auto getNodeActiveDofs(n_id_t                                               node,
+                       const dofs::NodeToGlobalDofMap< max_dofs_per_node >& node_dof_map,
+                       const dofs::NodeCondensationMap< CP >&               cond_map,
+                       util::ConstexprValue< dof_inds >                     dofinds_ctwrpr = {})
+{
+    if constexpr (CP == CondensationPolicy::None)
+        return util::getValuesAtInds(node_dof_map(cond_map.getCondensedId(node)), dofinds_ctwrpr);
+    else if constexpr (CP == CondensationPolicy::ElementBoundary)
+    {
+        auto           retval    = util::StaticVector< global_dof_t, max_dofs_per_node >{};
+        const auto&    node_dofs = node_dof_map(cond_map.getCondensedId(node));
+        constexpr auto is_valid  = [](global_dof_t dof) {
+            return dof != dofs::NodeToGlobalDofMap< max_dofs_per_node >::invalid_dof;
+        };
+        std::ranges::copy_if(node_dofs, std::back_inserter(retval), is_valid);
+        return retval;
+    }
+    else
+        static_assert(util::always_false< CP >, "Unimplemented");
+}
+
 template < IndexRange_c auto dof_inds, size_t n_nodes, size_t dofs_per_node, CondensationPolicy CP >
 auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&             nodes,
                       const dofs::NodeToGlobalDofMap< dofs_per_node >& node_dof_map,
                       const dofs::NodeCondensationMap< CP >&           cond_map,
                       util::ConstexprValue< dof_inds >                 dofinds_ctwrpr = {})
+    -> std::array< global_dof_t, std::ranges::size(dof_inds) * n_nodes >
 {
     std::array< global_dof_t, std::ranges::size(dof_inds) * n_nodes > retval;
     std::ranges::copy(nodes | std::views::transform([&](n_id_t node) {
@@ -23,6 +46,7 @@ template < size_t n_nodes, size_t dofs_per_node >
 auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                                    nodes,
                       const dofs::NodeToGlobalDofMap< dofs_per_node >&                        node_dof_map,
                       const dofs::NodeCondensationMap< CondensationPolicy::ElementBoundary >& cond_map)
+    -> util::StaticVector< global_dof_t, dofs_per_node * n_nodes >
 {
     util::StaticVector< global_dof_t, dofs_per_node * n_nodes > retval;
     std::ranges::copy(

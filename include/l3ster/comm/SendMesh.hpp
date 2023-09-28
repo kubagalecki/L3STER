@@ -53,9 +53,9 @@ inline void sendPartition(const MpiComm& comm, const mesh::SerializedPartition& 
 {
     int msg_tag = 0;
 
-    const size_t n_messages = 6 * part.domains.size() + 2;       // 6 per domain + nodes + boundary IDs
-    auto         messages   = std::vector< MpiComm::Request >{}; // comm completion ensured via RAII
-    messages.reserve(n_messages);
+    const size_t n_messages = 6 * part.domains.size() + 2; // 6 per domain + nodes + boundary IDs
+    auto         requests   = std::vector< MpiComm::Request >{};
+    requests.reserve(n_messages);
 
     // prelims
     const auto n_dom_msg_and_data = sendNDoms(comm, part, destination, msg_tag++);
@@ -65,19 +65,20 @@ inline void sendPartition(const MpiComm& comm, const mesh::SerializedPartition& 
     // domain data
     for (const auto& [id, dom] : part.domains)
     {
-        messages.emplace_back(comm.sendAsync(dom.element_nodes, destination, msg_tag++));
-        messages.emplace_back(comm.sendAsync(dom.element_data, destination, msg_tag++));
-        messages.emplace_back(comm.sendAsync(dom.element_ids, destination, msg_tag++));
-        messages.emplace_back(comm.sendAsync(dom.type_order_offsets, destination, msg_tag++));
-        messages.emplace_back(comm.sendAsync(dom.types, destination, msg_tag++));
-        messages.emplace_back(comm.sendAsync(dom.orders, destination, msg_tag++));
+        requests.emplace_back(comm.sendAsync(dom.element_nodes, destination, msg_tag++));
+        requests.emplace_back(comm.sendAsync(dom.element_data, destination, msg_tag++));
+        requests.emplace_back(comm.sendAsync(dom.element_ids, destination, msg_tag++));
+        requests.emplace_back(comm.sendAsync(dom.type_order_offsets, destination, msg_tag++));
+        requests.emplace_back(comm.sendAsync(dom.types, destination, msg_tag++));
+        requests.emplace_back(comm.sendAsync(dom.orders, destination, msg_tag++));
     }
 
     // nodes
-    messages.emplace_back(comm.sendAsync(part.nodes, destination, msg_tag++));
+    requests.emplace_back(comm.sendAsync(part.nodes, destination, msg_tag++));
 
     // boundaries
-    messages.emplace_back(comm.sendAsync(part.boundaries, destination, msg_tag++));
+    requests.emplace_back(comm.sendAsync(part.boundaries, destination, msg_tag++));
+    MpiComm::Request::waitAll(requests);
 }
 } // namespace lstr::comm
 #endif // L3STER_COMM_SENDMESH_HPP

@@ -43,8 +43,8 @@ auto CrsGraph< VertexType >::operator()(std::size_t vertex_ind) noexcept -> std:
 template < std::integral VertexType >
 auto CrsGraph< VertexType >::operator()(std::size_t vertex_ind) const noexcept -> std::span< const VertexType >
 {
-    return {std::next(m_adjacent.get(), m_adj_offsets[vertex_ind]),
-            std::next(m_adjacent.get(), m_adj_offsets[vertex_ind + 1u])};
+    return {std::next(m_adjacent.begin(), m_adj_offsets[vertex_ind]),
+            std::next(m_adjacent.begin(), m_adj_offsets[vertex_ind + 1u])};
 }
 
 template < std::integral VertexType >
