@@ -10,6 +10,7 @@
 #pragma GCC diagnostic ignored "-Wconversion"
 #pragma GCC diagnostic ignored "-Wfloat-conversion"
 #pragma GCC diagnostic ignored "-Wvolatile"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 #endif
 
 #include "Amesos2.hpp"

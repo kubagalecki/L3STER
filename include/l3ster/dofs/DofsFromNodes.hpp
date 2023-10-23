@@ -5,7 +5,7 @@
 
 namespace lstr::dofs
 {
-template < IndexRange_c auto dof_inds, size_t n_nodes, size_t max_dofs_per_node, CondensationPolicy CP >
+template < IndexRange_c auto dof_inds, size_t max_dofs_per_node, CondensationPolicy CP >
 auto getNodeActiveDofs(n_id_t                                               node,
                        const dofs::NodeToGlobalDofMap< max_dofs_per_node >& node_dof_map,
                        const dofs::NodeCondensationMap< CP >&               cond_map,

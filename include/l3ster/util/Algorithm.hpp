@@ -219,7 +219,6 @@ void sortRemoveDup(std::vector< T >& vec)
     std::ranges::sort(vec);
     const auto erase_range = std::ranges::unique(vec);
     vec.erase(erase_range.begin(), erase_range.end());
-    vec.shrink_to_fit();
 }
 
 template < std::array array >

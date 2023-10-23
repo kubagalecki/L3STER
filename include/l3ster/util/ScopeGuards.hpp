@@ -40,9 +40,8 @@ MpiScopeGuard::MpiScopeGuard(int& argc, char**& argv)
 {
     static constexpr auto required_mode            = MPI_THREAD_FUNNELED;
     constexpr auto        check_mpi_thread_support = [] {
-        int        provided_mode{};
-        const auto err_code = MPI_Query_thread(&provided_mode);
-        comm::handleMPIError(err_code, "`MPI_Query_thread` failed");
+        int provided_mode{};
+        L3STER_INVOKE_MPI(MPI_Query_thread, &provided_mode);
         util::throwingAssert(provided_mode >= required_mode,
                              "The provided MPI installation appears not to have the required threading support: "
                                     "`MPI_THREAD_FUNNELED`\nIf you are initializing MPI yourself (i.e. not via L3STER scope "
@@ -50,22 +49,19 @@ MpiScopeGuard::MpiScopeGuard(int& argc, char**& argv)
                                     "as the requirement, and *not* by calling `MPI_Init`");
     };
     constexpr auto check_initialized = []() -> bool {
-        int        retval{};
-        const auto err_code = MPI_Initialized(&retval);
-        comm::handleMPIError(err_code, "`MPI_Initialized` failed");
+        int retval{};
+        L3STER_INVOKE_MPI(MPI_Initialized, &retval);
         return retval;
     };
     constexpr auto check_not_finalized = [] {
-        int        finalized{};
-        const auto err_code = MPI_Finalized(&finalized);
-        comm::handleMPIError(err_code, "`MPI_Finalized` failed");
+        int finalized{};
+        L3STER_INVOKE_MPI(MPI_Finalized, &finalized);
         util::terminatingAssert(
             not finalized, "You are attempting to create `lstr::MpiScopeGuard` after `MPI_Finalize` has been called");
     };
     const auto initialize = [&] {
-        int        dummy{};
-        const auto err_code = MPI_Init_thread(&argc, &argv, required_mode, &dummy);
-        comm::handleMPIError(err_code, "`MPI_Init_thread` failed");
+        int dummy{};
+        L3STER_INVOKE_MPI(MPI_Init_thread, &argc, &argv, required_mode, &dummy);
     };
 
     check_not_finalized();
@@ -179,8 +175,9 @@ class MaxParallelismGuard
     }
 
 public:
-    explicit MaxParallelismGuard(size_t max_threads) : m_previous{getCurrentMaxPar()}
+    explicit MaxParallelismGuard(size_t max_threads_unclamped) : m_previous{getCurrentMaxPar()}
     {
+        const auto max_threads = std::clamp(max_threads_unclamped, size_t{1}, std::numeric_limits< size_t >::max());
         if (max_threads < m_previous)
         {
             m_thread_guards.emplace(max_threads);

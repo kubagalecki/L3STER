@@ -17,7 +17,6 @@
 #include "TestDataPath.h"
 
 #include "catch2/catch.hpp"
-#include "tbb/tbb.h"
 
 #include <algorithm>
 #include <random>
@@ -172,6 +171,7 @@ TEMPLATE_TEST_CASE("Bitset (de-)serialization",
 
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpragmas"
 #pragma GCC diagnostic ignored "-Wself-move"
 #endif
 
@@ -583,31 +583,59 @@ TEST_CASE("Base64 encoding", "[util]")
 
 TEST_CASE("StaticVector", "[util]")
 {
-    auto vec = util::StaticVector< int, 100 >{};
-    CHECK(vec.size() == 0);
-    std::generate_n(std::back_inserter(vec),
-                    100,
-                    [prng = std::mt19937{std::random_device{}()},
-                     dist = std::uniform_int_distribution< int >{}]() mutable { return dist(prng); });
-    REQUIRE(vec.size() == 100);
-    vec.resize(50);
-    REQUIRE(vec.size() == 50);
-    std::ranges::sort(vec);
-    CHECK(vec.front() <= vec.back());
-    CHECK(std::ranges::is_sorted(vec));
-    vec.erase(std::next(vec.begin(), 10), std::prev(vec.end(), 10));
-    REQUIRE(vec.size() == 20);
-    vec.resize(10);
-    CHECK(std::ranges::is_sorted(vec));
-    vec.pop_back();
-    REQUIRE(vec.size() == 9);
-    const auto vec_copy = vec;
-    vec.erase(vec.end(), vec.end());
-    REQUIRE(vec.size() == 9);
-    CHECK(std::ranges::equal(vec, vec_copy));
-    vec.resize(10, 42);
-    REQUIRE(vec.size() == 10);
-    CHECK(std::ranges::equal(vec | std::views::drop(9), std::views::single(42)));
+    SECTION("Ctors")
+    {
+        SECTION("Default")
+        {
+            auto vec = util::StaticVector< int, 100 >{};
+            REQUIRE(vec.size() == 0);
+        }
+        SECTION("Array")
+        {
+            const auto src_arr = std::array{1, 3, 5, 10, 42};
+            const auto vec     = util::StaticVector< int, 10 >{src_arr};
+            REQUIRE(std::ranges::equal(src_arr, vec));
+        }
+        SECTION("Range-based")
+        {
+            const auto src_vec = std::vector{1, 3, 5, 10, 42};
+
+            const auto full_vec = util::StaticVector< int, 10 >{src_vec};
+            REQUIRE(std::ranges::equal(src_vec, full_vec));
+
+            auto       even_view = src_vec | std::views::filter([](int i) { return i % 2 == 0; });
+            const auto even_vec  = util::StaticVector< int, 10 >{even_view};
+            REQUIRE(std::ranges::equal(even_vec, even_view));
+        }
+    }
+    SECTION("Manip")
+    {
+        auto vec = util::StaticVector< int, 100 >{};
+        CHECK(vec.size() == 0);
+        std::generate_n(std::back_inserter(vec),
+                        100,
+                        [prng = std::mt19937{std::random_device{}()},
+                         dist = std::uniform_int_distribution< int >{}]() mutable { return dist(prng); });
+        REQUIRE(vec.size() == 100);
+        vec.resize(50);
+        REQUIRE(vec.size() == 50);
+        std::ranges::sort(vec);
+        CHECK(vec.front() <= vec.back());
+        CHECK(std::ranges::is_sorted(vec));
+        vec.erase(std::next(vec.begin(), 10), std::prev(vec.end(), 10));
+        REQUIRE(vec.size() == 20);
+        vec.resize(10);
+        CHECK(std::ranges::is_sorted(vec));
+        vec.pop_back();
+        REQUIRE(vec.size() == 9);
+        const auto vec_copy = vec;
+        vec.erase(vec.end(), vec.end());
+        REQUIRE(vec.size() == 9);
+        CHECK(std::ranges::equal(vec, vec_copy));
+        vec.resize(10, 42);
+        REQUIRE(vec.size() == 10);
+        CHECK(std::ranges::equal(vec | std::views::drop(9), std::views::single(42)));
+    }
 }
 
 TEST_CASE("getTrueInds", "[util]")

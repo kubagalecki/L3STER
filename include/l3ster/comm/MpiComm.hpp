@@ -52,6 +52,8 @@ handleMPIError(int error, std::string_view err_msg, std::source_location src_loc
     util::throwingAssert(not error, err_msg, src_loc);
 }
 
+#define L3STER_INVOKE_MPI(fun__, ...) comm::handleMPIError(fun__(__VA_ARGS__), "Call to " #fun__ " failed")
+
 template < typename T >
 concept MpiType_c = requires { MpiType< std::remove_cvref_t< T > >::value(); };
 
@@ -63,7 +65,8 @@ concept MpiBorrowedBuf_c = MpiBuf_c< T > and std::ranges::borrowed_range< T >;
 
 template < typename It, typename Buf >
 concept MpiOutputIterator_c =
-    std::output_iterator< It, std::ranges::range_value_t< Buf > > and std::contiguous_iterator< It >;
+    std::output_iterator< It, std::ranges::range_value_t< Buf > > and
+    std::same_as< std::iter_value_t< It >, std::ranges::range_value_t< Buf > > and std::contiguous_iterator< It >;
 
 template < MpiType_c T >
 struct MpiBufView
@@ -85,6 +88,25 @@ auto parseMpiBuf(Buffer&& buf)
 class MpiComm
 {
 public:
+    class Status
+    {
+    public:
+        friend class MpiComm;
+
+        template < comm::MpiType_c T >
+        [[nodiscard]] auto numElems() const -> int;
+
+        [[nodiscard]] int getSource() const { return m_status.MPI_SOURCE; }
+        [[nodiscard]] int getTag() const { return m_status.MPI_TAG; }
+        [[nodiscard]] int getError() const { return m_status.MPI_ERROR; }
+
+    private:
+        auto getHandle() -> MPI_Status* { return &m_status; }
+
+        MPI_Status m_status;
+    };
+    static_assert(std::is_standard_layout_v< Status >);
+
     class Request
     {
     public:
@@ -97,19 +119,33 @@ public:
         ~Request() { waitImpl(); }
 
         void                      wait() { comm::handleMPIError(waitImpl(), "MPI_wait failed"); }
-        void                      cancel() { comm::handleMPIError(MPI_Cancel(&m_request), "MPI_Cancel failed"); }
+        void                      cancel() { L3STER_INVOKE_MPI(MPI_Cancel, &m_request); }
         [[nodiscard]] inline bool test();
 
         template < std::ranges::range RequestRange >
         static void waitAll(RequestRange&& requests)
-            requires std::same_as< std::ranges::range_reference_t< RequestRange >, Request& >;
+            requires(not std::ranges::contiguous_range< RequestRange > and
+                     std::same_as< std::ranges::range_reference_t< RequestRange >, Request& >);
+        template < std::ranges::contiguous_range RequestRange >
+        static void waitAll(RequestRange&& requests)
+            requires std::same_as< std::ranges::range_value_t< RequestRange >, Request >;
+        template < std::ranges::range RequestRange >
+        static auto waitAny(RequestRange&& requests) -> std::ranges::iterator_t< RequestRange >
+            requires(not std::ranges::contiguous_range< RequestRange > and
+                     std::same_as< std::ranges::range_reference_t< RequestRange >, Request& >);
+        template < std::ranges::contiguous_range RequestRange >
+        static auto waitAny(RequestRange&& requests) -> std::ranges::iterator_t< RequestRange >
+            requires std::same_as< std::ranges::range_value_t< RequestRange >, Request >;
 
     private:
         Request() = default;
         int waitImpl() noexcept { return MPI_Wait(&m_request, MPI_STATUS_IGNORE); }
 
+        auto getHandle() -> MPI_Request* { return &m_request; }
+
         MPI_Request m_request = MPI_REQUEST_NULL;
     };
+    static_assert(std::is_standard_layout_v< Request >);
 
     class FileHandle
     {
@@ -153,10 +189,12 @@ public:
     void receive(Data&& recv_range, int src = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG) const;
     template < comm::MpiBorrowedBuf_c Data >
     [[nodiscard]] auto receiveAsync(Data&& data, int src = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG) const -> Request;
-    [[nodiscard]] inline auto probe(int source = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG) const -> MPI_Status;
+    [[nodiscard]] inline auto probe(int source = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG) const -> Status;
+    [[nodiscard]] inline auto probeAsync(int source = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG) const
+        -> std::pair< Status, bool >;
 
     // collectives
-    void barrier() const { comm::handleMPIError(MPI_Barrier(m_comm), "MPI_Barrier failed"); }
+    void barrier() const { L3STER_INVOKE_MPI(MPI_Barrier, m_comm); }
     template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
     void reduce(Data&& data, It out_it, int root, MPI_Op op) const;
     template < comm::MpiBuf_c Data >
@@ -189,8 +227,6 @@ public:
     // misc
     inline FileHandle openFile(const char* file_name, int amode, MPI_Info info = MPI_INFO_NULL) const;
     void              abort() const { MPI_Abort(m_comm, MPI_ERR_UNKNOWN); }
-    template < comm::MpiType_c T >
-    static int countReceivedElems(const MPI_Status& status);
 
 private:
     MpiComm() = default;
@@ -198,6 +234,14 @@ private:
 
     MPI_Comm m_comm = MPI_COMM_NULL;
 };
+
+template < comm::MpiType_c T >
+auto MpiComm::Status::numElems() const -> int
+{
+    int retval{};
+    L3STER_INVOKE_MPI(MPI_Get_elements, &m_status, comm::MpiType< T >::value(), &retval);
+    return retval;
+}
 
 MpiComm::Request::Request(MpiComm::Request&& other) noexcept : m_request(other.m_request)
 {
@@ -214,21 +258,61 @@ MpiComm::Request& MpiComm::Request::operator=(MpiComm::Request&& other) noexcept
 bool MpiComm::Request::test()
 {
     int flag{};
-    comm::handleMPIError(MPI_Test(&m_request, &flag, MPI_STATUS_IGNORE), "MPI_Test failed");
+    L3STER_INVOKE_MPI(MPI_Test, &m_request, &flag, MPI_STATUS_IGNORE);
     return flag;
 }
 
 template < std::ranges::range RequestRange >
 void MpiComm::Request::waitAll(RequestRange&& requests)
-    requires std::same_as< std::ranges::range_reference_t< RequestRange >, Request& >
+    requires(not std::ranges::contiguous_range< RequestRange > and
+             std::same_as< std::ranges::range_reference_t< RequestRange >, Request& >)
 {
     const auto n_requests   = std::ranges::distance(requests);
     auto       raw_requests = util::ArrayOwner< MPI_Request >(static_cast< size_t >(n_requests));
     std::ranges::transform(requests, raw_requests.begin(), [](const Request& r) { return r.m_request; });
-    comm::handleMPIError(MPI_Waitall(static_cast< int >(n_requests), raw_requests.data(), MPI_STATUSES_IGNORE),
-                         "MPI_Waitall failed");
+    L3STER_INVOKE_MPI(MPI_Waitall, static_cast< int >(n_requests), raw_requests.data(), MPI_STATUSES_IGNORE);
     for (Request& r : requests)
         r.m_request = MPI_REQUEST_NULL;
+}
+
+template < std::ranges::contiguous_range RequestRange >
+void MpiComm::Request::waitAll(RequestRange&& requests)
+    requires std::same_as< std::ranges::range_value_t< RequestRange >, Request >
+{
+    const auto n_requests       = std::ranges::distance(requests);
+    const auto raw_requests_ptr = reinterpret_cast< MPI_Request* >(std::ranges::data(requests)); // standard layout
+    L3STER_INVOKE_MPI(MPI_Waitall, static_cast< int >(n_requests), raw_requests_ptr, MPI_STATUSES_IGNORE);
+}
+
+template < std::ranges::range RequestRange >
+auto MpiComm::Request::waitAny(RequestRange&& requests) -> std::ranges::iterator_t< RequestRange >
+    requires(not std::ranges::contiguous_range< RequestRange > and
+             std::same_as< std::ranges::range_reference_t< RequestRange >, Request& >)
+{
+    const auto n_requests   = std::ranges::distance(requests);
+    auto       raw_requests = util::ArrayOwner< MPI_Request >(static_cast< size_t >(n_requests));
+    std::ranges::transform(requests, raw_requests.begin(), [](const Request& r) { return r.m_request; });
+    int index{};
+    L3STER_INVOKE_MPI(MPI_Waitany, static_cast< int >(n_requests), raw_requests.data(), &index, MPI_STATUSES_IGNORE);
+    if (index == MPI_UNDEFINED)
+        return std::ranges::end(requests);
+    else
+    {
+        auto retval       = std::next(std::ranges::begin(requests), index);
+        retval->m_request = MPI_REQUEST_NULL;
+        return retval;
+    }
+}
+
+template < std::ranges::contiguous_range RequestRange >
+auto MpiComm::Request::waitAny(RequestRange&& requests) -> std::ranges::iterator_t< RequestRange >
+    requires std::same_as< std::ranges::range_value_t< RequestRange >, Request >
+{
+    const auto n_requests       = std::ranges::distance(requests);
+    const auto raw_requests_ptr = reinterpret_cast< MPI_Request* >(std::ranges::data(requests)); // standard layout
+    int        index{};
+    L3STER_INVOKE_MPI(MPI_Waitany, static_cast< int >(n_requests), raw_requests_ptr, &index, MPI_STATUSES_IGNORE);
+    return index == MPI_UNDEFINED ? std::ranges::end(requests) : std::next(std::ranges::begin(requests), index);
 }
 
 MpiComm::FileHandle::FileHandle(MpiComm::FileHandle&& other) noexcept
@@ -244,7 +328,7 @@ MpiComm::FileHandle& MpiComm::FileHandle::operator=(MpiComm::FileHandle&& other)
 
 void MpiComm::FileHandle::preallocate(MPI_Offset size) const
 {
-    comm::handleMPIError(MPI_File_preallocate(m_file, size), "MPI_File_preallocate failed");
+    L3STER_INVOKE_MPI(MPI_File_preallocate, m_file, size);
 }
 
 template < comm::MpiBorrowedBuf_c Data >
@@ -252,8 +336,7 @@ auto MpiComm::FileHandle::readAtAsync(Data&& read_range, MPI_Offset offset) cons
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(read_range);
     MpiComm::Request request;
-    comm::handleMPIError(MPI_File_iread_at(m_file, offset, buf_begin, buf_size, datatype, &request.m_request),
-                         "MPI_File_iread_at failed");
+    L3STER_INVOKE_MPI(MPI_File_iread_at, m_file, offset, buf_begin, buf_size, datatype, request.getHandle());
     return request;
 }
 
@@ -262,20 +345,20 @@ auto MpiComm::FileHandle::writeAtAsync(Data&& write_range, MPI_Offset offset) co
 {
     const auto datatype = comm::MpiType< std::ranges::range_value_t< decltype(write_range) > >::value();
     auto       request  = MpiComm::Request{};
-    comm::handleMPIError(MPI_File_iwrite_at(m_file,
-                                            offset,
-                                            std::ranges::data(write_range),
-                                            util::exactIntegerCast< int >(std::ranges::size(write_range)),
-                                            datatype,
-                                            &request.m_request),
-                         "MPI_File_iwrite_at failed");
+    L3STER_INVOKE_MPI(MPI_File_iwrite_at,
+                      m_file,
+                      offset,
+                      std::ranges::data(write_range),
+                      util::exactIntegerCast< int >(std::ranges::size(write_range)),
+                      datatype,
+                      request.getHandle());
     return request;
 }
 
 MpiComm::FileHandle MpiComm::openFile(const char* file_name, int amode, MPI_Info info) const
 {
     auto fh = FileHandle{};
-    comm::handleMPIError(MPI_File_open(m_comm, file_name, amode, info, &fh.m_file), "MPI_File_open failed");
+    L3STER_INVOKE_MPI(MPI_File_open, m_comm, file_name, amode, info, &fh.m_file);
     return fh;
 }
 
@@ -283,7 +366,7 @@ template < comm::MpiBuf_c Data >
 void MpiComm::send(Data&& send_range, int dest, int tag) const
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(send_range);
-    comm::handleMPIError(MPI_Send(buf_begin, buf_size, datatype, dest, tag, m_comm), "MPI_Send failed");
+    L3STER_INVOKE_MPI(MPI_Send, buf_begin, buf_size, datatype, dest, tag, m_comm);
 }
 
 template < comm::MpiBorrowedBuf_c Data >
@@ -291,8 +374,7 @@ auto MpiComm::sendAsync(Data&& data, int dest, int tag) const -> Request
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
     auto request                               = Request{};
-    comm::handleMPIError(MPI_Isend(buf_begin, buf_size, datatype, dest, tag, m_comm, &request.m_request),
-                         "MPI_Isend failed");
+    L3STER_INVOKE_MPI(MPI_Isend, buf_begin, buf_size, datatype, dest, tag, m_comm, &request.m_request);
     return request;
 }
 
@@ -300,8 +382,7 @@ template < comm::MpiBuf_c Data >
 void MpiComm::receive(Data&& recv_range, int src, int tag) const
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(recv_range);
-    comm::handleMPIError(MPI_Recv(buf_begin, buf_size, datatype, src, tag, m_comm, MPI_STATUS_IGNORE),
-                         "MPI_Recv failed");
+    L3STER_INVOKE_MPI(MPI_Recv, buf_begin, buf_size, datatype, src, tag, m_comm, MPI_STATUS_IGNORE);
 }
 
 template < comm::MpiBorrowedBuf_c Data >
@@ -310,15 +391,23 @@ auto MpiComm::receiveAsync(Data&& data, int src, int tag) const -> Request
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
     auto request                               = Request{};
-    comm::handleMPIError(MPI_Irecv(buf_begin, buf_size, datatype, src, tag, m_comm, &request.m_request),
-                         "MPI_Irecv failed");
+    L3STER_INVOKE_MPI(MPI_Irecv, buf_begin, buf_size, datatype, src, tag, m_comm, &request.m_request);
     return request;
 }
 
-auto MpiComm::probe(int source, int tag) const -> MPI_Status
+auto MpiComm::probe(int source, int tag) const -> Status
 {
-    auto retval = MPI_Status{};
-    comm::handleMPIError(MPI_Probe(source, tag, m_comm, &retval), "MPI_Probe failed");
+    auto retval = Status{};
+    L3STER_INVOKE_MPI(MPI_Probe, source, tag, m_comm, reinterpret_cast< MPI_Status* >(&retval));
+    return retval;
+}
+
+auto MpiComm::probeAsync(int source, int tag) const -> std::pair< Status, bool >
+{
+    auto retval = std::pair< Status, bool >{};
+    int  flag{};
+    L3STER_INVOKE_MPI(MPI_Iprobe, source, tag, m_comm, &flag, retval.first.getHandle());
+    retval.second = flag;
     return retval;
 }
 
@@ -326,41 +415,37 @@ template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
 void MpiComm::reduce(Data&& data, It out_it, int root, MPI_Op op) const
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
-    comm::handleMPIError(MPI_Reduce(buf_begin, std::addressof(*out_it), buf_size, datatype, op, root, m_comm),
-                         "MPI_Reduce failed");
+    L3STER_INVOKE_MPI(MPI_Reduce, buf_begin, std::addressof(*out_it), buf_size, datatype, op, root, m_comm);
 }
 
 template < comm::MpiBuf_c Data >
 void MpiComm::reduceInPlace(Data&& data, int root, MPI_Op op) const
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
-    comm::handleMPIError(getRank() == root ? MPI_Reduce(MPI_IN_PLACE, buf_begin, buf_size, datatype, op, root, m_comm)
-                                           : MPI_Reduce(buf_begin, nullptr, buf_size, datatype, op, root, m_comm),
-                         "MPI_Reduce failed");
+    getRank() == root ? L3STER_INVOKE_MPI(MPI_Reduce, MPI_IN_PLACE, buf_begin, buf_size, datatype, op, root, m_comm)
+                      : L3STER_INVOKE_MPI(MPI_Reduce, buf_begin, nullptr, buf_size, datatype, op, root, m_comm);
 }
 
 template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
 void MpiComm::allReduce(Data&& data, It out_it, MPI_Op op) const
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
-    comm::handleMPIError(MPI_Allreduce(buf_begin, std::addressof(*out_it), buf_size, datatype, op, m_comm),
-                         "MPI_Allreduce failed");
+    L3STER_INVOKE_MPI(MPI_Allreduce, buf_begin, std::addressof(*out_it), buf_size, datatype, op, m_comm);
 }
 
 template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
 void MpiComm::gather(Data&& data, It out_it, int root) const
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
-    comm::handleMPIError(
-        MPI_Gather(buf_begin, buf_size, datatype, std::addressof(*out_it), buf_size, datatype, root, m_comm),
-        "MPI_Gather failed");
+    L3STER_INVOKE_MPI(
+        MPI_Gather, buf_begin, buf_size, datatype, std::addressof(*out_it), buf_size, datatype, root, m_comm);
 }
 
 template < comm::MpiBuf_c Data >
 void MpiComm::broadcast(Data&& data, int root) const
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
-    comm::handleMPIError(MPI_Bcast(buf_begin, buf_size, datatype, root, m_comm), "MPI_Bcast failed");
+    L3STER_INVOKE_MPI(MPI_Bcast, buf_begin, buf_size, datatype, root, m_comm);
 }
 
 template < comm::MpiBorrowedBuf_c Data >
@@ -368,8 +453,7 @@ auto MpiComm::broadcastAsync(Data&& data, int root) const -> MpiComm::Request
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
     auto request                               = Request{};
-    comm::handleMPIError(MPI_Ibcast(buf_begin, buf_size, datatype, root, m_comm, &request.m_request),
-                         "MPI_Ibcast failed");
+    L3STER_INVOKE_MPI(MPI_Ibcast, buf_begin, buf_size, datatype, root, m_comm, request.getHandle());
     return request;
 }
 
@@ -386,9 +470,8 @@ auto MpiComm::allToAllAsync(SendBuf&& send_buf, RecvBuf&& recv_buf) const -> Mpi
 
     const int n_elems = send_size / getSize();
     auto      request = Request{};
-    comm::handleMPIError(
-        MPI_Ialltoall(send_begin, n_elems, send_type, recv_begin, n_elems, recv_type, m_comm, &request.m_request),
-        "MPI_IAlltoall failed");
+    L3STER_INVOKE_MPI(
+        MPI_Ialltoall, send_begin, n_elems, send_type, recv_begin, n_elems, recv_type, m_comm, request.getHandle());
     return request;
 }
 
@@ -399,38 +482,30 @@ template < ContiguousSizedRangeOf< int > Src,
 MpiComm MpiComm::distGraphCreate(Src&& sources, Deg&& degrees, Dest&& destinations, Wgts&& weights, bool reorder) const
 {
     auto retval = MpiComm{};
-    comm::handleMPIError(MPI_Dist_graph_create(m_comm,
-                                               static_cast< int >(std::ranges::ssize(sources)),
-                                               std::ranges::data(sources),
-                                               std::ranges::data(degrees),
-                                               std::ranges::data(destinations),
-                                               std::ranges::data(weights),
-                                               MPI_INFO_NULL,
-                                               reorder,
-                                               &retval.m_comm),
-                         "MPI_Dist_graph_create failed");
-    return retval;
-}
-
-template < comm::MpiType_c T >
-int MpiComm::countReceivedElems(const MPI_Status& status)
-{
-    int retval{};
-    comm::handleMPIError(MPI_Get_count(&status, comm::MpiType< T >::value(), &retval), "MPI_Get_count failed");
+    L3STER_INVOKE_MPI(MPI_Dist_graph_create,
+                      m_comm,
+                      static_cast< int >(std::ranges::ssize(sources)),
+                      std::ranges::data(sources),
+                      std::ranges::data(degrees),
+                      std::ranges::data(destinations),
+                      std::ranges::data(weights),
+                      MPI_INFO_NULL,
+                      reorder,
+                      &retval.m_comm);
     return retval;
 }
 
 int MpiComm::getRank() const
 {
     int rank{};
-    comm::handleMPIError(MPI_Comm_rank(m_comm, &rank), "MPI_Comm_rank failed");
+    L3STER_INVOKE_MPI(MPI_Comm_rank, m_comm, &rank);
     return rank;
 }
 
 int MpiComm::getSize() const
 {
     int size{};
-    comm::handleMPIError(MPI_Comm_size(m_comm, &size), "MPI_Comm_size failed");
+    L3STER_INVOKE_MPI(MPI_Comm_size, m_comm, &size);
     return size;
 }
 
@@ -442,8 +517,8 @@ void MpiComm::freeOwnedComm()
 
 MpiComm::MpiComm(MPI_Comm comm, MPI_Errhandler err_handler)
 {
-    comm::handleMPIError(MPI_Comm_dup(comm, &m_comm), "MPI_Comm_dup failed");
-    comm::handleMPIError(MPI_Comm_set_errhandler(m_comm, err_handler), "MPI_Comm_set_errhandler failed");
+    L3STER_INVOKE_MPI(MPI_Comm_dup, comm, &m_comm);
+    L3STER_INVOKE_MPI(MPI_Comm_set_errhandler, m_comm, err_handler);
 }
 
 MpiComm& MpiComm::operator=(MpiComm&& other) noexcept

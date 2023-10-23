@@ -36,31 +36,17 @@ auto getNodeDofs(NodeRange&& sorted_nodes, const node_interval_vector_t< n_field
     return retval;
 }
 
-inline auto makeTeuchosMpiComm(const MpiComm& comm) -> Teuchos::RCP< const Teuchos::MpiComm< int > >
-{
-    return util::makeTeuchosRCP< const Teuchos::MpiComm< int > >(comm.get());
-}
-
 inline auto getInvalidSize() -> Tpetra::global_size_t
 {
     return Teuchos::OrdinalTraits< Tpetra::global_size_t >::invalid();
 }
 
-inline auto makeTpetraMap(std::span< const global_dof_t > dofs, const MpiComm& comm)
+inline auto makeTpetraMap(std::span< const global_dof_t > dofs, Teuchos::RCP< const Teuchos::MpiComm< int > > comm)
     -> Teuchos::RCP< const tpetra_map_t >
 {
-    auto       teuchos_comm      = makeTeuchosMpiComm(comm);
     const auto compute_size      = getInvalidSize();
     const auto dofs_teuchos_view = util::asTeuchosView(dofs);
-    return util::makeTeuchosRCP< const tpetra_map_t >(compute_size, dofs_teuchos_view, 0, std::move(teuchos_comm));
-}
-
-template < RangeOfConvertibleTo_c< n_id_t > Nodes, size_t n_fields >
-auto makeTpetraMap(Nodes&& nodes, const node_interval_vector_t< n_fields >& dof_intervals, const MpiComm& comm)
-    -> Teuchos::RCP< const tpetra_map_t >
-{
-    const auto dofs = getNodeDofs(std::forward< Nodes >(nodes), dof_intervals);
-    return makeTpetraMap(dofs, comm);
+    return util::makeTeuchosRCP< const tpetra_map_t >(compute_size, dofs_teuchos_view, 0, std::move(comm));
 }
 } // namespace lstr::dofs
 #endif // L3STER_GLOB_ASM_MAKETPETRAMAP_HPP

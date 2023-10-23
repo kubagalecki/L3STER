@@ -14,6 +14,28 @@ class StaticVector
 public:
     using value_type = T;
 
+    StaticVector() = default;
+    template < size_t N >
+    explicit StaticVector(const std::array< T, N >& a)
+        requires(N <= capacity)
+        : m_size{N}
+    {
+        std::ranges::copy(a, m_data.begin());
+    }
+    template < std::ranges::range R >
+    explicit StaticVector(R&& r)
+        requires std::convertible_to< std::ranges::range_value_t< R >, T >
+    {
+        std::ranges::copy(std::forward< R >(r), std::back_inserter(*this));
+    }
+    template < std::ranges::sized_range R >
+    explicit StaticVector(R&& r)
+        requires std::convertible_to< std::ranges::range_value_t< R >, T >
+        : m_size{std::ranges::size(r)}
+    {
+        std::ranges::copy(std::forward< R >(r), m_data.begin());
+    }
+
     constexpr T*       begin() { return m_data.begin(); }
     constexpr const T* begin() const { return m_data.begin(); }
     constexpr T*       end() { return m_data.begin() + m_size; }

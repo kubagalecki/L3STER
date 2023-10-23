@@ -92,32 +92,6 @@ auto makeCommVolumeInfo(const std::vector< mesh::MeshPartition< orders... > >& m
     return retval;
 }
 
-template < el_o_t... orders, ProblemDef problem_def >
-auto computeOptimalRankPermutation(const MpiComm&                                         comm,
-                                   const std::vector< mesh::MeshPartition< orders... > >& mesh,
-                                   util::ConstexprValue< problem_def > probdef_ctwrapper) -> std::vector< int >
-{
-    L3STER_PROFILE_FUNCTION;
-    if (comm.getSize() == 1)
-        return {0};
-
-    if (comm.getRank() == 0)
-    {
-        const auto [sources, degrees, destinations, weights] = makeCommVolumeInfo(mesh, probdef_ctwrapper);
-        const int          optimal_rank = comm.distGraphCreate(sources, degrees, destinations, weights, true).getRank();
-        std::vector< int > retval(comm.getSize());
-        comm.gather(std::views::single(optimal_rank), retval.begin(), 0);
-        return retval;
-    }
-    else
-    {
-        const auto empty        = std::views::empty< int >;
-        const int  optimal_rank = comm.distGraphCreate(empty, empty, empty, empty, true).getRank();
-        comm.gather(std::views::single(optimal_rank), &std::ignore, 0);
-        return {};
-    }
-}
-
 inline auto computeDefaultRankPermutation(const MpiComm& comm)
 {
     std::vector< int > retval(comm.getSize());

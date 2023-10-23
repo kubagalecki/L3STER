@@ -73,9 +73,8 @@ private:
 };
 
 template < CondensationPolicy CP >
-void test()
+void test(const MpiComm& comm)
 {
-    const auto comm           = MpiComm{MPI_COMM_WORLD};
     auto       full_mesh      = std::invoke([] {
         constexpr auto node_dist = std::array{0., 1., 2.};
         auto           mesh      = mesh::makeCubeMesh(node_dist);
@@ -93,12 +92,8 @@ void test()
     const auto dof_intervals  = computeDofIntervals(comm, *my_partition, cond_map, probdef_ctwrpr);
     const auto node_dof_map   = NodeToGlobalDofMap{dof_intervals, cond_map};
     const auto sparsity_graph = makeSparsityGraph(comm, *my_partition, node_dof_map, cond_map, probdef_ctwrpr);
-
-    auto out_str = Teuchos::getFancyOStream(Teuchos::rcpFromRef(std::cout));
-    sparsity_graph->describe(*out_str, Teuchos::VERB_EXTREME);
-
-    const auto num_all_dofs = getNodeDofs(cond_map_full.getCondensedIds(), dof_intervals).size();
-    const auto dense_graph  = DenseGraph{full_mesh, probdef_ctwrpr, dof_intervals, cond_map_full};
+    const auto num_all_dofs   = getNodeDofs(cond_map_full.getCondensedIds(), dof_intervals).size();
+    const auto dense_graph    = DenseGraph{full_mesh, probdef_ctwrpr, dof_intervals, cond_map_full};
 
     REQUIRE(sparsity_graph->getGlobalNumRows() == num_all_dofs);
     REQUIRE(sparsity_graph->getGlobalNumCols() == num_all_dofs);
@@ -121,8 +116,13 @@ void test()
 
 int main(int argc, char* argv[])
 {
-    const auto max_par_guard = util::MaxParallelismGuard{4};
-    const auto scope_guard   = L3sterScopeGuard{argc, argv};
-    test< CondensationPolicy::None >();
-    test< CondensationPolicy::ElementBoundary >();
+    // Set number of threads before initializing Kokkos
+    const auto MpiGuard      = util::MpiScopeGuard{argc, argv};
+    const auto comm          = MpiComm{MPI_COMM_WORLD};
+    const auto n_threads     = 16 / comm.getSize();
+    const auto max_par_guard = util::MaxParallelismGuard{static_cast< size_t >(n_threads)};
+
+    const auto scope_guard = L3sterScopeGuard{argc, argv};
+    test< CondensationPolicy::None >(comm);
+    test< CondensationPolicy::ElementBoundary >(comm);
 }

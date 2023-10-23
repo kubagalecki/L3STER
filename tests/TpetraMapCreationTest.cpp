@@ -22,7 +22,9 @@ void test()
     const auto     cond_map        = dofs::makeCondensationMap< CP >(comm, *mesh, probdef_ctwrpr);
     auto           owned_condensed = cond_map.getCondensedOwnedNodesView(*mesh);
     const auto     dof_intervals   = dofs::computeDofIntervals(comm, *mesh, cond_map, probdef_ctwrpr);
-    const auto     tpetra_map      = dofs::makeTpetraMap(owned_condensed, dof_intervals, comm);
+    const auto     dofs            = getNodeDofs(owned_condensed, dof_intervals);
+    const auto     teuchos_comm    = util::makeTeuchosRCP< const Teuchos::MpiComm< int > >(comm.get());
+    const auto     tpetra_map      = dofs::makeTpetraMap(dofs, teuchos_comm);
     const auto     map_entries     = tpetra_map->getLocalElementList();
     REQUIRE(std::ranges::equal(owned_condensed, tpetra_map->getLocalElementList()));
     REQUIRE(tpetra_map->isOneToOne());
