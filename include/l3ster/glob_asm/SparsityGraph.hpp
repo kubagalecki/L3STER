@@ -173,9 +173,8 @@ auto computeOutNeighborDofInfo(int                                              
                 auto& my_insert_set = target_map[my_rank];
                 for (global_dof_t dof : owned_dofs | std::views::join)
                     my_insert_set.insert(dof);
-                for (size_t i = 0; n_id_t node : ghost_nodes)
+                for (size_t i = 0; int node_owner : ghost_node_owners)
                 {
-                    const auto  node_owner = ghost_node_owners[i];
                     const auto& node_dofs  = ghost_dofs[i];
                     auto&       insert_set = target_map[node_owner];
                     for (global_dof_t dof : node_dofs)
@@ -262,7 +261,7 @@ inline auto exchangeNeighborDofInfo(const MpiComm&                    comm,
             requests.push_back(comm.sendAsync(dofs, target_rank, dof_tag));
         }
     };
-    const auto probe_sizes = [&](const std::vector< int >& in_nbrs) -> std::vector< size_t > {
+    const auto probe_sizes = [&]() -> std::vector< size_t > {
         const size_t sz     = in_nbrs.size();
         auto         retval = std::vector< size_t >(sz);
         for (auto probed_inds = util::DynamicBitset{sz}; probed_inds.count() != sz;)
@@ -301,7 +300,7 @@ inline auto exchangeNeighborDofInfo(const MpiComm&                    comm,
     requests.reserve(2 * (in_nbrs.size() + out_dof_info.size()));
     const auto out_dof_info_flat = flatten_neighbor_dof_map(out_dof_info);
     begin_send_info(out_dof_info_flat);
-    const auto recv_sizes       = probe_sizes(in_nbrs);
+    const auto recv_sizes       = probe_sizes();
     const auto in_nbr_info_flat = begin_recv_info(recv_sizes);
     MpiComm::Request::waitAll(requests);
     return reconstitute_map_of_sets(in_nbr_info_flat);
@@ -512,7 +511,7 @@ inline auto makeTpetraCrsGraph(const MpiComm&                  comm,
     {
         const auto row_allocation = local_graph(local_row);
         const auto row_entries    = row_allocation.subspan(0, row_size);
-        retval->insertLocalIndices(local_row, util::asTeuchosView(row_entries));
+        retval->insertLocalIndices(static_cast< int >(local_row), util::asTeuchosView(row_entries));
         ++local_row;
     }
     L3STER_PROFILE_REGION_END("Insert into Tpetra::FECrsGraph");

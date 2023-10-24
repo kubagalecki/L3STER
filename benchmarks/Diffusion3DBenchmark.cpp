@@ -26,7 +26,7 @@ int main(int argc, char* argv[])
     constexpr auto        dirichletdef_ctwrpr = util::ConstexprValue< dirichlet_def >{};
 
     constexpr auto node_dist    = std::invoke([] {
-        constexpr size_t                   edge_divs = 5;
+        constexpr size_t                   edge_divs = 6;
         constexpr auto                     dx        = 1. / static_cast< val_t >(edge_divs);
         std::array< val_t, edge_divs + 1 > retval{};
         for (double x = 0; auto& r : retval)
