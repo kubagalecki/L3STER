@@ -2,17 +2,35 @@
 
 #include "DataPath.h"
 
+using namespace lstr;
+using namespace std::string_view_literals;
+
+auto makeMesh(const lstr::MpiComm& comm, auto probdef_ctwrpr)
+{
+    constexpr auto node_dist  = std::invoke([] {
+        constexpr size_t                   edge_divs = 6;
+        constexpr auto                     dx        = 1. / static_cast< val_t >(edge_divs);
+        std::array< val_t, edge_divs + 1 > retval{};
+        for (double x = 0; auto& r : retval)
+        {
+            r = x;
+            x += dx;
+        }
+        return retval;
+    });
+    constexpr auto mesh_order = 6;
+    return generateAndDistributeMesh< mesh_order >(
+        comm, [&] { return mesh::makeCubeMesh(node_dist); }, {}, probdef_ctwrpr);
+}
+
 int main(int argc, char* argv[])
 {
-    using namespace lstr;
-    using namespace std::string_view_literals;
-
     L3sterScopeGuard scope_guard{argc, argv};
     const MpiComm    comm{MPI_COMM_WORLD};
 
     constexpr d_id_t      domain_id           = 0;
     static constexpr auto boundary_ids        = util::makeIotaArray< d_id_t, 6 >(1);
-    static constexpr auto problem_def         = ProblemDef{defineDomain< 4 >(domain_id, 0, 1, 2, 3)};
+    static constexpr auto problem_def         = ProblemDef{defineDomain< 4 >(domain_id, ALL_DOFS)};
     constexpr auto        dirichlet_def       = std::invoke([] {
         auto retval = ProblemDef< boundary_ids.size(), problem_def.n_fields >{};
         for (size_t i = 0; auto& [id, fields] : retval.domain_defs)
@@ -25,20 +43,7 @@ int main(int argc, char* argv[])
     constexpr auto        probdef_ctwrpr      = util::ConstexprValue< problem_def >{};
     constexpr auto        dirichletdef_ctwrpr = util::ConstexprValue< dirichlet_def >{};
 
-    constexpr auto node_dist    = std::invoke([] {
-        constexpr size_t                   edge_divs = 6;
-        constexpr auto                     dx        = 1. / static_cast< val_t >(edge_divs);
-        std::array< val_t, edge_divs + 1 > retval{};
-        for (double x = 0; auto& r : retval)
-        {
-            r = x;
-            x += dx;
-        }
-        return retval;
-    });
-    constexpr auto mesh_order   = 6;
-    const auto     my_partition = generateAndDistributeMesh< mesh_order >(
-        comm, [&] { return mesh::makeCubeMesh(node_dist); }, {}, probdef_ctwrpr);
+    const auto my_partition = makeMesh(comm, probdef_ctwrpr);
 
     constexpr auto field_inds  = util::makeIotaArray< size_t, problem_def.n_fields >();
     constexpr auto T_inds      = std::array< size_t, 1 >{0};

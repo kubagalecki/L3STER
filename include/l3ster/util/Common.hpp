@@ -92,5 +92,31 @@ T& getThreadLocal()
     thread_local T value;
     return value;
 }
+
+template < std::floating_point T, size_t N >
+constexpr auto linspaceArray(T lo, T hi) -> std::array< T, N >
+    requires(N >= 2)
+{
+    const auto L      = hi - lo;
+    const auto d      = L / static_cast< T >(N - 1);
+    auto       retval = std::array< T, N >{};
+    std::ranges::transform(
+        std::views::iota(size_t{0}, N), retval.begin(), [&](size_t i) { return lo + static_cast< T >(i) * d; });
+    return retval;
+}
+
+template < std::floating_point T >
+auto makeLinspaceVector(T lo, T hi, size_t N) -> std::vector< T >
+{
+    util::throwingAssert(N >= 2);
+    const auto L      = hi - lo;
+    const auto d      = L / static_cast< T >(N - 1);
+    auto       retval = std::vector< T >{};
+    retval.reserve(N);
+    std::ranges::transform(std::views::iota(size_t{0}, N), std::back_inserter(retval), [&](size_t i) -> T {
+        return lo + static_cast< T >(i) * d;
+    });
+    return retval;
+}
 } // namespace lstr::util
 #endif // L3STER_UTIL_COMMON_HPP

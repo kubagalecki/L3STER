@@ -11,22 +11,29 @@ using namespace lstr;
 using namespace lstr::glob_asm;
 using namespace lstr::mesh;
 
+constexpr auto node_dist = std::array{0., 1., 2., 3., 4., 5., 6.};
+
+auto makeMesh(const MpiComm& comm, auto probdef_ctwrpr)
+{
+    constexpr auto mesh_order = 2;
+    return generateAndDistributeMesh< mesh_order >(
+        comm, [&] { return makeSquareMesh(node_dist); }, {}, probdef_ctwrpr);
+}
+
 template < CondensationPolicy CP >
 void test()
 {
     const auto comm = MpiComm{MPI_COMM_WORLD};
 
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
-    constexpr auto   problem_def    = ProblemDef{defineDomain< 3 >(domain_id, 0, 1, 2)};
+    constexpr auto   problem_def    = ProblemDef{defineDomain< 3 >(domain_id, ALL_DOFS)};
     constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
     constexpr auto   dirichlet_def =
         ProblemDef{defineDomain< 3 >(left_boundary, 0), defineDomain< 3 >(right_boundary, 0)};
     constexpr auto dirichletdef_ctwrpr = util::ConstexprValue< dirichlet_def >{};
 
-    constexpr auto node_dist  = std::array{0., 1., 2., 3., 4., 5., 6.};
-    constexpr auto mesh_order = 2;
-    const auto     mesh       = generateAndDistributeMesh< mesh_order >(
-        comm, [&] { return makeSquareMesh(node_dist); }, {}, probdef_ctwrpr);
+    const auto mesh = makeMesh(comm, probdef_ctwrpr);
+
     constexpr auto adiabatic_bound_ids = std::array{bot_boundary, top_boundary};
     constexpr auto boundary_ids        = std::array{top_boundary, bot_boundary, left_boundary, right_boundary};
 
@@ -65,7 +72,7 @@ void test()
 
     constexpr auto dirbc_params        = KernelParams{.dimension = 2, .n_equations = 1};
     constexpr auto dirichlet_bc_kernel = wrapBoundaryResidualKernel< dirbc_params >(
-        [node_dist](const auto& in, auto& out) { out[0] = in.point.space.x() / node_dist.back(); });
+        [](const auto& in, auto& out) { out[0] = in.point.space.x() / node_dist.back(); });
 
     const auto assembleDomainProblem = [&] {
         alg_sys->assembleProblem(diffusion_kernel2d, std::views::single(domain_id));
@@ -112,7 +119,7 @@ void test()
 
     // Check results
     constexpr auto params        = KernelParams{.dimension = 2, .n_equations = 3, .n_fields = 3};
-    constexpr auto compute_error = [node_dist](const auto& in, auto& error) {
+    constexpr auto compute_error = [](const auto& in, auto& error) {
         const auto& point             = in.point;
         const auto& vals              = in.field_vals;
         const auto& [T, dT_dx, dT_dy] = vals;

@@ -75,9 +75,11 @@ private:
 template < CondensationPolicy CP >
 void test(const MpiComm& comm)
 {
-    auto       full_mesh      = std::invoke([] {
-        constexpr auto node_dist = std::array{0., 1., 2.};
-        auto           mesh      = mesh::makeCubeMesh(node_dist);
+    auto       full_mesh      = std::invoke([&comm] {
+        constexpr int big = 16, small = 5;
+        const auto    nodes_per_edge = comm.getSize() == 1 ? big : small;
+        const auto    node_dist      = util::makeLinspaceVector(0., 1., nodes_per_edge);
+        auto          mesh           = mesh::makeCubeMesh(node_dist);
         return convertMeshToOrder< 2 >(mesh);
     });
     auto       full_mesh_copy = copy(full_mesh);
@@ -123,6 +125,13 @@ int main(int argc, char* argv[])
     const auto max_par_guard = util::MaxParallelismGuard{static_cast< size_t >(n_threads)};
 
     const auto scope_guard = L3sterScopeGuard{argc, argv};
-    test< CondensationPolicy::None >(comm);
-    test< CondensationPolicy::ElementBoundary >(comm);
+
+    // Test several times for the maximally parallel case to try to catch out any threading errors
+    constexpr int n_mt_iters = 4;
+    const int     n_iter     = comm.getSize() == 1 ? n_mt_iters : 1;
+    for (int i = 0; i != n_iter; ++i)
+    {
+        test< CondensationPolicy::None >(comm);
+        test< CondensationPolicy::ElementBoundary >(comm);
+    }
 }

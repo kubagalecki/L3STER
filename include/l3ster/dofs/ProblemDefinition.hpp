@@ -16,14 +16,30 @@ struct DomainDef
     std::array< bool, fields > active_fields{};
 };
 
+namespace detail
+{
+struct AllDofsTag
+{};
+} // namespace detail
+inline constexpr detail::AllDofsTag ALL_DOFS{};
+
 template < size_t fields >
 constexpr auto defineDomain(d_id_t domain, std::convertible_to< size_t > auto... field_inds) -> DomainDef< fields >
 {
-    auto                        active_fields = std::array< bool, fields >{};
-    [[maybe_unused]] const auto set           = [&](auto ind) {
-        active_fields.at(static_cast< size_t >(ind)) = true;
-    };
-    (set(field_inds), ...);
+    auto active_fields = std::array< bool, fields >{};
+    (
+        [&](auto ind) {
+            active_fields.at(static_cast< size_t >(ind)) = true;
+        }(field_inds),
+        ...);
+    return {domain, active_fields};
+}
+
+template < size_t fields >
+constexpr auto defineDomain(d_id_t domain, detail::AllDofsTag) -> DomainDef< fields >
+{
+    auto active_fields = std::array< bool, fields >{};
+    active_fields.fill(true);
     return {domain, active_fields};
 }
 

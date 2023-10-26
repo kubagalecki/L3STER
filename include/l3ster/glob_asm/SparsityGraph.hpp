@@ -490,6 +490,23 @@ auto computeCrsGraph(const mesh::MeshPartition< orders... >&                    
     return retval;
 }
 
+inline void convertToTpetraFECrsGraph(const util::CrsGraph< local_dof_t >& native_graph,
+                                      tpetra_fecrsgraph_t&                 tpetra_graph,
+                                      std::span< const size_t >            row_sizes)
+{
+    L3STER_PROFILE_FUNCTION;
+    const auto insert_into_row = [&](size_t local_row) {
+        const auto row_allocation = native_graph(local_row);
+        const auto row_size       = row_sizes[local_row];
+        const auto row_entries    = row_allocation.subspan(0, row_size);
+        tpetra_graph.insertLocalIndices(static_cast< int >(local_row), util::asTeuchosView(row_entries));
+    };
+#ifdef L3STER_SERIALIZE_TPETRA_GRAPH_INSERTION
+    const auto par_guard = util::MaxParallelismGuard{1};
+#endif
+    util::tbb::parallelFor(std::views::iota(0u, native_graph.getNRows()), insert_into_row);
+}
+
 inline auto makeTpetraCrsGraph(const MpiComm&                  comm,
                                std::span< const global_dof_t > owned_row_dofs,
                                std::span< const global_dof_t > owned_plus_shared_row_dofs,
@@ -503,29 +520,17 @@ inline auto makeTpetraCrsGraph(const MpiComm&                  comm,
     const auto owned_plus_shared_map = dofs::makeTpetraMap(owned_plus_shared_row_dofs, teuchos_comm);
     const auto col_map               = dofs::makeTpetraMap(col_dofs, teuchos_comm);
     auto retval = util::makeTeuchosRCP< tpetra_fecrsgraph_t >(owned_map, owned_plus_shared_map, col_map, row_sizes);
-
-    L3STER_PROFILE_REGION_BEGIN("Insert into Tpetra::FECrsGraph");
     retval->beginAssembly();
+
     const auto row_sizes_host_view = row_sizes.view_host();
-    for (size_t local_row = 0; size_t row_size : util::asSpan(row_sizes_host_view))
-    {
-        const auto row_allocation = local_graph(local_row);
-        const auto row_entries    = row_allocation.subspan(0, row_size);
-        retval->insertLocalIndices(static_cast< int >(local_row), util::asTeuchosView(row_entries));
-        ++local_row;
-    }
-    L3STER_PROFILE_REGION_END("Insert into Tpetra::FECrsGraph");
+    convertToTpetraFECrsGraph(local_graph, *retval, util::asSpan(row_sizes_host_view));
+#ifdef L3STER_PROFILE_EXECUTION
+    comm.barrier();
+#endif
 
     local_graph = {}; // Explicitly deallocate to free memory for endAssembly()
-
-#ifdef L3STER_PROFILE_EXECUTION
-    comm.barrier();
-#endif
     L3STER_PROFILE_REGION_BEGIN("Communicate data between ranks");
     retval->endAssembly();
-#ifdef L3STER_PROFILE_EXECUTION
-    comm.barrier();
-#endif
     L3STER_PROFILE_REGION_END("Communicate data between ranks");
 
     return retval;
