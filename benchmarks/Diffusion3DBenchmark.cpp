@@ -108,29 +108,30 @@ int main(int argc, char* argv[])
     constexpr auto dirichlet_bc_kernel =
         wrapBoundaryResidualKernel< dbc_params >([](const auto& in, auto& out) { out[0] = 0.; });
 
-    auto alg_system =
-        makeAlgebraicSystem(comm, my_partition, element_boundary_tag, probdef_ctwrpr, dirichletdef_ctwrpr);
-    alg_system->beginAssembly();
-    alg_system->assembleProblem(diffusion_kernel3d, std::views::single(domain_id));
-    alg_system->endAssembly();
-    alg_system->describe(comm);
-    alg_system->setDirichletBCValues(dirichlet_bc_kernel, boundary_ids, T_inds);
-    alg_system->applyDirichletBCs();
+    constexpr auto alg_params    = AlgebraicSystemParams{.cond_policy = CondensationPolicy::ElementBoundary};
+    constexpr auto algpar_ctwrpr = L3STER_WRAP_CTVAL(alg_params);
+    auto alg_system = makeAlgebraicSystem(comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr, algpar_ctwrpr);
+    alg_system.beginAssembly();
+    alg_system.assembleProblem(diffusion_kernel3d, {domain_id});
+    alg_system.endAssembly();
+    alg_system.describe(comm);
+    alg_system.setDirichletBCValues(dirichlet_bc_kernel, boundary_ids, T_inds);
+    alg_system.applyDirichletBCs();
 
     constexpr auto solver_opts  = IterSolverOpts{.verbosity = {.summary = true, .timing = true}};
     constexpr auto precond_opts = ChebyshevOpts{.degree = 3};
     auto           solver       = CG{solver_opts, precond_opts};
-    auto           solution     = alg_system->initSolution();
-    alg_system->solve(solver, solution);
+    auto           solution     = alg_system.initSolution();
+    alg_system.solve(solver, solution);
 
     L3STER_PROFILE_REGION_BEGIN("Solution management");
     auto solution_manager = SolutionManager{*my_partition, problem_def.n_fields};
-    alg_system->updateSolution(solution, dof_inds, solution_manager, field_inds);
+    alg_system.updateSolution(solution, dof_inds, solution_manager, field_inds);
     L3STER_PROFILE_REGION_END("Solution management");
 
     L3STER_PROFILE_REGION_BEGIN("Compute solution error");
     const auto fval_getter = solution_manager.makeFieldValueGetter(field_inds);
-    const auto error = computeNormL2(comm, error_kernel, *my_partition, std::views::single(domain_id), fval_getter);
+    const auto error = computeNormL2(comm, error_kernel, *my_partition, {domain_id}, fval_getter);
     L3STER_PROFILE_REGION_END("Compute solution error");
 
     if (comm.getRank() == 0)

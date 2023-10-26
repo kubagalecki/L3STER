@@ -29,7 +29,9 @@ void test()
                                             util::ConstexprValue< el_o_t{2} >{},
                                             probdef_ctwrpr);
 
-    auto alg_sys = makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr);
+    constexpr auto alg_params       = AlgebraicSystemParams{.cond_policy = CP};
+    constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
+    auto           alg_sys          = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, {}, algparams_ctwrpr);
 
     constexpr auto ker_params = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1};
     double         set_value  = 1.;
@@ -45,25 +47,25 @@ void test()
         set_value                 = static_cast< double >(dom_ind + 1);
         constexpr auto field_inds = std::array{size_t{dom_ind}};
         constexpr auto dom_ids    = std::array{domains[dom_ind]};
-        alg_sys->assembleProblem(const_kernel, dom_ids, empty_field_val_getter, util::ConstexprValue< field_inds >{});
+        alg_sys.assembleProblem(const_kernel, dom_ids, empty_field_val_getter, util::ConstexprValue< field_inds >{});
     };
 
-    alg_sys->beginAssembly();
+    alg_sys.beginAssembly();
     assemble_problem_in_dom(util::ConstexprValue< 0 >{});
     assemble_problem_in_dom(util::ConstexprValue< 1 >{});
     assemble_problem_in_dom(util::ConstexprValue< 2 >{});
     assemble_problem_in_dom(util::ConstexprValue< 3 >{});
-    alg_sys->endAssembly();
+    alg_sys.endAssembly();
 
     auto solver   = solvers::Lapack{};
-    auto solution = alg_sys->initSolution();
-    alg_sys->solve(solver, solution);
+    auto solution = alg_sys.initSolution();
+    alg_sys.solve(solver, solution);
 
     auto solution_manager = SolutionManager{*mesh, problem_def.n_fields};
     for (size_t i = 0; i != problem_def.n_fields; ++i)
         solution_manager.setField(i, static_cast< double >(i + 1));
     constexpr auto dof_inds = util::makeIotaArray< size_t, problem_def.n_fields >();
-    alg_sys->updateSolution(solution, dof_inds, solution_manager, dof_inds);
+    alg_sys.updateSolution(solution, dof_inds, solution_manager, dof_inds);
 
     for (size_t i = 0; i != problem_def.n_fields; ++i)
     {

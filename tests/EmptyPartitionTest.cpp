@@ -25,15 +25,17 @@ void test()
         {},
         probdef_ctwrpr);
 
-    auto alg_sys = makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr);
-    alg_sys->describe(comm);
+    constexpr auto alg_params       = AlgebraicSystemParams{.cond_policy = CP};
+    constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
+    auto           alg_sys          = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, {}, algparams_ctwrpr);
+    alg_sys.describe(comm);
 
     constexpr auto params       = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1};
     constexpr auto dummy_kernel = wrapDomainEquationKernel< params >([](const auto&, auto&) {});
-    alg_sys->beginAssembly();
-    alg_sys->assembleProblem(dummy_kernel, std::views::single(domain_id));
-    alg_sys->endAssembly();
-    alg_sys->describe(comm);
+    alg_sys.beginAssembly();
+    alg_sys.assembleProblem(dummy_kernel, std::views::single(domain_id));
+    alg_sys.endAssembly();
+    alg_sys.describe(comm);
 }
 
 int main(int argc, char* argv[])

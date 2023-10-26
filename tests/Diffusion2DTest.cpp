@@ -37,14 +37,9 @@ void test()
     constexpr auto adiabatic_bound_ids = std::array{bot_boundary, top_boundary};
     constexpr auto boundary_ids        = std::array{top_boundary, bot_boundary, left_boundary, right_boundary};
 
-    auto alg_sys = makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr, dirichletdef_ctwrpr);
-
-    // Check that the underlying data gets cached
-    {
-        const auto system_manager_shallow_copy =
-            makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr, dirichletdef_ctwrpr);
-        REQUIRE(alg_sys.get() == system_manager_shallow_copy.get());
-    }
+    constexpr auto alg_params       = AlgebraicSystemParams{.cond_policy = CP};
+    constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
+    auto           alg_sys = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, dirichletdef_ctwrpr, algparams_ctwrpr);
 
     constexpr auto diff_params = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3};
     constexpr auto diffusion_kernel2d =
@@ -75,47 +70,40 @@ void test()
         [](const auto& in, auto& out) { out[0] = in.point.space.x() / node_dist.back(); });
 
     const auto assembleDomainProblem = [&] {
-        alg_sys->assembleProblem(diffusion_kernel2d, std::views::single(domain_id));
+        alg_sys.assembleProblem(diffusion_kernel2d, std::views::single(domain_id));
     };
     const auto assembleBoundaryProblem = [&] {
-        alg_sys->assembleProblem(neumann_bc_kernel, adiabatic_bound_ids);
+        alg_sys.assembleProblem(neumann_bc_kernel, adiabatic_bound_ids);
     };
 
     // Check constraints on assembly state
-    alg_sys->beginAssembly();
+    alg_sys.beginAssembly();
     assembleDomainProblem();
     assembleBoundaryProblem();
-    CHECK_THROWS(alg_sys->applyDirichletBCs());
-    alg_sys->endAssembly();
-    alg_sys->describe(comm);
+    CHECK_THROWS(alg_sys.applyDirichletBCs());
+    alg_sys.endAssembly();
+    alg_sys.describe(comm);
     CHECK_THROWS(assembleDomainProblem());
     CHECK_THROWS(assembleBoundaryProblem());
-    CHECK_THROWS(alg_sys->endAssembly());
+    CHECK_THROWS(alg_sys.endAssembly());
 
     constexpr auto dirichlet_bound_ids = std::array{left_boundary, right_boundary};
-    alg_sys->setDirichletBCValues(dirichlet_bc_kernel, dirichlet_bound_ids, std::array{0});
-    alg_sys->applyDirichletBCs();
+    alg_sys.setDirichletBCValues(dirichlet_bc_kernel, dirichlet_bound_ids, std::array{0});
+    alg_sys.applyDirichletBCs();
 
     {
-        auto fake_problem = makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr);
-        fake_problem->endAssembly();
-        CHECK_THROWS(fake_problem->applyDirichletBCs());
+        auto dummy_problem = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, {}, algparams_ctwrpr);
+        dummy_problem.endAssembly();
+        CHECK_THROWS(dummy_problem.applyDirichletBCs());
     }
 
     constexpr auto dof_inds = util::makeIotaArray< size_t, 3 >();
 
     auto solver   = solvers::Lapack{};
-    auto solution = alg_sys->initSolution();
-    alg_sys->solve(solver, solution);
+    auto solution = alg_sys.initSolution();
+    alg_sys.solve(solver, solution);
     auto solution_manager = SolutionManager{*mesh, problem_def.n_fields};
-    alg_sys->updateSolution(solution, dof_inds, solution_manager, dof_inds);
-
-    // Check that the underlying data cache is still usable after the solve
-    {
-        const auto system_manager_shallow_copy =
-            makeAlgebraicSystem(comm, mesh, CondensationPolicyTag< CP >{}, probdef_ctwrpr, dirichletdef_ctwrpr);
-        REQUIRE(alg_sys.get() == system_manager_shallow_copy.get());
-    }
+    alg_sys.updateSolution(solution, dof_inds, solution_manager, dof_inds);
 
     // Check results
     constexpr auto params        = KernelParams{.dimension = 2, .n_equations = 3, .n_fields = 3};
@@ -144,7 +132,7 @@ void test()
     REQUIRE(error.norm() < 1e-10);
     REQUIRE(boundary_error.norm() < 1e-10);
 
-    alg_sys->beginAssembly();
+    alg_sys.beginAssembly();
 }
 
 // Solve 2D diffusion problem

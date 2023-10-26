@@ -24,6 +24,10 @@ struct ConstexprValue
     static constexpr auto value = V;
 };
 
+#define L3STER_WRAP_CTVAL(val__)                                                                                       \
+    ::lstr::util::ConstexprValue< val__ >                                                                              \
+    {}
+
 template < typename... Types >
 struct TypePack
 {

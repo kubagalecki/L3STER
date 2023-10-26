@@ -47,10 +47,10 @@ int main(int argc, char* argv[])
     constexpr auto   vec_inds          = std::array< size_t, 2 >{1, 3};
     constexpr auto   all_field_inds    = util::makeIotaArray< size_t, problem_def.n_fields >();
 
-    const auto system_manager   = makeAlgebraicSystem(comm, my_partition, no_condensation_tag, problemdef_ctwrpr);
-    auto       solution_manager = SolutionManager{*my_partition, problem_def.n_fields};
+    auto system_manager   = makeAlgebraicSystem(comm, my_partition, problemdef_ctwrpr);
+    auto solution_manager = SolutionManager{*my_partition, problem_def.n_fields};
+    auto solution         = system_manager.initSolution();
 
-    auto solution = system_manager->initSolution();
     {
         auto         solution_view = solution->get1dViewNonConst();
         const double Re            = 40.;
@@ -58,7 +58,7 @@ int main(int argc, char* argv[])
         const auto   bot_top_vals  = std::array< val_t, 2 >{1., pi};
         computeValuesAtNodes(*my_partition,
                              std::array{bot_boundary, top_boundary},
-                             system_manager->getDofMap(),
+                             system_manager.getDofMap(),
                              scalar_inds,
                              std::span{bot_top_vals},
                              solution_view);
@@ -72,7 +72,7 @@ int main(int argc, char* argv[])
         computeValuesAtNodes(kernel,
                              *my_partition,
                              std::views::single(domain_id),
-                             system_manager->getDofMap(),
+                             system_manager.getDofMap(),
                              vec_inds,
                              empty_field_val_getter,
                              solution_view);
@@ -80,7 +80,7 @@ int main(int argc, char* argv[])
     solution->switchActiveMultiVector();
     solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);
     solution->switchActiveMultiVector();
-    system_manager->updateSolution(solution, all_field_inds, solution_manager, all_field_inds);
+    system_manager.updateSolution(solution, all_field_inds, solution_manager, all_field_inds);
 
     auto       exporter        = PvtuExporter{*my_partition};
     const auto field_names     = std::array{"C1"sv, "Cpi"sv, "vel"sv};
