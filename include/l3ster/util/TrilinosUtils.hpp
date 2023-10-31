@@ -2,6 +2,7 @@
 #define L3STER_UTILS_TRILINOSUTILS_HPP
 
 #include "l3ster/common/TrilinosTypedefs.h"
+#include "l3ster/util/Assertion.hpp"
 #include "l3ster/util/Concepts.hpp"
 
 #include <concepts>
@@ -23,6 +24,31 @@ auto asSpan(const Kokkos::View< T*, Layout, Params... >& view) -> std::span< T >
     requires std::same_as< Layout, Kokkos::LayoutLeft > or std::same_as< Layout, Kokkos::LayoutRight >
 {
     return {view.data(), view.extent(0)};
+}
+
+template < Arithmetic_c T, typename Layout, typename... Params >
+auto asSpans(const Kokkos::View< T**, Layout, Params... >& view) -> std::vector< std::span< T > >
+    requires std::same_as< Layout, Kokkos::LayoutLeft >
+{
+    const auto n_rows = view.extent(0), n_cols = view.extent(1);
+    auto       retval = std::vector< std::span< T > >{};
+    retval.reserve(n_cols);
+    for (size_t i = 0; i != n_cols; ++i)
+        retval.emplace_back(&view(0, i), n_rows);
+    return retval;
+}
+
+template < size_t N, Arithmetic_c T, typename Layout, typename... Params >
+auto asSpans(const Kokkos::View< T**, Layout, Params... >& view, std::integral_constant< size_t, N > = {})
+    -> std::array< std::span< T >, N >
+    requires std::same_as< Layout, Kokkos::LayoutLeft >
+{
+    const auto n_rows = view.extent(0), n_cols = view.extent(1);
+    throwingAssert(n_cols == N);
+    auto retval = std::array< std::span< T >, N >{};
+    for (size_t i = 0; i != n_cols; ++i)
+        retval[i] = std::span{&view(0, i), n_rows};
+    return retval;
 }
 
 // A std::span::subspan-like interface for a 1D Kokkos::View

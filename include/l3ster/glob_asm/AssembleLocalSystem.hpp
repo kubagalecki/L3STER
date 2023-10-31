@@ -43,7 +43,7 @@ auto computeFieldDers(const util::eigen::RowMajorMatrix< val_t, dim, n_nodes >& 
     return retval;
 }
 
-template < size_t problem_size, size_t update_size >
+template < size_t problem_size, size_t update_size, size_t n_rhs >
 class LocalSystemManager
 {
     static constexpr size_t target_update_size = 128;
@@ -55,17 +55,17 @@ public:
     LocalSystemManager() { util::requestStackSize< util::default_stack_size + required_stack_size >(); }
 
     using matrix_t = util::eigen::RowMajorSquareMatrix< val_t, problem_size >;
-    using vector_t = Eigen::Vector< val_t, problem_size >;
-    using system_t = std::pair< matrix_t, vector_t >;
+    using rhs_t    = Eigen::Matrix< val_t, problem_size, int{n_rhs} >;
+    using system_t = std::pair< matrix_t, rhs_t >;
 
     static constexpr size_t required_stack_size = 2 * problem_size * batch_update_size * sizeof(val_t);
 
-    inline auto            setZero() -> LocalSystemManager&;
-    inline const system_t& getSystem();
+    inline auto setZero() -> LocalSystemManager&;
+    inline auto getSystem() -> const system_t&;
 
     template < int n_unknowns, int n_bases, int dim >
     void update(const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dim + 1 >& kernel_result,
-                const Eigen::Vector< val_t, update_size >&                                    kernel_rhs,
+                const Eigen::Matrix< val_t, update_size, int{n_rhs} >&                        kernel_rhs,
                 const Eigen::Vector< val_t, n_bases >&                                        basis_vals,
                 const util::eigen::RowMajorMatrix< val_t, dim, n_bases >&                     basis_ders,
                 val_t                                                                         weight);
@@ -89,15 +89,15 @@ private:
     std::unique_ptr< system_t > m_system = std::make_unique< system_t >();
 };
 
-template < size_t problem_size, size_t update_size >
-auto LocalSystemManager< problem_size, update_size >::tieBatchData(bool is_positive)
+template < size_t problem_size, size_t update_size, size_t n_rhs >
+auto LocalSystemManager< problem_size, update_size, n_rhs >::tieBatchData(bool is_positive)
 {
     return is_positive ? std::tie(*m_posw_buf, m_posw_batch_size) : std::tie(*m_negw_buf, m_negw_batch_size);
 }
 
-template < size_t problem_size, size_t update_size >
+template < size_t problem_size, size_t update_size, size_t n_rhs >
 template < int n_unknowns, int n_bases, int dim >
-auto LocalSystemManager< problem_size, update_size >::makeBasisBlock(
+auto LocalSystemManager< problem_size, update_size, n_rhs >::makeBasisBlock(
     const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dim + 1 >& kernel_result,
     const Eigen::Vector< val_t, n_bases >&                                        basis_vals,
     const util::eigen::RowMajorMatrix< val_t, dim, n_bases >&                     basis_ders,
@@ -110,11 +110,11 @@ auto LocalSystemManager< problem_size, update_size >::makeBasisBlock(
     return retval;
 }
 
-template < size_t problem_size, size_t update_size >
+template < size_t problem_size, size_t update_size, size_t n_rhs >
 template < int n_unknowns, int n_bases, int dim >
-void LocalSystemManager< problem_size, update_size >::update(
+void LocalSystemManager< problem_size, update_size, n_rhs >::update(
     const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dim + 1 >& kernel_result,
-    const Eigen::Vector< val_t, update_size >&                                    kernel_rhs,
+    const Eigen::Matrix< val_t, update_size, int{n_rhs} >&                        kernel_rhs,
     const Eigen::Vector< val_t, n_bases >&                                        basis_vals,
     const util::eigen::RowMajorMatrix< val_t, dim, n_bases >&                     basis_ders,
     val_t                                                                         weight)
@@ -127,7 +127,7 @@ void LocalSystemManager< problem_size, update_size >::update(
         const auto block = makeBasisBlock(kernel_result, basis_vals, basis_ders, basis_ind);
         const auto row   = basis_ind * n_unknowns;
         const auto col   = batch_size * update_size;
-        m_system->second.template segment< n_unknowns >(row) += block * kernel_rhs * weight;
+        m_system->second.template block< n_unknowns, int{n_rhs} >(row, 0) += block * kernel_rhs * weight;
         batch_matrix.template block< n_unknowns, update_size >(row, col) = block * wgt_abs_sqrt;
     }
     if (++batch_size == updates_per_batch)
@@ -138,30 +138,29 @@ template < KernelParams params, size_t n_nodes >
 auto& getLocalSystemManager()
 {
     constexpr auto local_problem_size = n_nodes * params.n_unknowns;
-    using local_system_t              = LocalSystemManager< local_problem_size, params.n_equations >;
+    using local_system_t              = LocalSystemManager< local_problem_size, params.n_equations, params.n_rhs >;
     return util::getThreadLocal< local_system_t >().setZero();
 }
 
-template < size_t problem_size, size_t update_size >
-const LocalSystemManager< problem_size, update_size >::system_t&
-LocalSystemManager< problem_size, update_size >::getSystem()
+template < size_t problem_size, size_t update_size, size_t n_rhs >
+auto LocalSystemManager< problem_size, update_size, n_rhs >::getSystem() -> const system_t&
 {
     flush();
     m_system->first = m_system->first.template selfadjointView< Eigen::Lower >();
     return *m_system;
 }
 
-template < size_t problem_size, size_t update_size >
-void LocalSystemManager< problem_size, update_size >::flush()
+template < size_t problem_size, size_t update_size, size_t n_rhs >
+void LocalSystemManager< problem_size, update_size, n_rhs >::flush()
 {
     flushBuf(*m_posw_buf, m_posw_batch_size, 1.);
     flushBuf(*m_negw_buf, m_negw_batch_size, -1.);
 }
 
-template < size_t problem_size, size_t update_size >
-void LocalSystemManager< problem_size, update_size >::flushBuf(const batch_update_matrix_t& batch_matrix,
-                                                               size_t&                      batch_size,
-                                                               val_t                        weight)
+template < size_t problem_size, size_t update_size, size_t n_rhs >
+void LocalSystemManager< problem_size, update_size, n_rhs >::flushBuf(const batch_update_matrix_t& batch_matrix,
+                                                                      size_t&                      batch_size,
+                                                                      val_t                        weight)
 {
     if (batch_size > 0)
         m_system->first.template selfadjointView< Eigen::Lower >().rankUpdate(
@@ -169,16 +168,16 @@ void LocalSystemManager< problem_size, update_size >::flushBuf(const batch_updat
     batch_size = 0;
 }
 
-template < size_t problem_size, size_t update_size >
-void LocalSystemManager< problem_size, update_size >::flushFullBuf(
+template < size_t problem_size, size_t update_size, size_t n_rhs >
+void LocalSystemManager< problem_size, update_size, n_rhs >::flushFullBuf(
     const LocalSystemManager::batch_update_matrix_t& batch_matrix, size_t& batch_size, val_t wgt)
 {
     m_system->first.template selfadjointView< Eigen::Lower >().rankUpdate(batch_matrix, wgt);
     batch_size = 0;
 }
 
-template < size_t problem_size, size_t update_size >
-auto LocalSystemManager< problem_size, update_size >::setZero() -> LocalSystemManager&
+template < size_t problem_size, size_t update_size, size_t n_rhs >
+auto LocalSystemManager< problem_size, update_size, n_rhs >::setZero() -> LocalSystemManager&
 {
     m_system->first.setZero();
     m_system->second.setZero();
@@ -187,7 +186,7 @@ auto LocalSystemManager< problem_size, update_size >::setZero() -> LocalSystemMa
 
 template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >
 const auto& assembleLocalSystem(
-    const DomainEquationKernel< Kernel, params >&                                                          kernel,
+    const DomainEquationKernel< Kernel, params >&                                                  kernel,
     const mesh::Element< ET, EO >&                                                                 element,
     const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, params.n_fields >& node_vals,
     const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,
@@ -219,8 +218,8 @@ const auto& assembleLocalSystem(
 }
 
 template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >
-const auto& assembleLocalBoundarySystem(
-    const BoundaryEquationKernel< Kernel, params >&                                                        kernel,
+const auto& assembleLocalSystem(
+    const BoundaryEquationKernel< Kernel, params >&                                                kernel,
     mesh::BoundaryElementView< ET, EO >                                                            el_view,
     const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, params.n_fields >& node_vals,
     const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,

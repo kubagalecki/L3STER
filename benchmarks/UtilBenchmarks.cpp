@@ -1,5 +1,11 @@
 #include "Common.hpp"
 
+static auto kernelImpl(size_t x, size_t rand) -> size_t
+{
+    thread_local const auto hash = std::hash< size_t >{};
+    return hash(hash(hash(in) % rand)) * 953u + rand + 1u;
+}
+
 static void BM_ParallelNonRandomAccessForBaseline(benchmark::State& state)
 {
     const auto size = static_cast< size_t >(state.range(0));
@@ -7,13 +13,13 @@ static void BM_ParallelNonRandomAccessForBaseline(benchmark::State& state)
     auto prng = std::mt19937{std::random_device{}()};
     auto dist = std::uniform_int_distribution< size_t >{1, 1000};
 
-    auto       input  = robin_hood::unordered_flat_map< size_t, size_t >{};
-    auto       output = std::vector< size_t >(size);
-    const auto hash   = std::hash< size_t >{};
+    auto input  = robin_hood::unordered_flat_map< size_t, size_t >{};
+    auto output = std::vector< size_t >(size);
+
     for (size_t i = 0; i != size; ++i)
         input.emplace(i, dist(prng));
-    const auto kernel = [&hash, random_number = dist(prng)](size_t in) {
-        return hash(hash(hash(in)) % random_number); // Arbitrary non-trivial operation
+    const auto kernel = [random_number = dist(prng)](size_t in) {
+        return kernelImpl(in, random_number); // Arbitrary non-trivial operation
     };
 
     for (auto _ : state)
@@ -42,13 +48,13 @@ static void BM_ParallelNonRandomAccessFor(benchmark::State& state)
     auto prng = std::mt19937{std::random_device{}()};
     auto dist = std::uniform_int_distribution< size_t >{1, 1000};
 
-    auto       input  = robin_hood::unordered_flat_map< size_t, size_t >{};
-    auto       output = std::vector< size_t >(size);
-    const auto hash   = std::hash< size_t >{};
+    auto input  = robin_hood::unordered_flat_map< size_t, size_t >{};
+    auto output = std::vector< size_t >(size);
+
     for (size_t i = 0; i != size; ++i)
         input.emplace(i, dist(prng));
-    const auto kernel = [&hash, random_number = dist(prng)](size_t in) {
-        return hash(hash(hash(in)) % random_number); // Arbitrary non-trivial operation
+    const auto kernel = [random_number = dist(prng)](size_t in) {
+        return kernelImpl(in, random_number); // Arbitrary non-trivial operation
     };
 
     for (auto _ : state)

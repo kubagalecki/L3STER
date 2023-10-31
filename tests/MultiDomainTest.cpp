@@ -29,18 +29,20 @@ void test()
                                             util::ConstexprValue< el_o_t{2} >{},
                                             probdef_ctwrpr);
 
-    constexpr auto alg_params       = AlgebraicSystemParams{.cond_policy = CP};
+    constexpr auto alg_params       = AlgebraicSystemParams{.cond_policy = CP, .n_rhs = 2};
     constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
     auto           alg_sys          = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, {}, algparams_ctwrpr);
 
-    constexpr auto ker_params = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1};
-    double         set_value  = 1.;
-    const auto     const_kernel =
+    constexpr auto   ker_params = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1, .n_rhs = 2};
+    constexpr double inc        = 1000.;
+    double           set_value  = 1.;
+    const auto       const_kernel =
         wrapDomainEquationKernel< ker_params >([&set_value]([[maybe_unused]] const auto& in, auto& out) {
             auto& [operators, rhs] = out;
             auto& [A0, A1, A2]     = operators;
             A0(0, 0)               = 1.;
-            rhs[0]                 = set_value;
+            rhs(0, 0)              = set_value;
+            rhs(0, 1)              = set_value + inc;
         });
 
     const auto assemble_problem_in_dom = [&]< int dom_ind >(util::ConstexprValue< dom_ind >) {
@@ -61,17 +63,32 @@ void test()
     auto solution = alg_sys.initSolution();
     alg_sys.solve(solver, solution);
 
-    auto solution_manager = SolutionManager{*mesh, problem_def.n_fields};
-    for (size_t i = 0; i != problem_def.n_fields; ++i)
-        solution_manager.setField(i, static_cast< double >(i + 1));
-    constexpr auto dof_inds = util::makeIotaArray< size_t, problem_def.n_fields >();
-    alg_sys.updateSolution(solution, dof_inds, solution_manager, dof_inds);
-
+    auto solution_manager = SolutionManager{*mesh, problem_def.n_fields * 2};
     for (size_t i = 0; i != problem_def.n_fields; ++i)
     {
-        const auto field_vals = solution_manager.getFieldView(i);
-        REQUIRE(std::ranges::all_of(field_vals,
-                                    [&](double v) { return std::fabs(v - static_cast< double >(i + 1)) < 1e-10; }));
+        solution_manager.setField(2 * i, static_cast< double >(i + 1));
+        solution_manager.setField(2 * i + 1, static_cast< double >(i + 1) + inc);
+    }
+    constexpr auto dof_inds     = util::makeIotaArray< size_t, problem_def.n_fields >();
+    constexpr auto sol_man_inds = util::makeIotaArray< size_t, problem_def.n_fields * 2 >();
+    alg_sys.updateSolution(solution, dof_inds, solution_manager, sol_man_inds);
+
+    constexpr double eps = 1e-8;
+    for (size_t i = 0; i != problem_def.n_fields; ++i)
+    {
+        const auto field_vals1 = solution_manager.getFieldView(2 * i);
+        const auto field_vals2 = solution_manager.getFieldView(2 * i + 1);
+        const auto v1          = static_cast< double >(i + 1);
+        const auto v2          = static_cast< double >(i + 1) + inc;
+        const auto check       = [&comm](auto view, double v) {
+            REQUIRE(std::ranges::all_of(view, [&](double v_test) { return std::fabs(v - v_test) < eps; }));
+            const char modified_local = std::ranges::any_of(view, [&](double v_test) { return v != v_test; });
+            char       modified_global;
+            comm.allReduce(std::span{&modified_local, 1}, &modified_global, MPI_LOR);
+            REQUIRE(modified_global); // Check at least one entry was correctly written into
+        };
+        check(field_vals1, v1);
+        check(field_vals2, v2);
     }
 }
 

@@ -66,7 +66,8 @@ void test()
                     constexpr auto dof_inds_wrpr = util::ConstexprValue< std::array{size_t{0}} >{};
                     const auto [row_dofs, col_dofs, rhs_dofs] =
                         getUnsortedPrimaryDofs(element, dof_map, CondensationPolicyTag< CP >{}, dof_inds_wrpr);
-                    scatterLocalSystem(local_mat, local_vec, *matrix, rhs_view, row_dofs, col_dofs, rhs_dofs);
+                    scatterLocalSystem(
+                        local_mat, local_vec, *matrix, std::array{rhs_view}, row_dofs, col_dofs, rhs_dofs);
                 }
             },
             std::views::single(domain_id));

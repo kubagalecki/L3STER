@@ -95,6 +95,8 @@ template < typename Kernel, KernelParams params >
     requires DomainEquationKernel_c< Kernel, params >
 struct DomainEquationKernel
 {
+    static constexpr auto parameters = params;
+
     constexpr DomainEquationKernel(Kernel kernel) : m_kernel{std::move(kernel)} {}
 
     auto operator()(const KernelInterface< params >::DomainInput& input) const -> KernelInterface< params >::Result
@@ -112,6 +114,8 @@ template < typename Kernel, KernelParams params >
     requires BoundaryEquationKernel_c< Kernel, params >
 struct BoundaryEquationKernel
 {
+    static constexpr auto parameters = params;
+
     constexpr BoundaryEquationKernel(Kernel kernel) : m_kernel{std::move(kernel)} {}
 
     auto operator()(const KernelInterface< params >::BoundaryInput& input) const -> KernelInterface< params >::Result
@@ -129,6 +133,8 @@ template < typename Kernel, KernelParams params >
     requires DomainResidualKernel_c< Kernel, params >
 struct ResidualDomainKernel
 {
+    static constexpr auto parameters = params;
+
     constexpr ResidualDomainKernel(Kernel kernel) : m_kernel{std::move(kernel)} {}
 
     auto operator()(const KernelInterface< params >::DomainInput& input) const -> KernelInterface< params >::Rhs
@@ -146,6 +152,8 @@ template < typename Kernel, KernelParams params >
     requires BoundaryResidualKernel_c< Kernel, params >
 struct ResidualBoundaryKernel
 {
+    static constexpr auto parameters = params;
+
     constexpr ResidualBoundaryKernel(Kernel kernel) : m_kernel{std::move(kernel)} {}
 
     auto operator()(const KernelInterface< params >::BoundaryInput& input) const -> KernelInterface< params >::Rhs
@@ -186,5 +194,34 @@ constexpr auto wrapBoundaryResidualKernel(Kernel kernel, util::ConstexprValue< p
 {
     return ResidualBoundaryKernel< std::remove_cvref_t< Kernel >, params >{std::move(kernel)};
 }
+
+namespace detail
+{
+template < typename T >
+inline constexpr auto is_domain_equation_kernel = false;
+template < typename Kernel, KernelParams params >
+inline constexpr auto is_domain_equation_kernel< DomainEquationKernel< Kernel, params > > = true;
+
+template < typename T >
+inline constexpr auto is_boundary_equation_kernel = false;
+template < typename Kernel, KernelParams params >
+inline constexpr auto is_boundary_equation_kernel< BoundaryEquationKernel< Kernel, params > > = true;
+
+template < typename T >
+inline constexpr auto is_domain_residual_kernel = false;
+template < typename Kernel, KernelParams params >
+inline constexpr auto is_domain_residual_kernel< ResidualDomainKernel< Kernel, params > > = true;
+
+template < typename T >
+inline constexpr auto is_boundary_residual_kernel = false;
+template < typename Kernel, KernelParams params >
+inline constexpr auto is_boundary_residual_kernel< ResidualBoundaryKernel< Kernel, params > > = true;
+} // namespace detail
+
+template < typename T >
+concept EquationKernel_c = detail::is_domain_equation_kernel< T > or detail::is_boundary_equation_kernel< T >;
+
+template < typename T >
+concept ResidualnKernel_c = detail::is_domain_residual_kernel< T > or detail::is_boundary_residual_kernel< T >;
 } // namespace lstr
 #endif // L3STER_COMMON_INTERFACE_HPP

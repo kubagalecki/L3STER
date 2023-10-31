@@ -48,16 +48,17 @@ void test2D(const MpiComm& comm)
     auto solution         = system_manager.initSolution();
 
     {
-        auto         solution_view = solution->get1dViewNonConst();
-        const double Re            = 40.;
-        const double lambda        = Re / 2. - std::sqrt(Re * Re / 4. - 4. * pi * pi);
-        const auto   bot_top_vals  = std::array< val_t, 2 >{1., pi};
+        auto           solution_view = solution->get1dViewNonConst();
+        const auto     sol_span_arr  = std::array{std::span{solution_view}};
+        const double   Re            = 40.;
+        const double   lambda        = Re / 2. - std::sqrt(Re * Re / 4. - 4. * pi * pi);
+        constexpr auto bot_top_vals  = std::array< val_t, 2 >{1., pi};
         computeValuesAtNodes(*my_partition,
                              std::array{bot_boundary, top_boundary},
                              system_manager.getDofMap(),
                              scalar_inds,
-                             std::span{bot_top_vals},
-                             solution_view);
+                             std::array{std::span{bot_top_vals}},
+                             sol_span_arr);
         constexpr auto params = KernelParams{.dimension = 2, .n_equations = 2};
         const auto     kernel = wrapDomainResidualKernel< params >([&](const auto& in, auto& out) {
             // Kovasznay flow velocity field
@@ -71,7 +72,7 @@ void test2D(const MpiComm& comm)
                              system_manager.getDofMap(),
                              vec_inds,
                              empty_field_val_getter,
-                             solution_view);
+                             sol_span_arr);
     }
     solution->switchActiveMultiVector();
     solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);
@@ -116,6 +117,7 @@ void test3D(const MpiComm& comm)
 
     {
         auto           solution_view = solution->get1dViewNonConst();
+        const auto     sol_span_arr  = std::array{std::span{solution_view}};
         constexpr auto ker_params    = KernelParams{.dimension = 3, .n_equations = 3};
 
         const auto dom_kernel = wrapDomainResidualKernel< ker_params >([&](const auto& in, auto& out) {
@@ -131,7 +133,7 @@ void test3D(const MpiComm& comm)
                              system_manager.getDofMap(),
                              domain_field_inds,
                              empty_field_val_getter,
-                             solution_view);
+                             sol_span_arr);
 
         constexpr auto boundary_ids = util::makeIotaArray< d_id_t, 6 >(1);
         const auto     bnd_kernel =
@@ -142,7 +144,7 @@ void test3D(const MpiComm& comm)
                              system_manager.getDofMap(),
                              boundary_field_inds,
                              empty_field_val_getter,
-                             solution_view);
+                             sol_span_arr);
 
         solution->switchActiveMultiVector();
         solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);

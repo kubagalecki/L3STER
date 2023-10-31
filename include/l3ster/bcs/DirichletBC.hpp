@@ -17,7 +17,7 @@ public:
                          Owned&&                                        owned_bc_dofs_sorted,
                          Shared&&                                       shared_bc_dofs_sorted);
 
-    inline void apply(const tpetra_vector_t& bc_vals, tpetra_crsmatrix_t& matrix, tpetra_vector_t& rhs) const;
+    inline void apply(const tpetra_multivector_t& bc_vals, tpetra_crsmatrix_t& matrix, tpetra_multivector_t& rhs) const;
 
 private:
     inline auto getLocalColInds(local_dof_t local_row) const -> std::span< const local_dof_t >;
@@ -79,18 +79,21 @@ DirichletBCAlgebraic::DirichletBCAlgebraic(const Teuchos::RCP< const tpetra_crsg
     m_bc_local_col_inds.shrink_to_fit();
 }
 
-void DirichletBCAlgebraic::apply(const tpetra_vector_t& bc_vals, tpetra_crsmatrix_t& matrix, tpetra_vector_t& rhs) const
+void DirichletBCAlgebraic::apply(const tpetra_multivector_t& bc_vals,
+                                 tpetra_crsmatrix_t&         matrix,
+                                 tpetra_multivector_t&       rhs) const
 {
+    util::throwingAssert(bc_vals.getNumVectors() == rhs.getNumVectors(),
+                         "Number of RHSs must be equal to the number of prescribed values");
     {
         const auto& matrix_row_map   = *matrix.getRowMap();
         const auto& matrix_col_map   = *matrix.getColMap();
         const auto& matrix_crs_graph = *matrix.getCrsGraph();
 
-        auto       bc_vals_view   = bc_vals.getLocalViewHost(Tpetra::Access::ReadOnly);
-        auto       bc_vals_view1d = Kokkos::subview(bc_vals_view, Kokkos::ALL, 0);
-        const auto rhs_view       = rhs.getLocalViewHost(Tpetra::Access::ReadWrite);
-        auto       rhs_view1d     = Kokkos::subview(rhs_view, Kokkos::ALL, 0);
-        auto       col_copy_vals  = Kokkos::View< val_t* >{"Columns", m_dirichlet_col_mat->getLocalMaxNumRowEntries()};
+        const auto bc_vals_view  = bc_vals.getLocalViewHost(Tpetra::Access::ReadOnly);
+        const auto rhs_view      = rhs.getLocalViewHost(Tpetra::Access::ReadWrite);
+        const auto n_rhs         = rhs_view.extent(1);
+        auto       col_copy_vals = Kokkos::View< val_t* >{"Columns", m_dirichlet_col_mat->getLocalMaxNumRowEntries()};
         auto       cols_to_zero_out = Kokkos::View< local_dof_t* >{"Column inds to zero out", col_copy_vals.size()};
         auto       local_vals       = Kokkos::View< val_t* >{"Local values", matrix.getLocalMaxNumRowEntries()};
         for (size_t i = 0; i < local_vals.extent(0); ++i)
@@ -105,8 +108,9 @@ void DirichletBCAlgebraic::apply(const tpetra_vector_t& bc_vals, tpetra_crsmatri
                 });
             local_vals[diag_ind] = 1.;
             matrix.replaceLocalValues(local_row, local_cols, util::subview1D(local_vals, 0, local_cols.extent_int(0)));
-            local_vals[diag_ind]  = 0.;
-            rhs_view1d[local_row] = bc_vals_view1d[local_row];
+            local_vals[diag_ind] = 0.;
+            for (size_t i = 0; i != n_rhs; ++i)
+                rhs_view(local_row, i) = bc_vals_view(local_row, i);
         };
         const auto fill_subgraph_row = [&](local_dof_t                           local_row,
                                            const std::span< const local_dof_t >& copy_inds,

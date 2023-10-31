@@ -99,6 +99,8 @@ private:
     std::shared_ptr< const mesh::MeshPartition< orders... > > m_mesh;
     Teuchos::RCP< tpetra_fecrsmatrix_t >                      m_matrix;
     Teuchos::RCP< tpetra_femultivector_t >                    m_rhs;
+    tpetra_femultivector_t::host_view_type                    m_rhs_view_owner;
+    std::array< std::span< val_t >, n_rhs >                   m_rhs_views;
     Teuchos::RCP< const tpetra_fecrsgraph_t >                 m_sparsity_graph;
     std::optional< const bcs::DirichletBCAlgebraic >          m_dirichlet_bcs;
     Teuchos::RCP< tpetra_multivector_t >                      m_dirichlet_values;
@@ -129,17 +131,17 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::updateSolution(
     SolutionManager&                                    sol_man,
     SolManInds&&                                        sol_man_inds)
 {
-    util::throwingAssert(std::ranges::distance(sol_man_inds) == std::ranges::distance(sol_inds),
+    util::throwingAssert(std::ranges::distance(sol_man_inds) == std::ranges::distance(sol_inds) * ptrdiff_t{n_rhs},
                          "Source and destination indices length must match");
     util::throwingAssert(std::ranges::none_of(sol_inds, [&](size_t i) { return i >= max_dofs_per_node; }),
                          "Source index out of bounds");
     util::throwingAssert(std::ranges::none_of(sol_man_inds, [&](size_t i) { return i >= sol_man.nFields(); }),
                          "Destination index out of bounds");
 
-    const auto solution_view = Kokkos::subview(solution->getLocalViewHost(Tpetra::Access::ReadOnly), Kokkos::ALL, 0);
+    const auto solution_view = solution->getLocalViewHost(Tpetra::Access::ReadOnly);
     m_condensation_manager.recoverSolution(*m_mesh,
                                            m_node_dof_map,
-                                           util::asSpan(solution_view),
+                                           util::asSpans< n_rhs >(solution_view),
                                            std::forward< SolInds >(sol_inds),
                                            sol_man,
                                            std::forward< SolManInds >(sol_man_inds));
@@ -157,10 +159,15 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCV
     util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
                          "The DOF indices are out of bounds for the problem");
 
-    const auto vals_view =
-        Kokkos::subview(m_dirichlet_values->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
-    computeValuesAtNodes(
-        kernel, *m_mesh, domain_ids, m_node_dof_map, dof_inds, field_val_getter, util::asSpan(vals_view), time);
+    const auto vals_view = m_dirichlet_values->getLocalViewHost(Tpetra::Access::OverwriteAll);
+    computeValuesAtNodes(kernel,
+                         *m_mesh,
+                         domain_ids,
+                         m_node_dof_map,
+                         dof_inds,
+                         field_val_getter,
+                         util::asSpans< n_rhs >(vals_view),
+                         time);
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
@@ -175,10 +182,15 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCV
     util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
                          "The DOF indices are out of bounds for the problem");
 
-    const auto vals_view =
-        Kokkos::subview(m_dirichlet_values->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
-    computeValuesAtNodes(
-        kernel, *m_mesh, boundary_ids, m_node_dof_map, dof_inds, field_val_getter, util::asSpan(vals_view), time);
+    const auto vals_view = m_dirichlet_values->getLocalViewHost(Tpetra::Access::OverwriteAll);
+    computeValuesAtNodes(kernel,
+                         *m_mesh,
+                         boundary_ids,
+                         m_node_dof_map,
+                         dof_inds,
+                         field_val_getter,
+                         util::asSpans< n_rhs >(vals_view),
+                         time);
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
@@ -224,11 +236,13 @@ AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::AlgebraicSystem(
     m_rhs    = initSolution();
     m_matrix->beginAssembly();
     m_rhs->beginAssembly();
+    m_rhs_view_owner = m_rhs->getLocalViewHost(Tpetra::Access::OverwriteAll);
+    m_rhs_views      = util::asSpans< n_rhs >(m_rhs_view_owner);
     L3STER_PROFILE_REGION_END("Create Tpetra objects");
 
     m_node_dof_map = dofs::NodeToLocalDofMap{
         cond_map, node_global_dof_map, *m_matrix->getRowMap(), *m_matrix->getColMap(), *m_rhs->getMap()};
-    m_condensation_manager = StaticCondensationManager< CP >{*m_mesh, m_node_dof_map, problemdef_ctwrpr};
+    m_condensation_manager = StaticCondensationManager< CP >{*m_mesh, m_node_dof_map, problemdef_ctwrpr, n_rhs};
     m_condensation_manager.beginAssembly();
 
     if constexpr (dirichlet_def.n_domains != 0)
@@ -255,6 +269,8 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::beginAssembly()
     m_rhs->beginAssembly();
     m_condensation_manager.beginAssembly();
     setToZero();
+    m_rhs_view_owner = m_rhs->getLocalViewHost(Tpetra::Access::OverwriteAll);
+    m_rhs_views      = util::asSpans< n_rhs >(m_rhs_view_owner);
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
@@ -264,8 +280,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::endAssembly()
     assertState(State::OpenForAssembly, "`endAssembly()` was called more than once");
 
     L3STER_PROFILE_REGION_BEGIN("Static condensation");
-    const auto rhs_view = Kokkos::subview(m_rhs->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
-    m_condensation_manager.endAssembly(*m_mesh, m_node_dof_map, *m_matrix, util::asSpan(rhs_view));
+    m_condensation_manager.endAssembly(*m_mesh, m_node_dof_map, *m_matrix, m_rhs_views);
     L3STER_PROFILE_REGION_END("Static condensation");
     L3STER_PROFILE_REGION_BEGIN("RHS");
     m_rhs->endAssembly();
@@ -274,6 +289,8 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::endAssembly()
     m_matrix->endAssembly();
     L3STER_PROFILE_REGION_END("Matrix");
     m_state = State::Closed;
+    m_rhs_views.fill({});
+    m_rhs_view_owner = {};
 
 #ifdef L3STER_PROFILE_EXECUTION
     m_rhs->getMap()->getComm()->barrier();
@@ -304,13 +321,12 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::assembleProblem
 {
     L3STER_PROFILE_FUNCTION;
     assertState(State::OpenForAssembly, "`assembleProblem()` was called before `beginAssembly()`");
-    const auto rhs_view = Kokkos::subview(m_rhs->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
     assembleGlobalSystem(kernel,
                          *m_mesh,
                          domain_ids,
                          fval_getter,
                          *m_matrix,
-                         util::asSpan(rhs_view),
+                         m_rhs_views,
                          getDofMap(),
                          m_condensation_manager,
                          field_inds_ctwrpr,
@@ -339,13 +355,12 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::assembleProblem
 {
     L3STER_PROFILE_FUNCTION;
     assertState(State::OpenForAssembly, "`assembleProblem()` was called before `beginAssembly()`");
-    const auto rhs_view = Kokkos::subview(m_rhs->getLocalViewHost(Tpetra::Access::OverwriteAll), Kokkos::ALL, 0);
     assembleGlobalSystem(kernel,
                          *m_mesh,
                          boundary_ids,
                          fval_getter,
                          *m_matrix,
-                         util::asSpan(rhs_view),
+                         m_rhs_views,
                          getDofMap(),
                          m_condensation_manager,
                          field_inds_ctwrpr,
@@ -364,9 +379,10 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::applyDirichletB
     util::throwingAssert(m_dirichlet_bcs.has_value(),
                          "`applyDirichletBCs()` was called, but no Dirichlet BCs were defined");
     assertState(State::Closed, "`applyDirichletBCs()` was called before `endAssembly()`");
+
     m_matrix->beginModify();
     m_rhs->beginModify();
-    m_dirichlet_bcs->apply(*m_dirichlet_values->getVector(0), *m_matrix, *m_rhs->getVectorNonConst(0));
+    m_dirichlet_bcs->apply(*m_dirichlet_values, *m_matrix, *m_rhs);
     m_rhs->endModify();
     m_matrix->endModify();
 
