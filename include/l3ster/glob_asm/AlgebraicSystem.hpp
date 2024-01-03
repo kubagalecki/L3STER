@@ -29,7 +29,6 @@ public:
 
     [[nodiscard]] inline auto getMatrix() const -> Teuchos::RCP< const tpetra_crsmatrix_t >;
     [[nodiscard]] inline auto getRhs() const -> Teuchos::RCP< const tpetra_multivector_t >;
-    [[nodiscard]] const auto& getDofMap() const { return m_node_dof_map; }
 
     [[nodiscard]] inline auto initSolution() const -> Teuchos::RCP< tpetra_femultivector_t >;
     template < IndexRange_c SolInds, IndexRange_c SolManInds >
@@ -65,6 +64,21 @@ public:
                          util::ConstexprValue< asm_opts >                     assembly_options  = {},
                          val_t                                                time              = 0.)
         requires(params.n_rhs == n_rhs);
+
+    template < typename Kernel, KernelParams params, std::integral dofind_t = size_t, size_t n_fields = 0 >
+    void setValues(const Teuchos::RCP< tpetra_femultivector_t >&        solution,
+                   const ResidualDomainKernel< Kernel, params >&        kernel,
+                   const util::ArrayOwner< d_id_t >&                    domain_ids,
+                   const std::array< dofind_t, params.n_equations >&    dof_inds,
+                   const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
+                   val_t                                                time             = 0.) const;
+    template < typename Kernel, KernelParams params, std::integral dofind_t = size_t, size_t n_fields = 0 >
+    void setValues(const Teuchos::RCP< tpetra_femultivector_t >&        solution,
+                   const ResidualBoundaryKernel< Kernel, params >&      kernel,
+                   const util::ArrayOwner< d_id_t >&                    boundary_ids,
+                   const std::array< dofind_t, params.n_equations >&    dof_inds,
+                   const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
+                   val_t                                                time             = 0.) const;
 
     inline void applyDirichletBCs();
     template < typename Kernel, KernelParams params, std::integral dofind_t = size_t, size_t n_fields = 0 >
@@ -145,6 +159,62 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::updateSolution(
                                            std::forward< SolInds >(sol_inds),
                                            sol_man,
                                            std::forward< SolManInds >(sol_man_inds));
+}
+
+template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
+template < typename Kernel, KernelParams params, std::integral dofind_t, size_t n_fields >
+void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
+    const Teuchos::RCP< tpetra_femultivector_t >&        solution,
+    const ResidualDomainKernel< Kernel, params >&        kernel,
+    const util::ArrayOwner< d_id_t >&                    domain_ids,
+    const std::array< dofind_t, params.n_equations >&    dof_inds,
+    const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
+    val_t                                                time) const
+{
+    util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
+                         "The DOF indices are out of bounds for the problem");
+    util::throwingAssert(n_rhs == solution->getNumVectors(), "The number of columns and number of RHS must match");
+
+    const auto vals_view = solution->getLocalViewHost(Tpetra::Access::ReadWrite);
+    computeValuesAtNodes(kernel,
+                         *m_mesh,
+                         domain_ids,
+                         m_node_dof_map,
+                         dof_inds,
+                         field_val_getter,
+                         util::asSpans< n_rhs >(vals_view),
+                         time);
+    solution->switchActiveMultiVector();
+    solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);
+    solution->switchActiveMultiVector();
+}
+
+template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
+template < typename Kernel, KernelParams params, std::integral dofind_t, size_t n_fields >
+void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
+    const Teuchos::RCP< tpetra_femultivector_t >&        solution,
+    const ResidualBoundaryKernel< Kernel, params >&      kernel,
+    const util::ArrayOwner< d_id_t >&                    boundary_ids,
+    const std::array< dofind_t, params.n_equations >&    dof_inds,
+    const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
+    val_t                                                time) const
+{
+    util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
+                         "The DOF indices are out of bounds for the problem");
+    util::throwingAssert(n_rhs == solution->getNumVectors(), "The number of columns and number of RHS must match");
+
+    const auto vals_view = solution->getLocalViewHost(Tpetra::Access::ReadWrite);
+    computeValuesAtNodes(kernel,
+                         *m_mesh,
+                         boundary_ids,
+                         m_node_dof_map,
+                         dof_inds,
+                         field_val_getter,
+                         util::asSpans< n_rhs >(vals_view),
+                         time);
+    solution->switchActiveMultiVector();
+    solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);
+    solution->switchActiveMultiVector();
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
@@ -327,7 +397,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::assembleProblem
                          fval_getter,
                          *m_matrix,
                          m_rhs_views,
-                         getDofMap(),
+                         m_node_dof_map,
                          m_condensation_manager,
                          field_inds_ctwrpr,
                          assembly_options,
@@ -361,7 +431,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::assembleProblem
                          fval_getter,
                          *m_matrix,
                          m_rhs_views,
-                         getDofMap(),
+                         m_node_dof_map,
                          m_condensation_manager,
                          field_inds_ctwrpr,
                          assembly_options,

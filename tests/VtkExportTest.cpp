@@ -47,36 +47,22 @@ void test2D(const MpiComm& comm)
     auto solution_manager = SolutionManager{*my_partition, problem_def.n_fields};
     auto solution         = system_manager.initSolution();
 
-    {
-        auto           solution_view = solution->get1dViewNonConst();
-        const auto     sol_span_arr  = std::array{std::span{solution_view}};
-        const double   Re            = 40.;
-        const double   lambda        = Re / 2. - std::sqrt(Re * Re / 4. - 4. * pi * pi);
-        constexpr auto bot_top_vals  = std::array< val_t, 2 >{1., pi};
-        computeValuesAtNodes(*my_partition,
-                             std::array{bot_boundary, top_boundary},
-                             system_manager.getDofMap(),
-                             scalar_inds,
-                             std::array{std::span{bot_top_vals}},
-                             sol_span_arr);
-        constexpr auto params = KernelParams{.dimension = 2, .n_equations = 2};
-        const auto     kernel = wrapDomainResidualKernel< params >([&](const auto& in, auto& out) {
-            // Kovasznay flow velocity field
-            const auto& p = in.point.space;
-            out[0]        = 1. - std::exp(lambda * p.x()) * std::cos(2. * pi * p.y());
-            out[1]        = lambda * std::exp(lambda * p.x()) * std::sin(2 * pi * p.y()) / (2. * pi);
-        });
-        computeValuesAtNodes(kernel,
-                             *my_partition,
-                             std::views::single(domain_id),
-                             system_manager.getDofMap(),
-                             vec_inds,
-                             empty_field_val_getter,
-                             sol_span_arr);
-    }
-    solution->switchActiveMultiVector();
-    solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);
-    solution->switchActiveMultiVector();
+    constexpr auto params           = KernelParams{.dimension = 2, .n_equations = 2};
+    const auto     bot_top_kernel   = wrapBoundaryResidualKernel< params >([&](const auto&, auto& out) {
+        // Some arbitrary constant values
+        out[0] = 1.;
+        out[1] = pi;
+    });
+    const auto     kovasznay_kernel = wrapDomainResidualKernel< params >([&](const auto& in, auto& out) {
+        // Kovasznay flow velocity field
+        const double Re     = 40.;
+        const double lambda = Re / 2. - std::sqrt(Re * Re / 4. - 4. * pi * pi);
+        const auto&  p      = in.point.space;
+        out[0]              = 1. - std::exp(lambda * p.x()) * std::cos(2. * pi * p.y());
+        out[1]              = lambda * std::exp(lambda * p.x()) * std::sin(2 * pi * p.y()) / (2. * pi);
+    });
+    system_manager.setValues(solution, kovasznay_kernel, {domain_id}, vec_inds);
+    system_manager.setValues(solution, bot_top_kernel, {bot_boundary, top_boundary}, scalar_inds);
     system_manager.updateSolution(solution, all_field_inds, solution_manager, all_field_inds);
 
     auto       exporter        = PvtuExporter{*my_partition};
@@ -110,47 +96,25 @@ void test3D(const MpiComm& comm)
     constexpr auto   n_fields            = problem_def.n_fields;
     constexpr auto   domain_field_inds   = std::array< size_t, 3 >{0, 1, 2};
     constexpr auto   boundary_field_inds = std::array< size_t, 3 >{3, 4, 5};
+    constexpr auto   field_inds          = util::makeIotaArray< size_t, n_fields >();
 
     auto system_manager   = makeAlgebraicSystem(comm, my_partition, problemdef_ctwrpr);
     auto solution_manager = SolutionManager{*my_partition, n_fields};
     auto solution         = system_manager.initSolution();
 
-    {
-        auto           solution_view = solution->get1dViewNonConst();
-        const auto     sol_span_arr  = std::array{std::span{solution_view}};
-        constexpr auto ker_params    = KernelParams{.dimension = 3, .n_equations = 3};
-
-        const auto dom_kernel = wrapDomainResidualKernel< ker_params >([&](const auto& in, auto& out) {
-            const auto& p = in.point.space;
-            const auto  r = std::sqrt(p.x() * p.x() + p.y() * p.y() + p.z() * p.z());
-            out[0]        = r;
-            out[1]        = p.y();
-            out[2]        = p.z();
-        });
-        computeValuesAtNodes(dom_kernel,
-                             *my_partition,
-                             std::views::single(domain_id),
-                             system_manager.getDofMap(),
-                             domain_field_inds,
-                             empty_field_val_getter,
-                             sol_span_arr);
-
-        constexpr auto boundary_ids = util::makeIotaArray< d_id_t, 6 >(1);
-        const auto     bnd_kernel =
-            wrapBoundaryResidualKernel< ker_params >([](const auto& in, auto& out) { out = in.normal; });
-        computeValuesAtNodes(bnd_kernel,
-                             *my_partition,
-                             boundary_ids,
-                             system_manager.getDofMap(),
-                             boundary_field_inds,
-                             empty_field_val_getter,
-                             sol_span_arr);
-
-        solution->switchActiveMultiVector();
-        solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);
-        solution->switchActiveMultiVector();
-    }
-    constexpr auto field_inds = util::makeIotaArray< size_t, n_fields >();
+    constexpr auto ker_params   = KernelParams{.dimension = 3, .n_equations = 3};
+    const auto     dom_kernel   = wrapDomainResidualKernel< ker_params >([&](const auto& in, auto& out) {
+        const auto& p = in.point.space;
+        const auto  r = std::sqrt(p.x() * p.x() + p.y() * p.y() + p.z() * p.z());
+        out[0]        = r;
+        out[1]        = p.y();
+        out[2]        = p.z();
+    });
+    constexpr auto boundary_ids = util::makeIotaArray< d_id_t, 6 >(1);
+    const auto     bnd_kernel =
+        wrapBoundaryResidualKernel< ker_params >([](const auto& in, auto& out) { out = in.normal; });
+    system_manager.setValues(solution, bnd_kernel, boundary_ids, boundary_field_inds);
+    system_manager.setValues(solution, dom_kernel, std::views::single(domain_id), domain_field_inds);
     system_manager.updateSolution(solution, field_inds, solution_manager, field_inds);
 
     auto       exporter    = PvtuExporter{*my_partition};
