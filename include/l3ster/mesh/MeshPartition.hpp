@@ -198,6 +198,18 @@ public:
     inline size_t computeTopoHash() const;
     bool          isGhostNode(n_id_t node) const { return std::ranges::binary_search(getGhostNodes(), node); }
     bool          isOwnedNode(n_id_t node) const { return std::ranges::binary_search(getOwnedNodes(), node); }
+    auto          getGhostNodePredicate() const
+    {
+        return [this](n_id_t node) {
+            return isGhostNode(node);
+        };
+    }
+    auto getOwnedNodePredicate() const
+    {
+        return [this](n_id_t node) {
+            return isOwnedNode(node);
+        };
+    }
 
     template < el_o_t O >
     auto getConversionAlloc() const -> MeshPartition< O >::domain_map_t;

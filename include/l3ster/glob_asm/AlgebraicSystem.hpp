@@ -132,8 +132,8 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::updateSolution(
     SolManInds&&                                        sol_man_inds)
 {
     util::throwingAssert(std::ranges::distance(sol_man_inds) == std::ranges::distance(sol_inds) * ptrdiff_t{n_rhs},
-                         "Source and destination indices length must match");
-    util::throwingAssert(std::ranges::none_of(sol_inds, [&](size_t i) { return i >= max_dofs_per_node; }),
+                         "Source and destination indices lengths must match");
+    util::throwingAssert(std::ranges::none_of(sol_inds, [](size_t i) { return i >= max_dofs_per_node; }),
                          "Source index out of bounds");
     util::throwingAssert(std::ranges::none_of(sol_man_inds, [&](size_t i) { return i >= sol_man.nFields(); }),
                          "Destination index out of bounds");

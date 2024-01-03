@@ -38,13 +38,12 @@ auto computeInNeighborGhostNodes(const MpiComm& comm, const mesh::MeshPartition<
     const auto process_recvd = [&](const util::ArrayOwner< n_id_t >& data_buf, int potential_nbr_rank) {
         const auto             rank_ghosts    = std::span{std::next(data_buf.begin()), data_buf.front()};
         std::vector< n_id_t >* nbr_ghosts_ptr = nullptr; // avoid repeated lookup
-        for (n_id_t ghost : rank_ghosts)
-            if (mesh.isOwnedNode(ghost))
-            {
-                if (not nbr_ghosts_ptr)
-                    nbr_ghosts_ptr = std::addressof(retval[potential_nbr_rank]);
-                nbr_ghosts_ptr->push_back(ghost);
-            }
+        for (n_id_t ghost : rank_ghosts | std::views::filter(mesh.getOwnedNodePredicate()))
+        {
+            if (not nbr_ghosts_ptr)
+                nbr_ghosts_ptr = std::addressof(retval[potential_nbr_rank]);
+            nbr_ghosts_ptr->push_back(ghost);
+        }
     };
 
     // Staggered all-gather pattern
@@ -194,7 +193,7 @@ auto computeOutNeighborDofInfo(int                                              
     return retval;
 }
 
-// Tell my out-neighbors which columns I'll be writing to, and who owns those colums' GID rows
+// Tell my out-neighbors which columns I'll be writing to, and who owns those columns' GID rows
 inline auto exchangeNeighborDofInfo(const MpiComm&                    comm,
                                     const std::vector< int >&         in_nbrs,
                                     const rank_to_rank_to_dofs_map_t& out_dof_info) -> rank_to_dofs_map_t

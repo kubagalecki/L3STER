@@ -30,11 +30,8 @@ public:
     NodeToGlobalDofMap(const node_interval_vector_t< dofs_per_node >& dof_intervals,
                        const NodeCondensationMap< CP >&               cond_map);
 
-    [[nodiscard]] inline payload_t operator()(n_id_t node) const noexcept;
-    [[nodiscard]] bool             isContiguous() const noexcept
-    {
-        return std::get_if< ContiguousCaseInfo >(std::addressof(m_data));
-    }
+    [[nodiscard]] inline auto operator()(n_id_t node) const -> payload_t;
+    [[nodiscard]] bool        isContiguous() const { return std::get_if< ContiguousCaseInfo >(std::addressof(m_data)); }
 
 private:
     template < CondensationPolicy CP >
@@ -63,7 +60,7 @@ public:
                       const NodeToGlobalDofMap< dofs_per_node >& global_map,
                       const std::same_as< tpetra_map_t > auto&... local_global_maps)
         requires(sizeof...(local_global_maps) == num_maps);
-    [[nodiscard]] const payload_t& operator()(n_id_t node) const noexcept { return m_map.find(node)->second; }
+    [[nodiscard]] const payload_t& operator()(n_id_t node) const noexcept { return m_map.at(node); }
 
     [[nodiscard]] auto size() const -> size_t { return m_map.size(); }
     [[nodiscard]] auto begin() const { return m_map.cbegin(); }
@@ -105,12 +102,11 @@ NodeToGlobalDofMap< dofs_per_node >::NodeToGlobalDofMap(const node_interval_vect
 }
 
 template < size_t dofs_per_node >
-typename NodeToGlobalDofMap< dofs_per_node >::payload_t
-NodeToGlobalDofMap< dofs_per_node >::operator()(n_id_t node) const noexcept
+auto NodeToGlobalDofMap< dofs_per_node >::operator()(n_id_t node) const -> payload_t
 {
     const auto map_ptr = std::get_if< map_t >(std::addressof(m_data));
     if (map_ptr)
-        return map_ptr->find(node)->second;
+        return map_ptr->at(node);
     else
     {
         const auto& contig_info = *std::get_if< ContiguousCaseInfo >(std::addressof(m_data));

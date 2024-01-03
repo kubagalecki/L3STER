@@ -52,7 +52,7 @@ auto initValsAndParentsDomain(const mesh::MeshPartition< orders... >&           
         auto       retval          = std::vector< std::uint8_t >(values.front().size(), 0);
         const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
             prepValsAndParentsAtDofs(
-                element.getNodes() | std::views::filter([&](auto node) { return not mesh.isGhostNode(node); }) |
+                element.getNodes() | std::views::filter(util::negatePredicate(mesh.getGhostNodePredicate())) |
                     std::views::transform([&](n_id_t node) { return getNodeDofsAtInds(dof_map, dof_inds, node); }) |
                     std::views::join,
                 retval,
@@ -79,16 +79,16 @@ auto initValsAndParentsBoundary(const mesh::MeshPartition< orders... >&         
                                 const SolutionManager::FieldValueGetter< n_fields >&,
                                 const std::array< std::span< val_t >, n_rhs >& values) -> std::vector< std::uint8_t >
 {
-    auto       retval          = std::vector< std::uint8_t >(values.front().size(), 0);
-    const auto process_el_view = [&]< mesh::ElementType ET, el_o_t EO >(
-                                     const mesh::BoundaryElementView< ET, EO >& el_view) {
-        prepValsAndParentsAtDofs(
-            el_view.getSideNodesView() | std::views::filter([&](n_id_t node) { return not mesh.isGhostNode(node); }) |
-                std::views::transform([&](n_id_t node) { return getNodeDofsAtInds(dof_map, dof_inds, node); }) |
-                std::views::join,
-            retval,
-            values);
-    };
+    auto       retval = std::vector< std::uint8_t >(values.front().size(), 0);
+    const auto process_el_view =
+        [&]< mesh::ElementType ET, el_o_t EO >(const mesh::BoundaryElementView< ET, EO >& el_view) {
+            prepValsAndParentsAtDofs(
+                el_view.getSideNodesView() | std::views::filter(util::negatePredicate(mesh.getGhostNodePredicate())) |
+                    std::views::transform([&](n_id_t node) { return getNodeDofsAtInds(dof_map, dof_inds, node); }) |
+                    std::views::join,
+                retval,
+                values);
+        };
     mesh.visitBoundaries(process_el_view, boundary_ids, std::execution::par);
     return retval;
 }
@@ -109,20 +109,17 @@ void computeValuesAtNodes(const mesh::MeshPartition< orders... >&               
 {
     L3STER_PROFILE_FUNCTION;
     const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
-        const auto process_node = [&](size_t node) {
+        for (auto node : element.getNodes() | std::views::filter(util::negatePredicate(mesh.getGhostNodePredicate())))
             for (size_t dof_ind = 0; auto dof : detail::getNodeDofsAtInds(dof_map, dof_inds, node))
             {
                 for (size_t rhs_ind = 0; rhs_ind != n_rhs; ++rhs_ind)
                 {
-                    std::atomic_ref{values_out[rhs_ind][dof]}.store(values_in[rhs_ind][dof_ind],
-                                                                    std::memory_order_relaxed);
+                    const auto val  = values_in[rhs_ind][dof_ind];
+                    auto&      dest = values_out[rhs_ind][dof];
+                    std::atomic_ref{dest}.store(val, std::memory_order_relaxed);
                 }
                 ++dof_ind;
             }
-        };
-        std::ranges::for_each(element.getNodes() |
-                                  std::views::filter([&](auto node) { return not mesh.isGhostNode(node); }),
-                              process_node);
     };
     mesh.visit(process_element, domain_ids, std::execution::par);
 }
@@ -177,30 +174,29 @@ void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&         
                     if constexpr (n_fields != 0)
                     {
                         const auto np_fp       = static_cast< val_t >(num_parents[dof]);
-                        const auto update_vals = std::invoke([&] {
-                            auto retval = std::array< val_t, n_rhs >{};
-                            for (size_t rhs_ind = 0; val_t & upd_val : retval)
-                                upd_val = ker_res(dof_ind, rhs_ind++);
-                            for (val_t& upd_val : retval)
-                                upd_val /= np_fp;
-                            return retval;
-                        });
+                        auto       update_vals = std::array< val_t, n_rhs >{};
+                        for (size_t rhs_ind = 0; val_t & upd_val : update_vals)
+                            upd_val = ker_res(dof_ind, rhs_ind++) /= np_fp;
                         for (size_t rhs_ind = 0; val_t upd_val : update_vals)
-                            std::atomic_ref{values[rhs_ind++][dof]}.fetch_add(upd_val, std::memory_order_relaxed);
+                        {
+                            auto& dest = values[rhs_ind++][dof];
+                            std::atomic_ref{dest}.fetch_add(upd_val, std::memory_order_relaxed);
+                        }
                     }
                     else
                         for (size_t rhs_ind = 0; rhs_ind != n_rhs; ++rhs_ind)
                         {
                             const auto upd_val = ker_res(dof_ind, rhs_ind);
-                            std::atomic_ref{values[rhs_ind][dof]}.store(upd_val, std::memory_order_relaxed);
+                            auto&      dest    = values[rhs_ind][dof];
+                            std::atomic_ref{dest}.store(upd_val, std::memory_order_relaxed);
                         }
                     ++dof_ind;
                 }
             };
-            std::ranges::for_each(
-                std::views::iota(size_t{}, el_nodes.size()) |
-                    std::views::filter([&](size_t node_ind) { return not mesh.isGhostNode(el_nodes[node_ind]); }),
-                process_node);
+            std::ranges::for_each(std::views::iota(0u, el_nodes.size()) | std::views::filter([&](auto node_ind) {
+                                      return not mesh.isGhostNode(el_nodes[node_ind]);
+                                  }),
+                                  process_node);
         }
     };
     mesh.visit(process_element, ids, std::execution::par);

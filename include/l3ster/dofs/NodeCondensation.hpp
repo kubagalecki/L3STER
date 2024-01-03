@@ -116,9 +116,7 @@ auto computeCondensedActiveNodeIds(const MpiComm&                          comm,
     const auto owned_active_nodes     = std::invoke([&] {
         auto retval = std::vector< n_id_t >{};
         retval.reserve(uncondensed_active_nodes.size());
-        for (auto n : uncondensed_active_nodes)
-            if (mesh.isOwnedNode(n))
-                retval.push_back(n);
+        std::ranges::copy_if(uncondensed_active_nodes, std::back_inserter(retval), mesh.getOwnedNodePredicate());
         retval.shrink_to_fit();
         return retval;
     });
@@ -166,9 +164,8 @@ void activateOwned(const MpiComm&                          comm,
     const int comm_size   = comm.getSize();
     auto      ghost_nodes = std::vector< n_id_t >{};
     ghost_nodes.reserve(my_active_nodes.size());
-    for (auto n : my_active_nodes)
-        if (mesh.isGhostNode(n))
-            ghost_nodes.push_back(n);
+    for (auto n : my_active_nodes | std::views::filter(mesh.getGhostNodePredicate()))
+        ghost_nodes.push_back(n);
     const auto max_ghost_nodes              = std::invoke([&] {
         size_t retval{};
         comm.allReduce(std::views::single(ghost_nodes.size()), &retval, MPI_MAX);

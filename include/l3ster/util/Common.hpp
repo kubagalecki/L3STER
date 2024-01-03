@@ -122,5 +122,16 @@ auto makeLinspaceVector(T lo, T hi, size_t N) -> std::vector< T >
     });
     return retval;
 }
+
+// Higher order functions
+template < typename Predicate >
+constexpr auto negatePredicate(Predicate&& p)
+{
+    return [pred = std::forward< Predicate >(p)]< typename T >(T&& in)
+        requires std::predicate< std::add_const_t< std::remove_cvref_t< Predicate > >, decltype(std::forward< T >(in)) >
+    {
+        return not pred(std::forward< T >(in));
+    };
+}
 } // namespace lstr::util
 #endif // L3STER_UTIL_COMMON_HPP
