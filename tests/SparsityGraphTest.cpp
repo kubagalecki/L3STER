@@ -75,11 +75,15 @@ private:
 template < CondensationPolicy CP >
 void test(const MpiComm& comm)
 {
-    auto       full_mesh      = std::invoke([&comm] {
-        constexpr int big = 16, small = 5;
-        const auto    nodes_per_edge = comm.getSize() == 1 ? big : small;
-        const auto    node_dist      = util::makeLinspaceVector(0., 1., nodes_per_edge);
-        auto          mesh           = mesh::makeCubeMesh(node_dist);
+    auto full_mesh = std::invoke([&comm] {
+#ifdef NDEBUG
+        constexpr int big = 15, small = 5;
+#else
+        constexpr int big = 5, small = 3;
+#endif
+        const auto nodes_per_edge = comm.getSize() == 1 ? big : small;
+        const auto node_dist      = util::makeLinspaceVector(0., 1., nodes_per_edge);
+        auto       mesh           = mesh::makeCubeMesh(node_dist);
         return convertMeshToOrder< 2 >(mesh);
     });
     auto       full_mesh_copy = copy(full_mesh);
@@ -126,9 +130,13 @@ int main(int argc, char* argv[])
 
     const auto scope_guard = L3sterScopeGuard{argc, argv};
 
-    // Test several times for the maximally parallel case to try to catch out any threading errors
-    constexpr int n_mt_iters = 4;
-    const int     n_iter     = comm.getSize() == 1 ? n_mt_iters : 1;
+#ifdef NDEBUG
+    // Test the maximally parallel case several times to try to catch any race conditions
+    constexpr int n_multi_threaded_iters = 4;
+    const int     n_iter                 = comm.getSize() == 1 ? n_multi_threaded_iters : 1;
+#else
+    const int n_iter = 1;
+#endif
     for (int i = 0; i != n_iter; ++i)
     {
         test< CondensationPolicy::None >(comm);

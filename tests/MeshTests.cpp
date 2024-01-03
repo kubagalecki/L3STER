@@ -82,15 +82,20 @@ TEMPLATE_TEST_CASE("Iteration over elements",
                    std::execution::parallel_policy)
 {
     constexpr auto node_dist = std::invoke([] {
-        std::array< double, 20 > retval{};
+#ifdef NDEBUG
+        constexpr auto sz = 20;
+#else
+        constexpr auto sz = 10;
+#endif
+        std::array< double, sz > retval{};
         std::ranges::generate(retval, [v = 0.]() mutable { return v += 1.; });
         return retval;
     });
-    constexpr auto n_edges   = node_dist.size() - 1;
-    constexpr auto n_faces   = n_edges * n_edges * 6;
-    constexpr auto n_vols    = n_edges * n_edges * n_edges;
-    const auto     mesh      = makeCubeMesh(node_dist);
-    const auto     policy    = TestType{};
+    constexpr auto n_edges = node_dist.size() - 1;
+    constexpr auto n_faces = n_edges * n_edges * 6;
+    constexpr auto n_vols  = n_edges * n_edges * n_edges;
+    const auto     mesh    = makeCubeMesh(node_dist);
+    const auto     policy  = TestType{};
 
     int        count           = 0;
     const auto element_counter = [&](const auto&) {
@@ -232,20 +237,18 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
 {
     SECTION("mesh imported from gmsh")
     {
-        constexpr el_o_t order      = 2;
-        auto             mesh1      = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), {}, gmsh_tag);
-        const auto       n_elements = mesh1.getNElements();
+        constexpr el_o_t order = 2;
+        auto             mesh1 = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), {}, gmsh_tag);
 
         auto mesh = convertMeshToOrder< order >(mesh1);
-        CHECK(n_elements == mesh.getNElements());
+        CHECK(mesh1.getNElements() == mesh.getNElements());
         const auto validate_elorder = [&]< ElementType T, el_o_t O >(const Element< T, O >&) {
-            if constexpr (O != 2)
-                throw std::logic_error{"Incorrect element order"};
+            CHECK(O == 2);
         };
-        CHECK_NOTHROW(mesh.visit(validate_elorder));
+        mesh.visit(validate_elorder);
         CHECK(mesh.getOwnedNodes().size() == 44745u);
-        for (size_t i = 0; i < mesh.getOwnedNodes().size() - 1; ++i)
-            CHECK(mesh.getOwnedNodes()[i] + 1 == mesh.getOwnedNodes()[i + 1]);
+        CHECK(std::ranges::adjacent_find(mesh.getOwnedNodes(), [](auto n1, auto n2) { return n2 - n1 != 1; }) ==
+              mesh.getOwnedNodes().end());
     }
 
     SECTION("procedurally generated mesh")

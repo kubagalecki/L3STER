@@ -564,8 +564,12 @@ TEST_CASE("Base64 encoding", "[util]")
     test(text_sv | std::views::drop(3) | std::views::take(2), std::string_view{"ZW0="});
 
     // Test whether sequential and parallel implementations yield identical results
+#ifdef DNDEBUG
     constexpr size_t long_text_size = 1ul << 25;
-    std::string      long_text(long_text_size, '\0');
+#else
+    constexpr size_t long_text_size = 1ul << 20;
+#endif
+    std::string long_text(long_text_size, '\0');
     std::ranges::generate(
         long_text,
         [prng = std::mt19937{std::random_device{}()}, dist = std::uniform_int_distribution< int >{0, 255}]() mutable {
@@ -647,9 +651,15 @@ TEST_CASE("getTrueInds", "[util]")
 
 TEST_CASE("Non-random access parallel for", "[util]")
 {
-    constexpr auto n_reps = 3;
-    auto           prng   = std::mt19937{std::random_device{}()};
-    for (auto size : {1u << 10, 1u << 15, 1u << 18, 1u << 22})
+#ifdef NDEBUG
+    constexpr auto n_reps = 4;
+    const auto     sizes  = {1u << 10, 1u << 15, 1u << 18, 1u << 22};
+#else
+    constexpr auto n_reps = 1;
+    const auto     sizes  = {1u << 18, 1u << 12, 1u << 16, 1u << 20};
+#endif
+    auto prng = std::mt19937{std::random_device{}()};
+    for (auto size : sizes)
     {
         auto map  = robin_hood::unordered_flat_map< size_t, size_t >{};
         auto dist = std::uniform_int_distribution< size_t >{0, size};

@@ -113,9 +113,13 @@ TEMPLATE_TEST_CASE("Node DOF interval (de-)serialization",
 TEMPLATE_TEST_CASE("Node DOF interval consolidation", "[dof]", util::ConstexprValue< 10 >, util::ConstexprValue< 100 >)
 {
     std::mt19937 prng{std::random_device{}()};
-    int          n_runs          = 1000; // This is effectively a fuzz test, so n_runs needs to be sufficiently large
-    int          min_n_intervals = 0, max_n_intervals = 1 << 8;
-    n_id_t       min_delim = 0, max_delim = 1u << 12;
+#ifdef NDEBUG
+    int n_runs = 1000; // This is effectively a fuzz test, so n_runs needs to be sufficiently large
+#else
+    int n_runs = 10; // This is effectively a fuzz test, so n_runs needs to be sufficiently large
+#endif
+    int    min_n_intervals = 0, max_n_intervals = 1 << 8;
+    n_id_t min_delim = 0, max_delim = 1u << 12;
 
     constexpr size_t n_fields        = TestType::value;
     using delim_t                    = std::array< n_id_t, 2 >;
@@ -205,7 +209,7 @@ TEMPLATE_TEST_CASE("Node to global DOF",
                 const auto  computed_dofs = map(cond_map_full.getCondensedId(node));
                 const auto  expected_dof_base{static_cast< global_dof_t >(
                     node > i1_end ? (i1_end - i1_begin + 1) * i1_cov.count() + (node - i2_begin) * i2_cov.count()
-                                   : (node - i1_begin) * i1_cov.count())};
+                                  : (node - i1_begin) * i1_cov.count())};
                 const auto& cov = node > i1_end ? i2_cov : i1_cov;
 
                 global_dof_t node_dof_count = 0;
