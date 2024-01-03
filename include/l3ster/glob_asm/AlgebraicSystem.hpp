@@ -40,59 +40,33 @@ public:
     inline void beginAssembly();
     inline void endAssembly();
 
-    template < typename Kernel,
-               KernelParams             params,
+    template < EquationKernel_c         Kernel,
                ArrayOf_c< size_t > auto field_inds = util::makeIotaArray< size_t, max_dofs_per_node >(),
                size_t                   n_fields   = 0,
                AssemblyOptions          asm_opts   = AssemblyOptions{} >
-    void assembleProblem(const DomainEquationKernel< Kernel, params >&        kernel,
+    void assembleProblem(const Kernel&                                        kernel,
                          const util::ArrayOwner< d_id_t >&                    domain_ids,
                          const SolutionManager::FieldValueGetter< n_fields >& fval_getter       = {},
                          util::ConstexprValue< field_inds >                   field_inds_ctwrpr = {},
                          util::ConstexprValue< asm_opts >                     assembly_options  = {},
                          val_t                                                time              = 0.)
-        requires(params.n_rhs == n_rhs);
-    template < typename Kernel,
-               KernelParams             params,
-               ArrayOf_c< size_t > auto field_inds = util::makeIotaArray< size_t, max_dofs_per_node >(),
-               size_t                   n_fields   = 0,
-               AssemblyOptions          asm_opts   = AssemblyOptions{} >
-    void assembleProblem(const BoundaryEquationKernel< Kernel, params >&      kernel,
-                         const util::ArrayOwner< d_id_t >&                    boundary_ids,
-                         const SolutionManager::FieldValueGetter< n_fields >& fval_getter       = {},
-                         util::ConstexprValue< field_inds >                   field_inds_ctwrpr = {},
-                         util::ConstexprValue< asm_opts >                     assembly_options  = {},
-                         val_t                                                time              = 0.)
-        requires(params.n_rhs == n_rhs);
+        requires(Kernel::parameters.n_rhs == n_rhs);
 
-    template < typename Kernel, KernelParams params, std::integral dofind_t = size_t, size_t n_fields = 0 >
-    void setValues(const Teuchos::RCP< tpetra_femultivector_t >&        solution,
-                   const ResidualDomainKernel< Kernel, params >&        kernel,
-                   const util::ArrayOwner< d_id_t >&                    domain_ids,
-                   const std::array< dofind_t, params.n_equations >&    dof_inds,
-                   const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
-                   val_t                                                time             = 0.) const;
-    template < typename Kernel, KernelParams params, std::integral dofind_t = size_t, size_t n_fields = 0 >
-    void setValues(const Teuchos::RCP< tpetra_femultivector_t >&        solution,
-                   const ResidualBoundaryKernel< Kernel, params >&      kernel,
-                   const util::ArrayOwner< d_id_t >&                    boundary_ids,
-                   const std::array< dofind_t, params.n_equations >&    dof_inds,
-                   const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
-                   val_t                                                time             = 0.) const;
+    template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
+    void setValues(const Teuchos::RCP< tpetra_femultivector_t >&                 solution,
+                   const Kernel&                                                 kernel,
+                   const util::ArrayOwner< d_id_t >&                             domain_ids,
+                   const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
+                   const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter = {},
+                   val_t                                                         time             = 0.) const;
 
     inline void applyDirichletBCs();
-    template < typename Kernel, KernelParams params, std::integral dofind_t = size_t, size_t n_fields = 0 >
-    void setDirichletBCValues(const ResidualDomainKernel< Kernel, params >&        kernel,
-                              const util::ArrayOwner< d_id_t >&                    domain_ids,
-                              const std::array< dofind_t, params.n_equations >&    dof_inds,
-                              const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
-                              val_t                                                time             = 0.);
-    template < typename Kernel, KernelParams params, std::integral dofind_t = size_t, size_t n_fields = 0 >
-    void setDirichletBCValues(const ResidualBoundaryKernel< Kernel, params >&      kernel,
-                              const util::ArrayOwner< d_id_t >&                    boundary_ids,
-                              const std::array< dofind_t, params.n_equations >&    dof_inds,
-                              const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
-                              val_t                                                time             = 0.);
+    template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
+    void setDirichletBCValues(const Kernel&                                                 kernel,
+                              const util::ArrayOwner< d_id_t >&                             domain_ids,
+                              const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
+                              const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter = {},
+                              val_t                                                         time             = 0.);
 
     void solve(solvers::Solver_c auto& solver, const Teuchos::RCP< tpetra_femultivector_t >& solution) const;
 
@@ -162,14 +136,14 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::updateSolution(
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-template < typename Kernel, KernelParams params, std::integral dofind_t, size_t n_fields >
+template < ResidualKernel_c Kernel, std::integral dofind_t, size_t n_fields >
 void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
-    const Teuchos::RCP< tpetra_femultivector_t >&        solution,
-    const ResidualDomainKernel< Kernel, params >&        kernel,
-    const util::ArrayOwner< d_id_t >&                    domain_ids,
-    const std::array< dofind_t, params.n_equations >&    dof_inds,
-    const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
-    val_t                                                time) const
+    const Teuchos::RCP< tpetra_femultivector_t >&                 solution,
+    const Kernel&                                                 kernel,
+    const util::ArrayOwner< d_id_t >&                             domain_ids,
+    const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
+    const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
+    val_t                                                         time) const
 {
     util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
                          "The DOF indices are out of bounds for the problem");
@@ -190,41 +164,13 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-template < typename Kernel, KernelParams params, std::integral dofind_t, size_t n_fields >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
-    const Teuchos::RCP< tpetra_femultivector_t >&        solution,
-    const ResidualBoundaryKernel< Kernel, params >&      kernel,
-    const util::ArrayOwner< d_id_t >&                    boundary_ids,
-    const std::array< dofind_t, params.n_equations >&    dof_inds,
-    const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
-    val_t                                                time) const
-{
-    util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
-                         "The DOF indices are out of bounds for the problem");
-    util::throwingAssert(n_rhs == solution->getNumVectors(), "The number of columns and number of RHS must match");
-
-    const auto vals_view = solution->getLocalViewHost(Tpetra::Access::ReadWrite);
-    computeValuesAtNodes(kernel,
-                         *m_mesh,
-                         boundary_ids,
-                         m_node_dof_map,
-                         dof_inds,
-                         field_val_getter,
-                         util::asSpans< n_rhs >(vals_view),
-                         time);
-    solution->switchActiveMultiVector();
-    solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);
-    solution->switchActiveMultiVector();
-}
-
-template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-template < typename Kernel, KernelParams params, std::integral dofind_t, size_t n_fields >
+template < ResidualKernel_c Kernel, std::integral dofind_t, size_t n_fields >
 void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCValues(
-    const ResidualDomainKernel< Kernel, params >&        kernel,
-    const util::ArrayOwner< d_id_t >&                    domain_ids,
-    const std::array< dofind_t, params.n_equations >&    dof_inds,
-    const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
-    val_t                                                time)
+    const Kernel&                                                 kernel,
+    const util::ArrayOwner< d_id_t >&                             domain_ids,
+    const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
+    const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
+    val_t                                                         time)
 {
     util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
                          "The DOF indices are out of bounds for the problem");
@@ -233,29 +179,6 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCV
     computeValuesAtNodes(kernel,
                          *m_mesh,
                          domain_ids,
-                         m_node_dof_map,
-                         dof_inds,
-                         field_val_getter,
-                         util::asSpans< n_rhs >(vals_view),
-                         time);
-}
-
-template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-template < typename Kernel, KernelParams params, std::integral dofind_t, size_t n_fields >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCValues(
-    const ResidualBoundaryKernel< Kernel, params >&      kernel,
-    const util::ArrayOwner< d_id_t >&                    boundary_ids,
-    const std::array< dofind_t, params.n_equations >&    dof_inds,
-    const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
-    val_t                                                time)
-{
-    util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
-                         "The DOF indices are out of bounds for the problem");
-
-    const auto vals_view = m_dirichlet_values->getLocalViewHost(Tpetra::Access::OverwriteAll);
-    computeValuesAtNodes(kernel,
-                         *m_mesh,
-                         boundary_ids,
                          m_node_dof_map,
                          dof_inds,
                          field_val_getter,
@@ -375,59 +298,21 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setToZero()
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-template < typename Kernel,
-           KernelParams             params,
-           ArrayOf_c< size_t > auto field_inds,
-           size_t                   n_fields,
-           AssemblyOptions          asm_opts >
+template < EquationKernel_c Kernel, ArrayOf_c< size_t > auto field_inds, size_t n_fields, AssemblyOptions asm_opts >
 void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::assembleProblem(
-    const DomainEquationKernel< Kernel, params >&        kernel,
+    const Kernel&                                        kernel,
     const util::ArrayOwner< d_id_t >&                    domain_ids,
     const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
     util::ConstexprValue< field_inds >                   field_inds_ctwrpr,
     util::ConstexprValue< asm_opts >                     assembly_options,
     val_t                                                time)
-    requires(params.n_rhs == n_rhs)
+    requires(Kernel::parameters.n_rhs == n_rhs)
 {
     L3STER_PROFILE_FUNCTION;
     assertState(State::OpenForAssembly, "`assembleProblem()` was called before `beginAssembly()`");
     assembleGlobalSystem(kernel,
                          *m_mesh,
                          domain_ids,
-                         fval_getter,
-                         *m_matrix,
-                         m_rhs_views,
-                         m_node_dof_map,
-                         m_condensation_manager,
-                         field_inds_ctwrpr,
-                         assembly_options,
-                         time);
-
-#ifdef L3STER_PROFILE_EXECUTION
-    m_rhs->getMap()->getComm()->barrier();
-#endif
-}
-
-template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-template < typename Kernel,
-           KernelParams             params,
-           ArrayOf_c< size_t > auto field_inds,
-           size_t                   n_fields,
-           AssemblyOptions          asm_opts >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::assembleProblem(
-    const BoundaryEquationKernel< Kernel, params >&      kernel,
-    const util::ArrayOwner< d_id_t >&                    boundary_ids,
-    const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
-    util::ConstexprValue< field_inds >                   field_inds_ctwrpr,
-    util::ConstexprValue< asm_opts >                     assembly_options,
-    val_t                                                time)
-    requires(params.n_rhs == n_rhs)
-{
-    L3STER_PROFILE_FUNCTION;
-    assertState(State::OpenForAssembly, "`assembleProblem()` was called before `beginAssembly()`");
-    assembleGlobalSystem(kernel,
-                         *m_mesh,
-                         boundary_ids,
                          fval_getter,
                          *m_matrix,
                          m_rhs_views,

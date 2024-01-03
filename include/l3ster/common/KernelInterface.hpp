@@ -222,6 +222,6 @@ template < typename T >
 concept EquationKernel_c = detail::is_domain_equation_kernel< T > or detail::is_boundary_equation_kernel< T >;
 
 template < typename T >
-concept ResidualnKernel_c = detail::is_domain_residual_kernel< T > or detail::is_boundary_residual_kernel< T >;
+concept ResidualKernel_c = detail::is_domain_residual_kernel< T > or detail::is_boundary_residual_kernel< T >;
 } // namespace lstr
 #endif // L3STER_COMMON_INTERFACE_HPP
