@@ -45,9 +45,6 @@ include( "cmake/ImportLibrary.cmake" )
 # Trilinos
 define_trilinos_target( ${L3STER_ENABLE_VERBOSITY} 13.4 Tpetra Belos MueLu )
 list( APPEND L3STER_INTERFACE_DEPENDENCIES Trilinos )
-if ( TARGET OpenMP::OpenMP_CXX )
-    list( APPEND L3STER_INTERFACE_DEPENDENCIES OpenMP::OpenMP_CXX )
-endif ()
 
 # Eigen
 find_package( Eigen3 3.4 REQUIRED )
