@@ -1,6 +1,6 @@
 #include "Common.hpp"
 
-static auto kernelImpl(size_t x, size_t rand) -> size_t
+static auto kernelImpl(size_t in, size_t rand) -> size_t
 {
     thread_local const auto hash = std::hash< size_t >{};
     return hash(hash(hash(in) % rand)) * 953u + rand + 1u;

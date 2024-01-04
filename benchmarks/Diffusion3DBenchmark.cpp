@@ -113,10 +113,9 @@ int main(int argc, char* argv[])
     auto alg_system = makeAlgebraicSystem(comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr, algpar_ctwrpr);
     alg_system.beginAssembly();
     alg_system.assembleProblem(diffusion_kernel3d, {domain_id});
+    alg_system.setDirichletBCValues(dirichlet_bc_kernel, boundary_ids, T_inds);
     alg_system.endAssembly();
     alg_system.describe(comm);
-    alg_system.setDirichletBCValues(dirichlet_bc_kernel, boundary_ids, T_inds);
-    alg_system.applyDirichletBCs();
 
     constexpr auto solver_opts  = IterSolverOpts{.verbosity = {.summary = true, .timing = true}};
     constexpr auto precond_opts = ChebyshevOpts{.degree = 3};
@@ -131,7 +130,7 @@ int main(int argc, char* argv[])
 
     L3STER_PROFILE_REGION_BEGIN("Compute solution error");
     const auto fval_getter = solution_manager.makeFieldValueGetter(field_inds);
-    const auto error = computeNormL2(comm, error_kernel, *my_partition, {domain_id}, fval_getter);
+    const auto error       = computeNormL2(comm, error_kernel, *my_partition, {domain_id}, fval_getter);
     L3STER_PROFILE_REGION_END("Compute solution error");
 
     if (comm.getRank() == 0)

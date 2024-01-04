@@ -16,8 +16,7 @@ constexpr auto node_dist = std::array{0., 1., 2., 3., 4., 5., 6.};
 auto makeMesh(const MpiComm& comm, auto probdef_ctwrpr)
 {
     constexpr auto mesh_order = 2;
-    return generateAndDistributeMesh< mesh_order >(
-        comm, [&] { return makeSquareMesh(node_dist); }, {}, probdef_ctwrpr);
+    return generateAndDistributeMesh< mesh_order >(comm, [&] { return makeSquareMesh(node_dist); }, {}, probdef_ctwrpr);
 }
 
 template < CondensationPolicy CP >
@@ -76,25 +75,22 @@ void test()
         alg_sys.assembleProblem(neumann_bc_kernel, adiabatic_bound_ids);
     };
 
+    constexpr auto dirichlet_bound_ids = std::array{left_boundary, right_boundary};
+    alg_sys.setDirichletBCValues(dirichlet_bc_kernel, dirichlet_bound_ids, std::array{0});
+
     // Check constraints on assembly state
     alg_sys.beginAssembly();
     assembleDomainProblem();
     assembleBoundaryProblem();
-    CHECK_THROWS(alg_sys.applyDirichletBCs());
     alg_sys.endAssembly();
     alg_sys.describe(comm);
     CHECK_THROWS(assembleDomainProblem());
     CHECK_THROWS(assembleBoundaryProblem());
     CHECK_THROWS(alg_sys.endAssembly());
 
-    constexpr auto dirichlet_bound_ids = std::array{left_boundary, right_boundary};
-    alg_sys.setDirichletBCValues(dirichlet_bc_kernel, dirichlet_bound_ids, std::array{0});
-    alg_sys.applyDirichletBCs();
-
     {
         auto dummy_problem = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, {}, algparams_ctwrpr);
         dummy_problem.endAssembly();
-        CHECK_THROWS(dummy_problem.applyDirichletBCs());
     }
 
     constexpr auto dof_inds = util::makeIotaArray< size_t, 3 >();

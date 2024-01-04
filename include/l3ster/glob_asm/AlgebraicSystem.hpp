@@ -60,7 +60,6 @@ public:
                    const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter = {},
                    val_t                                                         time             = 0.) const;
 
-    inline void applyDirichletBCs();
     template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setDirichletBCValues(const Kernel&                                                 kernel,
                               const util::ArrayOwner< d_id_t >&                             domain_ids,
@@ -74,6 +73,7 @@ public:
 
 private:
     inline void setToZero();
+    inline void applyDirichletBCs();
 
     enum struct State
     {
@@ -247,7 +247,7 @@ AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::AlgebraicSystem(
         L3STER_PROFILE_REGION_END("Dirichlet BCs");
     }
     if (m_dirichlet_bcs.has_value())
-        m_dirichlet_values = util::makeTeuchosRCP< tpetra_multivector_t >(m_sparsity_graph->getRowMap(), 1u);
+        m_dirichlet_values = util::makeTeuchosRCP< tpetra_multivector_t >(m_sparsity_graph->getRowMap(), n_rhs);
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
@@ -288,6 +288,8 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::endAssembly()
 #ifdef L3STER_PROFILE_EXECUTION
     m_rhs->getMap()->getComm()->barrier();
 #endif
+    if (m_dirichlet_bcs.has_value())
+        applyDirichletBCs();
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
@@ -331,10 +333,6 @@ template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t
 void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::applyDirichletBCs()
 {
     L3STER_PROFILE_FUNCTION;
-    util::throwingAssert(m_dirichlet_bcs.has_value(),
-                         "`applyDirichletBCs()` was called, but no Dirichlet BCs were defined");
-    assertState(State::Closed, "`applyDirichletBCs()` was called before `endAssembly()`");
-
     m_matrix->beginModify();
     m_rhs->beginModify();
     m_dirichlet_bcs->apply(*m_dirichlet_values, *m_matrix, *m_rhs);
