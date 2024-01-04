@@ -6,18 +6,18 @@
 #include "l3ster/mesh/Element.hpp"
 #include "l3ster/quad/ReferenceQuadrature.hpp"
 
-namespace lstr
+namespace lstr::quad
 {
-template < QuadratureTypes QT, q_o_t QO, ElementTypes ET >
+template < QuadratureType QT, q_o_t QO, mesh::ElementType ET >
 const auto& getQuadrature()
-    requires(ET == ElementTypes::Line)
+    requires(ET == mesh::ElementType::Line)
 {
     return getReferenceQuadrature< QT, QO >();
 }
 
-template < QuadratureTypes QT, q_o_t QO, ElementTypes ET >
+template < QuadratureType QT, q_o_t QO, mesh::ElementType ET >
 const auto& getQuadrature()
-    requires(ET == ElementTypes::Quad)
+    requires(ET == mesh::ElementType::Quad)
 {
     static const auto value = std::invoke([] {
         const auto& ref_quadrature   = getReferenceQuadrature< QT, QO >();
@@ -45,9 +45,9 @@ const auto& getQuadrature()
     return value;
 }
 
-template < QuadratureTypes QT, q_o_t QO, ElementTypes ET >
+template < QuadratureType QT, q_o_t QO, mesh::ElementType ET >
 const auto& getQuadrature()
-    requires(ET == ElementTypes::Hex)
+    requires(ET == mesh::ElementType::Hex)
 {
     static const auto value = std::invoke([] {
         const auto& ref_quadrature   = getReferenceQuadrature< QT, QO >();
@@ -76,5 +76,5 @@ const auto& getQuadrature()
     });
     return value;
 }
-} // namespace lstr
+} // namespace lstr::quad
 #endif // L3STER_QUAD_GENERATEQUADRATURE_HPP

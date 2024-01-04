@@ -1,7 +1,7 @@
 #ifndef L3STER_UTIL_TYPEID_HPP
 #define L3STER_UTIL_TYPEID_HPP
 
-namespace lstr
+namespace lstr::util
 {
 namespace detail
 {
@@ -13,5 +13,5 @@ struct TypeIDHelper
 } // namespace detail
 template < typename T >
 inline constexpr const void* type_id_value = std::addressof(detail::TypeIDHelper< T >::tag);
-} // namespace lstr
+} // namespace lstr::util
 #endif // L3STER_UTIL_TYPEID_HPP

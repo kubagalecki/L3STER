@@ -3,15 +3,15 @@
 
 #include "l3ster/basisfun/ReferenceBasisFunction.hpp"
 
-namespace lstr
+namespace lstr::basis
 {
-template < ElementTypes ET, el_o_t EO, size_t n_points >
+template < mesh::ElementType ET, el_o_t EO, size_t n_points >
 struct ReferenceBasisAtPoints
 {
-    static constexpr auto n_bases = Element< ET, EO >::n_nodes;
-    static constexpr auto dim     = Element< ET, EO >::native_dim;
+    static constexpr auto n_bases = mesh::Element< ET, EO >::n_nodes;
+    static constexpr auto dim     = mesh::Element< ET, EO >::native_dim;
     using basis_vals_t            = std::array< Eigen::Vector< val_t, n_bases >, n_points >;
-    using basis_ders_t            = std::array< eigen::RowMajorMatrix< val_t, dim, n_bases >, n_points >;
+    using basis_ders_t            = std::array< util::eigen::RowMajorMatrix< val_t, dim, n_bases >, n_points >;
 
     basis_vals_t values;
     basis_ders_t derivatives;
@@ -19,11 +19,11 @@ struct ReferenceBasisAtPoints
 
 namespace detail
 {
-template < BasisTypes                                                    BT,
-           ElementTypes                                                  ET,
-           el_o_t                                                        EO,
-           std::convertible_to< Point< Element< ET, EO >::native_dim > > Point_t,
-           size_t                                                        n_points >
+template < BasisType                                                           BT,
+           mesh::ElementType                                                   ET,
+           el_o_t                                                              EO,
+           std::convertible_to< Point< mesh::Element< ET, EO >::native_dim > > Point_t,
+           size_t                                                              n_points >
 auto evalRefBasisAtPoints(const std::array< Point_t, n_points >& points) -> ReferenceBasisAtPoints< ET, EO, n_points >
 {
     auto basis_vals = std::make_unique< typename ReferenceBasisAtPoints< ET, EO, n_points >::basis_vals_t >();
@@ -33,5 +33,5 @@ auto evalRefBasisAtPoints(const std::array< Point_t, n_points >& points) -> Refe
     return {*basis_vals, *basis_ders};
 }
 } // namespace detail
-} // namespace lstr
+} // namespace lstr::basis
 #endif // L3STER_BASISFUN_REFERENCEBASISATPOINTS_HPP

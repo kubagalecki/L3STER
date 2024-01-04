@@ -12,8 +12,6 @@ namespace lstr::util
 {
 inline constexpr std::size_t default_stack_size = 1u << 23;
 
-namespace detail
-{
 struct MaxStackSizeTracker
 {
     static size_t get() { return access(); }
@@ -22,6 +20,15 @@ struct MaxStackSizeTracker
         const auto prev_val = access();
         access()            = std::max(value, prev_val);
     }
+
+    template < size_t size >
+    struct MaxStackSizeRequest
+    {
+        inline static const bool _ = std::invoke([] {
+            MaxStackSizeTracker::set(size);
+            return false;
+        });
+    };
 
 private:
     static size_t& access()
@@ -32,19 +39,9 @@ private:
 };
 
 template < size_t size >
-struct MaxStackSizeRequest
-{
-    inline static const bool _ = std::invoke([] {
-        MaxStackSizeTracker::set(size);
-        return false;
-    });
-};
-} // namespace detail
-
-template < size_t size >
 void requestStackSize()
 {
-    [[maybe_unused]] const auto request = detail::MaxStackSizeRequest< size >{};
+    [[maybe_unused]] const auto request = MaxStackSizeTracker::MaxStackSizeRequest< size >{};
 }
 
 namespace detail
@@ -59,27 +56,23 @@ inline size_t getCurrentThreadStackSize()
     return ss;
 }
 
-inline auto getStackSize()
+inline auto getStackSize() -> rlimit
 {
-    struct rlimit rl
-    {};
-    const auto err_code = getrlimit(RLIMIT_STACK, &rl);
+    auto       retval   = rlimit{};
+    const auto err_code = getrlimit(RLIMIT_STACK, &retval);
     util::throwingAssert(not err_code, "Could not determine the stack size");
-    return std::make_pair(rl.rlim_cur, rl.rlim_max);
+    return retval;
 }
 
 inline void setMinStackSize(rlim_t requested_size)
 {
-    const auto [current_stack_size, max_stack_size] = getStackSize();
-    if (requested_size < current_stack_size)
+    auto resource_limit                             = getStackSize();
+    const auto [current_stack_size, max_stack_size] = resource_limit;
+    if (requested_size <= current_stack_size)
         return;
     util::throwingAssert(requested_size <= max_stack_size, "Requested stack size exceeds system limits");
-
-    struct rlimit rl
-    {};
-    rl.rlim_cur         = requested_size;
-    rl.rlim_max         = max_stack_size;
-    const auto err_code = setrlimit(RLIMIT_STACK, &rl);
+    resource_limit.rlim_cur = requested_size;
+    const auto err_code     = setrlimit(RLIMIT_STACK, &resource_limit);
     util::throwingAssert(not err_code, "Could not increase the stack size to the desired size");
 }
 } // namespace detail

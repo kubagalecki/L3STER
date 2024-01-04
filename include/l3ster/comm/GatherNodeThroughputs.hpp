@@ -2,11 +2,11 @@
 #define L3STER_COMM_GATHERNODETHROUGHPUTS_HPP
 
 #include "l3ster/comm/MpiComm.hpp"
-#include "l3ster/defs/Typedefs.h"
+#include "l3ster/common/Typedefs.h"
 
 #include "oneapi/tbb.h"
 
-namespace lstr
+namespace lstr::comm
 {
 inline std::vector< val_t > gatherNodeThroughputs(const MpiComm& comm)
 {
@@ -31,5 +31,5 @@ inline std::vector< val_t > gatherNodeThroughputs(const MpiComm& comm)
         return {};
     }
 }
-} // namespace lstr
+} // namespace lstr::comm
 #endif // L3STER_COMM_GATHERNODETHROUGHPUTS_HPP

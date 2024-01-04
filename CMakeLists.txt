@@ -1,4 +1,4 @@
-cmake_minimum_required( VERSION 3.13 )
+cmake_minimum_required( VERSION 3.19 )
 
 #######################################################################################################################
 
@@ -22,7 +22,7 @@ endif ()
 ### L3STER options ###
 
 # Verbosity (mainly relating to finding dependencies)
-option( L3STER_ENABLE_VERBOSITY "enable verbose config" )
+option( L3STER_ENABLE_VERBOSITY "enable verbose config" ON )
 
 # Build tests
 option( L3STER_ENABLE_TESTS "enable tests" )
@@ -130,7 +130,7 @@ write_basic_package_version_file(
         "${CMAKE_CURRENT_BINARY_DIR}/L3STERConfigVersion.cmake"
         VERSION "${CMAKE_PROJECT_VERSION}"
         COMPATIBILITY AnyNewerVersion
-)
+        )
 install( FILES
          "${CMAKE_CURRENT_BINARY_DIR}/L3STERConfig.cmake"
          "${CMAKE_CURRENT_BINARY_DIR}/L3STERConfigVersion.cmake"

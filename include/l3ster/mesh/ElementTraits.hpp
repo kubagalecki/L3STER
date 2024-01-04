@@ -1,16 +1,16 @@
 #ifndef L3STER_MESH_ELEMENTTRAITS_HPP
 #define L3STER_MESH_ELEMENTTRAITS_HPP
 
-#include "l3ster/mesh/ElementTypes.hpp"
-#include "l3ster/mesh/Point.hpp"
+#include "l3ster/common/Structs.hpp"
+#include "l3ster/mesh/ElementType.hpp"
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/ConstexprVector.hpp"
 
 #include <vector>
 
-namespace lstr
+namespace lstr::mesh
 {
-template < ElementTypes ELTYPE, el_o_t ELORDER >
+template < ElementType ET, el_o_t EO >
 class Element;
 
 template < typename >
@@ -18,10 +18,10 @@ struct ElementTraits;
 
 namespace detail::elem
 {
-consteval auto getBoundaryInds(const auto& boundary_table) -> ConstexprVector< el_locind_t >
+consteval auto getBoundaryInds(const auto& boundary_table) -> util::ConstexprVector< el_locind_t >
 {
-    ConstexprVector< el_locind_t > retval;
-    forEachTuple(boundary_table, [&retval](const auto& side_boundary_inds) {
+    auto retval = util::ConstexprVector< el_locind_t >{};
+    util::forEachTuple(boundary_table, [&retval](const auto& side_boundary_inds) {
         for (auto i : side_boundary_inds)
             retval.pushBack(i);
     });
@@ -59,13 +59,13 @@ consteval auto makeInternalNodeInds()
 } // namespace detail::elem
 
 template < el_o_t O >
-struct ElementTraits< Element< ElementTypes::Hex, O > >
+struct ElementTraits< Element< ElementType::Hex, O > >
 {
-    static constexpr ElementTypes type              = ElementTypes::Hex;
-    static constexpr el_o_t       order             = O;
-    static constexpr el_locind_t  nodes_per_element = (O + 1) * (O + 1) * (O + 1);
-    static constexpr dim_t        native_dim        = 3;
-    static constexpr el_side_t    n_sides           = 6;
+    static constexpr ElementType type              = ElementType::Hex;
+    static constexpr el_o_t      order             = O;
+    static constexpr el_locind_t nodes_per_element = (O + 1) * (O + 1) * (O + 1);
+    static constexpr dim_t       native_dim        = 3;
+    static constexpr el_side_t   n_sides           = 6;
 
 private:
     struct BoundaryTable
@@ -104,13 +104,13 @@ public:
 };
 
 template < el_o_t O >
-struct ElementTraits< Element< ElementTypes::Quad, O > >
+struct ElementTraits< Element< ElementType::Quad, O > >
 {
-    static constexpr ElementTypes type              = ElementTypes::Quad;
-    static constexpr el_o_t       order             = O;
-    static constexpr el_locind_t  nodes_per_element = (O + 1) * (O + 1);
-    static constexpr dim_t        native_dim        = 2;
-    static constexpr el_side_t    n_sides           = 4;
+    static constexpr ElementType type              = ElementType::Quad;
+    static constexpr el_o_t      order             = O;
+    static constexpr el_locind_t nodes_per_element = (O + 1) * (O + 1);
+    static constexpr dim_t       native_dim        = 2;
+    static constexpr el_side_t   n_sides           = 4;
 
 private:
     struct BoundaryTable
@@ -140,13 +140,13 @@ public:
 };
 
 template < el_o_t O >
-struct ElementTraits< Element< ElementTypes::Line, O > >
+struct ElementTraits< Element< ElementType::Line, O > >
 {
-    static constexpr ElementTypes type              = ElementTypes::Line;
-    static constexpr el_o_t       order             = O;
-    static constexpr el_locind_t  nodes_per_element = (O + 1);
-    static constexpr dim_t        native_dim        = 1;
-    static constexpr el_side_t    n_sides           = 2;
+    static constexpr ElementType type              = ElementType::Line;
+    static constexpr el_o_t      order             = O;
+    static constexpr el_locind_t nodes_per_element = (O + 1);
+    static constexpr dim_t       native_dim        = 1;
+    static constexpr el_side_t   n_sides           = 2;
 
 private:
     struct BoundaryTable
@@ -159,5 +159,5 @@ public:
     static constexpr auto boundary_node_inds = detail::elem::makeBoundaryNodeInds< BoundaryTable >();
     static constexpr auto internal_node_inds = detail::elem::makeInternalNodeInds< BoundaryTable, nodes_per_element >();
 };
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_ELEMENTTRAITS_HPP

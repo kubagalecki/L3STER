@@ -48,6 +48,10 @@ template < typename T >
 inline constexpr bool is_pair = false;
 template < typename T1, typename T2 >
 inline constexpr bool is_pair< std::pair< T1, T2 > > = true;
+template < typename >
+inline constexpr bool is_vector = false;
+template < typename T, typename Alloc >
+inline constexpr bool is_vector< std::vector< T, Alloc > > = true;
 } // namespace detail
 
 // Tuple-related cocnepts
@@ -56,9 +60,11 @@ concept Array_c = detail::is_array< T >;
 template < typename T, typename V >
 concept ArrayOf_c = Array_c< T > and std::same_as< typename T::value_type, V >;
 template < typename T >
-concept Tuple_c = detail::is_tuple< T >;
+concept Tuple_c = detail::is_tuple< std::remove_cvref_t< T > >;
 template < typename T >
-concept Pair_c = detail::is_pair< T >;
+concept Pair_c = detail::is_pair< std::remove_cvref_t< T > >;
+template < typename T >
+concept Vector_c = detail::is_vector< std::remove_cvref_t< T > >;
 
 namespace detail
 {
@@ -135,12 +141,27 @@ concept Mapping_c = requires(T f, Domain x) {
         f(x)
     } -> std::convertible_to< Range >;
 };
+template < typename G, typename V >
+concept GeneratorFor_c = std::is_invocable_r_v< V, G >;
 
 template < typename T, template < typename > typename Predicate >
 concept predicate_trait_specialized = requires {
     {
         Predicate< std::decay_t< T > >::value
     } -> std::convertible_to< bool >;
+};
+
+template < typename Fun, typename Ret, typename... Args >
+concept ReturnInvocable_c = std::invocable< Fun, Args... > and requires(Fun f, Args... args) {
+    {
+        std::invoke(f, args...)
+    } -> std::convertible_to< Ret >;
+};
+template < typename Reduction, typename Element >
+concept ReductionFor_c = requires(Reduction r, Element e) {
+    {
+        std::invoke(r, e, e)
+    } -> std::convertible_to< Element >;
 };
 
 // Execution policy concepts

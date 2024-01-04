@@ -1,11 +1,11 @@
 #ifndef L3STER_COMM_RECEIVEMESH_HPP
 #define L3STER_COMM_RECEIVEMESH_HPP
 
-#include "SendMesh.hpp"
+#include "l3ster/comm/SendMesh.hpp"
 
-namespace lstr
+namespace lstr::comm
 {
-inline auto receivePartition(const MpiComm& comm, int source) -> SerializedPartition
+inline auto receivePartition(const MpiComm& comm, int source) -> mesh::SerializedPartition
 {
     int msg_tag = 0;
 
@@ -20,47 +20,52 @@ inline auto receivePartition(const MpiComm& comm, int source) -> SerializedParti
         return retval;
     });
     const auto sizes   = std::invoke([&] {
-        std::vector< size_t > retval(detail::getSizeMsgLength(n_doms));
+        std::vector< size_t > retval(getSizeMsgLength(n_doms));
         comm.receive(retval, source, msg_tag++);
         return retval;
     });
-    auto       size_it = cbegin(sizes);
+    auto       size_it = sizes.begin();
 
-    SerializedPartition             retval{};
-    std::vector< MpiComm::Request > messages{};
-    constexpr size_t                messages_per_domain = 6;
-    messages.reserve(messages_per_domain * n_doms + 2);
+    auto             retval              = mesh::SerializedPartition{};
+    auto             requests            = std::vector< MpiComm::Request >{};
+    constexpr size_t messages_per_domain = 6;
+    requests.reserve(messages_per_domain * n_doms + 2);
     for (size_t i = 0; i < n_doms; ++i)
     {
-        auto& domain = retval.m_domains.emplace(dom_ids[i], SerializedDomain{}).first->second;
+        auto& domain = retval.domains.emplace(dom_ids[i], mesh::SerializedDomain{}).first->second;
 
         const auto node_msg_size = *size_it++;
         domain.element_nodes.resize(node_msg_size);
-        messages.emplace_back(comm.receiveAsync(domain.element_nodes, source, msg_tag++));
+        requests.emplace_back(comm.receiveAsync(domain.element_nodes, source, msg_tag++));
 
         const auto data_msg_size = *size_it++;
         domain.element_data.resize(data_msg_size);
-        messages.emplace_back(comm.receiveAsync(domain.element_data, source, msg_tag++));
+        requests.emplace_back(comm.receiveAsync(domain.element_data, source, msg_tag++));
 
         const auto id_msg_size = *size_it++;
         domain.element_ids.resize(id_msg_size);
-        messages.emplace_back(comm.receiveAsync(domain.element_ids, source, msg_tag++));
+        requests.emplace_back(comm.receiveAsync(domain.element_ids, source, msg_tag++));
 
         const auto offset_msg_size = *size_it++;
         domain.type_order_offsets.resize(offset_msg_size);
         domain.types.resize(offset_msg_size);
         domain.orders.resize(offset_msg_size);
-        messages.emplace_back(comm.receiveAsync(domain.type_order_offsets, source, msg_tag++));
-        messages.emplace_back(comm.receiveAsync(domain.types, source, msg_tag++));
-        messages.emplace_back(comm.receiveAsync(domain.orders, source, msg_tag++));
+        requests.emplace_back(comm.receiveAsync(domain.type_order_offsets, source, msg_tag++));
+        requests.emplace_back(comm.receiveAsync(domain.types, source, msg_tag++));
+        requests.emplace_back(comm.receiveAsync(domain.orders, source, msg_tag++));
     }
 
-    const auto nodes_size  = *size_it++;
-    retval.m_n_owned_nodes = *size_it++;
-    retval.m_nodes.resize(nodes_size);
-    messages.emplace_back(comm.receiveAsync(retval.m_nodes, source, msg_tag++));
+    const auto nodes_size = *size_it++;
+    retval.n_owned_nodes  = *size_it++;
+    retval.nodes          = util::ArrayOwner< n_id_t >(nodes_size);
+    requests.emplace_back(comm.receiveAsync(retval.nodes, source, msg_tag++));
 
+    const auto n_boundaries = *size_it++;
+    retval.boundaries       = util::ArrayOwner< d_id_t >(n_boundaries);
+    requests.emplace_back(comm.receiveAsync(retval.boundaries, source, msg_tag++));
+
+    MpiComm::Request::waitAll(requests);
     return retval;
 }
-} // namespace lstr
+} // namespace lstr::comm
 #endif // L3STER_COMM_RECEIVEMESH_HPP

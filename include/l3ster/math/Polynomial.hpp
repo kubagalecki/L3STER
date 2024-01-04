@@ -11,7 +11,7 @@
 #include <numeric>
 #include <utility>
 
-namespace lstr
+namespace lstr::math
 {
 template < std::floating_point T, size_t ORDER >
 struct Polynomial;
@@ -152,5 +152,5 @@ constexpr Polynomial< T, std::max(O1, O2) > operator+(const Polynomial< T, O1 >&
     else
         return poly_sum(b, a);
 }
-} // namespace lstr
+} // namespace lstr::math
 #endif // L3STER_MATH_POLYNOMIAL_HPP

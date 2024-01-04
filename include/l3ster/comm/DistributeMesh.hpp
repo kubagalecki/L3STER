@@ -1,27 +1,27 @@
 #ifndef L3STER_COMM_DISTRIBUTEMESH_HPP
 #define L3STER_COMM_DISTRIBUTEMESH_HPP
 
-#include "DeserializeMesh.hpp"
-#include "ReceiveMesh.hpp"
 #include "l3ster/comm/GatherNodeThroughputs.hpp"
+#include "l3ster/comm/ReceiveMesh.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
+#include "l3ster/mesh/DeserializeMesh.hpp"
 #include "l3ster/mesh/PartitionMesh.hpp"
 #include "l3ster/mesh/ReadMesh.hpp"
 
 namespace lstr
 {
-namespace detail::dist_mesh
+namespace comm
 {
-template < el_o_t... orders, detail::ProblemDef_c auto problem_def >
-auto makeNodeToDofMap(const MeshPartition< orders... >& mesh, ConstexprValue< problem_def > probdef_ctwrapper)
-    -> robin_hood::unordered_flat_map< n_id_t, std::bitset< deduceNFields(problem_def) > >
+template < el_o_t... orders, ProblemDef problem_def >
+auto makeNodeToDofMap(const mesh::MeshPartition< orders... >& mesh, util::ConstexprValue< problem_def > probdef_ctwrpr)
+    -> robin_hood::unordered_flat_map< n_id_t, std::bitset< problem_def.n_fields > >
 {
-    auto retval =
-        robin_hood::unordered_flat_map< n_id_t, std::bitset< deduceNFields(problem_def) > >{mesh.getAllNodes().size()};
+    constexpr auto n_fields = problem_def.n_fields;
+    using retval_t          = robin_hood::unordered_flat_map< n_id_t, std::bitset< problem_def.n_fields > >;
+    auto retval             = retval_t{mesh.getAllNodes().size()};
     forConstexpr(
-        [&]< auto dom_def >(ConstexprValue< dom_def >) {
-            constexpr auto dom_id   = dom_def.first;
-            constexpr auto dom_dofs = getTrueInds< dom_def.second >();
+        [&]< DomainDef< n_fields > dom_def >(util::ConstexprValue< dom_def >) {
+            constexpr auto dom_dofs = util::getTrueInds< dom_def.active_fields >();
             mesh.visit(
                 [&](const auto& element) {
                     for (auto node : element.getNodes())
@@ -31,21 +31,23 @@ auto makeNodeToDofMap(const MeshPartition< orders... >& mesh, ConstexprValue< pr
                             node_map_entry.set(dof);
                     }
                 },
-                dom_id);
+                dom_def.domain);
         },
-        probdef_ctwrapper);
+        probdef_ctwrpr);
     return retval;
 }
 
 template < el_o_t... orders >
-auto makeNodeToPartMap(const std::vector< MeshPartition< orders... > >& mesh_parts) -> std::vector< int >
+auto makeNodeToPartMap(const std::vector< mesh::MeshPartition< orders... > >& mesh_parts) -> std::vector< int >
 {
-    const size_t n_nodes = std::ranges::max(
-        mesh_parts |
-        std::views::filter([](const MeshPartition< orders... >& part) { return not part.getOwnedNodes().empty(); }) |
-        std::views::transform([](const MeshPartition< orders... >& part) { return part.getOwnedNodes().back(); }));
+    const size_t n_nodes =
+        std::ranges::max(mesh_parts | std::views::filter([](const mesh::MeshPartition< orders... >& part) {
+                             return not part.getOwnedNodes().empty();
+                         }) |
+                         std::views::transform(
+                             [](const mesh::MeshPartition< orders... >& part) { return part.getOwnedNodes().back(); }));
     std::vector< int > retval(n_nodes);
-    for (int part_ind = 0; const MeshPartition< orders... >& part : mesh_parts)
+    for (int part_ind = 0; const mesh::MeshPartition< orders... >& part : mesh_parts)
     {
         for (auto node : part.getOwnedNodes())
             retval[node] = part_ind;
@@ -58,13 +60,13 @@ struct CommVolumeInfo
 {
     std::vector< int > sources, degrees, destinations, weights;
 };
-template < el_o_t... orders, detail::ProblemDef_c auto problem_def >
-auto makeCommVolumeInfo(const std::vector< MeshPartition< orders... > >& mesh_parts,
-                        ConstexprValue< problem_def >                    probdef_ctwrapper)
+template < el_o_t... orders, ProblemDef problem_def >
+auto makeCommVolumeInfo(const std::vector< mesh::MeshPartition< orders... > >& mesh_parts,
+                        util::ConstexprValue< problem_def >                    probdef_ctwrapper)
 {
     const auto node_to_part_map = makeNodeToPartMap(mesh_parts);
     auto       retval           = CommVolumeInfo{};
-    for (int part_ind = 0; const MeshPartition< orders... >& part : mesh_parts)
+    for (int part_ind = 0; const mesh::MeshPartition< orders... >& part : mesh_parts)
     {
         const auto node_to_dof_map = makeNodeToDofMap(part, probdef_ctwrapper);
         auto       dest_wgts       = std::vector< int >(mesh_parts.size());
@@ -90,32 +92,6 @@ auto makeCommVolumeInfo(const std::vector< MeshPartition< orders... > >& mesh_pa
     return retval;
 }
 
-template < el_o_t... orders, detail::ProblemDef_c auto problem_def >
-auto computeOptimalRankPermutation(const MpiComm&                                   comm,
-                                   const std::vector< MeshPartition< orders... > >& mesh,
-                                   ConstexprValue< problem_def > probdef_ctwrapper) -> std::vector< int >
-{
-    L3STER_PROFILE_FUNCTION;
-    if (comm.getSize() == 1)
-        return {0};
-
-    if (comm.getRank() == 0)
-    {
-        const auto [sources, degrees, destinations, weights] = makeCommVolumeInfo(mesh, probdef_ctwrapper);
-        const int          optimal_rank = comm.distGraphCreate(sources, degrees, destinations, weights, true).getRank();
-        std::vector< int > retval(comm.getSize());
-        comm.gather(std::views::single(optimal_rank), retval.begin(), 0);
-        return retval;
-    }
-    else
-    {
-        const auto empty        = std::views::empty< int >;
-        const int  optimal_rank = comm.distGraphCreate(empty, empty, empty, empty, true).getRank();
-        comm.gather(std::views::single(optimal_rank), &std::ignore, 0);
-        return {};
-    }
-}
-
 inline auto computeDefaultRankPermutation(const MpiComm& comm)
 {
     std::vector< int > retval(comm.getSize());
@@ -123,80 +99,87 @@ inline auto computeDefaultRankPermutation(const MpiComm& comm)
     return retval;
 }
 
-template < el_o_t order, MeshFormat mesh_format >
-auto readAndConvertMesh(std::string_view mesh_file, MeshFormatTag< mesh_format > format_tag) -> MeshPartition< order >
+template < el_o_t order, mesh::MeshFormat mesh_format >
+auto readAndConvertMesh(std::string_view                   mesh_file,
+                        const util::ArrayOwner< d_id_t >&  boundary_ids,
+                        mesh::MeshFormatTag< mesh_format > format_tag) -> mesh::MeshPartition< order >
 {
-    auto mesh = readMesh(mesh_file, format_tag);
-    mesh.initDualGraph();
+    auto mesh = readMesh(mesh_file, boundary_ids, format_tag);
     return convertMeshToOrder< order >(mesh);
 }
-} // namespace detail::dist_mesh
+} // namespace comm
 
-template < el_o_t... orders, detail::ProblemDef_c auto problem_def = detail::empty_problem_def_t{} >
-auto distributeMesh(const MpiComm&                    comm,
-                    const MeshPartition< orders... >& mesh,
-                    const std::vector< d_id_t >&      boundaries,
-                    ConstexprValue< problem_def >     probdef_ctwrpr = {}) -> MeshPartition< orders... >
+template < el_o_t... orders, ProblemDef problem_def = EmptyProblemDef{} >
+auto distributeMesh(const MpiComm&                      comm,
+                    mesh::MeshPartition< orders... >&&  mesh,
+                    util::ConstexprValue< problem_def > probdef_ctwrpr = {})
+    -> std::shared_ptr< mesh::MeshPartition< orders... > >
 {
     L3STER_PROFILE_FUNCTION;
     if (comm.getSize() == 1)
-        return mesh;
+        return std::make_shared< mesh::MeshPartition< orders... > >(std::move(mesh));
 
-    const auto node_throughputs = gatherNodeThroughputs(comm);
-    auto       mesh_parted      = comm.getRank() == 0
-                                    ? partitionMesh(mesh, comm.getSize(), boundaries, node_throughputs, probdef_ctwrpr)
-                                    : std::vector< MeshPartition< orders... > >{};
-    const auto permutation      = detail::dist_mesh::computeDefaultRankPermutation(comm);
+    const auto node_throughputs = comm::gatherNodeThroughputs(comm);
+    auto       mesh_parted = comm.getRank() == 0 ? partitionMesh(mesh, comm.getSize(), node_throughputs, probdef_ctwrpr)
+                                                 : util::ArrayOwner< mesh::MeshPartition< orders... > >{};
+    const auto permutation = comm::computeDefaultRankPermutation(comm);
     // const auto permutation = detail::dist_mesh::computeOptimalRankPermutation(comm, mesh_parted, probdef_ctwrpr);
     if (comm.getRank() == 0)
     {
-        MeshPartition< orders... > my_partition;
-        for (size_t unpermuted_rank = 0; MeshPartition< orders... > & part : mesh_parted)
+        auto my_partition = mesh::MeshPartition< orders... >{};
+        for (size_t unpermuted_rank = 0; mesh::MeshPartition< orders... > & part : mesh_parted)
         {
             const auto dest_rank = permutation.at(unpermuted_rank);
             if (dest_rank == comm.getRank())
                 my_partition = std::move(part);
             else
             {
-                const auto serialized_part = SerializedPartition{part};
-                sendPartition(comm, serialized_part, dest_rank);
+                const auto serialized_part = mesh::SerializedPartition{part};
+                comm::sendPartition(comm, serialized_part, dest_rank);
             }
             ++unpermuted_rank;
         }
-        return my_partition;
+        return std::make_shared< mesh::MeshPartition< orders... > >(std::move(my_partition));
     }
     else
-        return deserializePartition< orders... >(receivePartition(comm, 0));
+        return std::make_shared< mesh::MeshPartition< orders... > >(
+            mesh::deserializePartition< orders... >(comm::receivePartition(comm, 0)));
 }
 
-template < el_o_t order, detail::ProblemDef_c auto problem_def = detail::empty_problem_def_t{} >
-auto generateAndDistributeMesh(const MpiComm&               comm,
-                               auto&&                       mesh_generator,
-                               const std::vector< d_id_t >& boundaries,
-                               ConstexprValue< order >                      = {},
-                               ConstexprValue< problem_def > probdef_ctwrpr = {}) -> MeshPartition< order >
-    requires std::is_invocable_r_v< MeshPartition< 1 >, decltype(mesh_generator) >
+template < el_o_t                                     order,
+           GeneratorFor_c< mesh::MeshPartition< 1 > > Generator,
+           ProblemDef                                 problem_def = EmptyProblemDef{} >
+auto generateAndDistributeMesh(const MpiComm& comm,
+                               Generator&&    mesh_generator,
+                               util::ConstexprValue< order >                      = {},
+                               util::ConstexprValue< problem_def > probdef_ctwrpr = {})
+    -> std::shared_ptr< mesh::MeshPartition< order > >
 {
-    const auto mesh = comm.getRank() == 0 ? std::invoke([&] {
-        auto gen_mesh = std::invoke(mesh_generator);
-        gen_mesh.initDualGraph();
-        return convertMeshToOrder< order >(gen_mesh);
-    })
-                                          : MeshPartition< order >{};
-    return distributeMesh(comm, mesh, boundaries, probdef_ctwrpr);
+    return distributeMesh(comm,
+                          comm.getRank() == 0 ? std::invoke([&] {
+                              auto generated_mesh = std::invoke(std::forward< Generator >(mesh_generator));
+                              if constexpr (order == 1)
+                                  return generated_mesh;
+                              else
+                                  return convertMeshToOrder< order >(generated_mesh);
+                          })
+                                              : mesh::MeshPartition< order >{},
+                          probdef_ctwrpr);
 }
 
-template < el_o_t order, MeshFormat mesh_format, detail::ProblemDef_c auto problem_def = detail::empty_problem_def_t{} >
-auto readAndDistributeMesh(const MpiComm&               comm,
-                           std::string_view             mesh_file,
-                           MeshFormatTag< mesh_format > format_tag,
-                           const std::vector< d_id_t >& boundaries,
-                           ConstexprValue< order >                      = {},
-                           ConstexprValue< problem_def > probdef_ctwrpr = {}) -> MeshPartition< order >
+template < el_o_t order, mesh::MeshFormat mesh_format, ProblemDef problem_def = EmptyProblemDef{} >
+auto readAndDistributeMesh(const MpiComm&                     comm,
+                           std::string_view                   mesh_file,
+                           mesh::MeshFormatTag< mesh_format > format_tag,
+                           const util::ArrayOwner< d_id_t >&  boundaries,
+                           util::ConstexprValue< order >                      = {},
+                           util::ConstexprValue< problem_def > probdef_ctwrpr = {})
+    -> std::shared_ptr< mesh::MeshPartition< order > >
 {
-    const auto mesh = comm.getRank() == 0 ? detail::dist_mesh::readAndConvertMesh< order >(mesh_file, format_tag)
-                                          : MeshPartition< order >{};
-    return distributeMesh(comm, mesh, boundaries, probdef_ctwrpr);
+    return distributeMesh(comm,
+                          comm.getRank() == 0 ? comm::readAndConvertMesh< order >(mesh_file, boundaries, format_tag)
+                                              : mesh::MeshPartition< order >{},
+                          probdef_ctwrpr);
 }
 } // namespace lstr
 #endif // L3STER_COMM_DISTRIBUTEMESH_HPP

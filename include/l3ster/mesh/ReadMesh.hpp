@@ -17,7 +17,7 @@
 #include <string_view>
 #include <utility>
 
-namespace lstr
+namespace lstr::mesh
 {
 enum class MeshFormat
 {
@@ -34,20 +34,20 @@ constexpr inline MeshFormatTag gmsh_tag = MeshFormatTag< MeshFormat::Gmsh >{};
 namespace detail
 {
 inline constexpr std::array gmsh_elt_lookup_tab{
-    std::pair{1u, ElementTypes::Line}, std::pair{3u, ElementTypes::Quad}, std::pair{5u, ElementTypes::Hex}};
+    std::pair{1u, ElementType::Line}, std::pair{3u, ElementType::Quad}, std::pair{5u, ElementType::Hex}};
 
 template < size_t I >
-consteval ElementTypes lookupElt()
+consteval ElementType lookupElt()
 {
     return std::ranges::find(gmsh_elt_lookup_tab, I, [](const auto p) { return p.first; })->second;
 }
 
-template < ElementTypes T >
+template < ElementType T >
 void reorderNodes(auto& nodes)
 {
-    if constexpr (T == ElementTypes::Quad)
+    if constexpr (T == ElementType::Quad)
         std::swap(nodes[2], nodes[3]);
-    else if constexpr (T == ElementTypes::Hex)
+    else if constexpr (T == ElementType::Hex)
     {
         std::swap(nodes[2], nodes[3]);
         std::swap(nodes[6], nodes[7]);
@@ -55,7 +55,9 @@ void reorderNodes(auto& nodes)
 }
 } // namespace detail
 
-inline auto readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh >) -> MeshPartition< 1 >
+inline auto readMesh(std::string_view                  file_path,
+                     const util::ArrayOwner< d_id_t >& boundary_ids,
+                     MeshFormatTag< MeshFormat::Gmsh >) -> MeshPartition< 1 >
 {
     L3STER_PROFILE_FUNCTION;
     const auto throw_error = [&file_path](std::string_view     message,
@@ -249,15 +251,15 @@ inline auto readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
                 });
             };
 
-            const auto srt_ind = sortingPermutation(node_ids.cbegin(), node_ids.cend());
+            const auto srt_ind = util::sortingPermutation(node_ids.cbegin(), node_ids.cend());
             {
                 auto temp = std::vector< size_t >(n_nodes);
-                copyPermuted(node_ids.cbegin(), node_ids.cend(), srt_ind.cbegin(), begin(temp));
+                util::copyPermuted(node_ids.cbegin(), node_ids.cend(), srt_ind.cbegin(), begin(temp));
                 node_ids = std::move(temp);
             }
             {
                 auto temp = std::vector< Point< 3 > >(n_nodes);
-                copyPermuted(node_coords.cbegin(), node_coords.cend(), srt_ind.cbegin(), begin(temp));
+                util::copyPermuted(node_coords.cbegin(), node_coords.cend(), srt_ind.cbegin(), begin(temp));
                 node_coords = std::move(temp);
             }
 
@@ -299,8 +301,9 @@ inline auto readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
                 auto& block_domain = domain_map[entity_data.first[entity_dim].at(entity_tag)];
 
                 const auto push_elements = [&]< size_t I >(std::integral_constant< size_t, I >) {
-                    constexpr auto el_type = detail::lookupElt< I >();
-                    std::generate_n(block_domain.getBackInserter< el_type, 1 >(), block_size, [&] {
+                    constexpr auto el_type       = detail::lookupElt< I >();
+                    const auto     back_inserter = std::back_inserter(block_domain.getElementVector< el_type, 1 >());
+                    const auto     push_element  = [&] {
                         size_t element_tag;
                         file >> element_tag; // discard tag
                         std::array< n_id_t, Element< el_type, 1 >::n_nodes > nodes;
@@ -310,7 +313,8 @@ inline auto readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
                         std::ranges::transform(nodes, begin(data), lookup_node_coords);
                         std::ranges::for_each(nodes, [&](auto& n) { n = node_contig_index(n); });
                         return Element< el_type, 1 >{nodes, ElementData< el_type, 1 >{data}, element_id++};
-                    });
+                    };
+                    std::generate_n(back_inserter, block_size, push_element);
                 };
 
                 switch (element_type)
@@ -331,7 +335,11 @@ inline auto readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
                 }
             }
             skip_until_section("$EndElements");
-            return {std::move(domain_map)};
+
+            for (auto& domain : domain_map | std::views::values)
+                domain.sort();
+
+            return {std::move(domain_map), boundary_ids};
         };
 
         return parse_elements_asciiv4();
@@ -347,5 +355,5 @@ inline auto readMesh(std::string_view file_path, MeshFormatTag< MeshFormat::Gmsh
     const auto node_data   = parse_nodes(format_data);
     return parse_elements(format_data, entity_data, node_data);
 }
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_READMESH_HPP

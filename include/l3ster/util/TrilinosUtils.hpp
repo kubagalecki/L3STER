@@ -1,16 +1,20 @@
 #ifndef L3STER_UTILS_TRILINOSUTILS_HPP
 #define L3STER_UTILS_TRILINOSUTILS_HPP
 
-#include "l3ster/defs/TrilinosTypedefs.h"
+#include "l3ster/common/TrilinosTypedefs.h"
+#include "l3ster/util/Assertion.hpp"
+#include "l3ster/util/Concepts.hpp"
 
 #include <concepts>
 #include <ranges>
 #include <span>
 
-namespace lstr
+namespace lstr::util
 {
-auto asTeuchosView(std::ranges::contiguous_range auto&& range)
-    requires std::ranges::sized_range< decltype(range) > and std::ranges::borrowed_range< decltype(range) >
+template < typename R >
+auto asTeuchosView(R&& range)
+    requires std::ranges::contiguous_range< R > and std::ranges::sized_range< R > and
+             std::ranges::borrowed_range< decltype(range) >
 {
     return Teuchos::ArrayView{std::ranges::data(range), std::ranges::ssize(range)};
 }
@@ -22,37 +26,65 @@ auto asSpan(const Kokkos::View< T*, Layout, Params... >& view) -> std::span< T >
     return {view.data(), view.extent(0)};
 }
 
+template < Arithmetic_c T, typename Layout, typename... Params >
+auto asSpans(const Kokkos::View< T**, Layout, Params... >& view) -> std::vector< std::span< T > >
+    requires std::same_as< Layout, Kokkos::LayoutLeft >
+{
+    const auto n_rows = view.extent(0), n_cols = view.extent(1);
+    auto       retval = std::vector< std::span< T > >{};
+    retval.reserve(n_cols);
+    for (size_t i = 0; i != n_cols; ++i)
+        retval.emplace_back(&view(0, i), n_rows);
+    return retval;
+}
+
+template < size_t N, Arithmetic_c T, typename Layout, typename... Params >
+auto asSpans(const Kokkos::View< T**, Layout, Params... >& view, std::integral_constant< size_t, N > = {})
+    -> std::array< std::span< T >, N >
+    requires std::same_as< Layout, Kokkos::LayoutLeft >
+{
+    const auto n_rows = view.extent(0), n_cols = view.extent(1);
+    throwingAssert(n_cols == N);
+    auto retval = std::array< std::span< T >, N >{};
+    for (size_t i = 0; i != n_cols; ++i)
+        retval[i] = std::span{&view(0, i), n_rows};
+    return retval;
+}
+
 // A std::span::subspan-like interface for a 1D Kokkos::View
 template < typename T, typename... Args >
 auto subview1D(const Kokkos::View< T*, Args... >& v, size_t offset, size_t count = std::dynamic_extent)
 {
-    return Kokkos::subview(v, std::pair{offset, count != std::dynamic_extent ? (offset + count) : v.extent(0)});
+    return Kokkos::subview(v, std::pair{offset, count == std::dynamic_extent ? v.extent(0) : (offset + count)});
 }
 
 template < typename T, typename... Args >
-Teuchos::RCP< T > makeTeuchosRCP(Args&&... args)
-    requires std::constructible_from< T, Args... >
+auto makeTeuchosRCP(Args&&... args) -> Teuchos::RCP< T >
+    requires std::constructible_from< T, decltype(std::forward< Args >(args))... >
 {
-    return Teuchos::rcp(new T{std::forward< Args >(args)...});
+    return Teuchos::rcp(new T(std::forward< Args >(args)...));
 }
 
 inline auto getLocalRowView(const tpetra_crsgraph_t& graph, local_dof_t row)
+    -> tpetra_crsgraph_t::local_inds_host_view_type
 {
-    tpetra_crsgraph_t::local_inds_host_view_type retval;
+    auto retval = tpetra_crsgraph_t::local_inds_host_view_type{};
     graph.getLocalRowView(row, retval);
     return retval;
 }
 
 inline auto getLocalRowView(const tpetra_crsmatrix_t& matrix, local_dof_t row)
 {
-    std::pair< tpetra_crsmatrix_t::local_inds_host_view_type, tpetra_crsmatrix_t::values_host_view_type > retval;
+    using local_inds_t = tpetra_crsmatrix_t::local_inds_host_view_type;
+    using host_vals_t  = tpetra_crsmatrix_t::values_host_view_type;
+    auto retval        = std::pair< local_inds_t, host_vals_t >{};
     matrix.getLocalRowView(row, retval.first, retval.second);
     return retval;
 }
 
-auto getSubgraph(const Teuchos::RCP< const tpetra_crsgraph_t >& full_graph,
-                 std::predicate< global_dof_t > auto&&          is_row,
-                 std::predicate< global_dof_t > auto&&          is_col)
+template < std::predicate< global_dof_t > RowPred, std::predicate< global_dof_t > ColPred >
+auto getSubgraph(const Teuchos::RCP< const tpetra_crsgraph_t >& full_graph, RowPred&& is_row, ColPred&& is_col)
+    -> Teuchos::RCP< tpetra_crsgraph_t >
 {
     const auto full_num_rows   = full_graph->getLocalNumRows();
     const auto full_row_map    = full_graph->getRowMap();
@@ -63,7 +95,7 @@ auto getSubgraph(const Teuchos::RCP< const tpetra_crsgraph_t >& full_graph,
         full_graph->getGlobalRowCopy(global_row, row_cols, row_size);
         return std::span{row_cols.data(), row_size};
     };
-    const auto foreach_row = [&](std::invocable< local_dof_t, global_dof_t > auto&& fun) {
+    const auto foreach_row = [&]< std::invocable< local_dof_t, global_dof_t > F >(F&& fun) {
         const auto signed_num_rows = static_cast< local_dof_t >(full_num_rows);
         for (local_dof_t local_row = 0; local_row < signed_num_rows; ++local_row)
         {
@@ -83,7 +115,7 @@ auto getSubgraph(const Teuchos::RCP< const tpetra_crsgraph_t >& full_graph,
     });
     subgraph_row_sizes_dv.sync_device();
 
-    auto subgraph = makeTeuchosRCP< tpetra_crsgraph_t >(full_row_map, subgraph_row_sizes_dv);
+    auto retval = makeTeuchosRCP< tpetra_crsgraph_t >(full_row_map, subgraph_row_sizes_dv);
     foreach_row([&](local_dof_t local_row, global_dof_t global_row) {
         if (subgraph_row_sizes[local_row] == 0)
             return;
@@ -91,10 +123,19 @@ auto getSubgraph(const Teuchos::RCP< const tpetra_crsgraph_t >& full_graph,
         const auto subcols_end =
             std::ranges::remove_if(row_cols, [&](global_dof_t dof) { return not is_col(dof); }).begin();
         const Teuchos::ArrayView subcols{row_cols.data(), std::distance(row_cols.begin(), subcols_end)};
-        subgraph->insertGlobalIndices(global_row, subcols);
+        retval->insertGlobalIndices(global_row, subcols);
     });
-    subgraph->fillComplete();
-    return subgraph;
+    retval->fillComplete();
+    return retval;
 }
-} // namespace lstr
+
+// The interface for diagonal-aware operators was only added in 14.0, but we can easily roll our own
+class DiagonalAwareOperator : virtual public tpetra_operator_t
+{
+public:
+    virtual Teuchos::RCP< tpetra_vector_t > initDiagonalCopy() const                 = 0;
+    virtual void                            fillDiagonalCopy(tpetra_vector_t&) const = 0;
+    virtual ~DiagonalAwareOperator()                                                 = default;
+};
+} // namespace lstr::util
 #endif // L3STER_UTILS_TRILINOSUTILS_HPP

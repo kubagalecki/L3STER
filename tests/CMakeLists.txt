@@ -86,35 +86,28 @@ add_mpi_test( MeshSendRecvTest.cpp Mesh_Send_Receive "2;4" )
 add_mpi_test( MeshDistributionTest.cpp Mesh_Distribution "1;2;4" )
 add_mpi_test( NodeThroughputInfoTest.cpp Node_Throughput_Calculation "1;2;4" )
 add_mpi_test( TpetraMapCreationTest.cpp Tpetra_Map_Creation "1;2;4" )
-add_mpi_test( SparsityGraphTest.cpp Sparsity_Graph "1;2;4" )
+add_mpi_test( SparsityGraphTest.cpp Sparsity_Graph "1;2;4;8;16" )
 add_mpi_test( DirichletBCTest.cpp Dirichlet_BC_Application "1;2;4" )
 add_mpi_test( Diffusion2DTest.cpp Solve_2D_diffusion_problem "1;2;4" )
 add_mpi_test( EmptyPartitionTest.cpp Handle_Empty_Partition "4" )
 add_mpi_test( MultiDomainTest.cpp Solve_Multi_Domain_Problem "1;2;4" )
 add_mpi_test( VtkExportTest.cpp Export_results_to_VTK "1;2;4" )
+add_mpi_test( SolverTests.cpp Solver_Tests "1;2;4" )
 
 #######################################################################################################################
 
 ### Generate test data ###
-
-execute_process( COMMAND lscpu
-                 COMMAND grep -i numa
-                 COMMAND head -1
-                 COMMAND grep -o "[0-9]*"
-                 COMMAND tr -d "\\012\\015"
+execute_process( COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/util/num-numa-nodes.sh"
                  OUTPUT_VARIABLE L3STER_N_NUMA_NODES
+                 COMMAND_ERROR_IS_FATAL ANY
                  )
-execute_process( COMMAND grep ^cpu\\scores /proc/cpuinfo
-                 COMMAND uniq
-                 COMMAND grep -o "[0-9]*"
-                 COMMAND tr -d "\\012\\015"
+execute_process( COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/util/num-cores.sh"
                  OUTPUT_VARIABLE L3STER_N_CORES
+                 COMMAND_ERROR_IS_FATAL ANY
                  )
-execute_process( COMMAND grep -c ^processor /proc/cpuinfo
-                 COMMAND uniq
-                 COMMAND grep -o "[0-9]*"
-                 COMMAND tr -d "\\012\\015"
+execute_process( COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/util/num-hwthreads.sh"
                  OUTPUT_VARIABLE L3STER_N_HWTHREADS
+                 COMMAND_ERROR_IS_FATAL ANY
                  )
 set( L3STER_TESTS_DATA_PATH "${CMAKE_CURRENT_SOURCE_DIR}/data" )
 

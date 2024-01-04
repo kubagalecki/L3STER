@@ -19,7 +19,7 @@ namespace lstr::util
 {
 namespace detail
 {
-[[nodiscard]] inline auto parseSourceLocation(std::source_location src_loc) -> std::string
+inline auto parseSourceLocation(std::source_location src_loc) -> std::string
 {
     using namespace std::string_view_literals;
     constexpr std::size_t buf_size = 32;

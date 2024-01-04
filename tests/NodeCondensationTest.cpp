@@ -1,4 +1,4 @@
-#include "l3ster/assembly/NodeCondensation.hpp"
+#include "l3ster/dofs/NodeCondensation.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
@@ -12,23 +12,23 @@ void test(CondensationPolicyTag< CP > = {})
 {
     MpiComm comm{MPI_COMM_WORLD};
 
-    constexpr auto problem_def       = std::array{Pair{d_id_t{0}, std::array{true}}};
-    constexpr auto problemdef_ctwrpr = ConstexprValue< problem_def >{};
+    constexpr auto problem_def       = ProblemDef{L3STER_DEFINE_DOMAIN(0, 0)};
+    constexpr auto problemdef_ctwrpr = util::ConstexprValue< problem_def >{};
 
     constexpr auto       mesh_order = 2;
     constexpr std::array node_dist{0., 1., 2., 3., 4.};
     const auto           mesh = generateAndDistributeMesh< mesh_order >(
-        comm, [&] { return makeCubeMesh(node_dist); }, {1, 2, 3, 4, 5, 6}, {}, problemdef_ctwrpr);
+        comm, [&] { return mesh::makeCubeMesh(node_dist); }, {}, problemdef_ctwrpr);
 
-    const auto  condensation_map         = detail::makeCondensationMap< CP >(comm, mesh, problemdef_ctwrpr);
-    const auto& global_nodes_to_condense = detail::getActiveNodes< CP >(mesh, problemdef_ctwrpr);
+    const auto  condensation_map         = dofs::makeCondensationMap< CP >(comm, *mesh, problemdef_ctwrpr);
+    const auto& global_nodes_to_condense = dofs::getActiveNodes< CP >(*mesh, problemdef_ctwrpr);
     REQUIRE(condensation_map.getCondensedIds().size() == global_nodes_to_condense.size());
     for (auto n : global_nodes_to_condense)
-        REQUIRE(detail::getLocalCondensedId(condensation_map, n) < global_nodes_to_condense.size());
+        REQUIRE(condensation_map.getLocalCondensedId(n) < global_nodes_to_condense.size());
     std::vector< n_id_t > uncondensed_owned, condensed_ghost, condensed_owned;
     for (auto n : global_nodes_to_condense)
     {
-        if (mesh.isOwnedNode(n))
+        if (mesh->isOwnedNode(n))
         {
             uncondensed_owned.push_back(n);
             condensed_owned.push_back(condensation_map.getCondensedId(n));
@@ -79,7 +79,7 @@ void test(CondensationPolicyTag< CP > = {})
     const auto gathered_owned_uncondensed = gather(std::move(uncondensed_owned));
     const auto gathered_ghost_condensed   = gather(std::move(condensed_ghost));
     const auto gathered_ghost_uncondensed =
-        gather(std::vector< n_id_t >{mesh.getGhostNodes().begin(), mesh.getGhostNodes().end()});
+        gather(std::vector< n_id_t >{mesh->getGhostNodes().begin(), mesh->getGhostNodes().end()});
     if (comm.getRank() == 0)
     {
         for (size_t i = 0; auto ghost_uncond : gathered_ghost_uncondensed)
@@ -99,7 +99,7 @@ void test(CondensationPolicyTag< CP > = {})
 
 int main(int argc, char* argv[])
 {
-    const auto max_par_guard = detail::MaxParallelismGuard{4};
+    const auto max_par_guard = util::MaxParallelismGuard{4};
     const auto scope_guard   = L3sterScopeGuard{argc, argv};
     test< CondensationPolicy::None >();
     test< CondensationPolicy::ElementBoundary >();

@@ -1,14 +1,14 @@
-#ifndef L3STER_MESH_LOBATTO_HPP
-#define L3STER_MESH_LOBATTO_HPP
+#ifndef L3STER_MATH_LOBATTO_HPP
+#define L3STER_MATH_LOBATTO_HPP
 
-#include "Legendre.hpp"
+#include "l3ster/math/Legendre.hpp"
 
-namespace lstr
+namespace lstr::math
 {
 template < std::floating_point T, size_t N >
 constexpr auto getLobattoPolynomial()
 {
     return getLegendrePolynomial< T, N + 1 >().derivative();
 }
-} // namespace lstr
-#endif // L3STER_MESH_LOBATTO_HPP
+} // namespace lstr::math
+#endif // L3STER_MATH_LOBATTO_HPP

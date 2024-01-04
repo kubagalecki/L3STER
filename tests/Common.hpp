@@ -7,13 +7,12 @@
 
 #include <iostream>
 
-inline void logErrorAndTerminate(std::string_view err_msg)
+inline void logErrorAndTerminate(std::string_view     err_msg,
+                                 std::source_location src_loc = std::source_location::current())
 {
-    auto err_src_loc = lstr::util::detail::parseSourceLocation(std::source_location::current());
-    err_src_loc.reserve(err_src_loc.size() + err_msg.size() + 1);
-    std::ranges::copy(err_msg, std::back_inserter(err_src_loc));
-    err_src_loc.push_back('\n');
-    std::cerr << err_msg;
+    auto printed_error = lstr::util::detail::parseSourceLocation(src_loc);
+    std::ranges::copy(err_msg, std::back_inserter(printed_error));
+    std::cerr << printed_error << '\n';
     std::terminate();
 }
 
@@ -39,7 +38,7 @@ inline void logErrorAndTerminate(std::string_view err_msg)
     })
 
 template < lstr::el_o_t... orders >
-void describeMesh(const lstr::MpiComm& comm, const lstr::MeshPartition< orders... >& mesh)
+void describeMesh(const lstr::MpiComm& comm, const lstr::mesh::MeshPartition< orders... >& mesh)
 {
     for (int rank = 0; rank < comm.getSize(); ++rank)
     {
@@ -56,7 +55,7 @@ void describeMesh(const lstr::MpiComm& comm, const lstr::MeshPartition< orders..
             {
                 std::cout << "Domain: " << dom << '\n';
                 mesh.visit(
-                    []< lstr::ElementTypes ET, lstr::el_o_t EO >(const lstr::Element< ET, EO >& element) {
+                    []< lstr::mesh::ElementType ET, lstr::el_o_t EO >(const lstr::mesh::Element< ET, EO >& element) {
                         std::cout << "Element ID: " << element.getId() << ", type: " << static_cast< int >(ET)
                                   << ", order: " << static_cast< int >(EO) << ", nodes: ";
                         for (auto n : element.getNodes())

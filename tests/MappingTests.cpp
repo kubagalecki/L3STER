@@ -13,35 +13,37 @@
 #include "catch2/catch.hpp"
 
 using namespace lstr;
+using namespace lstr::map;
+using namespace lstr::mesh;
 
 static auto getLineElement()
 {
-    return Element< ElementTypes::Line, 1 >{
-        {0, 1}, ElementData< ElementTypes::Line, 1 >{{Point{0., 0., 0.}, Point{1., 0., 0.}}}, 0};
+    return Element< ElementType::Line, 1 >{
+        {0, 1}, ElementData< ElementType::Line, 1 >{{Point{0., 0., 0.}, Point{1., 0., 0.}}}, 0};
 }
 
 static auto getQuadElement()
 {
     using namespace lstr;
-    return Element< ElementTypes::Quad, 1 >{
+    return Element< ElementType::Quad, 1 >{
         {0, 1, 2, 3},
-        ElementData< ElementTypes::Quad, 1 >{
+        ElementData< ElementType::Quad, 1 >{
             {Point{0., 0., 0.}, Point{1., 0., 0.}, Point{0., 1., 0.}, Point{2., 2., 0.}}},
         0};
 }
 
 static auto getHexElement()
 {
-    return Element< ElementTypes::Hex, 1 >{{0, 1, 2, 3, 4, 5, 6, 7},
-                                           ElementData< ElementTypes::Hex, 1 >{{Point{0., 0., 0.},
-                                                                                Point{1., 0., 0.},
-                                                                                Point{0., 1., 0.},
-                                                                                Point{1., 1., 0.},
-                                                                                Point{0., 0., 1.},
-                                                                                Point{1., 0., 1.5},
-                                                                                Point{0., 1., 1.5},
-                                                                                Point{1., 1., 2.}}},
-                                           0};
+    return Element< ElementType::Hex, 1 >{{0, 1, 2, 3, 4, 5, 6, 7},
+                                          ElementData< ElementType::Hex, 1 >{{Point{0., 0., 0.},
+                                                                              Point{1., 0., 0.},
+                                                                              Point{0., 1., 0.},
+                                                                              Point{1., 1., 0.},
+                                                                              Point{0., 0., 1.},
+                                                                              Point{1., 0., 1.5},
+                                                                              Point{0., 1., 1.5},
+                                                                              Point{1., 1., 2.}}},
+                                          0};
 }
 
 TEST_CASE("Reference to physical mapping", "[mesh]")
@@ -49,7 +51,7 @@ TEST_CASE("Reference to physical mapping", "[mesh]")
     constexpr auto el_o = 2;
     SECTION("1D")
     {
-        constexpr auto el_t                = ElementTypes::Line;
+        constexpr auto el_t                = ElementType::Line;
         using element_type                 = Element< el_t, el_o >;
         constexpr auto            el_nodes = typename element_type::node_array_t{};
         ElementData< el_t, el_o > data{{Point{1., 1., 1.}, Point{.5, .5, .5}}};
@@ -62,7 +64,7 @@ TEST_CASE("Reference to physical mapping", "[mesh]")
 
     SECTION("2D")
     {
-        constexpr auto el_t                = ElementTypes::Quad;
+        constexpr auto el_t                = ElementType::Quad;
         using element_type                 = Element< el_t, el_o >;
         constexpr auto            el_nodes = typename element_type::node_array_t{};
         ElementData< el_t, el_o > data{{Point{1., -1., 0.}, Point{2., -1., 0.}, Point{1., 1., 1.}, Point{2., 1., 1.}}};
@@ -75,7 +77,7 @@ TEST_CASE("Reference to physical mapping", "[mesh]")
 
     SECTION("3D")
     {
-        constexpr auto el_t                = ElementTypes::Hex;
+        constexpr auto el_t                = ElementType::Hex;
         using element_type                 = Element< el_t, el_o >;
         constexpr auto            el_nodes = typename element_type::node_array_t{};
         ElementData< el_t, el_o > data{{Point{.5, .5, .5},
@@ -138,8 +140,8 @@ TEST_CASE("Boundary normal computation", "[mapping]")
     {
         const auto element         = getLineElement();
         const auto jacobi_mat_eval = getNatJacobiMatGenerator(element);
-        const auto left_view       = BoundaryElementView{element, 0};
-        const auto right_view      = BoundaryElementView{element, 1};
+        const auto left_view       = BoundaryElementView{&element, 0};
+        const auto right_view      = BoundaryElementView{&element, 1};
         const auto left_normal     = computeBoundaryNormal(left_view, jacobi_mat_eval(Point{0.}));
         const auto right_normal    = computeBoundaryNormal(right_view, jacobi_mat_eval(Point{1.}));
         CHECK(left_normal[0] == Approx(-1.).margin(1e-13));
@@ -149,10 +151,10 @@ TEST_CASE("Boundary normal computation", "[mapping]")
     {
         const auto element         = getQuadElement();
         const auto jacobi_mat_eval = getNatJacobiMatGenerator(element);
-        const auto bot_view        = BoundaryElementView{element, 0};
-        const auto top_view        = BoundaryElementView{element, 1};
-        const auto left_view       = BoundaryElementView{element, 2};
-        const auto right_view      = BoundaryElementView{element, 3};
+        const auto bot_view        = BoundaryElementView{&element, 0};
+        const auto top_view        = BoundaryElementView{&element, 1};
+        const auto left_view       = BoundaryElementView{&element, 2};
+        const auto right_view      = BoundaryElementView{&element, 3};
         const auto bot_normal      = computeBoundaryNormal(bot_view, jacobi_mat_eval(Point{0., -1.}));
         const auto top_normal      = computeBoundaryNormal(top_view, jacobi_mat_eval(Point{0., 1.}));
         const auto left_normal     = computeBoundaryNormal(left_view, jacobi_mat_eval(Point{-1., 0.}));
@@ -170,12 +172,12 @@ TEST_CASE("Boundary normal computation", "[mapping]")
     {
         const auto element         = getHexElement();
         const auto jacobi_mat_eval = getNatJacobiMatGenerator(element);
-        const auto front_view      = BoundaryElementView{element, 0};
-        const auto back_view       = BoundaryElementView{element, 1};
-        const auto bot_view        = BoundaryElementView{element, 2};
-        const auto top_view        = BoundaryElementView{element, 3};
-        const auto left_view       = BoundaryElementView{element, 4};
-        const auto right_view      = BoundaryElementView{element, 5};
+        const auto front_view      = BoundaryElementView{&element, 0};
+        const auto back_view       = BoundaryElementView{&element, 1};
+        const auto bot_view        = BoundaryElementView{&element, 2};
+        const auto top_view        = BoundaryElementView{&element, 3};
+        const auto left_view       = BoundaryElementView{&element, 4};
+        const auto right_view      = BoundaryElementView{&element, 5};
         const auto front_normal    = computeBoundaryNormal(front_view, jacobi_mat_eval(Point{0., 0., -1.}));
         const auto back_normal     = computeBoundaryNormal(back_view, jacobi_mat_eval(Point{0., 0., 1.}));
         const auto bot_normal      = computeBoundaryNormal(bot_view, jacobi_mat_eval(Point{0., -1., 0.}));
@@ -205,10 +207,11 @@ TEST_CASE("Boundary normal computation", "[mapping]")
 
 TEST_CASE("Basis function values", "[mapping]")
 {
-    constexpr auto LB = BasisTypes::Lagrange;
+    using namespace basis;
+    constexpr auto LB = BasisType::Lagrange;
     SECTION("Line")
     {
-        constexpr auto   ET = ElementTypes::Line;
+        constexpr auto   ET = ElementType::Line;
         constexpr el_o_t EO = 1;
 
         const ReferenceBasisFunction< ET, EO, 0, LB > basis0{};
@@ -222,7 +225,7 @@ TEST_CASE("Basis function values", "[mapping]")
 
     SECTION("Quad")
     {
-        constexpr auto   ET = ElementTypes::Quad;
+        constexpr auto   ET = ElementType::Quad;
         constexpr el_o_t EO = 1;
 
         const ReferenceBasisFunction< ET, EO, 0, LB > basis0{};
@@ -253,7 +256,7 @@ TEST_CASE("Basis function values", "[mapping]")
 
     SECTION("Hex")
     {
-        constexpr auto   ET = ElementTypes::Hex;
+        constexpr auto   ET = ElementType::Hex;
         constexpr el_o_t EO = 1;
 
         const ReferenceBasisFunction< ET, EO, 0, LB > basis0{};
@@ -314,7 +317,8 @@ TEST_CASE("Basis function values", "[mapping]")
 
 TEST_CASE("Basis function derivatives", "[mapping]")
 {
-    constexpr auto LB = BasisTypes::Lagrange;
+    using namespace basis;
+    constexpr auto LB = BasisType::Lagrange;
     SECTION("Line")
     {
         const auto element    = getLineElement();
@@ -345,16 +349,16 @@ TEST_CASE("Basis function derivatives", "[mapping]")
 
     SECTION("Hex")
     {
-        const auto element    = Element< ElementTypes::Hex, 1 >{{0, 1, 2, 3, 4, 5, 6, 7},
-                                                                ElementData< ElementTypes::Hex, 1 >{{Point{0., 0., 0.},
-                                                                                                     Point{1., 0., 0.},
-                                                                                                     Point{0., 1., 0.},
-                                                                                                     Point{1., 1., 0.},
-                                                                                                     Point{0., 0., 1.},
-                                                                                                     Point{1., 0., 1.},
-                                                                                                     Point{0., 1., 1.},
-                                                                                                     Point{1., 1., 1.}}},
-                                                                0};
+        const auto element    = Element< ElementType::Hex, 1 >{{0, 1, 2, 3, 4, 5, 6, 7},
+                                                               ElementData< ElementType::Hex, 1 >{{Point{0., 0., 0.},
+                                                                                                   Point{1., 0., 0.},
+                                                                                                   Point{0., 1., 0.},
+                                                                                                   Point{1., 1., 0.},
+                                                                                                   Point{0., 0., 1.},
+                                                                                                   Point{1., 0., 1.},
+                                                                                                   Point{0., 1., 1.},
+                                                                                                   Point{1., 1., 1.}}},
+                                                               0};
         const auto test_point = Point{0., 0., 0.};
         const auto jac        = getNatJacobiMatGenerator(element)(test_point);
         const auto ref_ders = computeRefBasisDers< decltype(element)::type, decltype(element)::order, LB >(test_point);
@@ -388,11 +392,12 @@ TEST_CASE("Basis function derivatives", "[mapping]")
 
 TEST_CASE("Reference basis at domain QPs", "[mapping]")
 {
-    constexpr auto   ET            = ElementTypes::Hex;
+    using namespace basis;
+    constexpr auto   ET            = ElementType::Hex;
     constexpr el_o_t EO            = 4;
-    constexpr auto   QT            = QuadratureTypes::GLeg;
+    constexpr auto   QT            = quad::QuadratureType::GaussLegendre;
     constexpr el_o_t QO            = 4;
-    constexpr auto   BT            = BasisTypes::Lagrange;
+    constexpr auto   BT            = BasisType::Lagrange;
     const auto       ref_bas_at_qp = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
 
     SECTION("Values")
@@ -411,9 +416,9 @@ TEST_CASE("Reference basis at domain QPs", "[mapping]")
 
 TEST_CASE("Reference basis at boundary QPs", "[mapping]")
 {
-    constexpr auto  QT = QuadratureTypes::GLeg;
+    constexpr auto  QT = quad::QuadratureType::GaussLegendre;
     constexpr q_o_t QO = 5;
-    constexpr auto  BT = BasisTypes::Lagrange;
+    constexpr auto  BT = basis::BasisType::Lagrange;
 
     constexpr auto check_all_in_plane = []< el_o_t... orders >(
                                             const BoundaryView< orders... >& view, Space normal, val_t offs) {
@@ -435,13 +440,13 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
                 return retval;
             },
             normal);
-        const auto element_checker = [&]< ElementTypes ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
+        const auto element_checker = [&]< ElementType ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
             const auto& ref_q =
-                getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide()).quadrature;
+                basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide()).quadrature;
             for (auto qp : ref_q.points)
                 CHECK(mapToPhysicalSpace(*el_view, qp)[space_ind] == Approx{offs}.margin(1.e-15));
         };
-        view.visit(element_checker);
+        view.visit(element_checker, std::execution::seq);
     };
 
     SECTION("Generated")
@@ -450,7 +455,7 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
 
         SECTION("1D")
         {
-            constexpr auto   ET  = ElementTypes::Line;
+            constexpr auto   ET  = ElementType::Line;
             constexpr el_o_t EO  = 1;
             constexpr q_o_t  QLO = 1;
             const auto       el  = Element< ET, 1 >{
@@ -459,7 +464,7 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
                 0};
 
             const auto check_pos = [&](el_side_t side, val_t x_pos) {
-                const auto& ref_q  = getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QLO >(side);
+                const auto& ref_q  = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QLO >(side);
                 const auto& ref_p  = ref_q.quadrature.points.front();
                 const auto  phys_p = mapToPhysicalSpace(el, Point{ref_p});
                 CHECK(phys_p[0] == Approx{x_pos}.margin(1e-15));
@@ -473,10 +478,10 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
         {
             const auto mesh = makeSquareMesh(node_pos);
 
-            const auto b_bottom = mesh.getBoundaryView(1);
-            const auto b_top    = mesh.getBoundaryView(2);
-            const auto b_left   = mesh.getBoundaryView(3);
-            const auto b_right  = mesh.getBoundaryView(4);
+            const auto& b_bottom = mesh.getBoundary(1);
+            const auto& b_top    = mesh.getBoundary(2);
+            const auto& b_left   = mesh.getBoundary(3);
+            const auto& b_right  = mesh.getBoundary(4);
 
             check_all_in_plane(b_bottom, Space::Y, node_pos.front());
             check_all_in_plane(b_top, Space::Y, node_pos.back());
@@ -487,12 +492,12 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
         {
             const auto mesh = makeCubeMesh(node_pos);
 
-            const auto b_front  = mesh.getBoundaryView(1);
-            const auto b_back   = mesh.getBoundaryView(2);
-            const auto b_bottom = mesh.getBoundaryView(3);
-            const auto b_top    = mesh.getBoundaryView(4);
-            const auto b_left   = mesh.getBoundaryView(5);
-            const auto b_right  = mesh.getBoundaryView(6);
+            const auto& b_front  = mesh.getBoundary(1);
+            const auto& b_back   = mesh.getBoundary(2);
+            const auto& b_bottom = mesh.getBoundary(3);
+            const auto& b_top    = mesh.getBoundary(4);
+            const auto& b_left   = mesh.getBoundary(5);
+            const auto& b_right  = mesh.getBoundary(6);
 
             check_all_in_plane(b_front, Space::Z, node_pos.front());
             check_all_in_plane(b_back, Space::Z, node_pos.back());
@@ -506,12 +511,12 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
     {
         SECTION("2D")
         {
-            const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), gmsh_tag);
+            const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), {2, 3, 4, 5}, gmsh_tag);
 
-            const auto b_bottom = mesh.getBoundaryView(5);
-            const auto b_top    = mesh.getBoundaryView(3);
-            const auto b_left   = mesh.getBoundaryView(2);
-            const auto b_right  = mesh.getBoundaryView(4);
+            const auto& b_bottom = mesh.getBoundary(5);
+            const auto& b_top    = mesh.getBoundary(3);
+            const auto& b_left   = mesh.getBoundary(2);
+            const auto& b_right  = mesh.getBoundary(4);
 
             check_all_in_plane(b_bottom, Space::Y, -.5);
             check_all_in_plane(b_top, Space::Y, .5);
@@ -520,14 +525,14 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
         }
         SECTION("3D")
         {
-            const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), gmsh_tag);
+            const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_cube.msh), {2, 3, 4, 5, 6, 7}, gmsh_tag);
 
-            const auto b_front  = mesh.getBoundaryView(2);
-            const auto b_back   = mesh.getBoundaryView(3);
-            const auto b_bottom = mesh.getBoundaryView(4);
-            const auto b_top    = mesh.getBoundaryView(5);
-            const auto b_left   = mesh.getBoundaryView(7);
-            const auto b_right  = mesh.getBoundaryView(6);
+            const auto& b_front  = mesh.getBoundary(2);
+            const auto& b_back   = mesh.getBoundary(3);
+            const auto& b_bottom = mesh.getBoundary(4);
+            const auto& b_top    = mesh.getBoundary(5);
+            const auto& b_left   = mesh.getBoundary(7);
+            const auto& b_right  = mesh.getBoundary(6);
 
             check_all_in_plane(b_front, Space::Z, -1.);
             check_all_in_plane(b_back, Space::Z, 1.);
@@ -541,18 +546,21 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
 
 TEST_CASE("Boundary integration", "[mapping]")
 {
-    constexpr auto  BT        = BasisTypes::Lagrange;
-    constexpr auto  QT        = QuadratureTypes::GLeg;
-    constexpr q_o_t QO        = 10;
-    constexpr auto  integrand = [](const auto&, const auto&, const auto&, const auto&) noexcept {
-        return Eigen::Vector< val_t, 1 >(1.); // Compute boundary area/length
-    };
+    constexpr auto  BT = basis::BasisType::Lagrange;
+    constexpr auto  QT = quad::QuadratureType::GaussLegendre;
+    constexpr q_o_t QO = 10;
+
     const auto check_side_area =
-        [&]< ElementTypes ET, el_o_t EO >(const Element< ET, EO >& element, el_side_t side, val_t expected_area) {
-            const auto el_view    = BoundaryElementView{element, side};
-            const auto basis_vals = getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(side);
-            const auto node_vals  = eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, 0 >{};
-            const auto area = detail::evalElementBoundaryIntegral(integrand, el_view, node_vals, basis_vals, 0.)[0];
+        [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element, el_side_t side, val_t expected_area) {
+            constexpr auto params    = KernelParams{.dimension = Element< ET, EO >::native_dim, .n_equations = 1};
+            constexpr auto integrand = wrapBoundaryResidualKernel< params >([](const auto&, auto& out) {
+                out[0] = 1.; // Compute boundary area/length
+            });
+
+            const auto el_view    = BoundaryElementView{&element, side};
+            const auto basis_vals = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(side);
+            const auto node_vals  = util::eigen::RowMajorMatrix< val_t, Element< ET, EO >::n_nodes, 0 >{};
+            const auto area       = post::evalElementBoundaryIntegral(integrand, el_view, node_vals, basis_vals, 0.)[0];
             CHECK(area == Approx(expected_area).margin(1e-15));
         };
 

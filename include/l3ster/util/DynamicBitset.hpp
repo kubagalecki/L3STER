@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-namespace lstr
+namespace lstr::util
 {
 class DynamicBitset
 {
@@ -231,5 +231,5 @@ private:
     std::size_t                  m_size{};
 };
 
-} // namespace lstr
+} // namespace lstr::util
 #endif // L3STER_UTIL_DYNAMICBITSET_HPP

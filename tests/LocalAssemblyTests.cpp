@@ -1,12 +1,13 @@
 #include "catch2/catch.hpp"
 
-#include "l3ster/assembly/AssembleLocalSystem.hpp"
 #include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
+#include "l3ster/glob_asm/AssembleLocalSystem.hpp"
 #include "l3ster/mapping/ComputePhysBasisDer.hpp"
 #include "l3ster/mesh/NodePhysicalLocation.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 
 using namespace lstr;
+using namespace lstr::glob_asm;
 
 TEST_CASE("Local system assembly", "[local_asm]")
 {
@@ -14,30 +15,21 @@ TEST_CASE("Local system assembly", "[local_asm]")
 
     SECTION("Diffusion 2D")
     {
-        constexpr auto        ET       = ElementTypes::Quad;
-        constexpr el_o_t      EO       = 4;
-        constexpr auto        QT       = QuadratureTypes::GLeg;
-        constexpr q_o_t       QO       = 11; // Needs to be large enough for the local system buffer to overflow
-        constexpr auto        BT       = BasisTypes::Lagrange;
-        constexpr auto        el_nodes = typename Element< ET, EO >::node_array_t{};
-        ElementData< ET, EO > data{{Point{1., -1., 0.}, Point{2., -1., 0.}, Point{1., 1., 1.}, Point{2., 1., 1.}}};
-        const auto            element = Element< ET, EO >{el_nodes, data, 0};
+        constexpr auto              ET       = mesh::ElementType::Quad;
+        constexpr el_o_t            EO       = 4;
+        constexpr auto              QT       = quad::QuadratureType::GaussLegendre;
+        constexpr q_o_t             QO       = 11; // Needs to be large enough for the local system buffer to overflow
+        constexpr auto              BT       = basis::BasisType::Lagrange;
+        constexpr auto              el_nodes = typename mesh::Element< ET, EO >::node_array_t{};
+        mesh::ElementData< ET, EO > data{
+            {Point{1., -1., 0.}, Point{2., -1., 0.}, Point{1., 1., 1.}, Point{2., 1., 1.}}};
+        const auto element = mesh::Element< ET, EO >{el_nodes, data, 0};
 
-        const auto& basis_at_q = getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
+        const auto& basis_at_q = basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
 
-        constexpr size_t nf                  = 3;
-        constexpr size_t ne                  = 4;
-        constexpr size_t dim                 = 2;
-        constexpr auto   diffusion_kernel_2d = [](const auto&, const auto&, const auto&) noexcept {
-            using A_t   = Eigen::Matrix< val_t, ne, nf >;
-            using F_t   = Eigen::Matrix< val_t, ne, 1 >;
-            using ret_t = std::pair< std::array< A_t, dim + 1 >, F_t >;
-            ret_t retval;
-            auto& [A0, A1, A2] = retval.first;
-            auto& F            = retval.second;
-            for (auto& mat : retval.first)
-                mat.setZero();
-            F.setZero();
+        constexpr auto diffusion_kernel_2d = []([[maybe_unused]] const auto& in, auto& out) noexcept {
+            auto& [operators, rhs] = out;
+            auto& [A0, A1, A2]     = operators;
 
             constexpr double lambda = 1.;
 
@@ -51,20 +43,20 @@ TEST_CASE("Local system assembly", "[local_asm]")
             A2(0, 2) = lambda;
             A2(2, 0) = 1.;
             A2(3, 1) = -1.;
-
-            return retval;
         };
 
         constexpr auto solution = [](const Point< 3 >& p) {
             return p.x();
         };
 
-        const auto& [K, F] = assembleLocalSystem(
-            diffusion_kernel_2d, element, Eigen::Matrix< val_t, element.n_nodes, 0 >{}, basis_at_q, 0.);
+        constexpr auto ker_params = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3};
+        const auto     asm_kernel = wrapDomainEquationKernel< ker_params >(diffusion_kernel_2d);
+        const auto [K, F] =
+            assembleLocalSystem(asm_kernel, element, Eigen::Matrix< val_t, element.n_nodes, 0 >{}, basis_at_q, 0.);
         auto u = F;
 
         constexpr auto boundary_nodes = std::invoke([] {
-            constexpr auto& boundary_table = ElementTraits< Element< ET, EO > >::boundary_table;
+            constexpr auto& boundary_table = mesh::ElementTraits< mesh::Element< ET, EO > >::boundary_table;
             constexpr auto  bn_packed      = std::invoke([] {
                 constexpr size_t max_nbn =
                     std::accumulate(begin(boundary_table), end(boundary_table), 0, [](size_t val, const auto& a) {
@@ -89,17 +81,18 @@ TEST_CASE("Local system assembly", "[local_asm]")
         constexpr auto                            bc_inds    = std::invoke([&] {
             auto retval = boundary_nodes;
             for (auto& bc_ind : retval)
-                bc_ind *= nf;
+                bc_ind *= ker_params.n_unknowns;
             return retval;
         });
         constexpr auto                            nonbc_inds = std::invoke([&] {
-            std::array< ptrdiff_t, Element< ET, EO >::n_nodes * nf - bc_inds.size() > retval{};
-            std::ranges::set_difference(std::views::iota(0u, Element< ET, EO >::n_nodes * nf), bc_inds, begin(retval));
+            std::array< ptrdiff_t, mesh::Element< ET, EO >::n_nodes * ker_params.n_unknowns - bc_inds.size() > retval{};
+            std::ranges::set_difference(
+                std::views::iota(0u, mesh::Element< ET, EO >::n_nodes * ker_params.n_unknowns), bc_inds, begin(retval));
             return retval;
         });
         Eigen::Matrix< val_t, bc_inds.size(), 1 > bc_vals{};
         for (ptrdiff_t i = 0; auto node : boundary_nodes)
-            bc_vals[i++] = solution(nodePhysicalLocation(element, node));
+            bc_vals[i++] = solution(mesh::nodePhysicalLocation(element, node));
 
         Eigen::Matrix< val_t, nonbc_inds.size(), nonbc_inds.size() > K_red = K(nonbc_inds, nonbc_inds);
         Eigen::Matrix< val_t, nonbc_inds.size(), 1 > F_red = F(nonbc_inds, 1) - K(nonbc_inds, bc_inds) * bc_vals;
@@ -113,7 +106,7 @@ TEST_CASE("Local system assembly", "[local_asm]")
         {
             const auto node_location = nodePhysicalLocation(element, node);
             const auto node_value    = solution(node_location);
-            const auto sys_index     = node * nf;
+            const auto sys_index     = node * ker_params.n_unknowns;
             CHECK(u[sys_index] == Approx{node_value});
         }
     }

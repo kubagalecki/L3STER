@@ -9,7 +9,7 @@
 #include <numeric>
 #include <vector>
 
-namespace lstr
+namespace lstr::util
 {
 template < std::random_access_iterator It, typename F >
 std::vector< size_t > sortingPermutation(It first, It last, F&& compare)
@@ -85,27 +85,14 @@ constexpr auto makeTupleIf(T&&... arg)
     return std::tuple_cat(detail::tuplifyIf< TraitsPredicate >(std::forward< T >(arg))...);
 }
 
-constexpr void forEachTuple(auto&& t, auto&& f)
-    requires tuple_like< std::decay_t< decltype(t) > > and tuple_invocable< decltype(f), std::decay_t< decltype(t) > >
+template < typename Tup, typename F >
+constexpr void forEachTuple(Tup&& t, F&& f)
+    requires tuple_like< std::remove_cvref_t< Tup > > and tuple_invocable< F, std::remove_cvref_t< Tup > >
 {
-    std::invoke([&]< size_t... I >(std::index_sequence< I... >) { (std::invoke(f, std::get< I >(t)), ...); },
-                std::make_index_sequence< std::tuple_size_v< std::decay_t< decltype(t) > > >{});
-}
-
-template < std::unsigned_integral T >
-std::vector< T > consecutiveIndices(T n)
-{
-    std::vector< T > retval(n);
-    std::iota(begin(retval), end(retval), T{0});
-    return retval;
-}
-
-template < std::unsigned_integral T, T N >
-constexpr std::array< T, N > consecutiveIndices(std::integral_constant< T, N >)
-{
-    std::array< T, N > retval;
-    std::iota(begin(retval), end(retval), T{0});
-    return retval;
+    const auto visit_inds = [&]< size_t... I >(std::index_sequence< I... >) {
+        (std::invoke(f, std::get< I >(t)), ...);
+    };
+    std::invoke(visit_inds, std::make_index_sequence< std::tuple_size_v< std::remove_cvref_t< Tup > > >{});
 }
 
 template < std::copy_constructible T_a, std::integral T_filter, size_t N_a, size_t N_filter >
@@ -226,15 +213,12 @@ constexpr auto makeIotaArray(const T& first = T{})
     return retval;
 }
 
-namespace util
-{
 template < typename T >
 void sortRemoveDup(std::vector< T >& vec)
 {
     std::ranges::sort(vec);
     const auto erase_range = std::ranges::unique(vec);
     vec.erase(erase_range.begin(), erase_range.end());
-    vec.shrink_to_fit();
 }
 
 template < std::array array >
@@ -249,6 +233,24 @@ constexpr auto sortedUniqueElements()
     std::ranges::unique_copy(array, retval.begin());
     return retval;
 }
-} // namespace util
-} // namespace lstr
+
+template < IndexRange_c auto inds, typename T, size_t N, std::indirectly_writable< T > Iter >
+Iter copyValuesAtInds(const std::array< T, N >& array, Iter out_iter, ConstexprValue< inds > = {})
+    requires(std::ranges::all_of(inds, [](size_t i) { return i < N; }))
+{
+    for (auto i : inds)
+        *out_iter++ = array[i];
+    return out_iter;
+}
+
+template < IndexRange_c auto inds, typename T, size_t N >
+auto getValuesAtInds(const std::array< T, N >& array, ConstexprValue< inds > inds_ctwrpr = {})
+    -> std::array< T, std::ranges::size(inds) >
+    requires(std::ranges::all_of(inds, [](size_t i) { return i < N; }))
+{
+    std::array< T, std::ranges::size(inds) > retval;
+    copyValuesAtInds(array, begin(retval), inds_ctwrpr);
+    return retval;
+}
+} // namespace lstr::util
 #endif // L3STER_UTIL_ALGORITHM_HPP

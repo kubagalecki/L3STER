@@ -2,14 +2,16 @@
 #define L3STER_UTIL_KOKKOSSCOPEGUARD_HPP
 
 #include "l3ster/comm/MpiComm.hpp"
-#include "l3ster/defs/TrilinosTypedefs.h"
+#include "l3ster/common/TrilinosTypedefs.h"
 #include "l3ster/util/GlobalResource.hpp"
 #include "l3ster/util/HwlocWrapper.hpp"
 #include "l3ster/util/SetStackSize.hpp"
 
+#include <optional>
+
 namespace lstr
 {
-namespace detail
+namespace util
 {
 class MpiScopeGuard
 {
@@ -36,20 +38,39 @@ private:
 
 MpiScopeGuard::MpiScopeGuard(int& argc, char**& argv)
 {
-    int        initialized{};
-    const auto init_check_err = MPI_Initialized(&initialized);
-    detail::mpi::handleMPIError(init_check_err, "Failed to check MPI initialization status");
-    if (initialized)
-        return;
+    static constexpr auto required_mode            = MPI_THREAD_FUNNELED;
+    constexpr auto        check_mpi_thread_support = [] {
+        int provided_mode{};
+        L3STER_INVOKE_MPI(MPI_Query_thread, &provided_mode);
+        util::throwingAssert(provided_mode >= required_mode,
+                             "The provided MPI installation appears not to have the required threading support: "
+                                    "`MPI_THREAD_FUNNELED`\nIf you are initializing MPI yourself (i.e. not via L3STER scope "
+                                    "guards), be sure to do so by calling `MPI_Init_thread` and passing `MPI_THREAD_FUNNELED` "
+                                    "as the requirement, and *not* by calling `MPI_Init`");
+    };
+    constexpr auto check_initialized = []() -> bool {
+        int retval{};
+        L3STER_INVOKE_MPI(MPI_Initialized, &retval);
+        return retval;
+    };
+    constexpr auto check_not_finalized = [] {
+        int finalized{};
+        L3STER_INVOKE_MPI(MPI_Finalized, &finalized);
+        util::terminatingAssert(
+            not finalized, "You are attempting to create `lstr::MpiScopeGuard` after `MPI_Finalize` has been called");
+    };
+    const auto initialize = [&] {
+        int dummy{};
+        L3STER_INVOKE_MPI(MPI_Init_thread, &argc, &argv, required_mode, &dummy);
+    };
 
-    constexpr auto required_mode = MPI_THREAD_FUNNELED;
-    int            provided_mode{};
-    int            mpi_status = MPI_Init_thread(&argc, &argv, required_mode, &provided_mode);
-    detail::mpi::handleMPIError(mpi_status, "Failed to initialize MPI");
-    m_is_owning = true;
-    util::throwingAssert(
-        provided_mode >= required_mode,
-        "The installed configuration of MPI does not support the required threading mode MPI_THREAD_FUNNELED");
+    check_not_finalized();
+    if (not check_initialized())
+    {
+        initialize();
+        m_is_owning = true;
+    }
+    check_mpi_thread_support();
 }
 
 class KokkosScopeGuard
@@ -89,42 +110,79 @@ public:
 private:
     bool m_is_owning;
 };
-} // namespace detail
+} // namespace util
 
 class L3sterScopeGuard
 {
 public:
     L3sterScopeGuard(int& argc, char** argv)
-        : m_mpi_guard{argc, argv},
-          m_kokkos_guard{argc, argv},
-          m_stack_size_guard{util::detail::MaxStackSizeTracker::get()}
+        : m_mpi_guard{argc, argv}, m_kokkos_guard{argc, argv}, m_stack_size_guard{util::MaxStackSizeTracker::get()}
     {
-        (void)GlobalResource< util::hwloc::Topology >::getMaybeUninitialized();
+        (void)util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized();
     }
 
 private:
-    detail::MpiScopeGuard    m_mpi_guard;
-    detail::KokkosScopeGuard m_kokkos_guard;
-    util::StackSizeGuard     m_stack_size_guard;
+    util::MpiScopeGuard    m_mpi_guard;
+    util::KokkosScopeGuard m_kokkos_guard;
+    util::StackSizeGuard   m_stack_size_guard;
 };
 
-namespace detail
+namespace util
 {
 class MaxParallelismGuard
 {
-public:
-    MaxParallelismGuard(
-        size_t max_threads = GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNCores())
-        : m_max_threads{max_threads},
-          m_tbb_control{oneapi::tbb::global_control::max_allowed_parallelism, max_threads}
 #ifdef _OPENMP
-          ,
-          m_prev_omp_threads{omp_get_max_threads()}
-#endif
+    class OpenMPThreadGuard
     {
-#ifdef _OPENMP
-        omp_set_num_threads(static_cast< int >(m_max_threads));
+    public:
+        explicit OpenMPThreadGuard(int num_threads) : m_num_threads_previous{omp_get_max_threads()}
+        {
+            omp_set_num_threads(num_threads);
+        }
+        OpenMPThreadGuard(const OpenMPThreadGuard&)            = delete;
+        OpenMPThreadGuard& operator=(const OpenMPThreadGuard&) = delete;
+        OpenMPThreadGuard(OpenMPThreadGuard&&)                 = default;
+        OpenMPThreadGuard& operator=(OpenMPThreadGuard&&)      = default;
+        ~OpenMPThreadGuard() { omp_set_num_threads(m_num_threads_previous); }
+
+    private:
+        int m_num_threads_previous;
+    };
+#else
+    struct OpenMPThreadGuard
+    {
+        explicit OpenMPThreadGuard(int) {}
+    };
 #endif
+
+    class ThreadGuards
+    {
+    public:
+        explicit ThreadGuards(size_t threads)
+            : m_tbb_guard{oneapi::tbb::global_control::max_allowed_parallelism, threads},
+              m_openmp_guard{static_cast< int >(threads)}
+        {}
+
+    private:
+        oneapi::tbb::global_control m_tbb_guard;
+        OpenMPThreadGuard           m_openmp_guard;
+    };
+
+    static auto getCurrentMaxPar() -> size_t&
+    {
+        static size_t value = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNHwThreads();
+        return value;
+    }
+
+public:
+    explicit MaxParallelismGuard(size_t max_threads_unclamped) : m_previous{getCurrentMaxPar()}
+    {
+        const auto max_threads = std::clamp(max_threads_unclamped, size_t{1}, std::numeric_limits< size_t >::max());
+        if (max_threads < m_previous)
+        {
+            m_thread_guards.emplace(max_threads);
+            getCurrentMaxPar() = max_threads;
+        }
     }
 
     MaxParallelismGuard(const MaxParallelismGuard&)            = delete;
@@ -133,18 +191,14 @@ public:
     MaxParallelismGuard& operator=(MaxParallelismGuard&&)      = default;
     ~MaxParallelismGuard()
     {
-#ifdef _OPENMP
-        omp_set_num_threads(m_prev_omp_threads);
-#endif
+        if (m_thread_guards)
+            getCurrentMaxPar() = m_previous;
     }
 
 private:
-    size_t                      m_max_threads;
-    oneapi::tbb::global_control m_tbb_control;
-#ifdef _OPENMP
-    int m_prev_omp_threads;
-#endif
+    std::optional< ThreadGuards > m_thread_guards;
+    size_t                        m_previous;
 };
-} // namespace detail
+} // namespace util
 } // namespace lstr
 #endif // L3STER_UTIL_KOKKOSSCOPEGUARD_HPP

@@ -7,10 +7,10 @@
 #include <iostream>
 
 using namespace lstr;
+using namespace lstr::comm;
 
 int main(int argc, char* argv[])
 {
-    using namespace lstr;
     L3sterScopeGuard scope_guard{argc, argv};
     MpiComm          comm{MPI_COMM_WORLD};
 

@@ -4,7 +4,7 @@
 #include <concepts>
 #include <optional>
 
-namespace lstr
+namespace lstr::util
 {
 template < typename T >
 class GlobalResource
@@ -35,5 +35,5 @@ private:
         return instance;
     }
 };
-} // namespace lstr
+} // namespace lstr::util
 #endif // L3STER_UTIL_GLOBALRESOURCE_HPP

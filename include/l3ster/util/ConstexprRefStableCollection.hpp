@@ -5,7 +5,7 @@
 
 #include <compare>
 
-namespace lstr
+namespace lstr::util
 {
 template < typename T >
 class ConstexprUniquePtr
@@ -186,5 +186,5 @@ constexpr auto operator+(ptrdiff_t n, detail::RscIterator_c auto it)
 {
     return it + n;
 }
-} // namespace lstr
+} // namespace lstr::util
 #endif // L3STER_CONSTEXPRREFSTABLECOLLECTION_HPP

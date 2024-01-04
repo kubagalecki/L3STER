@@ -1,21 +1,20 @@
 #ifndef L3STER_QUADRATURE_REFERENCEQUADRATURE_HPP
 #define L3STER_QUADRATURE_REFERENCEQUADRATURE_HPP
 
-#include "l3ster/defs/Typedefs.h"
+#include "l3ster/common/Typedefs.h"
 #include "l3ster/math/ComputeGaussRule.hpp"
 #include "l3ster/quad/Quadrature.hpp"
-#include "l3ster/quad/QuadratureTypes.h"
 
 #include <algorithm>
 #include <cmath>
 
-namespace lstr
+namespace lstr::quad
 {
-consteval size_t getRefQuadSize(QuadratureTypes QT, q_o_t QO)
+consteval size_t getRefQuadSize(QuadratureType QT, q_o_t QO)
 {
     switch (QT)
     {
-    case QuadratureTypes::GLeg:
+    case QuadratureType::GaussLegendre:
         return QO / 2 + 1;
         break;
     default:
@@ -23,9 +22,9 @@ consteval size_t getRefQuadSize(QuadratureTypes QT, q_o_t QO)
     }
 }
 
-template < QuadratureTypes QT, q_o_t QO >
+template < QuadratureType QT, q_o_t QO >
 const auto& getReferenceQuadrature()
-    requires(QT == QuadratureTypes::GLeg)
+    requires(QT == QuadratureType::GaussLegendre)
 {
     static const auto value = std::invoke([] {
         constexpr auto size = getRefQuadSize(QT, QO);
@@ -40,7 +39,7 @@ const auto& getReferenceQuadrature()
         constexpr auto c = [](size_t x) {
             return static_cast< val_t >(x - 1u) / static_cast< val_t >(x);
         };
-        const auto [qp, w] = computeGaussRule(a, b, c, std::integral_constant< size_t, size >{});
+        const auto [qp, w] = math::computeGaussRule(a, b, c, std::integral_constant< size_t, size >{});
 
         typename quadrature_t::q_points_t q_points;
         typename quadrature_t::weights_t  weights;
@@ -51,5 +50,5 @@ const auto& getReferenceQuadrature()
     });
     return value;
 }
-} // namespace lstr
+} // namespace lstr::quad
 #endif // L3STER_QUADRATURE_REFERENCEQUADRATURE_HPP

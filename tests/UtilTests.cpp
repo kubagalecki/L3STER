@@ -17,7 +17,6 @@
 #include "TestDataPath.h"
 
 #include "catch2/catch.hpp"
-#include "tbb/tbb.h"
 
 #include <algorithm>
 #include <random>
@@ -27,7 +26,7 @@ using namespace lstr;
 
 static consteval auto getConstexprVecParams(int size, int cap)
 {
-    ConstexprVector< int > v;
+    auto v = util::ConstexprVector< int >{};
     for (int i = 0; i < cap; ++i)
         v.pushBack(i);
     for (int i = cap; i > size; --i)
@@ -37,8 +36,8 @@ static consteval auto getConstexprVecParams(int size, int cap)
 
 static consteval bool checkConstexprVecStorage()
 {
-    ConstexprVector< ConstexprVector< int > > v(3, ConstexprVector< int >{0, 1, 2});
-    bool                                      ret = true;
+    auto v   = util::ConstexprVector< util::ConstexprVector< int > >(3, util::ConstexprVector< int >{0, 1, 2});
+    bool ret = true;
     for (int i = 0; i < 3; ++i)
         for (int j = 0; j < 3; ++j)
             ret &= v[i][j] == j;
@@ -47,15 +46,15 @@ static consteval bool checkConstexprVecStorage()
 
 static consteval auto checkConstexprVectorReserve(int cap)
 {
-    ConstexprVector< int > v;
+    auto v = util::ConstexprVector< int >{};
     v.reserve(cap);
     return std::make_pair(v.size(), v.capacity());
 }
 
 static consteval bool checkConstexprVectorIters()
 {
-    ConstexprVector< int > v;
-    constexpr int          size = 10;
+    auto          v    = util::ConstexprVector< int >{};
+    constexpr int size = 10;
     v.reserve(size);
     for (int i = 0; i < size; ++i)
         v.pushBack(i + 1);
@@ -98,7 +97,7 @@ TEST_CASE("Constexpr vector", "[util]")
 
 static consteval auto checkRSC()
 {
-    ConstexprRefStableCollection< size_t > nums;
+    util::ConstexprRefStableCollection< size_t > nums;
     for (size_t i = 1; i < nums.block_size * 2; ++i)
         nums.push(i);
     std::ranges::sort(nums | std::views::reverse);
@@ -115,10 +114,13 @@ TEST_CASE("Stack size manipulation", "[util]")
     SECTION("Increase stack size by 1")
     {
         const auto [initial, max] = util::detail::getStackSize();
-        CHECK(initial <= max);
-        util::detail::setMinStackSize(initial + 1);
-        const auto [current, ignore] = util::detail::getStackSize();
-        CHECK(initial + 1 == current);
+        REQUIRE(initial <= max);
+        if (initial < std::numeric_limits< std::decay_t< decltype(initial) > >::max() and initial < max)
+        {
+            util::detail::setMinStackSize(initial + 1);
+            const auto [current, ignore] = util::detail::getStackSize();
+            CHECK(initial + 1 == current);
+        }
     }
 
     SECTION("Increse beyond limit")
@@ -126,7 +128,7 @@ TEST_CASE("Stack size manipulation", "[util]")
         const auto [initial, max] = util::detail::getStackSize();
         if (max < std::numeric_limits< std::decay_t< decltype(max) > >::max())
         {
-            CHECK_THROWS(util::detail::setMinStackSize(max + 1ul));
+            CHECK_THROWS(util::detail::setMinStackSize(max + 1));
             const auto [current, ignore] = util::detail::getStackSize();
             CHECK(initial == current);
         }
@@ -143,11 +145,11 @@ TEST_CASE("Stack size manipulation", "[util]")
 
 TEMPLATE_TEST_CASE("Bitset (de-)serialization",
                    "[util]",
-                   ConstexprValue< 10u >,
-                   ConstexprValue< 64u >,
-                   ConstexprValue< 100u >,
-                   ConstexprValue< 128u >,
-                   ConstexprValue< 257u >)
+                   util::ConstexprValue< 10u >,
+                   util::ConstexprValue< 64u >,
+                   util::ConstexprValue< 100u >,
+                   util::ConstexprValue< 128u >,
+                   util::ConstexprValue< 257u >)
 {
     constexpr static auto size               = TestType::value;
     constexpr auto        n_runs             = 1 << 8;
@@ -162,10 +164,16 @@ TEMPLATE_TEST_CASE("Bitset (de-)serialization",
     for (int i = 0; i < n_runs; ++i)
     {
         const auto test_data = make_random_bitset();
-        const auto result    = trimBitset< size >(deserializeBitset(serializeBitset(test_data)));
+        const auto result    = util::trimBitset< size >(util::deserializeBitset(util::serializeBitset(test_data)));
         CHECK(test_data == result);
     }
 }
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Wself-move"
+#endif
 
 TEST_CASE("MetisGraphWrapper", "[util]")
 {
@@ -192,22 +200,26 @@ TEST_CASE("MetisGraphWrapper", "[util]")
     auto test_obj3 = test_obj2;
 
     test_obj3 = test_obj2;
-    test_obj3 = test_obj3;
+    test_obj3 = test_obj3; // NOLINT
 
     auto test_obj4 = test_obj3;
     test_obj3      = std::move(test_obj4);
-    test_obj3      = std::move(test_obj3);
+    test_obj3      = std::move(test_obj3); // NOLINT
 
     CHECK(std::ranges::equal(test_obj2.getAdjncy(), test_obj3.getAdjncy()));
     CHECK(std::ranges::equal(test_obj2.getXadj(), test_obj3.getXadj()));
 }
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
 
 TEST_CASE("Consecutive reduce algo", "[util]")
 {
     SECTION("Default args")
     {
         std::vector v{1, 1, 1, 2, 3, 3, 4, 5, 5, 5};
-        v.erase(reduceConsecutive(v).begin(), v.end());
+        v.erase(util::reduceConsecutive(v).begin(), v.end());
         REQUIRE(v.size() == 5);
         CHECK(v[0] == 3);
         CHECK(v[1] == 2);
@@ -229,12 +241,12 @@ TEST_CASE("Consecutive reduce algo", "[util]")
         const auto  cmp = [](const auto& p1, const auto& p2) {
             return p1.first + p1.second == p2.first + p2.second;
         };
-        v.erase(reduceConsecutive(v,
-                                  cmp,
-                                  [](const auto& p1, const auto& p2) {
-                                      return std::make_pair(std::abs(p1.first) + std::abs(p2.first),
-                                                            std::abs(p1.second) + std::abs(p2.second));
-                                  })
+        v.erase(util::reduceConsecutive(v,
+                                        cmp,
+                                        [](const auto& p1, const auto& p2) {
+                                            return std::make_pair(std::abs(p1.first) + std::abs(p2.first),
+                                                                  std::abs(p1.second) + std::abs(p2.second));
+                                        })
                     .begin(),
                 v.end());
         REQUIRE(v.size() == 4);
@@ -251,7 +263,7 @@ TEST_CASE("Consecutive reduce algo", "[util]")
     SECTION("Algebraic sequence")
     {
         std::vector v{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 42};
-        v.erase(reduceConsecutive(
+        v.erase(util::reduceConsecutive(
                     v, [](int e1, int e2) { return e1 + 1 == e2; }, [](int e1, int e2) { return std::max(e1, e2); })
                     .begin(),
                 v.end());
@@ -270,7 +282,7 @@ TEST_CASE("Consecutive reduce algo", "[util]")
                       std::pair{6, 7},
                       std::pair{7, 8},
                       std::pair{8, 9}};
-        v.erase(reduceConsecutive(
+        v.erase(util::reduceConsecutive(
                     v,
                     [](const auto& p1, const auto& p2) { return p1.second == p2.first; },
                     [](const auto& p1, const auto& p2) { return std::make_pair(p1.first, p2.second); })
@@ -284,7 +296,7 @@ TEST_CASE("Consecutive reduce algo", "[util]")
     SECTION("Empty")
     {
         std::vector< int > v;
-        v.erase(reduceConsecutive(v).begin(), v.end());
+        v.erase(util::reduceConsecutive(v).begin(), v.end());
         REQUIRE(v.size() == 0);
     }
 }
@@ -304,8 +316,8 @@ TEST_CASE("Dynamic bitset", "[util]")
         return retval;
     };
 
-    constexpr auto check_are_set = [](const DynamicBitset& bitset, std::ranges::range auto&& inds) {
-        constexpr auto test_as_const = [](const DynamicBitset& bs, size_t pos) {
+    constexpr auto check_are_set = [](const util::DynamicBitset& bitset, std::ranges::range auto&& inds) {
+        constexpr auto test_as_const = [](const util::DynamicBitset& bs, size_t pos) {
             return bs[pos];
         };
         for (auto i : inds)
@@ -314,8 +326,8 @@ TEST_CASE("Dynamic bitset", "[util]")
             CHECK(test_as_const(bitset, i));
         }
     };
-    constexpr auto check_are_reset = [](const DynamicBitset& bitset, std::ranges::range auto&& inds) {
-        constexpr auto test_as_const = [](const DynamicBitset& bs, size_t pos) {
+    constexpr auto check_are_reset = [](const util::DynamicBitset& bitset, std::ranges::range auto&& inds) {
+        constexpr auto test_as_const = [](const util::DynamicBitset& bs, size_t pos) {
             return bs[pos];
         };
         for (auto i : inds)
@@ -329,7 +341,7 @@ TEST_CASE("Dynamic bitset", "[util]")
 
     SECTION("Single-threaded")
     {
-        DynamicBitset bitset;
+        util::DynamicBitset bitset;
         for (size_t size : sizes)
         {
             bitset.resize(size);
@@ -370,15 +382,15 @@ TEST_CASE("Dynamic bitset", "[util]")
         for (size_t size : sizes)
         {
             {
-                const DynamicBitset bitset{size};
-                const auto          subview = bitset.getSubView(1, size / 2);
+                const util::DynamicBitset bitset{size};
+                const auto                subview = bitset.getSubView(1, size / 2);
                 CHECK(subview.count() == 0);
                 CHECK(bitset.getSubView(0, 0).count() == 0);
                 CHECK_FALSE(subview[0]);
             }
             {
-                DynamicBitset bitset{size};
-                auto          subview = bitset.getSubView(1, size / 2);
+                util::DynamicBitset bitset{size};
+                auto                subview = bitset.getSubView(1, size / 2);
                 for (size_t i = 0; i < subview.size(); ++i)
                 {
                     subview.set(i);
@@ -402,10 +414,10 @@ TEST_CASE("Dynamic bitset", "[util]")
     {
         for (size_t size : sizes)
         {
-            DynamicBitset bitset{size};
-            auto          atomic_view = bitset.getAtomicView();
-            const auto    set_inds    = make_set_inds(size);
-            const auto    reset_inds  = make_reset_inds(size, set_inds);
+            util::DynamicBitset bitset{size};
+            auto                atomic_view = bitset.getAtomicView();
+            const auto          set_inds    = make_set_inds(size);
+            const auto          reset_inds  = make_reset_inds(size, set_inds);
 
             tbb::parallel_for(tbb::blocked_range< size_t >{0, set_inds.size()},
                               [&](const tbb::blocked_range< size_t >& range) {
@@ -446,7 +458,7 @@ TEST_CASE("Index map", "[util]")
     constexpr size_t           size = 42, base = 10;
     std::array< size_t, size > vals;
     std::ranges::generate(vals, [base = base]() mutable { return base++; });
-    const auto map = IndexMap{vals};
+    const auto map = util::IndexMap{vals};
     for (size_t i : std::views::iota(base, base + size))
         CHECK(map(i) == i - 10);
 }
@@ -538,7 +550,7 @@ TEST_CASE("Base64 encoding", "[util]")
 
     std::vector< char > alloc(text_sv.size() * 4u / 3u + 3u);
     const auto          test = [&alloc](auto&& txt, std::string_view expected_b64) {
-        const auto bytes_written = encodeAsBase64(txt, alloc.begin());
+        const auto bytes_written = util::encodeAsBase64(txt, alloc.begin());
         const auto encoded       = std::string_view{alloc.data(), bytes_written};
         REQUIRE(std::ranges::size(encoded) == expected_b64.size());
         CHECK(std::ranges::equal(encoded, expected_b64));
@@ -552,8 +564,12 @@ TEST_CASE("Base64 encoding", "[util]")
     test(text_sv | std::views::drop(3) | std::views::take(2), std::string_view{"ZW0="});
 
     // Test whether sequential and parallel implementations yield identical results
+#ifdef DNDEBUG
     constexpr size_t long_text_size = 1ul << 25;
-    std::string      long_text(long_text_size, '\0');
+#else
+    constexpr size_t long_text_size = 1ul << 20;
+#endif
+    std::string long_text(long_text_size, '\0');
     std::ranges::generate(
         long_text,
         [prng = std::mt19937{std::random_device{}()}, dist = std::uniform_int_distribution< int >{0, 255}]() mutable {
@@ -561,55 +577,89 @@ TEST_CASE("Base64 encoding", "[util]")
         });
     std::string long_text_b64_par(long_text_size * 4 / 3 + 4, '\0');
     std::string long_text_b64_seq(long_text_size * 4 / 3 + 4, '\0');
-    encodeAsBase64(long_text, long_text_b64_par.begin());
+    util::encodeAsBase64(long_text, long_text_b64_par.begin());
     auto       seq_ptr        = long_text_b64_seq.data();
     const auto long_byte_span = std::as_bytes(std::span{long_text});
-    const auto lp             = detail::b64::encB64SerialImpl(long_byte_span, seq_ptr);
-    detail::b64::encB64Remainder(long_byte_span.subspan(lp), seq_ptr);
+    const auto lp             = util::b64::encB64SerialImpl(long_byte_span, seq_ptr);
+    util::b64::encB64Remainder(long_byte_span.subspan(lp), seq_ptr);
     CHECK(long_text_b64_seq == long_text_b64_par);
 }
 
 TEST_CASE("StaticVector", "[util]")
 {
-    auto vec = util::StaticVector< int, 100 >{};
-    CHECK(vec.size() == 0);
-    std::generate_n(std::back_inserter(vec),
-                    100,
-                    [prng = std::mt19937{std::random_device{}()},
-                     dist = std::uniform_int_distribution< int >{}]() mutable { return dist(prng); });
-    REQUIRE(vec.size() == 100);
-    vec.resize(50);
-    REQUIRE(vec.size() == 50);
-    std::ranges::sort(vec);
-    CHECK(vec.front() <= vec.back());
-    CHECK(std::ranges::is_sorted(vec));
-    vec.erase(std::next(vec.begin(), 10), std::prev(vec.end(), 10));
-    REQUIRE(vec.size() == 20);
-    vec.resize(10);
-    CHECK(std::ranges::is_sorted(vec));
-    vec.pop_back();
-    REQUIRE(vec.size() == 9);
-    const auto vec_copy = vec;
-    vec.erase(vec.end(), vec.end());
-    REQUIRE(vec.size() == 9);
-    CHECK(std::ranges::equal(vec, vec_copy));
-    vec.resize(10, 42);
-    REQUIRE(vec.size() == 10);
-    CHECK(std::ranges::equal(vec | std::views::drop(9), std::views::single(42)));
+    SECTION("Ctors")
+    {
+        SECTION("Default")
+        {
+            auto vec = util::StaticVector< int, 100 >{};
+            REQUIRE(vec.size() == 0);
+        }
+        SECTION("Array")
+        {
+            const auto src_arr = std::array{1, 3, 5, 10, 42};
+            const auto vec     = util::StaticVector< int, 10 >{src_arr};
+            REQUIRE(std::ranges::equal(src_arr, vec));
+        }
+        SECTION("Range-based")
+        {
+            const auto src_vec = std::vector{1, 3, 5, 10, 42};
+
+            const auto full_vec = util::StaticVector< int, 10 >{src_vec};
+            REQUIRE(std::ranges::equal(src_vec, full_vec));
+
+            auto       even_view = src_vec | std::views::filter([](int i) { return i % 2 == 0; });
+            const auto even_vec  = util::StaticVector< int, 10 >{even_view};
+            REQUIRE(std::ranges::equal(even_vec, even_view));
+        }
+    }
+    SECTION("Manip")
+    {
+        auto vec = util::StaticVector< int, 100 >{};
+        CHECK(vec.size() == 0);
+        std::generate_n(std::back_inserter(vec),
+                        100,
+                        [prng = std::mt19937{std::random_device{}()},
+                         dist = std::uniform_int_distribution< int >{}]() mutable { return dist(prng); });
+        REQUIRE(vec.size() == 100);
+        vec.resize(50);
+        REQUIRE(vec.size() == 50);
+        std::ranges::sort(vec);
+        CHECK(vec.front() <= vec.back());
+        CHECK(std::ranges::is_sorted(vec));
+        vec.erase(std::next(vec.begin(), 10), std::prev(vec.end(), 10));
+        REQUIRE(vec.size() == 20);
+        vec.resize(10);
+        CHECK(std::ranges::is_sorted(vec));
+        vec.pop_back();
+        REQUIRE(vec.size() == 9);
+        const auto vec_copy = vec;
+        vec.erase(vec.end(), vec.end());
+        REQUIRE(vec.size() == 9);
+        CHECK(std::ranges::equal(vec, vec_copy));
+        vec.resize(10, 42);
+        REQUIRE(vec.size() == 10);
+        CHECK(std::ranges::equal(vec | std::views::drop(9), std::views::single(42)));
+    }
 }
 
 TEST_CASE("getTrueInds", "[util]")
 {
     constexpr auto in  = std::array{false, false, false, true};
-    constexpr auto out = getTrueInds< in >();
+    constexpr auto out = util::getTrueInds< in >();
     static_assert(std::ranges::equal(out, std::views::single(3)));
 }
 
 TEST_CASE("Non-random access parallel for", "[util]")
 {
-    constexpr auto n_reps = 3;
-    auto           prng   = std::mt19937{std::random_device{}()};
-    for (auto size : {1u << 10, 1u << 15, 1u << 18, 1u << 22})
+#ifdef NDEBUG
+    constexpr auto n_reps = 4;
+    const auto     sizes  = {1u << 10, 1u << 15, 1u << 18, 1u << 22};
+#else
+    constexpr auto n_reps = 1;
+    const auto     sizes  = {1u << 18, 1u << 12, 1u << 16, 1u << 20};
+#endif
+    auto prng = std::mt19937{std::random_device{}()};
+    for (auto size : sizes)
     {
         auto map  = robin_hood::unordered_flat_map< size_t, size_t >{};
         auto dist = std::uniform_int_distribution< size_t >{0, size};
@@ -639,19 +689,37 @@ TEST_CASE("Hwloc topology info", "[util, hwloc]")
 {
     const auto topology = util::hwloc::Topology{};
     REQUIRE_FALSE(topology.isEmpty());
-    REQUIRE(L3STER_N_NUMA_NODES == topology.getNNodes());
-    REQUIRE(L3STER_N_CORES == topology.getNCores());
-    REQUIRE(L3STER_N_HWTHREADS == topology.getNHwThreads());
+    const auto numa_expected    = L3STER_N_NUMA_NODES;
+    const auto cores_expected   = L3STER_N_CORES;
+    const auto threads_expected = L3STER_N_HWTHREADS;
+    CHECK(numa_expected == topology.getNNodes());
+    CHECK(cores_expected == topology.getNCores());
+    CHECK(threads_expected == topology.getNHwThreads());
 }
 
-#ifdef _OPENMP
-TEST_CASE("OpenMP num threads control", "[util]")
+TEST_CASE("Num threads control", "[util]")
 {
-    const auto max_threads_initial = omp_get_max_threads();
-    {
-        const auto max_par_guard = detail::MaxParallelismGuard{1};
-        CHECK(omp_get_max_threads() == 1);
-    }
-    CHECK(omp_get_max_threads() == max_threads_initial);
-}
+    constexpr auto check_num_threads = [](size_t expected) {
+        const auto tbb_threads =
+            oneapi::tbb::global_control::active_value(oneapi::tbb::global_control::max_allowed_parallelism);
+        CHECK(tbb_threads == expected);
+#ifdef _OPENMP
+        CHECK(omp_get_max_threads() == static_cast< int >(expected));
 #endif
+    };
+
+    const auto n_hw_threads = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNHwThreads();
+    check_num_threads(n_hw_threads);
+
+    {
+        const auto guard = util::MaxParallelismGuard{1};
+        check_num_threads(1);
+    }
+    check_num_threads(n_hw_threads);
+
+    {
+        const auto guard = util::MaxParallelismGuard{2 * n_hw_threads};
+        check_num_threads(n_hw_threads);
+    }
+    check_num_threads(n_hw_threads);
+}

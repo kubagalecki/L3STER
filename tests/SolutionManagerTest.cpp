@@ -1,4 +1,4 @@
-#include "l3ster/assembly/SolutionManager.hpp"
+#include "l3ster/post/SolutionManager.hpp"
 #include "l3ster/mesh/PartitionMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 
@@ -10,12 +10,12 @@ TEST_CASE("Solution Manager", "[sol_man]")
 {
     constexpr auto   node_dist  = std::array{0., 1., 2., 3., 4., 5.};
     constexpr size_t n_parts    = 4;
-    const auto       mesh       = makeCubeMesh(node_dist);
-    const auto       partitions = partitionMesh(mesh, n_parts, {});
+    const auto       mesh       = mesh::makeCubeMesh(node_dist);
+    const auto       partitions = mesh::partitionMesh(mesh, n_parts, {});
     constexpr size_t n_fields   = 3;
     auto             sol_mans   = std::vector< SolutionManager >{};
     std::ranges::transform(
-        partitions, std::back_inserter(sol_mans), [&, i = 0](const MeshPartition< 1 >& part) mutable {
+        partitions, std::back_inserter(sol_mans), [&, i = 0](const mesh::MeshPartition< 1 >& part) mutable {
             return SolutionManager{part, n_fields, static_cast< val_t >(i++)};
         });
 
@@ -30,7 +30,7 @@ TEST_CASE("Solution Manager", "[sol_man]")
             CHECK(sm.getFieldView(i).size() == std::as_const(sm).getFieldView(i).size());
         }
 
-    constexpr auto field_inds = makeIotaArray< size_t, n_fields >();
+    constexpr auto field_inds = util::makeIotaArray< size_t, n_fields >();
     for (size_t i = 0; const auto& sm : sol_mans)
     {
         const auto& part = partitions.at(i);

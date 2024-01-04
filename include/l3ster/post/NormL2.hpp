@@ -5,75 +5,59 @@
 
 namespace lstr
 {
-namespace detail
+namespace post
 {
 template < AssemblyOptions opts >
-consteval auto doubleQuadratureOrder(ConstexprValue< opts >)
+consteval auto doubleQuadratureOrder(util::ConstexprValue< opts >)
 {
-    return ConstexprValue< std::invoke([] {
+    return util::ConstexprValue< std::invoke([] {
         auto retval = opts;
         retval.value_order *= 2;
         retval.derivative_order *= 2;
         return retval;
     }) >{};
 }
-} // namespace detail
 
-template < size_t n_fields = 0, AssemblyOptions opts = {}, el_o_t... orders >
-auto computeNormL2(const MpiComm&                                       comm,
-                   auto&&                                               eval_residual,
-                   const MeshPartition< orders... >&                    mesh,
-                   detail::DomainIdRange_c auto&&                       domain_ids,
-                   const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
-                   ConstexprValue< opts >                               options_ctwrpr   = {},
-                   val_t                                                time             = 0.)
+auto getNormSquareComputer(const auto& kernel)
 {
-    const auto compute_squared_norm = [&eval_residual](const auto& vals, const auto& ders, const auto& point) noexcept
-        requires requires {
-            {
-                std::invoke(eval_residual, vals, ders, point)
-            } -> eigen::Vector_c;
-        }
-    {
-        const auto residual = std::invoke(eval_residual, vals, ders, point);
-        using ret_t         = std::remove_const_t< decltype(residual) >;
-        return ret_t{residual.unaryExpr([](val_t v) { return v * v; })};
+    return [&kernel](const auto& input, auto& out) {
+        out = kernel(input);
+        for (Eigen::Index i = 0; i != out.rows(); ++i)
+            out[i] *= out[i];
     };
-    const eigen::Vector_c auto squared_norm = evalIntegral(comm,
-                                                           compute_squared_norm,
-                                                           mesh,
-                                                           std::forward< decltype(domain_ids) >(domain_ids),
-                                                           field_val_getter,
-                                                           detail::doubleQuadratureOrder(options_ctwrpr),
-                                                           time);
-    using ret_t                             = std::remove_const_t< decltype(squared_norm) >;
-    return ret_t{squared_norm.cwiseSqrt()};
+}
+} // namespace post
+
+template < AssemblyOptions opts = {}, typename Kernel, KernelParams params, el_o_t... orders >
+auto computeNormL2(const MpiComm&                                              comm,
+                   const ResidualDomainKernel< Kernel, params >&               eval_residual,
+                   const mesh::MeshPartition< orders... >&                     mesh,
+                   const util::ArrayOwner< d_id_t >&                           domain_ids,
+                   const SolutionManager::FieldValueGetter< params.n_fields >& field_val_getter = {},
+                   util::ConstexprValue< opts >                                options_ctwrpr   = {},
+                   val_t time = 0.) -> KernelInterface< params >::Rhs
+{
+    const auto compute_squared_norm = post::getNormSquareComputer(eval_residual);
+    const auto wrapped_sqn          = wrapDomainResidualKernel(compute_squared_norm, util::ConstexprValue< params >{});
+    const auto squared_norm         = evalIntegral(
+        comm, wrapped_sqn, mesh, domain_ids, field_val_getter, post::doubleQuadratureOrder(options_ctwrpr), time);
+    return squared_norm.cwiseSqrt();
 }
 
-template < size_t n_fields = 0, AssemblyOptions opts = {}, el_o_t... orders >
-auto computeBoundaryNormL2(const MpiComm&                                       comm,
-                           auto&&                                               eval_residual,
-                           const BoundaryView< orders... >&                     boundary,
-                           const SolutionManager::FieldValueGetter< n_fields >& field_val_getter = {},
-                           ConstexprValue< opts >                               options_ctwrpr   = {},
-                           val_t                                                time             = 0.)
+template < AssemblyOptions opts = {}, typename Kernel, KernelParams params, el_o_t... orders >
+auto computeNormL2(const MpiComm&                                              comm,
+                   const ResidualBoundaryKernel< Kernel, params >&             eval_residual,
+                   const mesh::MeshPartition< orders... >&                     mesh,
+                   const util::ArrayOwner< d_id_t >&                           boundary_ids,
+                   const SolutionManager::FieldValueGetter< params.n_fields >& field_val_getter = {},
+                   util::ConstexprValue< opts >                                options_ctwrpr   = {},
+                   val_t time = 0.) -> KernelInterface< params >::Rhs
 {
-    const auto compute_squared_norm = [&eval_residual](
-        const auto& vals, const auto& ders, const auto& point, const auto& normal) noexcept
-        requires requires {
-            {
-                std::invoke(eval_residual, vals, ders, point, normal)
-            } -> eigen::Vector_c;
-        }
-    {
-        const auto residual = std::invoke(eval_residual, vals, ders, point, normal);
-        using ret_t         = std::remove_const_t< decltype(residual) >;
-        return ret_t{residual.unaryExpr([](val_t v) { return v * v; })};
-    };
-    const eigen::Vector_c auto squared_norm = evalBoundaryIntegral(
-        comm, compute_squared_norm, boundary, field_val_getter, detail::doubleQuadratureOrder(options_ctwrpr), time);
-    using ret_t = std::remove_const_t< decltype(squared_norm) >;
-    return ret_t{squared_norm.cwiseSqrt()};
+    const auto compute_squared_norm = post::getNormSquareComputer(eval_residual);
+    const auto wrapped_sqn  = wrapBoundaryResidualKernel(compute_squared_norm, util::ConstexprValue< params >{});
+    const auto squared_norm = evalIntegral(
+        comm, wrapped_sqn, mesh, boundary_ids, field_val_getter, post::doubleQuadratureOrder(options_ctwrpr), time);
+    return squared_norm.cwiseSqrt();
 }
 } // namespace lstr
 #endif // L3STER_POST_COMPUTENORM_HPP

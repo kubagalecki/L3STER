@@ -1,16 +1,16 @@
 #ifndef L3STER_MESH_ELEMENTDATA_HPP
 #define L3STER_MESH_ELEMENTDATA_HPP
 
+#include "l3ster/common/Structs.hpp"
 #include "l3ster/mesh/ElementTraits.hpp"
-#include "l3ster/mesh/Point.hpp"
 
-namespace lstr
+namespace lstr::mesh
 {
-template < ElementTypes T, el_o_t O >
+template < ElementType T, el_o_t O >
 struct ElementData;
 
-template < ElementTypes T, el_o_t O >
-    requires(T == ElementTypes::Line or T == ElementTypes::Quad or T == ElementTypes::Hex)
+template < ElementType T, el_o_t O >
+    requires(T == ElementType::Line or T == ElementType::Quad or T == ElementType::Hex)
 struct ElementData< T, O >
 {
     static constexpr auto n_verts = ElementTraits< Element< T, 1 > >::nodes_per_element;
@@ -26,5 +26,5 @@ struct ElementData< T, O >
 
     vertex_array_t vertices;
 };
-} // namespace lstr
+} // namespace lstr::mesh
 #endif // L3STER_MESH_ELEMENTDATA_HPP

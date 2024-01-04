@@ -2105,7 +2105,7 @@ public:
     typename std::enable_if< Self_::is_transparent, // NOLINT(modernize-use-nodiscard)
                              const_iterator >::type // NOLINT(modernize-use-nodiscard)
     find(const OtherKey& key) const
-    {                                               // NOLINT(modernize-use-nodiscard)
+    { // NOLINT(modernize-use-nodiscard)
         ROBIN_HOOD_TRACE(this)
         const size_t idx = findIdx(key);
         return const_iterator{mKeyVals + idx, mInfo + idx};
