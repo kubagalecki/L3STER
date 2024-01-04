@@ -14,7 +14,8 @@ public:
     ArrayOwner() = default;
     explicit ArrayOwner(std::size_t size) : m_size{size}, m_data{std::make_unique_for_overwrite< T[] >(size)} {}
     template < std::ranges::range R >
-    ArrayOwner(R&& range); // NOLINT implicit conversion and copy are intended
+    ArrayOwner(R&& range) // NOLINT implicit conversion and copy are intended
+        requires std::constructible_from< T, std::ranges::range_reference_t< R > >;
     template < std::convertible_to< T > Vals >
     ArrayOwner(std::initializer_list< Vals > vals);
 
@@ -67,6 +68,7 @@ ArrayOwner(std::initializer_list< T >) -> ArrayOwner< T >;
 template < std::default_initializable T >
 template < std::ranges::range R >
 ArrayOwner< T >::ArrayOwner(R&& range)
+    requires std::constructible_from< T, std::ranges::range_reference_t< R > >
     : m_size{static_cast< size_t >(std::ranges::distance(range))}, m_data{std::make_unique_for_overwrite< T[] >(m_size)}
 {
     std::ranges::copy(std::forward< R >(range), begin());

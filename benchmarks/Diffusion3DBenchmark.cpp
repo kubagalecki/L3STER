@@ -48,12 +48,10 @@ int main(int argc, char* argv[])
     constexpr auto field_inds  = util::makeIotaArray< size_t, problem_def.n_fields >();
     constexpr auto T_inds      = std::array< size_t, 1 >{0};
     constexpr auto T_grad_inds = std::array< size_t, 3 >{1, 2, 3};
-    const auto field_inds_view = std::array{std::span< const size_t >{T_inds}, std::span< const size_t >{T_grad_inds}};
-    constexpr auto field_names = std::array{"T"sv, "gradT"sv};
     constexpr auto dof_inds    = field_inds;
 
     constexpr auto dom_params         = KernelParams{.dimension = 3, .n_equations = 7, .n_unknowns = 4};
-    constexpr auto diffusion_kernel3d = wrapDomainEquationKernel< dom_params >([](const auto& in, auto& out) {
+    constexpr auto diffusion_kernel3d = wrapDomainEquationKernel< dom_params >([](const auto&, auto& out) {
         auto& [operators, rhs] = out;
         auto& [A0, Ax, Ay, Az] = operators;
 
@@ -106,7 +104,7 @@ int main(int argc, char* argv[])
     });
     constexpr auto dbc_params         = KernelParams{.dimension = 3, .n_equations = 1};
     constexpr auto dirichlet_bc_kernel =
-        wrapBoundaryResidualKernel< dbc_params >([](const auto& in, auto& out) { out[0] = 0.; });
+        wrapBoundaryResidualKernel< dbc_params >([](const auto&, auto& out) { out[0] = 0.; });
 
     constexpr auto alg_params    = AlgebraicSystemParams{.cond_policy = CondensationPolicy::ElementBoundary};
     constexpr auto algpar_ctwrpr = L3STER_WRAP_CTVAL(alg_params);
@@ -142,8 +140,10 @@ int main(int argc, char* argv[])
     }
 
     L3STER_PROFILE_REGION_BEGIN("Export results to VTK");
-    auto exporter = PvtuExporter{*my_partition};
-    exporter.exportSolution("Cube_Diffusion.pvtu", comm, solution_manager, field_names, field_inds_view);
+    auto           exporter    = PvtuExporter{*my_partition};
+    const auto     field_inds  = util::gatherAsCommon(T_inds, T_grad_inds);
+    constexpr auto field_names = std::array{"T"sv, "gradT"sv};
+    exporter.exportSolution("Cube_Diffusion.pvtu", comm, solution_manager, field_names, field_inds);
     exporter.flushWriteQueue();
     L3STER_PROFILE_REGION_END("Export results to VTK");
 }

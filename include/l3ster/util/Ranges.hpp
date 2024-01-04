@@ -1,6 +1,7 @@
 #ifndef L3STER_UTIL_RANGES_HPP
 #define L3STER_UTIL_RANGES_HPP
 
+#include "l3ster/util/ArrayOwner.hpp"
 #include "l3ster/util/Common.hpp"
 
 #include <algorithm>
@@ -50,5 +51,18 @@ decltype(auto) toVector(V&& vector)
 
 template < std::ranges::range Range >
 using range_const_reference_t = std::add_lvalue_reference_t< std::add_const_t< std::ranges::range_value_t< Range > > >;
+
+template < std::ranges::range... Ranges >
+auto gatherAsCommon(Ranges&&... ranges)
+    requires requires { typename std::common_type< std::ranges::range_value_t< Ranges >... >::type; }
+{
+    using common_t = std::common_type_t< std::ranges::range_value_t< Ranges >... >;
+    auto retval    = util::ArrayOwner< util::ArrayOwner< common_t > >(sizeof...(Ranges));
+    auto push_copy = [&retval, i = 0]< typename R >(R&& r) mutable {
+        retval[i++] = std::forward< R >(r) | std::views::all;
+    };
+    (push_copy(std::forward< Ranges >(ranges)), ...);
+    return retval;
+}
 } // namespace lstr::util
 #endif // L3STER_UTIL_RANGES_HPP

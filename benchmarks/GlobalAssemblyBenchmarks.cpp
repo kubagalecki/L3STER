@@ -12,7 +12,7 @@ static void BM_OwnerOrSharedNodeDeterminationNotGhost(benchmark::State& state)
         std::execution::par);
 
     const auto n_parts    = state.range(0);
-    const auto partitions = partitionMesh(mesh, n_parts);
+    const auto partitions = partitionMesh(mesh, static_cast< idx_t >(n_parts));
 
     for (auto _ : state)
     {
@@ -45,7 +45,7 @@ static void BM_OwnerOrSharedNodeDeterminationShared(benchmark::State& state)
         std::execution::par);
 
     const auto n_parts    = state.range(0);
-    const auto partitions = partitionMesh(mesh, n_parts);
+    const auto partitions = partitionMesh(mesh, static_cast< idx_t >(n_parts));
 
     for (auto _ : state)
     {
