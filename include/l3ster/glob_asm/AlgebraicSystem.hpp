@@ -181,7 +181,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCV
     util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
                          "The DOF indices are out of bounds for the problem");
 
-    const auto vals_view = m_dirichlet_values->getLocalViewHost(Tpetra::Access::OverwriteAll);
+    const auto vals_view = m_dirichlet_values->getLocalViewHost(Tpetra::Access::ReadWrite);
     computeValuesAtNodes(kernel,
                          *m_mesh,
                          domain_ids,
@@ -205,7 +205,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCV
                          "The DOF indices are out of bounds for the problem");
 
     const auto values_wrapped = std::array{std::span{values}};
-    const auto vals_view      = m_dirichlet_values->getLocalViewHost(Tpetra::Access::OverwriteAll);
+    const auto vals_view      = m_dirichlet_values->getLocalViewHost(Tpetra::Access::ReadWrite);
     computeValuesAtNodes(*m_mesh, domain_ids, m_node_dof_map, dof_inds, values_wrapped, util::asSpans< 1 >(vals_view));
 }
 
