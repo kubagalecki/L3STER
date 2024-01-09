@@ -94,7 +94,7 @@ int main(int argc, char* argv[])
     // Solution vector for the algebraic system
     auto solution = algebraic_system.initSolution();
 
-    // L3STER interface to Trilinos Lapack-based direct solver
+    // L3STER interface to KLU2 direct solver
     auto solver = solvers::KLU2{};
 
     // Paraview exporter object
