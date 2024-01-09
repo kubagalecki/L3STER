@@ -532,6 +532,7 @@ void PvtuExporter::exportSolution(std::string_view                       file_na
                          "Field names and groupings must have the same size");
 
     flushWriteQueue();
+    std::filesystem::create_directories(std::filesystem::path(file_name).parent_path());
     if (comm.getRank() == 0)
         enqueuePvtuFileWrite(file_name, comm, field_names, field_component_inds);
     enqueueVtuFileWrite(file_name, comm, solution_manager, field_names, field_component_inds);
