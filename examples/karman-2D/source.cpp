@@ -1,14 +1,5 @@
 #include "l3ster/l3ster.hpp"
 
-template < typename T, size_t N1, size_t N2 >
-auto concatArrays(const std::array< T, N1 >& a1, const std::array< T, N2 >& a2) -> std::array< T, N1 + N2 >
-{
-    auto       retval = std::array< T, N1 + N2 >{};
-    const auto out_it = std::ranges::copy(a1, retval.begin()).out;
-    std::ranges::copy(a2, out_it);
-    return retval;
-}
-
 int main(int argc, char* argv[])
 {
     using namespace lstr;
@@ -17,9 +8,9 @@ int main(int argc, char* argv[])
     const auto comm        = MpiComm{MPI_COMM_WORLD};
 
     // Physical region IDs
-    constexpr int domain = 13, inlet = 10, wall = 11, outlet = 12;
+    constexpr int domain = 9, inlet = 10, wall = 11, outlet = 12;
 
-    // Number of unknown scalar fields: u, v, vorticity, p
+    // Unknown scalar field numbering: u, v, vorticity, p
     constexpr int IU = 0, IV = 1, IO = 2, IP = 3;
     constexpr int n_unknowns = 4;
 
@@ -28,7 +19,7 @@ int main(int argc, char* argv[])
 
     // Dirichlet conditions velocity prescribed at inlet + walls
     constexpr auto dirichlet_def =
-        ProblemDef{defineDomain< n_unknowns >(inlet, 0, 1), defineDomain< n_unknowns >(wall, 0, 1)};
+        ProblemDef{defineDomain< n_unknowns >(inlet, IU, IV), defineDomain< n_unknowns >(wall, IU, IV)};
 
     // Wrap as compile-time values
     constexpr auto probdef_ctwrpr = L3STER_WRAP_CTVAL(problem_def);
@@ -37,13 +28,8 @@ int main(int argc, char* argv[])
     // Read mesh
     const std::string mesh_file  = argc > 1 ? argv[1] : "../karman.msh";
     constexpr el_o_t  mesh_order = 4; // el_o_t is the element order type
-    const auto        mesh =
-        readAndDistributeMesh(comm,
-                              mesh_file,
-                              mesh::gmsh_tag,
-                              {inlet, wall, outlet} /* IDs of boundaries, needed for correct partitioning */,
-                              L3STER_WRAP_CTVAL(mesh_order),
-                              probdef_ctwrpr);
+    const auto        mesh       = readAndDistributeMesh(
+        comm, mesh_file, mesh::gmsh_tag, {inlet, wall, outlet}, L3STER_WRAP_CTVAL(mesh_order), probdef_ctwrpr);
 
     // Algebraic system used for both the steady and unsteady problems
     auto algebraic_system = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, dirdef_ctwrpr);
@@ -53,7 +39,7 @@ int main(int argc, char* argv[])
     constexpr double dt = .1;
 
     // Reynolds number
-    constexpr double Re = 200.;
+    constexpr double Re = 100.;
     constexpr double nu = /* cylinder diameter */ .8 * /* mean inlet velocity */ 1. / Re;
 
     // Kernels //
@@ -69,16 +55,16 @@ int main(int argc, char* argv[])
                                            double du_dy,
                                            double dv_dy) {
         // Momentum equations
-        A0(0, IU) = 1. / dt + du_dx;
+        A0(0, IU) = du_dx;
         A0(0, IV) = du_dy;
         A1(0, IU) = u;
         A1(0, IP) = 1.;
-        A2(0, IV) = v;
+        A2(0, IU) = v;
         A2(0, IO) = nu;
         rhs(0, 0) = u * du_dx + v * du_dy;
 
         A0(1, IU) = dv_dx;
-        A0(1, IV) = 1. / dt + dv_dy;
+        A0(1, IV) = dv_dy;
         A1(1, IV) = u;
         A1(1, IO) = -nu;
         A2(1, IV) = v;
@@ -102,7 +88,7 @@ int main(int argc, char* argv[])
     // Steady state
     constexpr auto kernel_params_steady =
         KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = n_unknowns, .n_fields = 2};
-    constexpr auto kernel_steady = wrapDomainEquationKernel< kernel_params_steady >([&](const auto& in, auto& out) {
+    const auto kernel_steady = wrapDomainEquationKernel< kernel_params_steady >([&](const auto& in, auto& out) {
         const auto& [field_vals, field_ders, point] = in;
         const auto& [u, v]                          = field_vals; // Velocity values from previous time steps
         const auto& [x_ders, y_ders]                = field_ders; // Partial velocity derivatives
@@ -118,7 +104,7 @@ int main(int argc, char* argv[])
     // Transient
     constexpr auto kernel_params_trans =
         KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = n_unknowns, .n_fields = 4};
-    constexpr auto kernel_trans = wrapDomainEquationKernel< kernel_params_trans >([&](const auto& in, auto& out) {
+    const auto kernel_trans = wrapDomainEquationKernel< kernel_params_trans >([&](const auto& in, auto& out) {
         const auto& [field_vals, field_ders, point]  = in;
         const auto& [u1, v1, u2, v2]                 = field_vals; // Velocity values from 2 previous iteration
         const auto& [x_ders, y_ders]                 = field_ders; // Partial velocity derivatives
@@ -149,7 +135,7 @@ int main(int argc, char* argv[])
     constexpr auto outlet_dofs          = std::array< size_t, 3 >{IU, IV, IP};
     constexpr auto outdof_ctval         = L3STER_WRAP_CTVAL(outlet_dofs);
     constexpr auto kernel_params_outlet = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3};
-    constexpr auto kernel_outlet = wrapBoundaryEquationKernel< kernel_params_outlet >([&](const auto& in, auto& out) {
+    const auto     kernel_outlet = wrapBoundaryEquationKernel< kernel_params_outlet >([&](const auto& in, auto& out) {
         const double nx        = in.normal[0];
         const double ny        = in.normal[1];
         auto& [operators, rhs] = out;
@@ -166,26 +152,27 @@ int main(int argc, char* argv[])
 
     // Inlet BC - parabolic velocity profile
     constexpr auto kernel_params_inlet = KernelParams{.dimension = 2, .n_equations = 2};
-    constexpr auto kernel_inlet = wrapBoundaryResidualKernel< kernel_params_inlet >([&](const auto& in, auto& out) {
-        const double y        = in.point.space.y();
-        const double y_scaled = (y + 1.) / 2.;
-        out[0]                = 1.5 * (1. - y_scaled * y_scaled);
-        out[1]                = 0.;
+    const auto     kernel_inlet = wrapBoundaryResidualKernel< kernel_params_inlet >([&](const auto& in, auto& out) {
+        const double y = in.point.space.y();
+        out[0]         = 1.5 * (1. - y * y);
+        out[1]         = 0.;
     });
 
     // Set Dirichlet BC values
-    constexpr auto bc_inds = std::array{0, 1}; // indices of DOFs for which we wish to prescribe a Dirichlet BC
-    constexpr auto u_wall  = std::array{1., 0.};
+    constexpr auto bc_inds = std::array{IU, IV}; // indices of DOFs for which we wish to prescribe a Dirichlet BC
+    constexpr auto u_wall  = std::array{0., 0.};
     algebraic_system.setDirichletBCValues(u_wall, {wall}, bc_inds);
     algebraic_system.setDirichletBCValues(kernel_inlet, {inlet}, bc_inds);
 
-    // We store 2 velocity snapshots, each consisting of 2 velocity components + the current vorticity and pressure
-    auto       solution_manager = SolutionManager{*mesh, 6};
-    auto       vel_inds1        = std::array{0, 1}; // Velocities from previous time step
-    auto       vel_inds2        = std::array{2, 3}; // Velocities from 2 time steps ago
-    const auto vort_inds        = std::array{4};    // Vorticity
-    const auto p_inds           = std::array{5};    // Pressure
-    const auto vort_press_inds  = std::array{4, 5}; // Pressure
+    // Solution manager
+    auto solution_manager = SolutionManager{*mesh, 6};
+
+    // Indices of components in the solution manager. Note that these will change for the velocity, since we want to
+    // reinterpret which velocities come from which time step without actually moving the underlying data
+    auto       vel_inds1 = std::array{0, 1}; // Velocities from previous time step
+    auto       vel_inds2 = std::array{2, 3}; // Velocities from 2 time steps ago
+    const auto vort_inds = std::array{4};    // Vorticity
+    const auto p_inds    = std::array{5};    // Pressure
 
     // Solution vector for the algebraic system
     auto solution = algebraic_system.initSolution();
@@ -194,12 +181,13 @@ int main(int argc, char* argv[])
     auto solver = solvers::KLU2{};
 
     // Newton iterations for the stead state solution
-    for (int iter = 0; iter != 10; ++iter)
+    const int steady_iters = 15;
+    for (int iter = 0; iter != steady_iters; ++iter)
     {
         // Zero out system
         algebraic_system.beginAssembly();
 
-        // Velocity getter
+        // Velocity getter - we only need one velocity snapshot for the steady-state iteration
         const auto vel_getter = solution_manager.makeFieldValueGetter(vel_inds1);
 
         // Assemble problem based on the defined kernels
@@ -216,8 +204,9 @@ int main(int argc, char* argv[])
         algebraic_system.updateSolution(solution, vel_inds1, solution_manager, vel_inds1);
     }
 
-    // Set the 2 remaining velocity snapshots to the steady state solution
-    algebraic_system.updateSolution(solution, vel_inds1, solution_manager, vel_inds2);
+    // Set the remaining solution components to the steady state solution
+    algebraic_system.updateSolution(
+        solution, std::views::iota(0, 4), solution_manager, util::concatRanges(vel_inds2, vort_inds, p_inds));
 
     // Paraview exporter object
     auto exporter = PvtuExporter{*mesh};
@@ -227,7 +216,7 @@ int main(int argc, char* argv[])
                             comm,
                             solution_manager,
                             {"Velocity", "Vorticity", "Pressure"},
-                            std::array{vel_inds1, vort_inds, p_inds});
+                            util::gatherAsCommon(vel_inds2, vort_inds, p_inds));
 
     constexpr int time_steps = 200;
     for (int time_step = 1; time_step <= time_steps; ++time_step)
@@ -236,8 +225,7 @@ int main(int argc, char* argv[])
         algebraic_system.beginAssembly();
 
         // Velocity getter
-        const auto vel_inds   = concatArrays(vel_inds1, vel_inds2);
-        const auto vel_getter = solution_manager.makeFieldValueGetter(vel_inds);
+        const auto vel_getter = solution_manager.makeFieldValueGetter< 4 >(util::concatRanges(vel_inds1, vel_inds2));
 
         // Assemble problem based on the defined kernels
         algebraic_system.assembleProblem(kernel_trans, {domain}, vel_getter, {}, asmopt_ctval);
@@ -251,7 +239,7 @@ int main(int argc, char* argv[])
 
         // Place the computed values in the solution manager
         algebraic_system.updateSolution(
-            solution, std::views::iota(0, 4), solution_manager, concatArrays(vel_inds2, vort_press_inds));
+            solution, std::views::iota(0, 4), solution_manager, util::concatRanges(vel_inds2, vort_inds, p_inds));
 
         // Export snapshot
         const auto file_name = "results/karman_" + std::to_string(time_step) + ".pvtu";
@@ -259,9 +247,12 @@ int main(int argc, char* argv[])
                                 comm,
                                 solution_manager,
                                 {"Velocity", "Vorticity", "Pressure"},
-                                std::array{vel_inds2, vort_inds, p_inds});
+                                util::gatherAsCommon(vel_inds2, vort_inds, p_inds));
 
-        // Swap velocity indices to avoid moving the underlying data
+        // Swap velocity indices - the current time step becomes the previous time step
+        // For time stepping schemes of order >= 3 consider using std::rotate
         std::swap(vel_inds1, vel_inds2);
+
+        std::cout << "Time step " << time_step << std::endl;
     }
 }
