@@ -36,7 +36,7 @@ inline auto parseSourceLocation(std::source_location src_loc) -> std::string
     const auto fun_name   = std::string_view{src_loc.function_name()};
     const auto in_fun_txt = "\n\tIn function "sv;
     const auto line_txt   = parse_int(line_buf, src_loc.line());
-    const auto col_txt    = parse_int(col_buf, src_loc.line());
+    const auto col_txt    = parse_int(col_buf, src_loc.column());
 
     auto retval = std::string{"\t"};
     retval.reserve(file_name.size() + fun_name.size() + in_fun_txt.size() + line_txt.size() + col_txt.size() + 5u);
