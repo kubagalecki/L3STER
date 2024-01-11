@@ -206,8 +206,9 @@ const auto& assembleLocalSystem(
         const auto eval_point      = SpaceTimePoint{phys_coords, time};
         const auto kernel_in = typename KernelInterface< params >::DomainInput{field_vals, field_ders, eval_point};
         const auto [A, F]    = kernel(kernel_in);
-        const auto rank_update_weight = jacobi_mat.determinant() * weight;
-        local_system_manager.update(A, F, bas_vals, phys_basis_ders, rank_update_weight);
+        const val_t jacobian = jacobi_mat.determinant();
+        util::throwingAssert(jacobian > 0., "Encountered degenerate element ( |J| <= 0 )");
+        local_system_manager.update(A, F, bas_vals, phys_basis_ders, jacobian * weight);
     };
     for (size_t qp_ind = 0; qp_ind < basis_at_qps.quadrature.size; ++qp_ind)
         process_qp(basis_at_qps.quadrature.points[qp_ind],
