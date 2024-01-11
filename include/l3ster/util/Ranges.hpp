@@ -64,5 +64,19 @@ auto gatherAsCommon(Ranges&&... ranges)
     (push_copy(std::forward< Ranges >(ranges)), ...);
     return retval;
 }
+
+template < std::ranges::range... Ranges >
+auto concatRanges(Ranges&&... ranges)
+    requires requires { typename std::common_type< std::ranges::range_value_t< Ranges >... >::type; }
+{
+    using common_t        = std::common_type_t< std::ranges::range_value_t< Ranges >... >;
+    const auto size       = static_cast< size_t >((std::ranges::distance(ranges) + ...));
+    auto       retval     = ArrayOwner< common_t >(size);
+    auto       write_copy = [iter = retval.begin()]< typename R >(R&& r) mutable {
+        iter = std::ranges::copy(std::forward< R >(r), iter).out;
+    };
+    (write_copy(std::forward< Ranges >(ranges)), ...);
+    return retval;
+}
 } // namespace lstr::util
 #endif // L3STER_UTIL_RANGES_HPP
