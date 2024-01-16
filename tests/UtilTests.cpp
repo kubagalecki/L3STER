@@ -5,6 +5,7 @@
 #include "l3ster/util/ConstexprRefStableCollection.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/HwlocWrapper.hpp"
+#include "l3ster/util/IO.hpp"
 #include "l3ster/util/IndexMap.hpp"
 #include "l3ster/util/Meta.hpp"
 #include "l3ster/util/MetisUtils.hpp"
@@ -722,4 +723,51 @@ TEST_CASE("Num threads control", "[util]")
         check_num_threads(n_hw_threads);
     }
     check_num_threads(n_hw_threads);
+}
+
+TEST_CASE("Memory-mapping utils", "[utils]")
+{
+    constexpr size_t size = 1 << 16;
+    constexpr size_t ofs = 10, len = 20;
+    const auto       filename = std::string("mmap_test.temp");
+
+    auto text = util::ArrayOwner< char >(size);
+    std::ranges::generate(text,
+                          [prng = std::mt19937{std::random_device{}()},
+                           dist = std::uniform_int_distribution< unsigned >(65, 90)]() mutable {
+                              return static_cast< char >(dist(prng));
+                          });
+    text[ofs] = '?';
+    auto file = std::ofstream{filename};
+    std::ranges::copy(text, std::ostream_iterator< char >(file));
+    file.close();
+
+    auto file_mmapped = util::MmappedFile{filename};
+
+    SECTION("mmap")
+    {
+        REQUIRE(std::ranges::equal(file_mmapped.view(), text));
+        CHECK_THROWS(util::MmappedFile{"nonexistent/file/name.txt"});
+    }
+
+    SECTION("Stream interface")
+    {
+        auto bstream = util::MmappedStreambuf(std::move(file_mmapped));
+        auto istream = std::istream{&bstream};
+        REQUIRE(std::ranges::equal(text, std::views::istream< char >(istream)));
+        CHECK_FALSE(istream.good());
+    }
+
+    SECTION("Search")
+    {
+        const auto view      = file_mmapped.view();
+        const auto text_view = std::string_view{text.data(), text.size()};
+        const auto needle    = view.substr(ofs, len);
+        auto       bstream   = util::MmappedStreambuf(std::move(file_mmapped));
+        auto       istream   = std::istream{&bstream};
+        bstream.skipPast(needle);
+
+        REQUIRE(std::ranges::equal(text_view.substr(ofs + len), std::views::istream< char >(istream)));
+        CHECK_FALSE(istream.good());
+    }
 }

@@ -4,7 +4,9 @@
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/util/Assertion.hpp"
 #include "l3ster/util/Caliper.hpp"
+#include "l3ster/util/IO.hpp"
 #include "l3ster/util/Meta.hpp"
+#include "l3ster/util/RobinHoodHashTables.hpp"
 
 #include <algorithm>
 #include <array>
@@ -42,16 +44,62 @@ consteval ElementType lookupElt()
     return std::ranges::find(gmsh_elt_lookup_tab, I, [](const auto p) { return p.first; })->second;
 }
 
-template < ElementType T >
-void reorderNodes(auto& nodes)
+struct NodeInfo
 {
-    if constexpr (T == ElementType::Quad)
-        std::swap(nodes[2], nodes[3]);
-    else if constexpr (T == ElementType::Hex)
+    n_id_t     l3ster_id;
+    Point< 3 > coords;
+};
+
+template < ElementType ET >
+auto makeElementFromNodeData(const std::array< NodeInfo, Element< ET, 1 >::n_nodes >& node_data, el_id_t id)
+    -> Element< ET, 1 >
+{
+    using node_array_t   = std::array< n_id_t, Element< ET, 1 >::n_nodes >;
+    using coords_array_t = ElementData< ET, 1 >::vertex_array_t;
+    auto nodes           = node_array_t{};
+    auto coords          = coords_array_t{};
+    std::ranges::transform(node_data, nodes.begin(), [](const auto& n) { return n.l3ster_id; });
+    std::ranges::transform(node_data, coords.begin(), [](const auto& n) { return n.coords; });
+
+    if constexpr (ET == ElementType::Quad)
     {
+        // L3STER node ordering is different from Gmsh's
+        std::swap(nodes[2], nodes[3]);
+        std::swap(coords[2], coords[3]);
+
+        // In 2D, we need to ensure positive Jacobians. Gmsh may generate "upside down" elements, we need to flip those
+        const auto same_z_as_first = [&coords](const Point< 3 >& p) {
+            return std::fabs(p.z() - coords.front().z()) < 1e-9;
+        };
+        // We don't care about Quad elements residing in a general 3D space
+        if (std::ranges::all_of(coords | std::views::drop(1), same_z_as_first))
+        {
+            // Check the face normal vector is pointing upwards (z+)
+            const val_t ux = coords[1].x() - coords[0].x();
+            const val_t uy = coords[1].y() - coords[0].y();
+            const val_t vx = coords[2].x() - coords[0].x();
+            const val_t vy = coords[2].y() - coords[0].y();
+            const val_t nz = ux * vy - uy * vx;
+
+            // Flip element
+            if (nz < 0.)
+            {
+                std::swap(nodes[1], nodes[2]);
+                std::swap(coords[1], coords[2]);
+            }
+        }
+    }
+
+    if constexpr (ET == ElementType::Hex)
+    {
+        // There is no special direction in 3D, we just need to permute the data in accordance with L3STER ordering
         std::swap(nodes[2], nodes[3]);
         std::swap(nodes[6], nodes[7]);
+        std::swap(coords[2], coords[3]);
+        std::swap(coords[6], coords[7]);
     }
+
+    return Element< ET, 1 >{nodes, coords, id};
 }
 } // namespace detail
 
@@ -60,22 +108,18 @@ inline auto readMesh(std::string_view                  file_path,
                      MeshFormatTag< MeshFormat::Gmsh >) -> MeshPartition< 1 >
 {
     L3STER_PROFILE_FUNCTION;
-    const auto throw_error = [&file_path](std::string_view     message,
-                                          std::source_location src_loc = std::source_location::current()) {
-        std::stringstream error_msg;
-        error_msg << "Error: " << message << "\nWhile trying to read: " << file_path;
-        util::throwingAssert(false, error_msg.view(), src_loc);
+
+    auto file_map       = util::MmappedFile{std::string{file_path}};
+    auto file_streambuf = util::MmappedStreambuf{std::move(file_map)};
+    auto file           = std::istream{&file_streambuf};
+
+    const auto assert_file_ok = [&](std::string_view     err_msg = "Error while reading .msh file",
+                                    std::source_location sl      = std::source_location::current()) {
+        util::throwingAssert(file.good(), err_msg, sl);
     };
-
-    std::ifstream file;
-
-    const auto skip_until_section = [&](std::string_view section_name,
-                                        std::string_view err_msg = "Invalid gmsh mesh file") {
-        std::search(std::istream_iterator< char >(file),
-                    std::istream_iterator< char >{},
-                    section_name.cbegin(),
-                    section_name.cend());
-        util::throwingAssert(file.good(), err_msg);
+    const auto skip_until_section = [&](std::string_view str) {
+        const bool found = file_streambuf.skipPast(str);
+        util::throwingAssert(found, "Error while reading .msh file: required section not present");
     };
 
     enum class Format
@@ -88,7 +132,7 @@ inline auto readMesh(std::string_view                  file_path,
         BIN64_V4,
     };
     const auto parse_format = [&]() -> Format {
-        skip_until_section("$MeshFormat", "'MeshFormat' section not found");
+        skip_until_section("$MeshFormat");
 
         float  version;
         bool   bin;
@@ -111,7 +155,8 @@ inline auto readMesh(std::string_view                  file_path,
                     format = Format::BIN64_V4;
                     break;
                 default:
-                    throw_error("Unsupported size of size_t in the format section");
+                    util::throwingAssert(
+                        false, "Error while reading .msh file: Unsupported size of size_t in the format section");
                 }
             }
             else
@@ -132,69 +177,48 @@ inline auto readMesh(std::string_view                  file_path,
                         format = Format::BIN64_V2;
                         break;
                     default:
-                        throw_error("Unsupported size of size_t in the format section");
+                        util::throwingAssert(
+                            false, "Error while reading .msh file: Unsupported size of size_t in the format section");
                     }
                 }
                 else
                     format = Format::ASCII_V2;
             }
             else
-                throw_error("Unsupported .msh format version");
+                util::throwingAssert(false, "Error while reading .msh file: Unsupported .msh format version");
         }
 
-        if (format != Format::ASCII_V4)
-            throw_error("Only the ASCII v4 gmsh format is currently supported");
-
+        util::throwingAssert(format == Format::ASCII_V4,
+                             "Unsupported .msh format. Only the ASCII v4 gmsh format is currently supported");
         return format;
     };
 
     const auto parse_entities = [&](const Format&) {
         skip_until_section("$Entities");
 
-        constexpr size_t                     n_entity_types = 4;
-        std::array< size_t, n_entity_types > n_entities{};
-        using entity_data_t = std::array< std::map< int, d_id_t >, n_entity_types >;
-        entity_data_t entity_data{};
+        constexpr size_t n_entity_types = 4;
+        using entity_data_t             = std::array< std::map< int, d_id_t >, n_entity_types >;
+        auto entity_data                = entity_data_t{};
 
         const auto parse_entities_asciiv4 = [&]() {
-            for (auto& e : n_entities)
-                file >> e;
+            const auto n_entities = util::extract< size_t, 4 >(file);
 
             const auto parse_dim_entities = [&](const size_t dim) {
                 const auto parse_entity = [&]() {
-                    int    entity_tag;
-                    double coord;
-                    file >> entity_tag;
-                    for (size_t n_io = 0; n_io < 3 + ((dim > 0) * 3); ++n_io)
-                        file >> coord;
+                    const int entity_tag = util::extract< int >(file);
+                    util::ignore< val_t >(file, dim > 0 ? 6 : 3);
 
-                    size_t n_physical_tags;
-                    file >> n_physical_tags;
-                    if (n_physical_tags > 1)
-                    {
-                        std::stringstream error_msg;
-                        error_msg << "Entity of dimension " << dim << " and tag " << entity_tag
-                                  << " has more than one physical tag";
-                        throw_error(error_msg.view());
-                    }
-                    else if (n_physical_tags == 1)
-                    {
-                        int physical_tag;
-                        file >> physical_tag;
-                        entity_data[dim][entity_tag] = static_cast< d_id_t >(physical_tag);
-                    }
+                    const auto n_physical_tags = util::extract< size_t >(file);
+                    util::throwingAssert(n_physical_tags <= 1,
+                                         "Error while reading .msh file: entity has more than 1 physical tag");
+                    if (n_physical_tags == 1)
+                        entity_data[dim][entity_tag] = util::extract< d_id_t >(file);
 
                     if (dim > 0)
-                    {
-                        size_t n_bounding_entities;
-                        file >> n_bounding_entities;
-                        int skip;
-                        for (size_t i = 0; i < n_bounding_entities; ++i)
-                            file >> skip;
-                    }
+                        util::ignore< int >(file, util::extract< size_t >(file));
                 };
 
-                for (size_t entity = 0; entity < n_entities[dim]; entity++)
+                for (size_t entity = 0; entity < n_entities[dim]; ++entity)
                     parse_entity();
             };
 
@@ -219,49 +243,37 @@ inline auto readMesh(std::string_view                  file_path,
     };
     using entity_data_t = decltype(parse_entities(parse_format()));
 
-    using node_data_t      = std::tuple< std::vector< size_t >, std::vector< Point< 3 > >, bool >;
+    // Maps Gmsh ID to condensed ID + coordinates
+    using node_data_t      = robin_hood::unordered_flat_map< size_t, detail::NodeInfo >;
     const auto parse_nodes = [&](const Format&) -> node_data_t {
-        skip_until_section("$Nodes", "'Node' section not found");
+        skip_until_section("$Nodes");
 
         const auto parse_nodes_asciiv4 = [&]() {
-            size_t n_blocks, n_nodes, min_node_tag, max_node_tag;
-            file >> n_blocks >> n_nodes >> min_node_tag >> max_node_tag;
+            const auto [n_blocks, n_nodes, min_node_tag, max_node_tag] = util::extract< size_t, 4 >(file);
+            auto node_data                                             = node_data_t(n_nodes);
 
-            node_data_t node_data{};
-            auto& [node_ids, node_coords, is_contiguous] = node_data;
-
-            is_contiguous = max_node_tag - min_node_tag == n_nodes - 1;
-            node_ids.reserve(n_nodes);
-            node_coords.reserve(n_nodes);
-
+            auto   node_ids_in_block = std::vector< size_t >{};
+            n_id_t l3ster_id         = 0;
             for (size_t block_ind = 0; block_ind < n_blocks; ++block_ind)
             {
-                std::tuple< size_t, int, int, bool > _{};
-                auto& [block_size, dim, entity_tag, parametric] = _;
+                int    dim, entity_tag;
+                bool   parametric;
+                size_t block_size;
                 file >> dim >> entity_tag >> parametric >> block_size;
 
-                if (parametric)
-                    throw_error("Parametric nodes are unsupported");
+                util::throwingAssert(!parametric, "Encountered parametric node while reading .msh file");
 
-                std::copy_n(std::istream_iterator< size_t >(file), block_size, std::back_inserter(node_ids));
-                std::generate_n(std::back_inserter(node_coords), block_size, [&] {
-                    std::array< val_t, 3 > retval; // NOLINT unneeded initialization
-                    std::copy_n(std::istream_iterator< val_t >(file), 3, retval.begin());
-                    return Point< 3 >{retval};
-                });
+                node_ids_in_block.clear();
+                node_ids_in_block.reserve(block_size);
+                std::copy_n(std::istream_iterator< size_t >(file), block_size, std::back_inserter(node_ids_in_block));
+
+                for (size_t gmsh_id : node_ids_in_block)
+                {
+                    auto coords = std::array< val_t, 3 >{};
+                    std::copy_n(std::istream_iterator< val_t >(file), 3, coords.begin());
+                    node_data.emplace(gmsh_id, detail::NodeInfo{l3ster_id++, Point{coords}});
+                }
             };
-
-            const auto srt_ind = util::sortingPermutation(node_ids.cbegin(), node_ids.cend());
-            {
-                auto temp = std::vector< size_t >(n_nodes);
-                util::copyPermuted(node_ids.cbegin(), node_ids.cend(), srt_ind.cbegin(), begin(temp));
-                node_ids = std::move(temp);
-            }
-            {
-                auto temp = std::vector< Point< 3 > >(n_nodes);
-                util::copyPermuted(node_coords.cbegin(), node_coords.cend(), srt_ind.cbegin(), begin(temp));
-                node_coords = std::move(temp);
-            }
 
             skip_until_section("$EndNodes");
             return node_data;
@@ -272,26 +284,15 @@ inline auto readMesh(std::string_view                  file_path,
     };
 
     const auto parse_elements = [&](Format, const entity_data_t& entity_data, const node_data_t& node_data) {
-        skip_until_section("$Elements", "'Elements' section not found");
+        skip_until_section("$Elements");
 
         auto domain_map = MeshPartition< 1 >::domain_map_t{};
 
         const auto parse_elements_asciiv4 = [&]() -> MeshPartition< 1 > {
-            size_t n_blocks, n_elements, min_element_tag, max_element_tag, element_id = 0;
+            size_t n_blocks, n_elements, min_element_tag, max_element_tag;
             file >> n_blocks >> n_elements >> min_element_tag >> max_element_tag;
 
-            const auto node_contig_index = [&](n_id_t gmsh_id) -> n_id_t {
-                const auto& [ids, coords, is_contig] = node_data;
-                if (is_contig)
-                    return gmsh_id - ids.front();
-                else
-                    return std::distance(begin(ids), std::ranges::find(ids, gmsh_id));
-            };
-            const auto lookup_node_coords = [&](n_id_t gmsh_id) {
-                const auto& [ids, coords, is_contig] = node_data;
-                return coords[node_contig_index(gmsh_id)];
-            };
-
+            el_id_t element_id = 0;
             for (size_t block = 0; block < n_blocks; ++block)
             {
                 int    entity_dim, entity_tag, element_type;
@@ -303,18 +304,19 @@ inline auto readMesh(std::string_view                  file_path,
                 const auto push_elements = [&]< size_t I >(std::integral_constant< size_t, I >) {
                     constexpr auto el_type       = detail::lookupElt< I >();
                     const auto     back_inserter = std::back_inserter(block_domain.getElementVector< el_type, 1 >());
-                    const auto     push_element  = [&] {
+                    const auto     read_element  = [&] {
                         size_t element_tag;
                         file >> element_tag; // discard tag
-                        std::array< n_id_t, Element< el_type, 1 >::n_nodes > nodes;
-                        std::copy_n(std::istream_iterator< n_id_t >(file), nodes.size(), begin(nodes));
-                        detail::reorderNodes< el_type >(nodes);
-                        typename ElementData< el_type, 1 >::ElementData::vertex_array_t data;
-                        std::ranges::transform(nodes, begin(data), lookup_node_coords);
-                        std::ranges::for_each(nodes, [&](auto& n) { n = node_contig_index(n); });
-                        return Element< el_type, 1 >{nodes, ElementData< el_type, 1 >{data}, element_id++};
+
+                        auto nodes_gmsh = std::array< size_t, Element< el_type, 1 >::n_nodes >{};
+                        std::copy_n(std::istream_iterator< size_t >(file), nodes_gmsh.size(), nodes_gmsh.begin());
+
+                        auto node_info = std::array< detail::NodeInfo, Element< el_type, 1 >::n_nodes >{};
+                        std::ranges::transform(nodes_gmsh, node_info.begin(), [&](auto n) { return node_data.at(n); });
+
+                        return detail::makeElementFromNodeData< el_type >(node_info, element_id++);
                     };
-                    std::generate_n(back_inserter, block_size, push_element);
+                    std::generate_n(back_inserter, block_size, read_element);
                 };
 
                 switch (element_type)
@@ -329,9 +331,7 @@ inline auto readMesh(std::string_view                  file_path,
                     push_elements(std::integral_constant< size_t, 5 >{});
                     break;
                 default:
-                    std::stringstream err;
-                    err << "Unsupported element type: " << element_type;
-                    throw_error(err.view());
+                    util::throwingAssert(false, "Error while reading .msh file: Encountered unsupported element type");
                 }
             }
             skip_until_section("$EndElements");
@@ -346,10 +346,7 @@ inline auto readMesh(std::string_view                  file_path,
         // TODO: switch over other possible formats once implemented
     };
 
-    // Parse
-    file.open(std::filesystem::path{file_path});
-    util::throwingAssert(file.is_open(), "Could not open mesh file");
-
+    assert_file_ok("Failed to open .msh file");
     const auto format_data = parse_format();
     const auto entity_data = parse_entities(format_data);
     const auto node_data   = parse_nodes(format_data);
