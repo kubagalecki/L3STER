@@ -48,8 +48,10 @@ public:
         std::array< size_t, n_fields > m_field_inds;
     };
 
-    template < size_t N >
-    [[nodiscard]] auto makeFieldValueGetter(const std::array< size_t, N >& indices) const -> FieldValueGetter< N >;
+    template < std::integral Index, size_t N >
+    [[nodiscard]] auto makeFieldValueGetter(const std::array< Index, N >& indices) const -> FieldValueGetter< N >;
+    template < size_t n_fields, RangeOfConvertibleTo_c< size_t > Indices >
+    [[nodiscard]] auto makeFieldValueGetter(Indices&& indices) const -> FieldValueGetter< n_fields >;
 
 private:
     size_t                     m_n_nodes, m_n_fields;
@@ -116,10 +118,24 @@ auto SolutionManager::getFieldView(size_t field_ind) -> std::span< val_t >
     return {std::next(m_nodal_values.get(), static_cast< ptrdiff_t >(field_ind * m_n_nodes)), m_n_nodes};
 }
 
-template < size_t n_fields >
-auto SolutionManager::makeFieldValueGetter(const std::array< size_t, n_fields >& field_inds) const
+template < std::integral Index, size_t n_fields >
+auto SolutionManager::makeFieldValueGetter(const std::array< Index, n_fields >& field_inds) const
     -> FieldValueGetter< n_fields >
 {
+    auto field_inds_size_t = std::array< size_t, n_fields >{};
+    std::ranges::transform(
+        field_inds, field_inds_size_t.begin(), [](auto i) { return util::exactIntegerCast< size_t >(i); });
+    return FieldValueGetter{this, field_inds_size_t};
+}
+
+template < size_t n_fields, RangeOfConvertibleTo_c< size_t > Indices >
+auto SolutionManager::makeFieldValueGetter(Indices&& indices) const -> FieldValueGetter< n_fields >
+{
+    util::throwingAssert(std::ranges::distance(indices) == n_fields,
+                         "The size of the passed index range differs from the value of the parameter");
+
+    auto field_inds = std::array< size_t, n_fields >{};
+    std::ranges::copy(std::forward< Indices >(indices), field_inds.begin());
     return FieldValueGetter{this, field_inds};
 }
 

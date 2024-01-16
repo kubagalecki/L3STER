@@ -119,11 +119,6 @@ void test3D(const MpiComm& comm)
 
     auto       exporter    = PvtuExporter{*my_partition};
     const auto field_names = std::array{"vec3D"sv, "normal"sv};
-    CHECK_THROWS(exporter.exportSolution("path/to/nonexistent/directory/test_results_3D",
-                                         comm,
-                                         solution_manager,
-                                         field_names,
-                                         std::array{domain_field_inds, boundary_field_inds}));
     comm.barrier();
     exporter.exportSolution("3D/results.nonsense_extension",
                             comm,
@@ -137,11 +132,6 @@ int main(int argc, char* argv[])
     const auto max_par_guard = util::MaxParallelismGuard{4};
     const auto scope_guard   = L3sterScopeGuard{argc, argv};
     const auto comm          = MpiComm{MPI_COMM_WORLD};
-    if (comm.getRank() == 0)
-    {
-        const auto exit_code = std::system("mkdir -p 2D; mkdir -p 3D");
-        REQUIRE(!exit_code);
-    }
     test2D(comm);
     test3D(comm);
     // TODO: Programatically check whether the data was exported correctly. For the time being, check manually...

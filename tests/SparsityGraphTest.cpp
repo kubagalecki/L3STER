@@ -82,7 +82,7 @@ void test(const MpiComm& comm)
         constexpr int big = 5, small = 3;
 #endif
         const auto nodes_per_edge = comm.getSize() == 1 ? big : small;
-        const auto node_dist      = util::makeLinspaceVector(0., 1., nodes_per_edge);
+        const auto node_dist      = util::linspaceVector(0., 1., nodes_per_edge);
         auto       mesh           = mesh::makeCubeMesh(node_dist);
         return convertMeshToOrder< 2 >(mesh);
     });

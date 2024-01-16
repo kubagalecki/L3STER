@@ -97,7 +97,7 @@ T& getThreadLocal()
     return value;
 }
 
-template < std::floating_point T, size_t N >
+template < size_t N, std::floating_point T >
 constexpr auto linspaceArray(T lo, T hi) -> std::array< T, N >
     requires(N >= 2)
 {
@@ -110,7 +110,7 @@ constexpr auto linspaceArray(T lo, T hi) -> std::array< T, N >
 }
 
 template < std::floating_point T >
-auto makeLinspaceVector(T lo, T hi, size_t N) -> std::vector< T >
+auto linspaceVector(T lo, T hi, size_t N) -> std::vector< T >
 {
     util::throwingAssert(N >= 2);
     const auto L      = hi - lo;

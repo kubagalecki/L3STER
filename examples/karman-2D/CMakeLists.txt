@@ -1,0 +1,5 @@
+cmake_minimum_required( VERSION 3.19 )
+project( karman-2D )
+add_subdirectory( ../.. L3STER-bin )
+add_executable( karman-2D source.cpp )
+target_link_libraries( karman-2D L3STER )

@@ -66,6 +66,11 @@ public:
                               const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
                               const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter = {},
                               val_t                                                         time             = 0.);
+    template < size_t n_vals, std::integral dofind_t = size_t >
+    void setDirichletBCValues(const std::array< val_t, n_vals >&    values,
+                              const util::ArrayOwner< d_id_t >&     domain_ids,
+                              const std::array< dofind_t, n_vals >& dof_inds)
+        requires(n_rhs == 1);
 
     void solve(solvers::Solver_c auto& solver, const Teuchos::RCP< tpetra_femultivector_t >& solution) const;
 
@@ -172,10 +177,11 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCV
     const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
     val_t                                                         time)
 {
+    util::throwingAssert(m_dirichlet_bcs.has_value(), "setDirichletBCValues called, but no Dirichlet were defined");
     util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
                          "The DOF indices are out of bounds for the problem");
 
-    const auto vals_view = m_dirichlet_values->getLocalViewHost(Tpetra::Access::OverwriteAll);
+    const auto vals_view = m_dirichlet_values->getLocalViewHost(Tpetra::Access::ReadWrite);
     computeValuesAtNodes(kernel,
                          *m_mesh,
                          domain_ids,
@@ -184,6 +190,23 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCV
                          field_val_getter,
                          util::asSpans< n_rhs >(vals_view),
                          time);
+}
+
+template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
+template < size_t n_vals, std::integral dofind_t >
+void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCValues(
+    const std::array< val_t, n_vals >&    values,
+    const util::ArrayOwner< d_id_t >&     domain_ids,
+    const std::array< dofind_t, n_vals >& dof_inds)
+    requires(n_rhs == 1)
+{
+    util::throwingAssert(m_dirichlet_bcs.has_value(), "setDirichletBCValues called, but no Dirichlet were defined");
+    util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
+                         "The DOF indices are out of bounds for the problem");
+
+    const auto values_wrapped = std::array{std::span{values}};
+    const auto vals_view      = m_dirichlet_values->getLocalViewHost(Tpetra::Access::ReadWrite);
+    computeValuesAtNodes(*m_mesh, domain_ids, m_node_dof_map, dof_inds, values_wrapped, util::asSpans< 1 >(vals_view));
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
