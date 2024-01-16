@@ -7,7 +7,7 @@ int main(int argc, char* argv[])
     const auto scope_guard = L3sterScopeGuard{argc, argv};
     const auto comm        = MpiComm{MPI_COMM_WORLD};
 
-    // Physical region IDs
+    // Physical region IDs - these were set in Gmsh
     constexpr int domain = 44, inlet = 45, wall = 46, outlet = 47;
 
     // Unknown scalar field numbering: u, v, vorticity, p
@@ -17,7 +17,7 @@ int main(int argc, char* argv[])
     // Define the flow problem
     constexpr auto problem_def = ProblemDef{defineDomain< n_unknowns >(domain, ALL_DOFS)};
 
-    // Dirichlet conditions velocity prescribed at inlet + walls
+    // Dirichlet conditions: velocity prescribed at inlet + walls
     constexpr auto dirichlet_def =
         ProblemDef{defineDomain< n_unknowns >(inlet, IU, IV), defineDomain< n_unknowns >(wall, IU, IV)};
 
@@ -31,7 +31,7 @@ int main(int argc, char* argv[])
     const auto        mesh =
         readAndDistributeMesh< mesh_order >(comm, mesh_file, mesh::gmsh_tag, {inlet, wall, outlet}, {}, probdef_ctwrpr);
 
-    // Algebraic system used for both the steady and unsteady problems
+    // Algebraic system used for both the steady and transient problems
     constexpr auto sys_opts         = AlgebraicSystemParams{.cond_policy = CondensationPolicy::ElementBoundary};
     constexpr auto sysopts_ctval    = L3STER_WRAP_CTVAL(sys_opts);
     auto           algebraic_system = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, dirdef_ctwrpr, sysopts_ctval);
@@ -44,8 +44,8 @@ int main(int argc, char* argv[])
     constexpr double Re = 150.;
     constexpr double nu = /* cylinder diameter */ .8 * /* mean inlet velocity */ 1. / Re;
 
-    // Kernels //
-    // Steady state part of the Navier-Stokes kernel, defined here separately for reuse in the transient kernel
+    ////////// KERNELS //////////
+    // Steady state part of the Navier-Stokes kernel, defined separately for reuse in the transient kernel
     constexpr auto fill_steady_kernel = [](auto&  A0,
                                            auto&  A1,
                                            auto&  A2,
@@ -116,7 +116,7 @@ int main(int argc, char* argv[])
         auto& [operators, rhs] = out;
         auto& [A0, A1, A2]     = operators;
 
-        // Velocity extrapolations in time
+        // Velocity approximation extrapolated in time
         const double u     = 2 * u1 - u2;
         const double v     = 2 * v1 - v2;
         const double du_dx = 2 * du1_dx - du2_dx;
@@ -131,6 +131,17 @@ int main(int argc, char* argv[])
         A0(1, IV) += 1.5 / dt;
         rhs(0, 0) += (2 * u1 - .5 * u2) / dt;
         rhs(1, 0) += (2 * v1 - .5 * v2) / dt;
+
+        // Scale the momentum equations by a factor dt, this helps with mass loss, see
+        // Pontaza, J. P. (2006). A least-squares finite element formulation for unsteady incompressible flows with
+        // improved velocity–pressure coupling. Journal of Computational Physics, 217(2), 563–588.
+        // https://doi.org/10.1016/j.jcp.2006.01.013
+        for (auto& op : operators)
+            for (size_t unknown = 0; unknown != n_unknowns; ++unknown)
+                for (size_t eq = 0; eq != 2; ++eq)
+                    op(eq, unknown) *= dt;
+        for (size_t eq = 0; eq != 2; ++eq)
+            rhs(eq, 0) *= dt;
     });
 
     // Outlet BC - this kernel operates only on the velocity components and the pressure
@@ -170,6 +181,7 @@ int main(int argc, char* argv[])
         out[0]         = 1.5 * (1. - y * y);
         out[1]         = 0.;
     });
+    ////////// END KERNELS //////////
 
     // Set Dirichlet BC values
     constexpr auto bc_inds = std::array{IU, IV}; // indices of DOFs for which we wish to prescribe a Dirichlet BC
