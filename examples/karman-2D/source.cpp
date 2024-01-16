@@ -27,12 +27,12 @@ int main(int argc, char* argv[])
 
     // Read mesh
     const std::string mesh_file  = argc > 1 ? argv[1] : "../karman.msh";
-    constexpr el_o_t  mesh_order = 4; // el_o_t is the element order type
-    const auto        mesh       = readAndDistributeMesh(
-        comm, mesh_file, mesh::gmsh_tag, {inlet, wall, outlet}, L3STER_WRAP_CTVAL(mesh_order), probdef_ctwrpr);
+    constexpr int     mesh_order = 4;
+    const auto        mesh =
+        readAndDistributeMesh< mesh_order >(comm, mesh_file, mesh::gmsh_tag, {inlet, wall, outlet}, {}, probdef_ctwrpr);
 
     // Algebraic system used for both the steady and unsteady problems
-    constexpr auto sys_opts         = AlgebraicSystemParams{.cond_policy = CondensationPolicy::None};
+    constexpr auto sys_opts         = AlgebraicSystemParams{.cond_policy = CondensationPolicy::ElementBoundary};
     constexpr auto sysopts_ctval    = L3STER_WRAP_CTVAL(sys_opts);
     auto           algebraic_system = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, dirdef_ctwrpr, sysopts_ctval);
     algebraic_system.describe(comm);
