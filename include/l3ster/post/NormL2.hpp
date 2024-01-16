@@ -39,7 +39,7 @@ auto computeNormL2(const MpiComm&                                              c
 {
     const auto compute_squared_norm = post::getNormSquareComputer(eval_residual);
     const auto wrapped_sqn          = wrapDomainResidualKernel(compute_squared_norm, util::ConstexprValue< params >{});
-    const auto squared_norm         = evalIntegral(
+    const auto squared_norm         = computeIntegral(
         comm, wrapped_sqn, mesh, domain_ids, field_val_getter, post::doubleQuadratureOrder(options_ctwrpr), time);
     return squared_norm.cwiseSqrt();
 }
@@ -55,7 +55,7 @@ auto computeNormL2(const MpiComm&                                              c
 {
     const auto compute_squared_norm = post::getNormSquareComputer(eval_residual);
     const auto wrapped_sqn  = wrapBoundaryResidualKernel(compute_squared_norm, util::ConstexprValue< params >{});
-    const auto squared_norm = evalIntegral(
+    const auto squared_norm = computeIntegral(
         comm, wrapped_sqn, mesh, boundary_ids, field_val_getter, post::doubleQuadratureOrder(options_ctwrpr), time);
     return squared_norm.cwiseSqrt();
 }

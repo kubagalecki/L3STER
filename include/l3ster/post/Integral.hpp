@@ -97,7 +97,7 @@ auto evalLocalIntegral(const ResidualBoundaryKernel< Kernel, params >&          
             constexpr auto QT         = options.quad_type;
             constexpr auto QO         = options.order(EO);
             const auto     field_vals = field_val_getter(el_view->getNodes());
-            const auto&    qbv        = basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
+            const auto&    qbv = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
             return evalElementBoundaryIntegral(kernel, el_view, field_vals, qbv, time);
         }
         else
@@ -108,36 +108,19 @@ auto evalLocalIntegral(const ResidualBoundaryKernel< Kernel, params >&          
 }
 } // namespace post
 
-template < typename Kernel, KernelParams params, el_o_t... orders, AssemblyOptions opts = {} >
-auto evalIntegral(const MpiComm&                                              comm,
-                  const ResidualDomainKernel< Kernel, params >&               kernel,
-                  const mesh::MeshPartition< orders... >&                     mesh,
-                  const util::ArrayOwner< d_id_t >&                           domain_ids,
-                  const SolutionManager::FieldValueGetter< params.n_fields >& field_val_getter = {},
-                  util::ConstexprValue< opts >                                opts_ctwrpr      = {},
-                  val_t                                                       time             = 0.)
+template < ResidualKernel_c Kernel, el_o_t... orders, AssemblyOptions opts = {} >
+auto computeIntegral(const MpiComm&                                                          comm,
+                     const Kernel&                                                           kernel,
+                     const mesh::MeshPartition< orders... >&                                 mesh,
+                     const util::ArrayOwner< d_id_t >&                                       domain_ids,
+                     const SolutionManager::FieldValueGetter< Kernel::parameters.n_fields >& field_val_getter = {},
+                     util::ConstexprValue< opts >                                            opts_ctwrpr      = {},
+                     val_t                                                                   time             = 0.)
 {
     const auto local_integral  = post::evalLocalIntegral(kernel, mesh, domain_ids, field_val_getter, opts_ctwrpr, time);
-    auto       global_integral = detail::initResidualKernelResult< params >();
-    auto       comm_view       = std::views::counted(local_integral.data(), params.n_equations);
+    auto       global_integral = detail::initResidualKernelResult< Kernel::parameters >();
+    auto       comm_view       = std::views::counted(local_integral.data(), Kernel::parameters.n_equations);
     comm.allReduce(std::move(comm_view), global_integral.data(), MPI_SUM);
-    return global_integral;
-}
-
-template < typename Kernel, KernelParams params, el_o_t... orders, AssemblyOptions opts = {} >
-auto evalIntegral(const MpiComm&                                              comm,
-                  const ResidualBoundaryKernel< Kernel, params >&             kernel,
-                  const mesh::MeshPartition< orders... >&                     mesh,
-                  const util::ArrayOwner< d_id_t >&                           boundary_ids,
-                  const SolutionManager::FieldValueGetter< params.n_fields >& field_val_getter = {},
-                  util::ConstexprValue< opts >                                opts_ctwrpr      = {},
-                  val_t                                                       time             = 0.)
-{
-    const auto local_integral =
-        post::evalLocalIntegral(kernel, mesh, boundary_ids, field_val_getter, opts_ctwrpr, time);
-    auto global_integral = detail::initResidualKernelResult< params >();
-    auto comm_view       = std::views::counted(local_integral.data(), params.n_equations);
-    comm.allReduce(comm_view, global_integral.data(), MPI_SUM);
     return global_integral;
 }
 } // namespace lstr
