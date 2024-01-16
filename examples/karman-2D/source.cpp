@@ -8,7 +8,7 @@ int main(int argc, char* argv[])
     const auto comm        = MpiComm{MPI_COMM_WORLD};
 
     // Physical region IDs
-    constexpr int domain = 9, inlet = 10, wall = 11, outlet = 12;
+    constexpr int domain = 44, inlet = 45, wall = 46, outlet = 47;
 
     // Unknown scalar field numbering: u, v, vorticity, p
     constexpr int IU = 0, IV = 1, IO = 2, IP = 3;
@@ -32,14 +32,16 @@ int main(int argc, char* argv[])
         comm, mesh_file, mesh::gmsh_tag, {inlet, wall, outlet}, L3STER_WRAP_CTVAL(mesh_order), probdef_ctwrpr);
 
     // Algebraic system used for both the steady and unsteady problems
-    auto algebraic_system = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, dirdef_ctwrpr);
+    constexpr auto sys_opts         = AlgebraicSystemParams{.cond_policy = CondensationPolicy::None};
+    constexpr auto sysopts_ctval    = L3STER_WRAP_CTVAL(sys_opts);
+    auto           algebraic_system = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, dirdef_ctwrpr, sysopts_ctval);
     algebraic_system.describe(comm);
 
     // Time step
     constexpr double dt = .1;
 
     // Reynolds number
-    constexpr double Re = 100.;
+    constexpr double Re = 150.;
     constexpr double nu = /* cylinder diameter */ .8 * /* mean inlet velocity */ 1. / Re;
 
     // Kernels //
@@ -150,6 +152,17 @@ int main(int argc, char* argv[])
         A2(1, 1) = nu * ny;
     });
 
+    // Flow rate at inlet/outlet
+    constexpr auto kernel_params_flowrate = KernelParams{.dimension = 2, .n_equations = 1, .n_fields = 2};
+    constexpr auto kernel_flowrate =
+        wrapBoundaryResidualKernel< kernel_params_flowrate >([](const auto& in, auto& out) {
+            const auto& [field_vals, field_ders, point, normal] = in;
+            const auto& [u, v]                                  = field_vals; // Velocity components
+            const double nx                                     = normal[0];
+            const double ny                                     = normal[1];
+            out[0]                                              = u * nx + v * ny;
+        });
+
     // Inlet BC - parabolic velocity profile
     constexpr auto kernel_params_inlet = KernelParams{.dimension = 2, .n_equations = 2};
     const auto     kernel_inlet = wrapBoundaryResidualKernel< kernel_params_inlet >([&](const auto& in, auto& out) {
@@ -180,8 +193,34 @@ int main(int argc, char* argv[])
     // L3STER interface to KLU2 direct solver
     auto solver = solvers::KLU2{};
 
-    // Newton iterations for the stead state solution
-    const int steady_iters = 15;
+    // Utilities for printing the table of results
+    constexpr auto print_padded =
+        [](const std::string& a, const std::string& b, const std::string& c, const std::string& d) {
+            // Column widths for results table
+            constexpr int w1 = 11, w2 = 8, w3 = 9, w4 = 16;
+            std::cout << std::left << std::setw(w1) << a << std::setw(w2) << b << std::setw(w3) << c << std::setw(w4)
+                      << d << '\n';
+        };
+    const auto print_row = [&](int step, double inflow, double outflow) {
+        constexpr auto ts = [](double value, int precision = 3) {
+            // Convert double to string with given precision (don't do this in performance-sensitive code)
+            std::ostringstream stream;
+            stream << std::fixed << std::setprecision(precision) << value;
+            return stream.str();
+        };
+        print_padded(std::to_string(step), ts(inflow), ts(outflow), ts((inflow - outflow) / inflow * 100., 2) + "%");
+    };
+
+    // Table header
+    print_padded("Time step", "Inflow", "Outflow", "Flow rate error");
+
+    // Header separator
+    std::cout << std::setfill('-');
+    print_padded("", "", "", "");
+    std::cout << std::setfill(' ');
+
+    // Newton iterations for the steady state solution
+    const int steady_iters = 10;
     for (int iter = 0; iter != steady_iters; ++iter)
     {
         // Zero out system
@@ -218,6 +257,14 @@ int main(int argc, char* argv[])
                             {"Velocity", "Vorticity", "Pressure"},
                             util::gatherAsCommon(vel_inds2, vort_inds, p_inds));
 
+    // Print flow rate info, note that the computed integrals are vectors of length 1, hence the "[0]"
+    {
+        const auto vel_getter   = solution_manager.makeFieldValueGetter(vel_inds1);
+        const auto inflow_rate  = -computeIntegral(comm, kernel_flowrate, *mesh, {inlet}, vel_getter)[0];
+        const auto outflow_rate = computeIntegral(comm, kernel_flowrate, *mesh, {outlet}, vel_getter)[0];
+        print_row(0, inflow_rate, outflow_rate);
+    }
+
     constexpr int time_steps = 200;
     for (int time_step = 1; time_step <= time_steps; ++time_step)
     {
@@ -241,6 +288,12 @@ int main(int argc, char* argv[])
         algebraic_system.updateSolution(
             solution, std::views::iota(0, 4), solution_manager, util::concatRanges(vel_inds2, vort_inds, p_inds));
 
+        // Print flow rate info
+        const auto current_vel_getter = solution_manager.makeFieldValueGetter(vel_inds2);
+        const auto inflow_rate        = -computeIntegral(comm, kernel_flowrate, *mesh, {inlet}, current_vel_getter)[0];
+        const auto outflow_rate       = computeIntegral(comm, kernel_flowrate, *mesh, {outlet}, current_vel_getter)[0];
+        print_row(time_step, inflow_rate, outflow_rate);
+
         // Export snapshot
         const auto file_name = "results/karman_" + std::to_string(time_step) + ".pvtu";
         exporter.exportSolution(file_name,
@@ -252,7 +305,5 @@ int main(int argc, char* argv[])
         // Swap velocity indices - the current time step becomes the previous time step
         // For time stepping schemes of order >= 3 consider using std::rotate
         std::swap(vel_inds1, vel_inds2);
-
-        std::cout << "Time step " << time_step << std::endl;
     }
 }
