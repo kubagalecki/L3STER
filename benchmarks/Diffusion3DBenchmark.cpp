@@ -141,9 +141,9 @@ int main(int argc, char* argv[])
 
     L3STER_PROFILE_REGION_BEGIN("Export results to VTK");
     auto           exporter    = PvtuExporter{*my_partition};
-    const auto     field_inds  = util::gatherAsCommon(T_inds, T_grad_inds);
+    const auto     export_inds = util::gatherAsCommon(T_inds, T_grad_inds);
     constexpr auto field_names = std::array{"T"sv, "gradT"sv};
-    exporter.exportSolution("Cube_Diffusion.pvtu", comm, solution_manager, field_names, field_inds);
+    exporter.exportSolution("Cube_Diffusion.pvtu", comm, solution_manager, field_names, export_inds);
     exporter.flushWriteQueue();
     L3STER_PROFILE_REGION_END("Export results to VTK");
 }
