@@ -13,6 +13,9 @@ auto getDirichletDofs(const mesh::MeshPartition< orders... >&                 me
                       util::ConstexprValue< problem_def >,
                       util::ConstexprValue< dirichlet_def > dirichletdef_ctwrpr)
 {
+    static_assert(CP == CondensationPolicy::None or CP == CondensationPolicy::ElementBoundary,
+                  "The current implementation may not work for future condensation policies");
+
     constexpr auto n_fields                  = problem_def.n_fields;
     const auto     mark_owned_dirichlet_dofs = [&] {
         const auto dirichlet_dofs = util::makeTeuchosRCP< tpetra_femultivector_t >(
@@ -21,8 +24,8 @@ auto getDirichletDofs(const mesh::MeshPartition< orders... >&                 me
         const auto process_domain = [&]< DomainDef< n_fields > domain_def >(util::ConstexprValue< domain_def >) {
             constexpr auto covered_dof_inds = util::getTrueInds< domain_def.active_fields >();
             const auto process_element = [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >& element) {
-                const auto element_dirichlet_dofs =
-                    dofs::getUnsortedPrimaryDofs< covered_dof_inds >(element, node_to_dof_map, cond_map);
+                const auto element_dirichlet_dofs = // All element nodes (not just primary ones) participate in DBC
+                    dofs::getDofsFromNodes< covered_dof_inds >(element.getNodes(), node_to_dof_map, cond_map);
                 for (auto dof : element_dirichlet_dofs)
                     dirichlet_dofs->replaceGlobalValue(dof, 0, 1.);
             };
