@@ -132,10 +132,7 @@ int main(int argc, char* argv[])
         rhs(0, 0) += (2 * u1 - .5 * u2) / dt;
         rhs(1, 0) += (2 * v1 - .5 * v2) / dt;
 
-        // Scale the momentum equations by a factor dt, this helps with mass loss, see
-        // Pontaza, J. P. (2006). A least-squares finite element formulation for unsteady incompressible flows with
-        // improved velocity–pressure coupling. Journal of Computational Physics, 217(2), 563–588.
-        // https://doi.org/10.1016/j.jcp.2006.01.013
+        // Scale the momentum equations by a factor dt
         for (auto& op : operators)
             for (size_t unknown = 0; unknown != n_unknowns; ++unknown)
                 for (size_t eq = 0; eq != 2; ++eq)
