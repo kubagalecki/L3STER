@@ -45,6 +45,7 @@ L3STER_MPI_TYPE_MAPPING_STRUCT(unsigned long long, MPI_UNSIGNED_LONG_LONG) // NO
 L3STER_MPI_TYPE_MAPPING_STRUCT(float, MPI_FLOAT)                           // NOLINT
 L3STER_MPI_TYPE_MAPPING_STRUCT(double, MPI_DOUBLE)                         // NOLINT
 L3STER_MPI_TYPE_MAPPING_STRUCT(long double, MPI_LONG_DOUBLE)               // NOLINT
+L3STER_MPI_TYPE_MAPPING_STRUCT(std::byte, MPI_BYTE)                        // NOLINT
 
 inline void
 handleMPIError(int error, std::string_view err_msg, std::source_location src_loc = std::source_location::current())
@@ -55,11 +56,12 @@ handleMPIError(int error, std::string_view err_msg, std::source_location src_loc
 #define L3STER_INVOKE_MPI(fun__, ...) comm::handleMPIError(fun__(__VA_ARGS__), "Call to " #fun__ " failed")
 
 template < typename T >
-concept MpiType_c = requires { MpiType< std::remove_cvref_t< T > >::value(); };
+concept MpiBuiltinType_c = requires { MpiType< std::remove_cvref_t< T > >::value(); };
 
 template < typename T >
 concept MpiBuf_c = std::ranges::contiguous_range< T > and std::ranges::sized_range< T > and
-                   MpiType_c< std::ranges::range_value_t< T > >;
+                   (MpiBuiltinType_c< std::ranges::range_value_t< T > > or
+                    std::is_trivially_copyable_v< std::ranges::range_value_t< T > >);
 template < typename T >
 concept MpiBorrowedBuf_c = MpiBuf_c< T > and std::ranges::borrowed_range< T >;
 
@@ -68,7 +70,7 @@ concept MpiOutputIterator_c =
     std::output_iterator< It, std::ranges::range_value_t< Buf > > and
     std::same_as< std::iter_value_t< It >, std::ranges::range_value_t< Buf > > and std::contiguous_iterator< It >;
 
-template < MpiType_c T >
+template < MpiBuiltinType_c T >
 struct MpiBufView
 {
     MPI_Datatype type;
@@ -79,9 +81,23 @@ struct MpiBufView
 template < MpiBuf_c Buffer >
 auto parseMpiBuf(Buffer&& buf)
 {
-    return MpiBufView{MpiType< std::ranges::range_value_t< decltype(buf) > >::value(),
-                      std::ranges::data(buf),
-                      static_cast< int >(std::ranges::ssize(buf))};
+    using range_value_t = std::remove_reference_t< std::ranges::range_value_t< Buffer > >;
+    if constexpr (MpiBuiltinType_c< range_value_t >)
+    {
+        const auto mpi_type = MpiType< range_value_t >::value();
+        const auto data_ptr = std::ranges::data(buf);
+        const auto size     = static_cast< int >(std::ranges::size(buf));
+        return MpiBufView{mpi_type, data_ptr, size};
+    }
+    else
+    {
+        constexpr bool is_const_range =
+            std::is_const_v< std::remove_reference_t< decltype(*std::ranges::begin(buf)) > >;
+        if constexpr (is_const_range)
+            return parseMpiBuf(std::as_bytes(std::span{buf}));
+        else
+            return parseMpiBuf(std::as_writable_bytes(std::span{buf}));
+    }
 }
 } // namespace comm
 
@@ -93,7 +109,7 @@ public:
     public:
         friend class MpiComm;
 
-        template < comm::MpiType_c T >
+        template < comm::MpiBuiltinType_c T >
         [[nodiscard]] auto numElems() const -> int;
 
         [[nodiscard]] int getSource() const { return m_status.MPI_SOURCE; }
@@ -235,7 +251,7 @@ private:
     MPI_Comm m_comm = MPI_COMM_NULL;
 };
 
-template < comm::MpiType_c T >
+template < comm::MpiBuiltinType_c T >
 auto MpiComm::Status::numElems() const -> int
 {
     int retval{};
