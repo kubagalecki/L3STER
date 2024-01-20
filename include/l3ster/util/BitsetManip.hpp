@@ -20,11 +20,11 @@ auto serializeBitset(const std::bitset< N >& bits)
 {
     constexpr auto ull_bits      = sizeof(unsigned long long) * 8u;
     constexpr auto required_ulls = bitsetNUllongs< N >();
-    const auto     mask = std::bitset< N >{std::numeric_limits< unsigned long long >::max()}; // 0xffffffffffffffff
+    constexpr auto mask = std::bitset< N >{std::numeric_limits< unsigned long long >::max()}; // 0xffffffffffffffff
 
     std::array< unsigned long long, required_ulls > retval;
     std::generate_n(
-        rbegin(retval), required_ulls, [&, i = 0ul]() mutable { return (bits >> i++ * ull_bits & mask).to_ullong(); });
+        retval.rbegin(), required_ulls, [&, i = 0ul]() mutable { return (bits >> i++ * ull_bits & mask).to_ullong(); });
     return retval;
 }
 

@@ -45,6 +45,7 @@ L3STER_MPI_TYPE_MAPPING_STRUCT(unsigned long long, MPI_UNSIGNED_LONG_LONG) // NO
 L3STER_MPI_TYPE_MAPPING_STRUCT(float, MPI_FLOAT)                           // NOLINT
 L3STER_MPI_TYPE_MAPPING_STRUCT(double, MPI_DOUBLE)                         // NOLINT
 L3STER_MPI_TYPE_MAPPING_STRUCT(long double, MPI_LONG_DOUBLE)               // NOLINT
+L3STER_MPI_TYPE_MAPPING_STRUCT(std::byte, MPI_BYTE)                        // NOLINT
 
 inline void
 handleMPIError(int error, std::string_view err_msg, std::source_location src_loc = std::source_location::current())
@@ -55,11 +56,12 @@ handleMPIError(int error, std::string_view err_msg, std::source_location src_loc
 #define L3STER_INVOKE_MPI(fun__, ...) comm::handleMPIError(fun__(__VA_ARGS__), "Call to " #fun__ " failed")
 
 template < typename T >
-concept MpiType_c = requires { MpiType< std::remove_cvref_t< T > >::value(); };
+concept MpiBuiltinType_c = requires { MpiType< std::remove_cvref_t< T > >::value(); };
 
 template < typename T >
 concept MpiBuf_c = std::ranges::contiguous_range< T > and std::ranges::sized_range< T > and
-                   MpiType_c< std::ranges::range_value_t< T > >;
+                   (MpiBuiltinType_c< std::ranges::range_value_t< T > > or
+                    std::is_trivially_copyable_v< std::ranges::range_value_t< T > >);
 template < typename T >
 concept MpiBorrowedBuf_c = MpiBuf_c< T > and std::ranges::borrowed_range< T >;
 
@@ -68,7 +70,7 @@ concept MpiOutputIterator_c =
     std::output_iterator< It, std::ranges::range_value_t< Buf > > and
     std::same_as< std::iter_value_t< It >, std::ranges::range_value_t< Buf > > and std::contiguous_iterator< It >;
 
-template < MpiType_c T >
+template < MpiBuiltinType_c T >
 struct MpiBufView
 {
     MPI_Datatype type;
@@ -79,9 +81,23 @@ struct MpiBufView
 template < MpiBuf_c Buffer >
 auto parseMpiBuf(Buffer&& buf)
 {
-    return MpiBufView{MpiType< std::ranges::range_value_t< decltype(buf) > >::value(),
-                      std::ranges::data(buf),
-                      static_cast< int >(std::ranges::ssize(buf))};
+    using range_value_t = std::remove_reference_t< std::ranges::range_value_t< Buffer > >;
+    if constexpr (MpiBuiltinType_c< range_value_t >)
+    {
+        const auto mpi_type = MpiType< range_value_t >::value();
+        const auto data_ptr = std::ranges::data(buf);
+        const auto size     = static_cast< int >(std::ranges::size(buf));
+        return MpiBufView{mpi_type, data_ptr, size};
+    }
+    else
+    {
+        constexpr bool is_const_range =
+            std::is_const_v< std::remove_reference_t< decltype(*std::ranges::begin(buf)) > >;
+        if constexpr (is_const_range)
+            return parseMpiBuf(std::as_bytes(std::span{buf}));
+        else
+            return parseMpiBuf(std::as_writable_bytes(std::span{buf}));
+    }
 }
 } // namespace comm
 
@@ -93,7 +109,7 @@ public:
     public:
         friend class MpiComm;
 
-        template < comm::MpiType_c T >
+        template < comm::MpiBuiltinType_c T >
         [[nodiscard]] auto numElems() const -> int;
 
         [[nodiscard]] int getSource() const { return m_status.MPI_SOURCE; }
@@ -101,8 +117,6 @@ public:
         [[nodiscard]] int getError() const { return m_status.MPI_ERROR; }
 
     private:
-        auto getHandle() -> MPI_Status* { return &m_status; }
-
         MPI_Status m_status;
     };
     static_assert(std::is_standard_layout_v< Status >);
@@ -112,6 +126,7 @@ public:
     public:
         friend class MpiComm;
 
+        Request()                          = default;
         Request(const Request&)            = delete;
         Request& operator=(const Request&) = delete;
         inline Request(Request&&) noexcept;
@@ -138,10 +153,7 @@ public:
             requires std::same_as< std::ranges::range_value_t< RequestRange >, Request >;
 
     private:
-        Request() = default;
         int waitImpl() noexcept { return MPI_Wait(&m_request, MPI_STATUS_IGNORE); }
-
-        auto getHandle() -> MPI_Request* { return &m_request; }
 
         MPI_Request m_request = MPI_REQUEST_NULL;
     };
@@ -203,6 +215,8 @@ public:
     void allReduce(Data&& data, It out_it, MPI_Op op) const;
     template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
     void gather(Data&& data, It out_it, int root) const;
+    template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
+    void allGather(Data&& data, It out_it) const;
     template < comm::MpiBuf_c Data >
     void broadcast(Data&& data, int root) const;
 
@@ -235,7 +249,7 @@ private:
     MPI_Comm m_comm = MPI_COMM_NULL;
 };
 
-template < comm::MpiType_c T >
+template < comm::MpiBuiltinType_c T >
 auto MpiComm::Status::numElems() const -> int
 {
     int retval{};
@@ -336,7 +350,7 @@ auto MpiComm::FileHandle::readAtAsync(Data&& read_range, MPI_Offset offset) cons
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(read_range);
     MpiComm::Request request;
-    L3STER_INVOKE_MPI(MPI_File_iread_at, m_file, offset, buf_begin, buf_size, datatype, request.getHandle());
+    L3STER_INVOKE_MPI(MPI_File_iread_at, m_file, offset, buf_begin, buf_size, datatype, &request.m_request);
     return request;
 }
 
@@ -351,7 +365,7 @@ auto MpiComm::FileHandle::writeAtAsync(Data&& write_range, MPI_Offset offset) co
                       std::ranges::data(write_range),
                       util::exactIntegerCast< int >(std::ranges::size(write_range)),
                       datatype,
-                      request.getHandle());
+                      &request.m_request);
     return request;
 }
 
@@ -406,7 +420,7 @@ auto MpiComm::probeAsync(int source, int tag) const -> std::pair< Status, bool >
 {
     auto retval = std::pair< Status, bool >{};
     int  flag{};
-    L3STER_INVOKE_MPI(MPI_Iprobe, source, tag, m_comm, &flag, retval.first.getHandle());
+    L3STER_INVOKE_MPI(MPI_Iprobe, source, tag, m_comm, &flag, &retval.first.m_status);
     retval.second = flag;
     return retval;
 }
@@ -437,8 +451,16 @@ template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
 void MpiComm::gather(Data&& data, It out_it, int root) const
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
-    L3STER_INVOKE_MPI(
-        MPI_Gather, buf_begin, buf_size, datatype, std::addressof(*out_it), buf_size, datatype, root, m_comm);
+    const auto out_ptr                         = std::addressof(*out_it);
+    L3STER_INVOKE_MPI(MPI_Gather, buf_begin, buf_size, datatype, out_ptr, buf_size, datatype, root, m_comm);
+}
+
+template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
+void MpiComm::allGather(Data&& data, It out_it) const
+{
+    const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
+    const auto out_ptr                         = std::addressof(*out_it);
+    L3STER_INVOKE_MPI(MPI_Allgather, buf_begin, buf_size, datatype, out_ptr, buf_size, datatype, m_comm);
 }
 
 template < comm::MpiBuf_c Data >
@@ -453,7 +475,7 @@ auto MpiComm::broadcastAsync(Data&& data, int root) const -> MpiComm::Request
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
     auto request                               = Request{};
-    L3STER_INVOKE_MPI(MPI_Ibcast, buf_begin, buf_size, datatype, root, m_comm, request.getHandle());
+    L3STER_INVOKE_MPI(MPI_Ibcast, buf_begin, buf_size, datatype, root, m_comm, &request.m_request);
     return request;
 }
 
@@ -471,7 +493,7 @@ auto MpiComm::allToAllAsync(SendBuf&& send_buf, RecvBuf&& recv_buf) const -> Mpi
     const int n_elems = send_size / getSize();
     auto      request = Request{};
     L3STER_INVOKE_MPI(
-        MPI_Ialltoall, send_begin, n_elems, send_type, recv_begin, n_elems, recv_type, m_comm, request.getHandle());
+        MPI_Ialltoall, send_begin, n_elems, send_type, recv_begin, n_elems, recv_type, m_comm, &request.m_request);
     return request;
 }
 

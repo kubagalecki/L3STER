@@ -21,8 +21,10 @@ public:
 
     T*       begin() { return m_data.get(); }
     const T* begin() const { return m_data.get(); }
+    const T* cbegin() const { return begin(); }
     T*       end() { return m_data.get() + m_size; }
     const T* end() const { return m_data.get() + m_size; }
+    const T* cend() const { return end(); }
     T*       data() { return m_data.get(); }
     const T* data() const { return m_data.get(); }
     T&       operator[](std::size_t i) { return m_data[i]; }
