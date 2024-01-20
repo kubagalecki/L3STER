@@ -117,8 +117,6 @@ public:
         [[nodiscard]] int getError() const { return m_status.MPI_ERROR; }
 
     private:
-        auto getHandle() -> MPI_Status* { return &m_status; }
-
         MPI_Status m_status;
     };
     static_assert(std::is_standard_layout_v< Status >);
@@ -128,6 +126,7 @@ public:
     public:
         friend class MpiComm;
 
+        Request()                          = default;
         Request(const Request&)            = delete;
         Request& operator=(const Request&) = delete;
         inline Request(Request&&) noexcept;
@@ -154,10 +153,7 @@ public:
             requires std::same_as< std::ranges::range_value_t< RequestRange >, Request >;
 
     private:
-        Request() = default;
         int waitImpl() noexcept { return MPI_Wait(&m_request, MPI_STATUS_IGNORE); }
-
-        auto getHandle() -> MPI_Request* { return &m_request; }
 
         MPI_Request m_request = MPI_REQUEST_NULL;
     };
@@ -219,6 +215,8 @@ public:
     void allReduce(Data&& data, It out_it, MPI_Op op) const;
     template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
     void gather(Data&& data, It out_it, int root) const;
+    template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
+    void allGather(Data&& data, It out_it) const;
     template < comm::MpiBuf_c Data >
     void broadcast(Data&& data, int root) const;
 
@@ -352,7 +350,7 @@ auto MpiComm::FileHandle::readAtAsync(Data&& read_range, MPI_Offset offset) cons
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(read_range);
     MpiComm::Request request;
-    L3STER_INVOKE_MPI(MPI_File_iread_at, m_file, offset, buf_begin, buf_size, datatype, request.getHandle());
+    L3STER_INVOKE_MPI(MPI_File_iread_at, m_file, offset, buf_begin, buf_size, datatype, &request.m_request);
     return request;
 }
 
@@ -367,7 +365,7 @@ auto MpiComm::FileHandle::writeAtAsync(Data&& write_range, MPI_Offset offset) co
                       std::ranges::data(write_range),
                       util::exactIntegerCast< int >(std::ranges::size(write_range)),
                       datatype,
-                      request.getHandle());
+                      &request.m_request);
     return request;
 }
 
@@ -422,7 +420,7 @@ auto MpiComm::probeAsync(int source, int tag) const -> std::pair< Status, bool >
 {
     auto retval = std::pair< Status, bool >{};
     int  flag{};
-    L3STER_INVOKE_MPI(MPI_Iprobe, source, tag, m_comm, &flag, retval.first.getHandle());
+    L3STER_INVOKE_MPI(MPI_Iprobe, source, tag, m_comm, &flag, &retval.first.m_status);
     retval.second = flag;
     return retval;
 }
@@ -453,8 +451,16 @@ template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
 void MpiComm::gather(Data&& data, It out_it, int root) const
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
-    L3STER_INVOKE_MPI(
-        MPI_Gather, buf_begin, buf_size, datatype, std::addressof(*out_it), buf_size, datatype, root, m_comm);
+    const auto out_ptr                         = std::addressof(*out_it);
+    L3STER_INVOKE_MPI(MPI_Gather, buf_begin, buf_size, datatype, out_ptr, buf_size, datatype, root, m_comm);
+}
+
+template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
+void MpiComm::allGather(Data&& data, It out_it) const
+{
+    const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
+    const auto out_ptr                         = std::addressof(*out_it);
+    L3STER_INVOKE_MPI(MPI_Allgather, buf_begin, buf_size, datatype, out_ptr, buf_size, datatype, m_comm);
 }
 
 template < comm::MpiBuf_c Data >
@@ -469,7 +475,7 @@ auto MpiComm::broadcastAsync(Data&& data, int root) const -> MpiComm::Request
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
     auto request                               = Request{};
-    L3STER_INVOKE_MPI(MPI_Ibcast, buf_begin, buf_size, datatype, root, m_comm, request.getHandle());
+    L3STER_INVOKE_MPI(MPI_Ibcast, buf_begin, buf_size, datatype, root, m_comm, &request.m_request);
     return request;
 }
 
@@ -487,7 +493,7 @@ auto MpiComm::allToAllAsync(SendBuf&& send_buf, RecvBuf&& recv_buf) const -> Mpi
     const int n_elems = send_size / getSize();
     auto      request = Request{};
     L3STER_INVOKE_MPI(
-        MPI_Ialltoall, send_begin, n_elems, send_type, recv_begin, n_elems, recv_type, m_comm, request.getHandle());
+        MPI_Ialltoall, send_begin, n_elems, send_type, recv_begin, n_elems, recv_type, m_comm, &request.m_request);
     return request;
 }
 

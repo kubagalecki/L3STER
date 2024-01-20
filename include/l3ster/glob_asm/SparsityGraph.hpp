@@ -3,6 +3,7 @@
 
 #include "l3ster/dofs/DofsFromNodes.hpp"
 #include "l3ster/dofs/MakeTpetraMap.hpp"
+#include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/CrsGraph.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
@@ -24,43 +25,20 @@ template < el_o_t... orders >
 auto computeInNeighborGhostNodes(const MpiComm& comm, const mesh::MeshPartition< orders... >& mesh)
     -> rank_to_nodes_map_t
 {
-    const auto                 max_n_ghosts = std::invoke([&] {
-        const size_t my_n_ghosts = mesh.getGhostNodes().size();
-        size_t       retval{};
-        comm.allReduce(std::span{&my_n_ghosts, 1}, &retval, MPI_MAX);
-        return retval;
-    });
-    util::ArrayOwner< n_id_t > send_buf(max_n_ghosts + 1), recv_buf(max_n_ghosts + 1), proc_buf(max_n_ghosts + 1);
-    send_buf.front() = mesh.getGhostNodes().size();
-    std::ranges::copy(mesh.getGhostNodes(), std::next(send_buf.begin()));
-
-    auto       retval        = rank_to_nodes_map_t{};
-    const auto process_recvd = [&](const util::ArrayOwner< n_id_t >& data_buf, int potential_nbr_rank) {
-        const auto             rank_ghosts    = std::span{std::next(data_buf.begin()), data_buf.front()};
+    const int  my_rank            = comm.getRank();
+    auto       retval             = rank_to_nodes_map_t{};
+    const auto process_nbr_ghosts = [&](std::span< const n_id_t > rank_ghosts, int potential_nbr_rank) {
+        if (potential_nbr_rank == my_rank)
+            return;
         std::vector< n_id_t >* nbr_ghosts_ptr = nullptr; // avoid repeated lookup
-        for (n_id_t ghost : rank_ghosts | std::views::filter(mesh.getOwnedNodePredicate()))
+        for (auto ghost : rank_ghosts | std::views::filter(mesh.getOwnedNodePredicate()))
         {
             if (not nbr_ghosts_ptr)
                 nbr_ghosts_ptr = std::addressof(retval[potential_nbr_rank]);
             nbr_ghosts_ptr->push_back(ghost);
         }
     };
-
-    // Staggered all-gather pattern
-    const int my_rank = comm.getRank(), comm_size = comm.getSize();
-    auto      request = comm.broadcastAsync(my_rank == 0 ? send_buf : recv_buf, 0);
-    for (int send_rank = 1; send_rank != comm_size; ++send_rank)
-    {
-        request.wait();
-        std::swap(recv_buf, proc_buf);
-        request = comm.broadcastAsync(my_rank == send_rank ? send_buf : recv_buf, send_rank);
-        if (my_rank != send_rank - 1)
-            process_recvd(proc_buf, send_rank - 1);
-    }
-    request.wait();
-    if (my_rank != comm_size - 1)
-        process_recvd(recv_buf, comm_size - 1);
-
+    util::staggeredAllGather(comm, mesh.getGhostNodes(), process_nbr_ghosts);
     return retval;
 }
 

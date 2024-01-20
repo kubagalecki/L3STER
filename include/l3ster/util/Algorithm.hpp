@@ -1,6 +1,7 @@
 #ifndef L3STER_UTIL_ALGORITHM_HPP
 #define L3STER_UTIL_ALGORITHM_HPP
 
+#include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/util/Meta.hpp"
 
 #include "oneapi/tbb/parallel_invoke.h"
@@ -119,9 +120,9 @@ matchingPermutation(R1&& r_pattern, R2&& r_match, O out, Pred pred = {}, Proj1 p
 {
     auto out_initial = out;
     std::ranges::for_each(r_match, [&](auto&& match_el) {
-        *(out++) = std::distance(std::ranges::begin(r_pattern),
-                                 std::ranges::find_if(
-                                     r_pattern, [&](auto&& el) { return pred(el, proj2(match_el)); }, proj1));
+        *(out++) =
+            std::distance(std::ranges::begin(r_pattern),
+                          std::ranges::find_if(r_pattern, [&](auto&& el) { return pred(el, proj2(match_el)); }, proj1));
     });
     return std::ranges::in_out_result{out_initial, out};
 }
@@ -251,6 +252,47 @@ auto getValuesAtInds(const std::array< T, N >& array, ConstexprValue< inds > ind
     std::array< T, std::ranges::size(inds) > retval;
     copyValuesAtInds(array, begin(retval), inds_ctwrpr);
     return retval;
+}
+
+template < typename T, typename Process >
+void staggeredAllGather(const MpiComm& comm, std::span< const T > my_data, Process&& process_received)
+    requires std::invocable< Process, std::span< const T >, int >
+{
+    const int my_rank   = comm.getRank();
+    const int comm_size = comm.getSize();
+
+    // Data is not actually modified, this is just to enable passing to the MPI wrapper
+    const auto my_data_mut = std::span{const_cast< T* >(my_data.data()), my_data.size()};
+
+    auto msg_sizes = util::ArrayOwner< size_t >(static_cast< size_t >(comm_size));
+    comm.allGather(std::views::single(my_data.size()), msg_sizes.begin());
+    msg_sizes[static_cast< size_t >(my_rank)] = 0;
+    const auto            max_recv_sz         = std::ranges::max(msg_sizes);
+    util::ArrayOwner< T > proc_buf(max_recv_sz), recv_buf(max_recv_sz);
+
+    auto       request            = MpiComm::Request{};
+    const auto begin_broadcasting = [&](int send_rank) {
+        const auto comm_buf = my_rank == send_rank ? my_data_mut : std::span{recv_buf}.subspan(0, msg_sizes[send_rank]);
+        request             = comm.broadcastAsync(comm_buf, send_rank);
+    };
+    const auto finish_broadcasting = [&]() {
+        request.wait();
+        std::swap(recv_buf, proc_buf);
+    };
+    const auto do_processing = [&](int send_rank) {
+        const auto proc_data = my_rank == send_rank ? my_data : std::span{proc_buf.cbegin(), msg_sizes[send_rank]};
+        std::invoke(process_received, proc_data, send_rank);
+    };
+
+    begin_broadcasting(0);
+    for (int send_rank = 1; send_rank != comm_size; ++send_rank)
+    {
+        finish_broadcasting();
+        begin_broadcasting(send_rank);
+        do_processing(send_rank - 1);
+    }
+    finish_broadcasting();
+    do_processing(comm_size - 1);
 }
 } // namespace lstr::util
 #endif // L3STER_UTIL_ALGORITHM_HPP

@@ -2,6 +2,7 @@
 #define L3STER_DOFS_DOFINTERVALS_HPP
 
 #include "l3ster/dofs/NodeCondensation.hpp"
+#include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/BitsetManip.hpp"
 #include "l3ster/util/Caliper.hpp"
 
@@ -82,12 +83,11 @@ void serializeDofIntervals(const node_interval_vector_t< n_fields >&       inter
 }
 
 template < size_t n_fields >
-void deserializeDofIntervals(const std::ranges::sized_range auto& serial_data, auto out_it)
-    requires std::same_as< std::ranges::range_value_t< std::decay_t< decltype(serial_data) > >, unsigned long long > and
-             std::output_iterator< decltype(out_it), node_interval_t< n_fields > >
+void deserializeDofIntervals(std::span< const unsigned long long >                    serial_data,
+                             std::output_iterator< node_interval_t< n_fields > > auto out_it)
 {
     constexpr auto n_ulls = util::bitsetNUllongs< n_fields >();
-    for (auto data_it = std::ranges::begin(serial_data); data_it != std::ranges::end(serial_data);)
+    for (auto data_it = serial_data.begin(); data_it != serial_data.end();)
     {
         auto delims          = std::array< n_id_t, 2 >{};
         auto serial_fieldcov = std::array< unsigned long long, n_ulls >{};
@@ -101,53 +101,22 @@ template < size_t n_fields >
 auto gatherGlobalDofIntervals(const MpiComm& comm, const node_interval_vector_t< n_fields >& local_intervals)
     -> node_interval_vector_t< n_fields >
 {
-    constexpr size_t serial_interval_size = util::bitsetNUllongs< n_fields >() + 2;
-    const size_t     n_intervals_local    = local_intervals.size();
-    const auto       comm_size            = comm.getSize();
-    const auto       my_rank              = comm.getRank();
-
-    const size_t max_n_intervals_global = std::invoke([&] {
-        size_t retval{};
-        comm.allReduce(std::views::single(n_intervals_local), &retval, MPI_MAX);
+    constexpr size_t                   serial_interval_size       = util::bitsetNUllongs< n_fields >() + 2;
+    const auto                         my_rank                    = comm.getRank();
+    const auto                         serialized_local_intervals = std::invoke([&] {
+        auto retval = util::ArrayOwner< unsigned long long >(serial_interval_size * local_intervals.size());
+        serializeDofIntervals(local_intervals, retval.begin());
         return retval;
     });
-    const size_t max_msg_size           = max_n_intervals_global * serial_interval_size + 1u;
-    auto         serial_local_intervals = std::invoke([&] {
-        auto retval    = util::ArrayOwner< unsigned long long >(max_msg_size);
-        retval.front() = n_intervals_local;
-        serializeDofIntervals(local_intervals, std::next(retval.begin()));
-        return retval;
-    });
-
     node_interval_vector_t< n_fields > retval;
-    retval.reserve(comm_size * max_n_intervals_global);
-    auto       proc_buf     = util::ArrayOwner< unsigned long long >(max_msg_size);
-    const auto process_data = [&](int sender_rank) {
+    retval.reserve(comm.getSize() * local_intervals.size());
+    const auto process_received = [&](std::span< const unsigned long long > received_intervals, int sender_rank) {
         if (sender_rank != my_rank)
-        {
-            const auto received_intervals =
-                proc_buf | std::views::drop(1) | std::views::take(proc_buf.front() * serial_interval_size);
             deserializeDofIntervals< n_fields >(received_intervals, std::back_inserter(retval));
-        }
         else
             std::ranges::copy(local_intervals, std::back_inserter(retval));
     };
-
-    auto msg_buf =
-        my_rank == 0 ? std::move(serial_local_intervals) : util::ArrayOwner< unsigned long long >(max_msg_size);
-    auto request = comm.broadcastAsync(msg_buf, 0);
-    for (int root_rank = 1; root_rank < comm_size; ++root_rank)
-    {
-        request.wait();
-        std::swap(msg_buf, proc_buf);
-        if (my_rank == root_rank)
-            msg_buf = std::move(serial_local_intervals);
-        request = comm.broadcastAsync(msg_buf, root_rank);
-        process_data(root_rank - 1);
-    }
-    request.wait();
-    std::swap(msg_buf, proc_buf);
-    process_data(comm_size - 1);
+    util::staggeredAllGather(comm, std::span{serialized_local_intervals}, process_received);
     return retval;
 }
 
