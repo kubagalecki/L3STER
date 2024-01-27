@@ -13,6 +13,7 @@
 #include "l3ster/util/SetStackSize.hpp"
 #include "l3ster/util/StaticVector.hpp"
 #include "l3ster/util/TbbUtils.hpp"
+#include "l3ster/util/TypeErasedOverload.hpp"
 
 #include "MakeRandomVector.hpp"
 #include "TestDataPath.h"
@@ -769,5 +770,74 @@ TEST_CASE("Memory-mapping utils", "[utils]")
 
         REQUIRE(std::ranges::equal(text_view.substr(ofs + len), std::views::istream< char >(istream)));
         CHECK_FALSE(istream.good());
+    }
+}
+
+TEST_CASE("Type-erased overload set tests", "[util]")
+{
+    using namespace std::string_literals;
+    using teos_t              = util::TypeErasedOverload< int, int, const std::string& >;
+    constexpr auto check_vals = [](const teos_t& teos) {
+        CHECK(teos(1) == 0);
+        CHECK(teos("str"s) == 1);
+    };
+
+    SECTION("Target fits in buffer")
+    {
+        const int  int_val = 0, str_val = 1;
+        const auto process_int = [&](int) {
+            return int_val;
+        };
+        const auto process_string = [&](const std::string&) {
+            return str_val;
+        };
+        const auto overload = util::OverloadSet{process_int, process_string};
+
+        auto te_overload = teos_t{overload};
+        check_vals(te_overload);
+
+        auto te2 = std::move(te_overload);
+        check_vals(te2);
+
+        int i       = 0;
+        te_overload = [&i](const auto&) {
+            return i++;
+        };
+        check_vals(te_overload);
+        i = 0;
+
+        teos_t empty;
+        CHECK(!empty);
+        te2 = std::move(empty);
+        CHECK(!te2);
+        te2 = std::move(te_overload);
+        check_vals(te2);
+    }
+
+    SECTION("Target allocated on heap")
+    {
+        const auto a           = std::array{0, 1, 2, 3, 4};
+        const auto process_int = [a = a](int) {
+            return a[0];
+        };
+        const auto process_string = [a = a](const std::string&) {
+            return a[1];
+        };
+        const auto overload = util::OverloadSet{process_int, process_string};
+
+        auto te_overload = teos_t{overload};
+        check_vals(te_overload);
+
+        auto te2 = std::move(te_overload);
+        check_vals(te2);
+
+        size_t i    = 0;
+        te_overload = [&i, a = a](const auto&) {
+            return a[i++];
+        };
+        check_vals(te_overload);
+
+        te_overload = teos_t{};
+        CHECK(!te_overload);
     }
 }
