@@ -87,6 +87,6 @@ auto parallelTransformReduce(Range&& range, Zero identity, Reduction reduction =
                                          transform);
         },
         reduction);
-} // namespace lstr::util::tbb
+}
 } // namespace lstr::util::tbb
 #endif // L3STER_UTIL_TBBUTILS_HPP

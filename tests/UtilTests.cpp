@@ -14,6 +14,7 @@
 #include "l3ster/util/StaticVector.hpp"
 #include "l3ster/util/TbbUtils.hpp"
 #include "l3ster/util/TypeErasedOverload.hpp"
+#include "l3ster/util/UniVector.hpp"
 
 #include "MakeRandomVector.hpp"
 #include "TestDataPath.h"
@@ -839,5 +840,84 @@ TEST_CASE("Type-erased overload set tests", "[util]")
 
         te_overload = teos_t{};
         CHECK(!te_overload);
+    }
+}
+
+TEST_CASE("UniVector", "[util]")
+{
+    auto vec = util::UniVector< int, std::string >{};
+    REQUIRE(vec.size() == 0);
+
+    constexpr size_t n_ints = 50'000, n_strs = 20'000;
+    std::fill_n(std::back_inserter(vec.getVector< int >()), n_ints, 42);
+    std::fill_n(std::back_inserter(vec.getVector< std::string >()), n_strs, "42");
+    REQUIRE(vec.size() == n_ints + n_strs);
+
+    SECTION("Iteration")
+    {
+        std::mutex            mut; // Catch2 assertions not thread safe
+        std::atomic< size_t > n_visited{0};
+        const auto            check          = util::OverloadSet{[&](int i) {
+                                                 n_visited.fetch_add(1, std::memory_order_relaxed);
+                                                 const auto lock = std::lock_guard{mut};
+                                                 CHECK(i == 42);
+                                             },
+                                             [&](const std::string& str) {
+                                                 n_visited.fetch_add(1, std::memory_order_relaxed);
+                                                 const auto lock = std::lock_guard{mut};
+                                                 CHECK(std::stoi(str) == 42);
+                                             }};
+        const auto            check_n_visits = [&]() {
+            REQUIRE(n_visited == n_ints + n_strs);
+            n_visited.store(0);
+        };
+
+        vec.visit(check, std::execution::seq);
+        check_n_visits();
+        std::as_const(vec).visit(check, std::execution::seq);
+        check_n_visits();
+
+        vec.visit(check, std::execution::par);
+        check_n_visits();
+        std::as_const(vec).visit(check, std::execution::par);
+        check_n_visits();
+    }
+
+    SECTION("Reduction")
+    {
+        const auto transform = util::OverloadSet{[&](int i) { return i; },
+                                                 [&](const std::string& str) {
+                                                     return std::stoi(str);
+                                                 }};
+
+        CHECK(vec.transformReduce(0, transform, std::plus{}, std::execution::seq) == (n_strs + n_ints) * 42);
+        CHECK(vec.transformReduce(0, transform, std::plus{}, std::execution::par) == (n_strs + n_ints) * 42);
+    }
+
+    SECTION("Lookup")
+    {
+        auto       find_val = 42;
+        const auto pred     = util::OverloadSet{[&find_val](int i) { return i == find_val; },
+                                            [&find_val](const std::string& str) {
+                                                return std::stoi(str) == find_val;
+                                            }};
+
+        {
+            const auto found_ptr = vec.find(pred);
+            REQUIRE(found_ptr.has_value());
+            REQUIRE(*found_ptr == vec.at(0));
+        }
+
+        vec.getVector< std::string >().emplace_back("43");
+        {
+            find_val             = 43;
+            const auto found_ptr = vec.find(pred);
+            REQUIRE(found_ptr.has_value());
+            REQUIRE(*found_ptr == vec.at(n_ints + n_strs));
+        }
+
+        find_val = 44;
+        REQUIRE_FALSE(vec.find(pred).has_value());
+        REQUIRE_FALSE(std::as_const(vec).find(pred).has_value());
     }
 }
