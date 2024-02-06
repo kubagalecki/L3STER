@@ -67,8 +67,7 @@ class MeshPartition
 
 public:
     inline static auto makeBoundaryElementViews(const MeshPartition< orders... >& mesh,
-                                                const util::ArrayOwner< d_id_t >& bnd_ids)
-        -> detail::boundary_element_view_variant_array_t< orders... >;
+                                                const util::ArrayOwner< d_id_t >& bnd_ids) -> BoundaryView< orders... >;
 
 private:
     class BoundaryManager
@@ -84,7 +83,7 @@ private:
             m_boundary_views.clear();
             for (d_id_t id : bnd_ids)
             {
-                auto bv = BoundaryView< orders... >{makeBoundaryElementViews(mesh, std::views::single(id))};
+                auto bv = makeBoundaryElementViews(mesh, std::views::single(id));
                 m_boundary_views.emplace(id, std::move(bv));
             }
         }
@@ -333,7 +332,7 @@ void MeshPartition< orders... >::visitBoundaries(Visitor&&                      
 {
     const auto visit_ids      = filterExistingBoundaryIds(m_boundary_manager, boundary_ids);
     const auto visit_bnd_view = [&](d_id_t id) {
-        m_boundary_manager.getBoundary(id).visit(element_bnd_view_visitor, policy);
+        m_boundary_manager.getBoundary(id).element_views.visit(element_bnd_view_visitor, policy);
     };
     std::for_each(policy, visit_ids.begin(), visit_ids.end(), visit_bnd_view);
 }
@@ -371,7 +370,7 @@ auto MeshPartition< orders... >::transformReduceBoundaries(const util::ArrayOwne
 {
     const auto transred_ids = filterExistingBoundaryIds(m_boundary_manager, boundary_ids);
     const auto transred_bnd = [&](d_id_t id) {
-        return m_boundary_manager.getBoundary(id).transfromReduce(zero, trans, reduction, policy);
+        return m_boundary_manager.getBoundary(id).element_views.transformReduce(zero, trans, reduction, policy);
     };
     return std::transform_reduce(policy, transred_ids.begin(), transred_ids.end(), zero, reduction, transred_bnd);
 }
@@ -528,17 +527,14 @@ auto makeDimToDomainMap(const MeshPartition< orders... >& mesh) -> std::map< dim
 template < el_o_t... orders >
 auto MeshPartition< orders... >::makeBoundaryElementViews(const MeshPartition< orders... >& mesh,
                                                           const util::ArrayOwner< d_id_t >& bnd_ids)
-    -> detail::boundary_element_view_variant_array_t< orders... >
+    -> BoundaryView< orders... >
 {
-    const auto insert_pos_map  = std::invoke([&] {
-        auto   retval = robin_hood::unordered_flat_map< el_id_t, size_t >{};
-        size_t i      = 0;
-        mesh.visit([&](const auto& element) { retval[element.getId()] = i++; }, bnd_ids);
-        return retval;
-    });
+    auto       retval    = BoundaryView< orders... >{};
+    auto&      bel_views = retval.element_views;
+    std::mutex insert_mut;
     const auto domain_dim_maps = detail::makeDimToDomainMap(mesh);
-    auto       retval          = detail::boundary_element_view_variant_array_t< orders... >(insert_pos_map.size());
-    auto       error_flag      = std::atomic_bool{false};
+    auto       error_flag      = std::atomic_flag{};
+    error_flag.clear();
     const auto put_bnd_el_view = [&]< ElementType BET, el_o_t BEO >(const Element< BET, BEO >& bnd_el) {
         const auto bnd_el_nodes_sorted = util::getSortedArray(bnd_el.getNodes());
         const auto match_dom_el        = [&]< ElementType DET, el_o_t DEO >(const Element< DET, DEO >& dom_el) {
@@ -546,24 +542,25 @@ auto MeshPartition< orders... >::makeBoundaryElementViews(const MeshPartition< o
             if (matched_side_opt)
             {
                 const auto el_boundary_view = BoundaryElementView{&dom_el, *matched_side_opt};
-                const auto insert_pos       = insert_pos_map.at(bnd_el.getId());
-                retval[insert_pos]          = el_boundary_view;
+                const auto lock             = std::lock_guard{insert_mut};
+                bel_views.template getVector< BoundaryElementView< DET, DEO > >().push_back(el_boundary_view);
             }
             return matched_side_opt.has_value();
         };
         constexpr auto bnd_dim    = ElementTraits< Element< BET, BEO > >::native_dim;
         const auto&    domain_ids = domain_dim_maps.at(bnd_dim + 1);
-        const auto     matched    = mesh.find(match_dom_el, domain_ids, std::execution::par);
+        const auto     matched    = mesh.find(match_dom_el, domain_ids);
         if (not matched)
-            error_flag.store(true);
+            error_flag.test_and_set(std::memory_order_relaxed);
     };
     mesh.visit(put_bnd_el_view, bnd_ids, std::execution::par);
     util::throwingAssert(
-        not error_flag.load(),
+        not error_flag.test(),
         "BoundaryView could not be constructed because some of the boundary elements are not edges/faces of "
         "any of the domain elements in the partition. This may be because the mesh was partitioned with "
         "incorrectly specified boundaries, resulting in the edge/face element being in a different partition "
         "from its parent area/volume element.");
+    bel_views.shrinkToFit();
     return retval;
 }
 } // namespace lstr::mesh

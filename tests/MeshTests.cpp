@@ -34,7 +34,7 @@ TEST_CASE("2D mesh import", "[mesh]")
 
     // BoundaryView
     for (auto bnd_id : boundary_ids)
-        CHECK(mesh.getBoundary(bnd_id).size() == 10);
+        CHECK(mesh.getBoundary(bnd_id).element_views.size() == 10);
     CHECK_THROWS(mesh.getBoundary(boundary_ids.back() + 1));
     CHECK(static_cast< size_t >(std::ranges::distance(mesh.getBoundaryIdsView())) == boundary_ids.size());
 }
@@ -217,7 +217,7 @@ TEST_CASE("Serial mesh partitioning", "[mesh]")
     constexpr auto get_bnd_size = [](const MeshPartition< 1 >& part, d_id_t bnd_id) -> size_t {
         try
         {
-            return part.getBoundary(bnd_id).size();
+            return part.getBoundary(bnd_id).element_views.size();
         }
         catch (const std::out_of_range&)
         {

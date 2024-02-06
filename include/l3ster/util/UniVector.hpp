@@ -26,6 +26,7 @@ public:
     template < typename T >
     auto getVector() const -> const std::vector< T >&;
 
+    inline void                      shrinkToFit();
     [[nodiscard]] inline std::size_t size() const;
 
     template < typename Fun, SimpleExecutionPolicy_c ExecPolicy >
@@ -154,6 +155,12 @@ auto UniVector< Ts... >::find(Predicate&& pred) -> std::optional< ptr_variant_t 
         return deconstify(*found);
     else
         return {};
+}
+
+template < typename... Ts >
+void UniVector< Ts... >::shrinkToFit()
+{
+    (getVector< Ts >().shrink_to_fit(), ...);
 }
 
 template < typename... Ts >

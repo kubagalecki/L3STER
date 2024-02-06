@@ -74,10 +74,10 @@ auto evalLocalIntegral(const ResidualDomainKernel< Kernel, params >&            
             return evalElementIntegral(kernel, element, field_vals, qbv, time);
         }
         else
-            return {};
+            return detail::initResidualKernelResult< params >();
     };
-    return mesh.transformReduce(
-        domain_ids, detail::initResidualKernelResult< params >(), reduce_element, std::plus{}, std::execution::par);
+    const auto zero = detail::initResidualKernelResult< params >();
+    return mesh.transformReduce(domain_ids, zero, reduce_element, std::plus{}, std::execution::par);
 }
 
 template < typename Kernel, KernelParams params, el_o_t... orders, AssemblyOptions options >
@@ -101,7 +101,7 @@ auto evalLocalIntegral(const ResidualBoundaryKernel< Kernel, params >&          
             return evalElementBoundaryIntegral(kernel, el_view, field_vals, qbv, time);
         }
         else
-            return {};
+            return detail::initResidualKernelResult< params >();
     };
     const auto zero = detail::initResidualKernelResult< params >();
     return mesh.transformReduceBoundaries(boundary_ids, zero, reduce_element, std::plus{}, std::execution::par);

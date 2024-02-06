@@ -446,7 +446,7 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
             for (auto qp : ref_q.points)
                 CHECK(mapToPhysicalSpace(*el_view, qp)[space_ind] == Approx{offs}.margin(1.e-15));
         };
-        view.visit(element_checker, std::execution::seq);
+        view.element_views.visit(element_checker, std::execution::seq);
     };
 
     SECTION("Generated")
