@@ -20,7 +20,7 @@ Fun* getTargetPtr(void* buf_ptr)
 {
     if (SsoCapableTypeErasedFun_c< Fun >) // The target resides directly in the buffer
         return reinterpret_cast< Fun* >(buf_ptr);
-    else // The buffer holds a void* pointer to the target
+    else // The buffer holds a void* to the target
     {
         const auto ptr_to_target = *reinterpret_cast< void** >(buf_ptr);
         return reinterpret_cast< Fun* >(ptr_to_target);
@@ -101,7 +101,7 @@ public:
     using detail::TypeErasedInvoker< Return, Args, TypeErasedOverload< Return, Args... > >::operator()...;
 
 private:
-    alignas(void*) std::array< std::byte, detail::type_erased_overload_sso_size > m_target_buf{};
+    alignas(void*) std::array< std::byte, detail::type_erased_overload_sso_size > m_target_buf;
     void (*m_special_members)(void*, void*, OperationType) = nullptr;
 };
 
@@ -151,23 +151,28 @@ void TypeErasedOverload< Return, Args... >::initTarget(Fun&& f, std::byte* buf)
 
 template < typename Return, typename... Args >
 template < typename Fun >
-auto        TypeErasedOverload< Return, Args... >::makeSpecialMemberImpl()
-    -> void (*)(void*, void*, TypeErasedOverload::OperationType)
+auto TypeErasedOverload< Return, Args... >::makeSpecialMemberImpl() -> void (*)(void*, void*, OperationType)
 {
     return +[](void* my_target_buf, void* other_target_buf, OperationType op) {
-        const auto my_target    = detail::getTargetPtr< Fun >(my_target_buf);
-        const auto other_target = detail::getTargetPtr< Fun >(other_target_buf);
+        const auto my_target = detail::getTargetPtr< Fun >(my_target_buf);
         switch (op)
         {
         case OperationType::Move:
             if constexpr (detail::SsoCapableTypeErasedFun_c< Fun >)
+            {
+                const auto other_target = detail::getTargetPtr< Fun >(other_target_buf);
                 std::construct_at(my_target, std::move(*other_target));
+            }
             else
+            {
                 std::memcpy(my_target_buf, other_target_buf, sizeof(void*));
+                *reinterpret_cast< void** >(other_target_buf) = nullptr;
+            }
             return;
         case OperationType::Destroy:
-            std::destroy_at(my_target);
-            if constexpr (not detail::SsoCapableTypeErasedFun_c< Fun >)
+            if constexpr (detail::SsoCapableTypeErasedFun_c< Fun >)
+                std::destroy_at(my_target);
+            else
                 delete my_target;
             return;
         }
@@ -177,7 +182,7 @@ auto        TypeErasedOverload< Return, Args... >::makeSpecialMemberImpl()
 template < typename Return, typename... Args >
 void TypeErasedOverload< Return, Args... >::moveImpl(TypeErasedOverload&& other)
 {
-    m_special_members = std::exchange(other.m_special_members, nullptr);
+    m_special_members = other.m_special_members;
     if (m_special_members)
     {
         copyInvokersImpl(other);
