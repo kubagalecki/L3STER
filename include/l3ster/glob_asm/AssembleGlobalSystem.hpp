@@ -37,8 +37,8 @@ bool checkDomainDimension(const mesh::MeshPartition< orders... >& mesh,
     const auto check_domain_dim = [&](d_id_t id) {
         try
         {
-            const auto dom_view = mesh.getDomainView(id);
-            return dom_view.getDim() == dim;
+            const auto domain_dim = mesh.getDomain(id).dim;
+            return domain_dim == dim;
         }
         catch (const std::out_of_range&) // Domain not present in partition means kernel will not be invoked
         {

@@ -31,7 +31,6 @@ add_executable( L3STER_tests TestsMain.cpp
                 LocalAssemblyTests.cpp
                 MappingTests.cpp
                 MathTests.cpp
-                MeshSerializationTests.cpp
                 MeshTests.cpp
                 QuadratureTests.cpp
                 SolutionManagerTest.cpp
@@ -82,7 +81,7 @@ add_mpi_test( NodeCondensationTest.cpp Condense_Element_Boundary_Nodes "1;2;4" )
 add_mpi_test( GlobalDofGatherTest.cpp Distribute_Global_DOF_Intervals "2;4" )
 add_mpi_test( MpiBlockingCommunicationTest.cpp MPI_Blocking_Communication "1;2;4" )
 add_mpi_test( MpiAsyncCommunicationTest.cpp MPI_Async_Communication "1;2;4" )
-add_mpi_test( MeshSendRecvTest.cpp Mesh_Send_Receive "2;4" )
+add_mpi_test( MeshSendRecvTest.cpp Mesh_Send_Recv "2;4" )
 add_mpi_test( MeshDistributionTest.cpp Mesh_Distribution "1;2;4" )
 add_mpi_test( NodeThroughputInfoTest.cpp Node_Throughput_Calculation "1;2;4" )
 add_mpi_test( TpetraMapCreationTest.cpp Tpetra_Map_Creation "1;2;4" )

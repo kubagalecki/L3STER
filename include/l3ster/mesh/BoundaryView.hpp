@@ -19,14 +19,13 @@ concept BoundaryTransformReducible_c =
     ReductionFor_c< Reduction, Zero >;
 
 template < el_o_t... orders >
-class BoundaryView
+struct BoundaryView
 {
     static_assert(sizeof...(orders) > 0);
 
     using bev_univec_t =
         parametrize_type_over_element_types_and_orders_t< util::UniVector, BoundaryElementView, orders... >;
 
-public:
     bev_univec_t element_views;
 };
 } // namespace lstr::mesh

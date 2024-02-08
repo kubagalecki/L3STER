@@ -70,10 +70,10 @@ TEST_CASE("Incorrect domain dim handling", "[mesh]")
     const auto     data  = ElementData< ElementType::Line, 1 >{{Point{0., 0., 0.}, Point{0., 0., 0.}}};
     constexpr auto nodes = std::array< n_id_t, 2 >{1, 2};
     el_id_t        id    = 1;
-    domain.getElementVector< ElementType::Line, 1 >().reserve(1);
-    domain.getElementVector< ElementType::Line, 1 >().emplace_back(nodes, data, id++);
-    domain.getElementVector< ElementType::Line, 1 >().reserve(1);
-    CHECK_THROWS(domain.getElementVector< ElementType::Quad, 1 >());
+    domain.elements.getVector< Element< ElementType::Line, 1 > >().reserve(1);
+    domain.elements.getVector< Element< ElementType::Line, 1 > >().emplace_back(nodes, data, id++);
+    domain.elements.getVector< Element< ElementType::Line, 1 > >().reserve(1);
+    CHECK(domain.elements.getVector< Element< ElementType::Quad, 1 > >().size() == 0);
 }
 
 TEMPLATE_TEST_CASE("Iteration over elements",
@@ -123,64 +123,65 @@ TEMPLATE_TEST_CASE("Iteration over elements",
     count = 0;
 }
 
-TEMPLATE_TEST_CASE("Element lookup", "[mesh]", std::execution::sequenced_policy, std::execution::parallel_policy)
+TEST_CASE("Element lookup", "[mesh]")
 {
-    const auto policy = TestType{};
-    auto       mesh   = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), {}, gmsh_tag);
+    auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), {}, gmsh_tag);
 
     constexpr auto existing_nodes = std::array{54, 55, 63, 64};
     constexpr auto fake_nodes     = std::array{153, 213, 372, 821};
 
-    CHECK(mesh.find(
-        [&](const auto& element) {
-            auto element_nodes = element.getNodes();
-            std::ranges::sort(element_nodes);
-            return std::ranges::equal(element_nodes, existing_nodes);
-        },
-        policy));
-    CHECK_FALSE(mesh.find(
-        [&](const auto& element) {
-            auto element_nodes = element.getNodes();
-            std::ranges::sort(element_nodes);
-            return std::ranges::equal(element_nodes, fake_nodes);
-        },
-        policy));
-    CHECK_FALSE(MeshPartition< 1 >{}.find([](const auto&) { return true; }, policy));
+    CHECK(mesh.find([&](const auto& element) {
+        auto element_nodes = element.getNodes();
+        std::ranges::sort(element_nodes);
+        return std::ranges::equal(element_nodes, existing_nodes);
+    }));
+    CHECK_FALSE(mesh.find([&](const auto& element) {
+        auto element_nodes = element.getNodes();
+        std::ranges::sort(element_nodes);
+        return std::ranges::equal(element_nodes, fake_nodes);
+    }));
+    CHECK_FALSE(MeshPartition< 1 >{}.find([](const auto&) { return true; }));
     CHECK_FALSE(MeshPartition< 1 >{}.find(0));
 }
 
 TEST_CASE("Element lookup by ID", "[mesh]")
 {
-    auto domain = Domain< 1 >{};
-    CHECK_FALSE(domain.find(1));
-    CHECK_FALSE(std::as_const(domain).find(1));
-
-    const auto data  = ElementData< ElementType::Line, 1 >{{Point{0., 0., 0.}, Point{0., 0., 0.}}};
-    auto       nodes = std::array< n_id_t, 2 >{1, 2};
-    el_id_t    id    = 1;
-    domain.getElementVector< ElementType::Line, 1 >().reserve(1);
-    CHECK_FALSE(domain.find(1));
-    domain.getElementVector< ElementType::Line, 1 >().emplace_back(nodes, data, id++);
-    CHECK(domain.find(1));
-    CHECK_FALSE(domain.find(0));
-
-    const auto next = [&]() -> std::array< n_id_t, 2 >& {
-        std::ranges::for_each(nodes, [](auto& n) { ++n; });
-        return nodes;
+    auto       domain       = Domain< 1 >{};
+    const auto push_elem_id = [&](el_id_t id) {
+        constexpr auto data  = ElementData< ElementType::Line, 1 >{};
+        constexpr auto nodes = std::array< n_id_t, 2 >{};
+        emplaceInDomain< ElementType::Line, 1 >(domain, nodes, data, id);
+    };
+    const auto check_contains = [&](el_id_t id) {
+        auto part = MeshPartition< 1 >{MeshPartition< 1 >::domain_map_t{{0, domain}}, {}};
+        CHECK(part.find(id));
+        CHECK(std::as_const(part).find(id));
+    };
+    const auto check_doesnt_contain = [&](el_id_t id) {
+        auto part = MeshPartition< 1 >{MeshPartition< 1 >::domain_map_t{{0, domain}}, {}};
+        CHECK_FALSE(part.find(id));
+        CHECK_FALSE(std::as_const(part).find(id));
     };
 
+    check_doesnt_contain(0);
+
+    el_id_t id = 1;
+    push_elem_id(id++);
+    check_contains(1);
+    check_doesnt_contain(0);
+
     for (size_t i = 0; i < 10; ++i)
-        domain.getElementVector< ElementType::Line, 1 >().emplace_back(next(), data, id++);
-    CHECK(domain.find(10));
+        push_elem_id(id++);
+    check_contains(10);
+    check_doesnt_contain(0);
 
-    domain.getElementVector< ElementType::Line, 1 >().emplace_back(next(), data, 0);
-    CHECK_FALSE(domain.find(0));
-    domain.sort();
-    CHECK(domain.find(0));
+    push_elem_id(0);
+    domain.elements.visitVectors([](auto& v) { std::ranges::sort(v, {}, [](const auto& el) { return el.getId(); }); });
+    check_contains(0);
 
-    domain.getElementVector< ElementType::Line, 1 >().emplace_back(next(), data, id *= 2);
-    CHECK(domain.find(id));
-    CHECK_FALSE(domain.find(id + 1));
+    push_elem_id(id *= 2);
+    check_contains(id);
+    check_doesnt_contain(id + 1);
 }
 
 TEST_CASE("Serial mesh partitioning", "[mesh]")

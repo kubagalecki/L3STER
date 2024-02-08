@@ -1,7 +1,7 @@
-#include "l3ster/comm/ReceiveMesh.hpp"
-#include "l3ster/mesh/ReadMesh.hpp"
+#include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
+#include "Common.hpp"
 #include "TestDataPath.h"
 
 #include <iostream>
@@ -10,49 +10,44 @@ using namespace lstr;
 using namespace lstr::comm;
 using namespace lstr::mesh;
 
+using el_ptr_var = Domain< 1 >::el_univec_t::const_ptr_variant_t;
+bool compareElemsAt(el_ptr_var v1, el_ptr_var v2)
+{
+    constexpr auto compare_contents = [](auto ptr1, auto ptr2) {
+        if constexpr (std::same_as< decltype(ptr1), decltype(ptr2) >)
+            return *ptr1 == *ptr2;
+        return false;
+    };
+    return std::visit(compare_contents, v1, v2);
+}
+
 int main(int argc, char* argv[])
 {
     L3sterScopeGuard scope_guard{argc, argv};
     MpiComm          comm{MPI_COMM_WORLD};
 
-    const auto read_mesh   = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), {}, lstr::mesh::gmsh_tag);
-    const auto serial_part = SerializedPartition{read_mesh};
+    const auto read_mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), {}, lstr::mesh::gmsh_tag);
 
-    if (comm.getSize() <= 1)
+    if (comm.getRank() == 0)
     {
-        std::cerr << "This test requires at least 2 MPI ranks";
-        comm.abort();
-        return EXIT_FAILURE;
+        auto reqs = std::vector< MpiComm::Request >{};
+        for (int i = 1; i < comm.getSize(); ++i)
+            sendMesh(comm, read_mesh, i, std::back_inserter(reqs));
+        MpiComm::Request::waitAll(reqs);
     }
-    for (int i = 0; i < comm.getSize(); ++i)
+    else
     {
-        if (comm.getRank() == 0)
-            for (int j = 1; j < comm.getSize(); ++j)
-                sendPartition(comm, serial_part, j);
-        else
+        const auto recv_mesh = receiveMesh< 1 >(comm, 0);
+        REQUIRE(std::ranges::equal(read_mesh.getAllNodes(), recv_mesh.getAllNodes()));
+        REQUIRE(std::ranges::equal(read_mesh.getDomainIds(), recv_mesh.getDomainIds()));
+        for (d_id_t domain_id : read_mesh.getDomainIds())
         {
-            const auto recv_part = receivePartition(comm, 0);
-            try
-            {
-                if (recv_part.nodes != serial_part.nodes or recv_part.n_owned_nodes != serial_part.n_owned_nodes)
-                    throw 1;
-                for (const auto& [id, dom] : recv_part.domains)
-                {
-                    const auto& dom_read = serial_part.domains.at(id);
-                    if (dom_read.element_nodes != dom.element_nodes or dom_read.element_data != dom.element_data or
-                        dom_read.element_ids != dom.element_ids or dom_read.orders != dom.orders or
-                        dom_read.types != dom.types or dom_read.type_order_offsets != dom.type_order_offsets)
-                        throw 1;
-                }
-            }
-            catch (...)
-            {
-                std::cerr << "The received mesh is different from the sent mesh";
-                comm.abort();
-                return EXIT_FAILURE;
-            }
+            const auto& read_domain = read_mesh.getDomain(domain_id);
+            const auto& recv_domain = recv_mesh.getDomain(domain_id);
+            REQUIRE(read_domain.dim == recv_domain.dim);
+            REQUIRE(read_domain.elements.size() == recv_domain.elements.size());
+            for (size_t i = 0; i != read_domain.elements.size(); ++i)
+                REQUIRE(compareElemsAt(read_domain.elements.at(i), recv_domain.elements.at(i)));
         }
     }
-
-    return EXIT_SUCCESS;
 }

@@ -153,15 +153,14 @@ public:
 
     // find
     // Note: if the predicate returns true for multiple elements, it is undefined which one is returned
-    template < ElementPredicate_c< orders... > F, SimpleExecutionPolicy_c ExecPolicy = DefaultExec >
-    auto find(F&& predicate, ExecPolicy&& policy = {}) -> find_result_t;
-    template < ElementPredicate_c< orders... > F, SimpleExecutionPolicy_c ExecPolicy = DefaultExec >
-    auto find(F&& predicate, ExecPolicy&& policy = {}) const -> const_find_result_t;
-    template < ElementPredicate_c< orders... > F, SimpleExecutionPolicy_c ExecPolicy = DefaultExec >
-    auto find(F&& predicate, const util::ArrayOwner< d_id_t >& ids, ExecPolicy&& policy = {}) -> find_result_t;
-    template < ElementPredicate_c< orders... > F, SimpleExecutionPolicy_c ExecPolicy = DefaultExec >
-    auto find(F&& predicate, const util::ArrayOwner< d_id_t >& ids, ExecPolicy&& policy = {}) const
-        -> const_find_result_t;
+    template < ElementPredicate_c< orders... > F >
+    auto find(F&& predicate) -> find_result_t;
+    template < ElementPredicate_c< orders... > F >
+    auto find(F&& predicate) const -> const_find_result_t;
+    template < ElementPredicate_c< orders... > F >
+    auto find(F&& predicate, const util::ArrayOwner< d_id_t >& ids) -> find_result_t;
+    template < ElementPredicate_c< orders... > F >
+    auto                       find(F&& predicate, const util::ArrayOwner< d_id_t >& ids) const -> const_find_result_t;
     inline find_result_t       find(el_id_t id);
     inline const_find_result_t find(el_id_t id) const;
 
@@ -185,7 +184,6 @@ public:
         requires BoundaryTransformReducible_c< Zero, Transform, Reduction, orders... >;
 
     // observers
-    auto          getDomainView(d_id_t id) const -> DomainView< orders... > { return DomainView{m_domains.at(id), id}; }
     inline size_t getNElements() const;
     auto          getNDomains() const { return m_domains.size(); }
     auto          getDomainIds() const { return m_domains | std::views::keys; }
@@ -210,9 +208,6 @@ public:
         };
     }
 
-    template < el_o_t O >
-    auto getConversionAlloc() const -> MeshPartition< O >::domain_map_t;
-
 private:
     inline static auto filterExistingDomainIds(const domain_map_t& domain_map, const util::ArrayOwner< d_id_t >& ids)
         -> util::ArrayOwner< d_id_t >;
@@ -222,12 +217,73 @@ private:
     template < typename Visitor, typename DomainMap, typename Policy >
     static void
     visitImpl(Visitor&& visitor, DomainMap&& domain_map, const util::ArrayOwner< d_id_t >& domain_ids, Policy&& policy);
+    template < typename Predicate, typename DomainMap >
+    static auto findImpl(Predicate&& predicate, DomainMap&& domain_map, const util::ArrayOwner< d_id_t >& domain_ids);
+    template < typename DomainMap >
+    static auto findImpl(el_id_t id, DomainMap&& domain_map);
 
     domain_map_t               m_domains;
     util::ArrayOwner< n_id_t > m_nodes;
     size_t                     m_n_owned_nodes;
     BoundaryManager            m_boundary_manager;
 };
+
+template < el_o_t... orders >
+template < typename Predicate, typename DomainMap >
+auto MeshPartition< orders... >::findImpl(Predicate&&                       predicate,
+                                          DomainMap&&                       domain_map,
+                                          const util::ArrayOwner< d_id_t >& domain_ids)
+{
+    for (auto id : filterExistingDomainIds(domain_map, domain_ids))
+    {
+        auto&&     domain   = domain_map.at(id);
+        const auto find_res = domain.elements.find(predicate);
+        if (find_res)
+            return find_res;
+    }
+    using retval_t = decltype(domain_map.at(0).elements.find(predicate));
+    return retval_t{};
+}
+
+template < el_o_t... orders >
+template < typename DomainMap >
+auto MeshPartition< orders... >::findImpl(el_id_t id, DomainMap&& domain_map)
+{
+    using retval_t            = decltype(domain_map.at(0).elements.find([](const auto&) { return true; }));
+    auto       retval         = retval_t{};
+    const auto find_in_domain = [&](auto&& domain) {
+        const auto find_in_vec = [&](auto&& el_vec) {
+            if (el_vec.empty())
+                return false;
+
+            const auto front_id = el_vec.front().getId();
+            const auto back_id  = el_vec.back().getId();
+
+            if (id < front_id or id > back_id)
+                return false;
+
+            // Optimization for contiguous case
+            if (back_id - front_id + 1u == el_vec.size())
+            {
+                const auto ptr = std::addressof(el_vec[id - front_id]);
+                retval.emplace(ptr);
+                return true;
+            }
+
+            const auto iter = std::ranges::lower_bound(el_vec, id, {}, [](const auto& el) { return el.getId(); });
+            if (iter == end(el_vec) or iter->getId() != id)
+                return false;
+
+            const auto ptr = std::addressof(*iter);
+            retval.emplace(ptr);
+            return true;
+        };
+        domain.elements.visitVectorsUntil(find_in_vec);
+        return retval.has_value();
+    };
+    std::ranges::find_if(domain_map | std::views::values, find_in_domain);
+    return retval;
+}
 
 template < el_o_t... orders >
 auto copy(const MeshPartition< orders... >& mesh) -> MeshPartition< orders... >
@@ -351,7 +407,7 @@ auto MeshPartition< orders... >::transformReduce(const util::ArrayOwner< d_id_t 
 {
     const auto ids           = filterExistingDomainIds(m_domains, domain_ids);
     const auto reduce_domain = [&](d_id_t id) {
-        return m_domains.at(id).transformReduce(zero, transform, reduction, policy);
+        return m_domains.at(id).elements.transformReduce(zero, transform, reduction, policy);
     };
     return std::transform_reduce(policy, ids.begin(), ids.end(), std::move(zero), std::move(reduction), reduce_domain);
 }
@@ -376,88 +432,51 @@ auto MeshPartition< orders... >::transformReduceBoundaries(const util::ArrayOwne
 }
 
 template < el_o_t... orders >
-template < ElementPredicate_c< orders... > F, SimpleExecutionPolicy_c ExecPolicy >
-auto MeshPartition< orders... >::find(F&& predicate, ExecPolicy&& policy) -> find_result_t
+template < ElementPredicate_c< orders... > F >
+auto MeshPartition< orders... >::find(F&& predicate) -> find_result_t
 {
-    const auto dom_ids = util::ArrayOwner(getDomainIds());
-    return find(std::forward< decltype(predicate) >(predicate), dom_ids, std::forward< ExecPolicy >(policy));
+    return findImpl(std::forward< F >(predicate), m_domains, getDomainIds());
 }
 
 template < el_o_t... orders >
-template < ElementPredicate_c< orders... > F, SimpleExecutionPolicy_c ExecPolicy >
-auto MeshPartition< orders... >::find(F&& predicate, ExecPolicy&& policy) const -> const_find_result_t
+template < ElementPredicate_c< orders... > F >
+auto MeshPartition< orders... >::find(F&& predicate) const -> const_find_result_t
 {
-    const auto dom_ids = util::ArrayOwner(getDomainIds());
-    return find(std::forward< decltype(predicate) >(predicate), dom_ids, std::forward< ExecPolicy >(policy));
+    return findImpl(std::forward< F >(predicate), m_domains, getDomainIds());
 }
 
 template < el_o_t... orders >
-template < ElementPredicate_c< orders... > F, SimpleExecutionPolicy_c ExecPolicy >
-auto MeshPartition< orders... >::find(F&& predicate, const util::ArrayOwner< d_id_t >& ids, ExecPolicy&& policy)
-    -> find_result_t
+template < ElementPredicate_c< orders... > F >
+auto MeshPartition< orders... >::find(F&& predicate, const util::ArrayOwner< d_id_t >& ids) -> find_result_t
 {
-    const auto const_find =
-        std::as_const(*this).find(std::forward< F >(predicate), ids, std::forward< ExecPolicy >(policy));
-    return detail::makeMutableFindResult< orders... >(const_find);
+    return findImpl(std::forward< F >(predicate), m_domains, ids);
 }
 
 template < el_o_t... orders >
-template < ElementPredicate_c< orders... > F, SimpleExecutionPolicy_c ExecPolicy >
-auto MeshPartition< orders... >::find(F&& predicate, const util::ArrayOwner< d_id_t >& ids, ExecPolicy&& policy) const
-    -> const_find_result_t
+template < ElementPredicate_c< orders... > F >
+auto MeshPartition< orders... >::find(F&& predicate, const util::ArrayOwner< d_id_t >& ids) const -> const_find_result_t
 {
-    auto retval = const_find_result_t{};
-    auto mut    = std::mutex{};
-    std::find_if(policy, ids.begin(), ids.end(), [&](d_id_t id) {
-        const auto map_entry_it = m_domains.find(id);
-        if (map_entry_it == m_domains.end())
-            return false;
-        const auto domain_find_result = map_entry_it->second.find(predicate, policy);
-        if (domain_find_result)
-        {
-            const auto lock = std::lock_guard{mut};
-            retval          = domain_find_result;
-        }
-        return domain_find_result.has_value();
-    });
-    return retval;
+    return findImpl(std::forward< F >(predicate), m_domains, ids);
 }
 
 template < el_o_t... orders >
 auto MeshPartition< orders... >::find(el_id_t id) -> find_result_t
 {
-    const auto const_find = std::as_const(*this).find(id);
-    return detail::makeMutableFindResult< orders... >(const_find);
+    return findImpl(id, m_domains);
 }
 
 template < el_o_t... orders >
 auto MeshPartition< orders... >::find(el_id_t id) const -> const_find_result_t
 {
-    auto retval = const_find_result_t{};
-    std::ranges::find_if(m_domains | std::views::values, [&](const Domain< orders... >& domain) {
-        retval = domain.find(id);
-        return retval.has_value();
-    });
-    return retval;
+    return findImpl(id, m_domains);
 }
 
 template < el_o_t... orders >
 size_t MeshPartition< orders... >::getNElements() const
 {
     return std::transform_reduce(m_domains.cbegin(), m_domains.cend(), size_t{}, std::plus{}, [](const auto& d) {
-        return d.second.getNElements();
+        return d.second.elements.size();
     });
-}
-
-template < el_o_t... orders >
-
-template < el_o_t O >
-auto MeshPartition< orders... >::getConversionAlloc() const -> MeshPartition< O >::domain_map_t
-{
-    auto retval = typename MeshPartition< O >::domain_map_t{};
-    for (const auto& [id, dom] : m_domains)
-        retval.emplace_hint(retval.cend(), id, dom.template getConversionAlloc< O >());
-    return retval;
 }
 
 template < el_o_t... orders >
@@ -484,13 +503,13 @@ void MeshPartition< orders... >::visitImpl(Visitor&&                         vis
 {
     const auto ids_to_visit    = filterExistingDomainIds(domain_map, domain_ids);
     const auto visit_domain_id = [&](d_id_t id) {
-        domain_map.at(id).visit(visitor, policy);
+        domain_map.at(id).elements.visit(visitor, policy);
     };
     // std::for_each with sequential policy does not guarantee iteration order
     if constexpr (std::same_as< std::remove_cvref_t< Policy >, std::execution::sequenced_policy >)
         std::ranges::for_each(ids_to_visit, visit_domain_id);
     else
-        std::for_each(policy, ids_to_visit.begin(), ids_to_visit.end(), visit_domain_id);
+        util::tbb::parallelFor(ids_to_visit, visit_domain_id);
 }
 
 template < el_o_t... orders >
@@ -517,7 +536,7 @@ auto makeDimToDomainMap(const MeshPartition< orders... >& mesh) -> std::map< dim
     auto retval = std::map< dim_t, std::vector< d_id_t > >{};
     for (d_id_t id : mesh.getDomainIds())
     {
-        const auto dim = mesh.getDomainView(id).getDim();
+        const auto dim = mesh.getDomain(id).dim;
         retval[dim].push_back(id);
     }
     return retval;
@@ -529,11 +548,24 @@ auto MeshPartition< orders... >::makeBoundaryElementViews(const MeshPartition< o
                                                           const util::ArrayOwner< d_id_t >& bnd_ids)
     -> BoundaryView< orders... >
 {
+    constexpr std::string_view not_found_error =
+        "BoundaryView could not be constructed because some of the boundary elements are not edges/faces of "
+        "any of the domain elements in the partition. This may be because the mesh was partitioned with "
+        "incorrectly specified boundaries, resulting in the edge/face element being in a different partition "
+        "from its parent area/volume element.";
+
+    const auto domain_dim_maps = detail::makeDimToDomainMap(mesh);
+    for (d_id_t boundary_id : bnd_ids)
+        if (mesh.m_domains.contains(boundary_id))
+        {
+            const auto boundary_dim = mesh.m_domains.at(boundary_id).dim;
+            util::throwingAssert(domain_dim_maps.contains(boundary_dim + 1), not_found_error);
+        }
+
     auto       retval    = BoundaryView< orders... >{};
     auto&      bel_views = retval.element_views;
     std::mutex insert_mut;
-    const auto domain_dim_maps = detail::makeDimToDomainMap(mesh);
-    auto       error_flag      = std::atomic_flag{};
+    auto       error_flag = std::atomic_flag{};
     error_flag.clear();
     const auto put_bnd_el_view = [&]< ElementType BET, el_o_t BEO >(const Element< BET, BEO >& bnd_el) {
         const auto bnd_el_nodes_sorted = util::getSortedArray(bnd_el.getNodes());
@@ -554,13 +586,8 @@ auto MeshPartition< orders... >::makeBoundaryElementViews(const MeshPartition< o
             error_flag.test_and_set(std::memory_order_relaxed);
     };
     mesh.visit(put_bnd_el_view, bnd_ids, std::execution::par);
-    util::throwingAssert(
-        not error_flag.test(),
-        "BoundaryView could not be constructed because some of the boundary elements are not edges/faces of "
-        "any of the domain elements in the partition. This may be because the mesh was partitioned with "
-        "incorrectly specified boundaries, resulting in the edge/face element being in a different partition "
-        "from its parent area/volume element.");
-    bel_views.shrinkToFit();
+    util::throwingAssert(not error_flag.test(), not_found_error);
+    bel_views.visitVectors([](auto& vec) { vec.shrink_to_fit(); });
     return retval;
 }
 } // namespace lstr::mesh

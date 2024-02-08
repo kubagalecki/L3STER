@@ -182,7 +182,7 @@ consteval auto getPointMatcher()
 {
     return [](const Point< 3 >& p1, const Point< 3 >& p2) {
         constexpr double tolerance = 1e-12;
-        return (Eigen::Vector< val_t, 3 >{p1} - Eigen::Vector< val_t, 3 >{p2}).norm() < tolerance;
+        return (p1.asEigenVec() - p2.asEigenVec()).norm() < tolerance;
     };
 }
 } // namespace detail

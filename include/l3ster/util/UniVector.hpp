@@ -21,13 +21,18 @@ public:
     using ptr_variant_t       = std::variant< std::add_pointer_t< Ts >... >;
     using const_ptr_variant_t = std::variant< std::add_pointer_t< std::add_const_t< Ts > >... >;
 
+    static constexpr std::size_t num_types = sizeof...(Ts);
+
     template < typename T >
     auto getVector() -> std::vector< T >&;
     template < typename T >
     auto getVector() const -> const std::vector< T >&;
 
-    inline void                      shrinkToFit();
     [[nodiscard]] inline std::size_t size() const;
+    [[nodiscard]] inline auto        sizes() const -> std::array< std::size_t, num_types >;
+    [[nodiscard]] inline bool        empty() const;
+
+    inline void reserve(const std::array< std::size_t, num_types >& sizes);
 
     template < typename Fun, SimpleExecutionPolicy_c ExecPolicy >
     void visit(Fun&& fun, ExecPolicy&&)
@@ -48,6 +53,27 @@ public:
     auto at(std::size_t index) -> ptr_variant_t;
     auto at(std::size_t index) const -> const_ptr_variant_t;
 
+    template < typename VecVisitor >
+    void visitVectors(VecVisitor&& v)
+    {
+        (std::invoke(v, getVector< Ts >()), ...);
+    }
+    template < typename VecVisitor >
+    void visitVectors(VecVisitor&& v) const
+    {
+        (std::invoke(v, getVector< Ts >()), ...);
+    }
+    template < typename VecVisitor >
+    void visitVectorsUntil(VecVisitor&& v)
+    {
+        (std::invoke(v, getVector< Ts >()) or ...);
+    }
+    template < typename VecVisitor >
+    void visitVectorsUntil(VecVisitor&& v) const
+    {
+        (std::invoke(v, getVector< Ts >()) or ...);
+    }
+
 private:
     inline static auto deconstify(const_ptr_variant_t) -> ptr_variant_t;
 
@@ -60,12 +86,7 @@ void UniVector< Ts... >::visit(Fun&& fun, ExecPolicy&&)
     requires(std::invocable< Fun, Ts > and ...)
 {
     if constexpr (std::same_as< std::execution::sequenced_policy, std::remove_cvref_t< ExecPolicy > >)
-    {
-        const auto visit_vec = [&]< typename T >(std::type_identity< T >) {
-            std::ranges::for_each(getVector< T >(), fun);
-        };
-        (visit_vec(std::type_identity< Ts >{}), ...);
-    }
+        visitVectors([&](auto& v) { std::ranges::for_each(v, fun); });
     else
     {
         oneapi::tbb::parallel_invoke([&] {
@@ -80,12 +101,7 @@ void UniVector< Ts... >::visit(Fun&& fun, ExecPolicy&&) const
     requires(std::invocable< Fun, std::add_const_t< Ts > > and ...)
 {
     if constexpr (std::same_as< std::execution::sequenced_policy, std::remove_cvref_t< ExecPolicy > >)
-    {
-        const auto visit_vec = [&]< typename T >(std::type_identity< T >) {
-            std::ranges::for_each(getVector< T >(), fun);
-        };
-        (visit_vec(std::type_identity< Ts >{}), ...);
-    }
+        visitVectors([&](const auto& v) { std::ranges::for_each(v, fun); });
     else
     {
         oneapi::tbb::parallel_invoke([&] {
@@ -101,7 +117,6 @@ auto UniVector< Ts... >::transformReduce(Zero zero, Transform transform, Reducti
     requires ReductionFor_c< Reduction, Zero > and (Mapping_c< Transform, Ts, Zero > and ...)
 {
     auto intermediate_reductions = std::array< Zero, sizeof...(Ts) >{};
-    intermediate_reductions.fill(zero);
     if constexpr (std::same_as< std::execution::sequenced_policy, std::remove_cvref_t< ExecPolicy > >)
     {
         const auto reduce_vec = [&]< std::size_t I >(std::integral_constant< std::size_t, I >) {
@@ -133,15 +148,15 @@ auto UniVector< Ts... >::find(Predicate&& pred) const -> std::optional< const_pt
     requires(std::predicate< Predicate, std::add_const_t< Ts > > and ...)
 {
     auto       retval      = std::optional< const_ptr_variant_t >{};
-    const auto try_find_in = [&]< typename T >(std::type_identity< T >) {
-        const auto& vec   = getVector< T >();
-        const auto  iter  = std::ranges::find_if(vec, pred);
-        const bool  found = iter != vec.end();
+    const auto try_find_in = [&]< typename T >(const std::vector< T >& vec) {
+        using cptr_t     = std::add_pointer_t< std::add_const_t< T > >;
+        const auto iter  = std::ranges::find_if(vec, pred);
+        const bool found = iter != vec.end();
         if (found)
-            retval.emplace(std::in_place_type< std::add_pointer_t< std::add_const_t< T > > >, std::addressof(*iter));
+            retval.emplace(std::in_place_type< cptr_t >, std::addressof(*iter));
         return found;
     };
-    (try_find_in(std::type_identity< Ts >{}) or ...);
+    visitVectorsUntil(try_find_in);
     return retval;
 }
 
@@ -158,18 +173,30 @@ auto UniVector< Ts... >::find(Predicate&& pred) -> std::optional< ptr_variant_t 
 }
 
 template < typename... Ts >
-void UniVector< Ts... >::shrinkToFit()
+std::size_t UniVector< Ts... >::size() const
 {
-    (getVector< Ts >().shrink_to_fit(), ...);
+    return (getVector< Ts >().size() + ...);
 }
 
 template < typename... Ts >
-std::size_t UniVector< Ts... >::size() const
+auto UniVector< Ts... >::sizes() const -> std::array< std::size_t, num_types >
 {
-    const auto get_sz = [&]< typename T >(std::type_identity< T >) {
-        return std::get< std::vector< T > >(m_contents).size();
+    return {getVector< Ts >().size()...};
+}
+
+template < typename... Ts >
+bool UniVector< Ts... >::empty() const
+{
+    return ((getVector< Ts >().size() == 0) and ...);
+}
+
+template < typename... Ts >
+void UniVector< Ts... >::reserve(const std::array< std::size_t, num_types >& sizes)
+{
+    auto reserve_for = [&sizes, i = 0](auto& vector) mutable {
+        vector.reserve(sizes[i++]);
     };
-    return (get_sz(std::type_identity< Ts >{}) + ...);
+    (reserve_for(getVector< Ts >()), ...);
 }
 
 template < typename... Ts >
@@ -212,12 +239,12 @@ auto UniVector< Ts... >::getVector() const -> const std::vector< T >&
 }
 
 template < typename... Ts >
-auto UniVector< Ts... >::deconstify(UniVector::const_ptr_variant_t ptr_var) -> UniVector::ptr_variant_t
+auto UniVector< Ts... >::deconstify(const_ptr_variant_t ptr_var) -> ptr_variant_t
 {
-    constexpr auto deconstify = []< typename T >(const T* ptr) -> ptr_variant_t {
+    constexpr auto do_deconstify = []< typename T >(const T* ptr) -> ptr_variant_t {
         return const_cast< T* >(ptr);
     };
-    return std::visit(deconstify, ptr_var);
+    return std::visit(do_deconstify, ptr_var);
 }
 } // namespace lstr::util
 #endif // L3STER_UTIL_UNIVECTOR_HPP

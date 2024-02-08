@@ -1,6 +1,7 @@
 #ifndef L3STER_MESH_PARTITIONMESH_HPP
 #define L3STER_MESH_PARTITIONMESH_HPP
 
+#include "ElementTraits.hpp"
 #include "l3ster/dofs/ProblemDefinition.hpp"
 #include "l3ster/mesh/MeshUtils.hpp"
 #include "l3ster/util/Algorithm.hpp"
@@ -233,8 +234,9 @@ auto makeDomainMaps(const MeshPartition< orders... >& part,
     for (size_t index = 0; auto id : domain_ids)
     {
         const auto push_to_domain_map = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
-            auto& domain = retval[epart[index++]][id];
-            domain.template getElementVector< ET, EO >().push_back(element);
+            const auto target_partition = epart.at(index++);
+            auto&      domain           = retval.at(target_partition)[id];
+            pushToDomain(domain, element);
         };
         part.visit(push_to_domain_map, id);
     }
@@ -287,8 +289,8 @@ void assignBoundaryElements(const MeshPartition< orders... >&                   
     std::atomic_size_t n_boundary_elements{0}, n_assigned{0};
     auto               insertion_mutex = std::mutex{};
     const auto         assign_boundary = [&](d_id_t boundary_id) {
-        const auto boundary_view = part.getDomainView(boundary_id);
-        n_boundary_elements.fetch_add(boundary_view.getNElements(), std::memory_order_relaxed);
+        const auto& boundary = part.getDomain(boundary_id);
+        n_boundary_elements.fetch_add(boundary.elements.size(), std::memory_order_relaxed);
         const auto assign_from_domain = [&](d_id_t domain_id) {
             const auto assign_boundary_els = [&]< ElementType ET, el_o_t EO >(
                                                  const Element< ET, EO >& boundary_element) {
@@ -301,12 +303,12 @@ void assignBoundaryElements(const MeshPartition< orders... >&                   
 
                     const auto lock   = std::lock_guard{insertion_mutex};
                     auto&      domain = new_domain_maps[domain_element_partition][boundary_id];
-                    domain.template getElementVector< ET, EO >().push_back(boundary_element);
+                    pushToDomain(domain, boundary_element);
                 }
             };
             part.visit(assign_boundary_els, std::views::single(boundary_id));
         };
-        const auto& potential_dom_ids = dim_dom_map.at(boundary_view.getDim() + 1);
+        const auto& potential_dom_ids = dim_dom_map.at(boundary.dim + 1);
         util::tbb::parallelFor(potential_dom_ids, assign_from_domain);
     };
     util::tbb::parallelFor(boundary_ids, assign_boundary);
@@ -357,7 +359,7 @@ auto assignNodes(idx_t                                                          
         robin_hood::unordered_flat_set< idx_t > owned_nodes, ghost_nodes;
         for (const auto& domain : dom_map | std::views::values)
         {
-            domain.visit(
+            domain.elements.visit(
                 [&](const auto& element) {
                     for (auto node : element.getNodes())
                         if (npart[node] == part_ind)
