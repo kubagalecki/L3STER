@@ -1,8 +1,10 @@
 #include "l3ster/mesh/BoundaryView.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
+#include "l3ster/mesh/LocalMeshView.hpp"
 #include "l3ster/mesh/PartitionMesh.hpp"
 #include "l3ster/mesh/ReadMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
+#include "l3ster/mesh/primitives/SquareMesh.hpp"
 
 #include "TestDataPath.h"
 #include "catch2/catch.hpp"
@@ -270,5 +272,80 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
         CHECK(mesh.getOwnedNodes().size() == expected_n_nodes);
         for (size_t i = 0; i < mesh.getOwnedNodes().size() - 1; ++i)
             CHECK(mesh.getOwnedNodes()[i] + 1 == mesh.getOwnedNodes()[i + 1]);
+    }
+}
+
+template < el_o_t O >
+using Order = std::integral_constant< el_o_t, O >;
+TEMPLATE_TEST_CASE("Local mesh view", "[mesh]", Order< 1 >, Order< 2 >, Order< 4 >)
+{
+    constexpr auto order     = TestType::value;
+    constexpr auto node_dist = std::array{0., 1., 2., 3., 4.};
+
+    constexpr auto check_local_view = [](const auto& global_mesh) {
+        const auto       local_view    = LocalMeshView{global_mesh};
+        constexpr d_id_t domain_id     = 0;
+        const auto       global_domain = global_mesh.getDomain(domain_id);
+        const auto       local_domain  = local_view.domains.at(domain_id);
+
+        const auto find_local_element = [&](const auto& global_element) {
+            const auto found_el = local_domain.elements.find([&](const auto& local_element) {
+                using local_t  = std::remove_cvref_t< decltype(local_element) >;
+                using global_t = std::remove_cvref_t< decltype(global_element) >;
+                if constexpr (local_t::type == global_t::type and local_t::order == global_t::order)
+                {
+                    const auto nodes = local_element.getGlobalNodes(local_view.node_map);
+                    return nodes == global_element.getNodes() and local_element.getData() == global_element.getData();
+                }
+                return false;
+            });
+            return found_el.has_value();
+        };
+        const auto check_element = [&](const auto& global_element) {
+            CHECK(find_local_element(global_element));
+        };
+        global_domain.elements.visit(check_element, std::execution::seq);
+
+        const auto find_local_boundary_view = [&](const auto& global_boundary_view, d_id_t boundary_id) {
+            const auto found_el = local_domain.elements.find([&](const auto& local_element) {
+                using local_t  = std::remove_cvref_t< decltype(local_element) >;
+                using global_t = std::remove_cvref_t< decltype(global_boundary_view) >;
+                if constexpr (local_t::type == global_t::type and local_t::order == global_t::order)
+                {
+                    for (const auto& [side, boundary] : local_element.getBoundaries())
+                        if (boundary == boundary_id)
+                        {
+                            const auto nodes = local_element.getGlobalNodes(local_view.node_map);
+                            if (nodes == global_boundary_view->getNodes() and
+                                local_element.getData() == global_boundary_view->getData() and
+                                side == global_boundary_view.getSide())
+                                return true;
+                        }
+                }
+                return false;
+            });
+            return found_el.has_value();
+        };
+        for (d_id_t boundary_id : global_mesh.getBoundaryIdsView())
+        {
+            const auto& boundary_view       = global_mesh.getBoundary(boundary_id);
+            const auto  check_boundary_view = [&](const auto& global_element_boundary_view) {
+                CHECK(find_local_boundary_view(global_element_boundary_view, boundary_id));
+            };
+            boundary_view.element_views.visit(check_boundary_view, std::execution::seq);
+        }
+    };
+
+    SECTION("2D")
+    {
+        const auto mesh_o1 = makeSquareMesh(node_dist);
+        const auto mesh    = convertMeshToOrder< order >(mesh_o1);
+        check_local_view(mesh);
+    }
+    SECTION("3D")
+    {
+        const auto mesh_o1 = makeCubeMesh(node_dist);
+        const auto mesh    = convertMeshToOrder< order >(mesh_o1);
+        check_local_view(mesh);
     }
 }

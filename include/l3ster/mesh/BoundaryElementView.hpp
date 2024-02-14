@@ -11,6 +11,9 @@ template < ElementType ET, el_o_t EO >
 class BoundaryElementView
 {
 public:
+    static constexpr auto type  = ET;
+    static constexpr auto order = EO;
+
     BoundaryElementView() = default;
     BoundaryElementView(const Element< ET, EO >* element_ptr, const el_side_t side)
         : m_element_ptr{element_ptr}, m_element_side{side}

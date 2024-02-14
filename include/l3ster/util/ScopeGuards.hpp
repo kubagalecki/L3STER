@@ -108,7 +108,7 @@ public:
     }
 
 private:
-    bool m_is_owning;
+    bool m_is_owning = false;
 };
 } // namespace util
 

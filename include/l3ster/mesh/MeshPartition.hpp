@@ -191,6 +191,7 @@ public:
     auto          getOwnedNodes() const -> node_span_t { return m_nodes | std::views::take(m_n_owned_nodes); }
     auto          getGhostNodes() const -> node_span_t { return m_nodes | std::views::drop(m_n_owned_nodes); }
     auto          getAllNodes() const -> node_span_t { return m_nodes; }
+    auto          getMaxDim() const -> dim_t;
 
     inline size_t computeTopoHash() const;
     bool          isGhostNode(n_id_t node) const { return std::ranges::binary_search(getGhostNodes(), node); }
@@ -227,6 +228,14 @@ private:
     size_t                     m_n_owned_nodes;
     BoundaryManager            m_boundary_manager;
 };
+
+template < el_o_t... orders >
+auto MeshPartition< orders... >::getMaxDim() const -> dim_t
+{
+    if (m_domains.empty())
+        return Domain< orders... >::uninitialized_dim;
+    return std::ranges::max(m_domains | std::views::transform([](const auto& pair) { return pair.second.dim; }));
+}
 
 template < el_o_t... orders >
 template < typename Predicate, typename DomainMap >
