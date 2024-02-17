@@ -123,7 +123,10 @@ static void BM_NS3DLocalAssembly(benchmark::State& state)
     });
 
     for (auto _ : state)
-        benchmark::DoNotOptimize(glob_asm::assembleLocalSystem(ns3d_kernel, element, nodal_vals, ref_bas_at_quad, 0.));
+    {
+        auto local_sys = glob_asm::assembleLocalSystem(ns3d_kernel, element, nodal_vals, ref_bas_at_quad, 0.);
+        benchmark::DoNotOptimize(local_sys);
+    }
 
     const auto flops_per_qp = /* physical basis derivative computation */ n_nodes * 3 * 3 * 2 +
                               /* field value computation */ n_fields * n_nodes * 2 * 4 +
