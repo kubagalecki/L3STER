@@ -87,6 +87,7 @@ target_sources( L3STER INTERFACE $<BUILD_INTERFACE:${L3STER_SOURCES}> )
 ### Tests ###
 
 if ( L3STER_ENABLE_TESTS )
+    enable_testing()
     add_subdirectory( tests )
 endif ()
 
@@ -95,6 +96,7 @@ endif ()
 ### Benchmarks ###
 
 if ( L3STER_ENABLE_BENCHMARKS )
+    enable_testing()
     add_subdirectory( benchmarks )
 endif ()
 
