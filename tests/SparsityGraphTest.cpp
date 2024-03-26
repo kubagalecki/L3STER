@@ -87,7 +87,7 @@ void test(const MpiComm& comm)
         return convertMeshToOrder< 2 >(mesh);
     });
     auto       full_mesh_copy = copy(full_mesh);
-    const auto my_partition   = distributeMesh(comm, std::move(full_mesh_copy));
+    const auto my_partition   = comm::distributeMesh(comm, std::move(full_mesh_copy), {}, {.renumber = false});
 
     constexpr auto problem_def =
         ProblemDef{defineDomain< 2 >(0, 1), defineDomain< 2 >(1, 0), defineDomain< 2 >(3, 0, 1)};

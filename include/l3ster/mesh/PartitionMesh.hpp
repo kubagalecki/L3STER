@@ -15,6 +15,11 @@
 // Note on naming: the uninformative names such as eptr, nparts, etc. are inherited from the METIS documentation
 namespace lstr::mesh
 {
+struct PartitioningOpts
+{
+    bool renumber = true;
+};
+
 namespace detail
 {
 inline auto convertPartWeights(util::ArrayOwner< real_t > wgts) -> util::ArrayOwner< real_t >
@@ -319,11 +324,10 @@ void assignBoundaryElements(const MeshPartition< orders... >&                   
 }
 
 // Fix behavior where METIS sometimes ends up putting nodes in partitions where no elements contain them
-inline void
-reassignDisjointNodes(util::ArrayOwner< std::pair< std::vector< n_id_t >, std::vector< n_id_t > > >& part_nodes,
-                      std::vector< idx_t >&                                                          disjoint_nodes)
+inline void reassignDisjointNodes(util::ArrayOwner< std::array< std::vector< n_id_t >, 2 > >& part_nodes,
+                                  std::vector< idx_t >&                                       disjoint_nodes)
 {
-    const auto claim_nodes = [&](std::pair< std::vector< n_id_t >, std::vector< n_id_t > >& nodes) {
+    const auto claim_nodes = [&](std::array< std::vector< n_id_t >, 2 >& nodes) {
         auto claimed                     = std::vector< n_id_t >{};
         auto& [owned_nodes, ghost_nodes] = nodes;
         const auto try_claim             = [&](idx_t node) {
@@ -351,8 +355,9 @@ template < el_o_t... orders >
 auto assignNodes(idx_t                                                              n_parts,
                  const util::ArrayOwner< idx_t >&                                   npart,
                  const util::ArrayOwner< std::map< d_id_t, Domain< orders... > > >& domain_maps)
+    -> util::ArrayOwner< std::array< std::vector< n_id_t >, 2 > >
 {
-    auto new_node_vecs  = util::ArrayOwner< std::pair< std::vector< n_id_t >, std::vector< n_id_t > > >(n_parts);
+    auto new_node_vecs  = util::ArrayOwner< std::array< std::vector< n_id_t >, 2 > >(n_parts);
     auto disjoint_nodes = std::vector< idx_t >{};
     for (idx_t part_ind = 0; const auto& dom_map : domain_maps)
     {
@@ -382,7 +387,8 @@ auto assignNodes(idx_t                                                          
             std::ranges::sort(vec);
             return vec;
         };
-        new_node_vecs[part_ind] = std::make_pair(vec_from_set(owned_nodes), vec_from_set(ghost_nodes));
+        new_node_vecs[part_ind].front() = vec_from_set(owned_nodes);
+        new_node_vecs[part_ind].back()  = vec_from_set(ghost_nodes);
         ++part_ind;
     }
     reassignDisjointNodes(new_node_vecs, disjoint_nodes);
@@ -390,10 +396,10 @@ auto assignNodes(idx_t                                                          
 }
 
 template < el_o_t... orders >
-auto makeMeshFromPartitionComponents(
-    util::ArrayOwner< std::map< d_id_t, Domain< orders... > > >&&                             dom_maps,
-    util::ArrayOwner< std::pair< util::ArrayOwner< n_id_t >, util::ArrayOwner< n_id_t > > >&& node_vecs,
-    const util::ArrayOwner< d_id_t >& bnd_ids) -> util::ArrayOwner< MeshPartition< orders... > >
+auto makeMeshFromPartitionComponents(util::ArrayOwner< std::map< d_id_t, Domain< orders... > > >&& dom_maps,
+                                     util::ArrayOwner< std::array< std::vector< n_id_t >, 2 > >&&  node_vecs,
+                                     const util::ArrayOwner< d_id_t >&                             bnd_ids)
+    -> util::ArrayOwner< MeshPartition< orders... > >
 {
     auto retval = util::ArrayOwner< MeshPartition< orders... > >(dom_maps.size());
     for (size_t i = 0; auto& [owned, ghost] : node_vecs)
@@ -406,11 +412,42 @@ auto makeMeshFromPartitionComponents(
 }
 
 template < el_o_t... orders >
+void renumberNodes(util::ArrayOwner< std::map< d_id_t, Domain< orders... > > >& dom_maps,
+                   util::ArrayOwner< std::array< std::vector< n_id_t >, 2 > >&  node_vecs)
+{
+    auto node_id_map = robin_hood::unordered_flat_map< n_id_t, n_id_t >{};
+    for (n_id_t new_id = 0; auto& [owned, _] : node_vecs)
+        for (auto& old_id : owned)
+        {
+            node_id_map.emplace(old_id, new_id);
+            old_id = new_id++;
+        }
+    const auto update_id = [&node_id_map](n_id_t& id) {
+        id = node_id_map.at(id);
+    };
+    for (auto& [_, ghost] : node_vecs)
+    {
+        std::ranges::for_each(ghost, update_id);
+        std::ranges::sort(ghost);
+    }
+    const auto update_element = [&]< ElementType ET, el_o_t EO >(Element< ET, EO >& element) {
+        std::ranges::for_each(element.getNodes(), update_id);
+    };
+    for (auto& map : dom_maps)
+        for (auto& map_entry : map)
+        {
+            auto& elems = map_entry.second.elements;
+            elems.visit(update_element, std::execution::seq);
+        }
+}
+
+template < el_o_t... orders >
 auto partitionMeshImpl(const MeshPartition< orders... >& mesh,
                        idx_t                             n_parts,
                        const util::ArrayOwner< d_id_t >& boundary_ids,
                        util::ArrayOwner< real_t >        part_weights,
-                       util::ArrayOwner< idx_t >         node_weights) -> util::ArrayOwner< MeshPartition< orders... > >
+                       util::ArrayOwner< idx_t >         node_weights,
+                       PartitioningOpts                  opts) -> util::ArrayOwner< MeshPartition< orders... > >
 {
     const auto domain_ids  = getDomainIds(mesh, boundary_ids);
     const auto domain_data = getDomainData(mesh, domain_ids);
@@ -419,6 +456,8 @@ auto partitionMeshImpl(const MeshPartition< orders... >& mesh,
     auto new_domain_maps = makeDomainMaps(mesh, n_parts, epart, domain_ids);
     assignBoundaryElements(mesh, epart, new_domain_maps, domain_ids, boundary_ids, domain_data.n_elements);
     auto node_vecs = assignNodes(n_parts, npart, new_domain_maps);
+    if (opts.renumber)
+        renumberNodes(new_domain_maps, node_vecs);
     return makeMeshFromPartitionComponents(std::move(new_domain_maps), std::move(node_vecs), boundary_ids);
 }
 } // namespace detail
@@ -427,8 +466,8 @@ template < el_o_t... orders, ProblemDef problem_def = EmptyProblemDef{} >
 auto partitionMesh(const MeshPartition< orders... >&   mesh,
                    idx_t                               n_parts,
                    util::ArrayOwner< real_t >          part_weights   = {},
-                   util::ConstexprValue< problem_def > probdef_ctwrpr = {})
-    -> util::ArrayOwner< MeshPartition< orders... > >
+                   util::ConstexprValue< problem_def > probdef_ctwrpr = {},
+                   PartitioningOpts                    opts = {}) -> util::ArrayOwner< MeshPartition< orders... > >
 {
     L3STER_PROFILE_FUNCTION;
     util::throwingAssert(mesh.getGhostNodes().empty() and
@@ -445,7 +484,7 @@ auto partitionMesh(const MeshPartition< orders... >&   mesh,
 
     const auto boundary_ids = mesh.getBoundaryIdsCopy();
     auto       node_wgts    = detail::computeNodeWeights(mesh, probdef_ctwrpr);
-    return detail::partitionMeshImpl(mesh, n_parts, boundary_ids, std::move(part_weights), std::move(node_wgts));
+    return detail::partitionMeshImpl(mesh, n_parts, boundary_ids, std::move(part_weights), std::move(node_wgts), opts);
 }
 } // namespace lstr::mesh
 #endif // L3STER_MESH_PARTITIONMESH_HPP

@@ -231,7 +231,7 @@ public:
     void  tick()
     {
         for (auto& hot : m_hot)
-            hot >>= 2; // exponential decay
+            hot /= 2; // exponential decay
     }
 
 private:

@@ -1,5 +1,5 @@
-#ifndef L3STER_GLOB_ASM_ALGEBRAICSYSTEMMANAGER_HPP
-#define L3STER_GLOB_ASM_ALGEBRAICSYSTEMMANAGER_HPP
+#ifndef L3STER_GLOB_ASM_ALGEBRAICSYSTEM_HPP
+#define L3STER_GLOB_ASM_ALGEBRAICSYSTEM_HPP
 
 #include "l3ster/bcs/DirichletBC.hpp"
 #include "l3ster/bcs/GetDirichletDofs.hpp"
@@ -447,4 +447,4 @@ auto makeAlgebraicSystem(const MpiComm&                                      com
                                params_ctwrpr);
 }
 } // namespace lstr
-#endif // L3STER_GLOB_ASM_ALGEBRAICSYSTEMMANAGER_HPP
+#endif // L3STER_GLOB_ASM_ALGEBRAICSYSTEM_HPP

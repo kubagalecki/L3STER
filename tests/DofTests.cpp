@@ -64,7 +64,7 @@ TEMPLATE_TEST_CASE("Node DOF intervals of parts sum up to whole",
     const auto cond_map_full           = makeLocalCondensationMap(mesh, prob_def_ctwrpr, TestType{});
     const auto unpartitioned_intervals = computeLocalDofIntervals(mesh, cond_map_full, prob_def_ctwrpr);
 
-    const auto partitions            = mesh::partitionMesh(mesh, 2);
+    const auto partitions            = mesh::partitionMesh(mesh, 2, {}, {}, {.renumber = false});
     auto       partitioned_intervals = unpartitioned_intervals;
     partitioned_intervals.clear();
     for (const auto& part : partitions)

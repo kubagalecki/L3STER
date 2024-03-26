@@ -36,10 +36,10 @@ public:
 
     template < typename Fun, SimpleExecutionPolicy_c ExecPolicy >
     void visit(Fun&& fun, ExecPolicy&&)
-        requires(std::invocable< Fun, Ts > and ...);
+        requires(std::invocable< Fun, std::add_lvalue_reference_t< Ts > > and ...);
     template < typename Fun, SimpleExecutionPolicy_c ExecPolicy >
     void visit(Fun&& fun, ExecPolicy&&) const
-        requires(std::invocable< Fun, std::add_const_t< Ts > > and ...);
+        requires(std::invocable< Fun, std::add_lvalue_reference_t< std::add_const_t< Ts > > > and ...);
     template < typename Zero, typename Transform, typename Reduction, SimpleExecutionPolicy_c ExecPolicy >
     auto transformReduce(Zero zero, Transform transform, Reduction reduction, ExecPolicy&&) const -> Zero
         requires ReductionFor_c< Reduction, Zero > and (Mapping_c< Transform, Ts, Zero > and ...);
@@ -83,7 +83,7 @@ private:
 template < typename... Ts >
 template < typename Fun, SimpleExecutionPolicy_c ExecPolicy >
 void UniVector< Ts... >::visit(Fun&& fun, ExecPolicy&&)
-    requires(std::invocable< Fun, Ts > and ...)
+    requires(std::invocable< Fun, std::add_lvalue_reference_t< Ts > > and ...)
 {
     if constexpr (std::same_as< std::execution::sequenced_policy, std::remove_cvref_t< ExecPolicy > >)
         visitVectors([&](auto& v) { std::ranges::for_each(v, fun); });
@@ -98,7 +98,7 @@ void UniVector< Ts... >::visit(Fun&& fun, ExecPolicy&&)
 template < typename... Ts >
 template < typename Fun, SimpleExecutionPolicy_c ExecPolicy >
 void UniVector< Ts... >::visit(Fun&& fun, ExecPolicy&&) const
-    requires(std::invocable< Fun, std::add_const_t< Ts > > and ...)
+    requires(std::invocable< Fun, std::add_lvalue_reference_t< std::add_const_t< Ts > > > and ...)
 {
     if constexpr (std::same_as< std::execution::sequenced_policy, std::remove_cvref_t< ExecPolicy > >)
         visitVectors([&](const auto& v) { std::ranges::for_each(v, fun); });

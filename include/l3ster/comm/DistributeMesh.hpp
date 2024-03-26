@@ -170,21 +170,20 @@ auto receiveMesh(const MpiComm& comm, int src_rank) -> mesh::MeshPartition< orde
     MpiComm::Request::waitAll(reqs);
     return {std::move(domain_map), std::move(nodes), num_owned_nodes, boundary_ids};
 }
-} // namespace comm
 
 template < el_o_t... orders, ProblemDef problem_def = EmptyProblemDef{} >
 auto distributeMesh(const MpiComm&                      comm,
                     mesh::MeshPartition< orders... >&&  mesh,
-                    util::ConstexprValue< problem_def > probdef_ctwrpr = {})
-    -> std::shared_ptr< mesh::MeshPartition< orders... > >
+                    util::ConstexprValue< problem_def > probdef_ctwrpr = {},
+                    mesh::PartitioningOpts opts = {}) -> std::shared_ptr< mesh::MeshPartition< orders... > >
 {
     L3STER_PROFILE_FUNCTION;
     if (comm.getSize() == 1)
         return std::make_shared< mesh::MeshPartition< orders... > >(std::move(mesh));
 
     const auto node_throughputs = comm::gatherNodeThroughputs(comm);
-    auto       mesh_parted = comm.getRank() == 0 ? partitionMesh(mesh, comm.getSize(), node_throughputs, probdef_ctwrpr)
-                                                 : util::ArrayOwner< mesh::MeshPartition< orders... > >{};
+    auto mesh_parted = comm.getRank() == 0 ? partitionMesh(mesh, comm.getSize(), node_throughputs, probdef_ctwrpr, opts)
+                                           : util::ArrayOwner< mesh::MeshPartition< orders... > >{};
     const auto permutation = comm::computeDefaultRankPermutation(comm);
     // const auto permutation = detail::dist_mesh::computeOptimalRankPermutation(comm, mesh_parted, probdef_ctwrpr);
     if (comm.getRank() == 0)
@@ -206,6 +205,7 @@ auto distributeMesh(const MpiComm&                      comm,
     else
         return std::make_shared< mesh::MeshPartition< orders... > >(comm::receiveMesh< orders... >(comm, 0));
 }
+} // namespace comm
 
 template < el_o_t                                     order,
            GeneratorFor_c< mesh::MeshPartition< 1 > > Generator,
@@ -216,16 +216,16 @@ auto generateAndDistributeMesh(const MpiComm& comm,
                                util::ConstexprValue< problem_def > probdef_ctwrpr = {})
     -> std::shared_ptr< mesh::MeshPartition< order > >
 {
-    return distributeMesh(comm,
-                          comm.getRank() == 0 ? std::invoke([&] {
-                              auto generated_mesh = std::invoke(std::forward< Generator >(mesh_generator));
-                              if constexpr (order == 1)
-                                  return generated_mesh;
-                              else
-                                  return convertMeshToOrder< order >(generated_mesh);
-                          })
-                                              : mesh::MeshPartition< order >{},
-                          probdef_ctwrpr);
+    return comm::distributeMesh(comm,
+                                comm.getRank() == 0 ? std::invoke([&] {
+                                    auto generated_mesh = std::invoke(std::forward< Generator >(mesh_generator));
+                                    if constexpr (order == 1)
+                                        return generated_mesh;
+                                    else
+                                        return convertMeshToOrder< order >(generated_mesh);
+                                })
+                                                    : mesh::MeshPartition< order >{},
+                                probdef_ctwrpr);
 }
 
 template < el_o_t order, mesh::MeshFormat mesh_format, ProblemDef problem_def = EmptyProblemDef{} >
@@ -237,10 +237,11 @@ auto readAndDistributeMesh(const MpiComm&                     comm,
                            util::ConstexprValue< problem_def > probdef_ctwrpr = {})
     -> std::shared_ptr< mesh::MeshPartition< order > >
 {
-    return distributeMesh(comm,
-                          comm.getRank() == 0 ? comm::readAndConvertMesh< order >(mesh_file, boundaries, format_tag)
-                                              : mesh::MeshPartition< order >{},
-                          probdef_ctwrpr);
+    return comm::distributeMesh(comm,
+                                comm.getRank() == 0
+                                    ? comm::readAndConvertMesh< order >(mesh_file, boundaries, format_tag)
+                                    : mesh::MeshPartition< order >{},
+                                probdef_ctwrpr);
 }
 } // namespace lstr
 #endif // L3STER_COMM_DISTRIBUTEMESH_HPP
