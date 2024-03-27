@@ -90,3 +90,21 @@ BENCHMARK_TEMPLATE(BM_CopyElementNodes, std::execution::parallel_policy)
     ->Unit(benchmark::kMicrosecond)
     ->UseRealTime()
     ->Name("Hash nodes [parallel]");
+
+static void BM_MakeLocalMeshView(benchmark::State& state)
+{
+    const d_id_t boundary_id = 2;
+    const auto   mesh        = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {boundary_id}, mesh::gmsh_tag);
+
+    for (auto _ : state)
+    {
+        auto local_view = mesh::LocalMeshView{mesh};
+        benchmark::DoNotOptimize(local_view);
+    }
+
+    state.counters["Element processing rate"] =
+        benchmark::Counter{static_cast< double >(mesh.getNElements() * state.iterations()),
+                           benchmark::Counter::kIsRate,
+                           benchmark::Counter::kIs1000};
+}
+BENCHMARK(BM_MakeLocalMeshView)->Unit(benchmark::kMillisecond)->Name("Generate local mesh view");

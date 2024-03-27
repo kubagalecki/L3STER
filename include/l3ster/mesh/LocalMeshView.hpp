@@ -2,6 +2,7 @@
 #define L3STER_MESH_LOCALMESHVIEW_HPP
 
 #include "l3ster/mesh/MeshPartition.hpp"
+#include "l3ster/util/CrsGraph.hpp"
 #include "l3ster/util/StaticVector.hpp"
 
 namespace lstr::mesh
@@ -198,86 +199,128 @@ auto getMaxNode(const std::vector< LocalElementView< ET, EO > >& elements) -> n_
     return std::ranges::max(elements | std::views::transform(&nodeProjection< ET, EO >) | std::views::join);
 }
 
-/// Sum of degrees of element nodes in the mesh graph
+/// Map from nodes to elements which contain them
 template < ElementType ET, el_o_t EO >
-auto computeElementConnectedness(const std::vector< LocalElementView< ET, EO > >& elements, n_loc_id_t max_node)
-    -> std::vector< int >
+auto computeNodeToElementMap(const std::vector< LocalElementView< ET, EO > >& elements) -> util::CrsGraph< el_loc_id_t >
 {
-    auto node_degs = std::vector< int >(max_node + 1);
-    for (auto node : elements | std::views::transform(&nodeProjection< ET, EO >) | std::views::join)
-        ++node_degs[node];
-    auto retval = std::vector< int >{};
-    retval.reserve(elements.size());
-    const auto sum_degrees = [&](const LocalElementView< ET, EO >& el) {
-        const auto& nodes        = el.getLocalNodes();
-        const auto  get_node_deg = [&](auto node) {
-            return node_degs.at(node);
-        };
-        return std::transform_reduce(nodes.begin(), nodes.end(), 0, std::plus{}, get_node_deg);
-    };
-    std::ranges::transform(elements, std::back_inserter(retval), sum_degrees);
+    using elem_set_t             = robin_hood::unordered_flat_set< el_loc_id_t >;
+    auto       node_to_elems_map = robin_hood::unordered_flat_map< n_loc_id_t, elem_set_t >{};
+    n_loc_id_t max_node          = 0;
+    for (el_loc_id_t elem_id = 0; const auto& elem : elements)
+    {
+        for (auto node : elem.getLocalNodes())
+        {
+            node_to_elems_map[node].insert(elem_id);
+            max_node = std::max(max_node, node);
+        }
+        ++elem_id;
+    }
+    auto node_degs = std::vector< size_t >(max_node + 1);
+    for (const auto& [node, elems] : node_to_elems_map)
+        node_degs.at(node) = elems.size();
+    auto retval = util::CrsGraph< el_loc_id_t >{node_degs};
+    for (const auto& [node, elems] : node_to_elems_map)
+    {
+        const auto row = retval(node);
+        std::ranges::copy(elems, row.begin());
+        std::ranges::sort(row);
+    }
     return retval;
 }
 
-class NodeCacheHotness
+/// Model of nodes which are present in cache and how recently they were accessed
+class NodeCacheHotnessModel
 {
-    using hot_t                    = int;
-    static constexpr hot_t max_hot = 1 << 5;
-
 public:
-    explicit NodeCacheHotness(size_t num_nodes) : m_hot(num_nodes) {}
-    hot_t get(n_loc_id_t node) const { return m_hot.at(node); }
-    void  touch(n_loc_id_t node) { m_hot.at(node) = max_hot; }
-    void  tick()
+    using hotness_t                    = unsigned;
+    static constexpr hotness_t max_hot = 1 << 4;
+
+    void touch(n_loc_id_t node) { m_cache_model[node] = max_hot; }
+    void tick()
     {
-        for (auto& hot : m_hot)
-            hot /= 2; // exponential decay
+        m_erase_list.clear();
+        for (auto& [node, hot] : m_cache_model)
+        {
+            hot /= 2;
+            if (hot == 0)
+                m_erase_list.push_back(node);
+        }
+        for (auto to_erase : m_erase_list)
+            m_cache_model.erase(to_erase);
     }
+    auto getActiveNodes() const { return m_cache_model | std::views::all; }
 
 private:
-    std::vector< hot_t > m_hot;
+    robin_hood::unordered_flat_map< n_loc_id_t, hotness_t > m_cache_model;
+    std::vector< n_loc_id_t >                               m_erase_list;
 };
+
+/// Sum of degrees of element nodes in the mesh graph
+template < ElementType ET, el_o_t EO >
+auto computeElementConnectedness(const std::vector< LocalElementView< ET, EO > >& elements,
+                                 const util::CrsGraph< el_loc_id_t >& node_to_elem) -> util::ArrayOwner< unsigned >
+{
+    auto retval = util::ArrayOwner< unsigned >(elements.size());
+    std::ranges::transform(elements, retval.begin(), [&](const auto& elem) {
+        const auto& nodes        = elem.getLocalNodes();
+        const auto  get_node_deg = [&](auto node) {
+            return node_to_elem(node).size();
+        };
+        return std::transform_reduce(nodes.begin(), nodes.end(), 0u, std::plus{}, get_node_deg);
+    });
+    return retval;
+}
 
 /// Sort vector so that elements sharing nodes are clustered together
 template < ElementType ET, el_o_t EO >
-void reorderByAdjacency(std::vector< LocalElementView< ET, EO > >& elements)
+void reorderByAdjacency(std::vector< LocalElementView< ET, EO > >& elements, NodeCacheHotnessModel& cache)
 {
-    using local_el_t       = std::uint32_t;
-    auto       permutation = std::vector< local_el_t >{};
-    auto       done        = util::DynamicBitset(elements.size());
-    const auto max_node    = getMaxNode(elements);
-    const auto el_connect  = computeElementConnectedness(elements, max_node);
-    auto       cache       = NodeCacheHotness{max_node + 1};
-    const auto elem_crit   = [&](local_el_t el_ind) -> std::pair< int, int > {
-        if (done.test(el_ind))
-            return {-1, 0}; // Cache hotness is >=0, so no elements get matched twice
+    const auto nodes_to_elems = computeNodeToElementMap(elements);
+    const auto elem_connect   = computeElementConnectedness(elements, nodes_to_elems);
+    auto       done_elems     = util::DynamicBitset(elements.size());
+    auto       permutation    = std::vector< el_loc_id_t >{};
+    permutation.reserve(elements.size());
 
-        const auto node_hotness = [&](n_loc_id_t node) {
-            return cache.get(node);
-        };
-        const auto& nodes   = elements.at(el_ind).getLocalNodes();
-        const auto  hotness = std::transform_reduce(nodes.begin(), nodes.end(), 0, std::plus{}, node_hotness);
-        const int   connect = -el_connect.at(el_ind); // We want the least connected elements at the front
-        return {hotness, connect};
+    auto       hot_elems          = robin_hood::unordered_flat_map< el_loc_id_t, NodeCacheHotnessModel::hotness_t >{};
+    const auto populate_hot_elems = [&] {
+        for (const auto& [node, hotness] : cache.getActiveNodes())
+            for (auto elem : nodes_to_elems(node) | std::views::filter([&](auto e) { return not done_elems.test(e); }))
+                hot_elems[elem] += hotness;
     };
-    const auto put_next_elem = [&](local_el_t elem_id) {
+    constexpr auto max_unsigned   = std::numeric_limits< unsigned >::max();
+    const auto     get_el_connect = [&](el_loc_id_t el) -> unsigned {
+        return done_elems.test(el) ? max_unsigned : elem_connect.at(el); // match least connected first
+    };
+    const auto elem_crit = [&](const auto& map_entry) -> std::array< unsigned, 2 > {
+        const auto& [id, hot]  = map_entry;
+        const auto neg_connect = max_unsigned - elem_connect.at(id); // match least connected first
+        return {hot, neg_connect};
+    };
+    const auto get_next_elem = [&] {
+        if (hot_elems.empty()) [[unlikely]]
+            return std::ranges::min(std::views::iota(0u, elements.size()), {}, get_el_connect);
+        else
+            return std::ranges::max(hot_elems, {}, elem_crit).first;
+    };
+    const auto put_next_elem = [&](el_loc_id_t elem_id) {
         permutation.push_back(elem_id);
-        done.set(elem_id);
+        done_elems.set(elem_id);
         for (auto n : elements.at(elem_id).getLocalNodes())
             cache.touch(n);
     };
     for (size_t i = 0; i != elements.size(); ++i)
     {
-        const auto next = std::ranges::max(std::views::iota(0u, elements.size()), {}, elem_crit);
+        hot_elems.clear();
+        populate_hot_elems();
+        const auto next = get_next_elem();
         put_next_elem(next);
         cache.tick();
     }
+
     auto permuted = std::vector< LocalElementView< ET, EO > >{};
     permuted.reserve(elements.size());
-    const auto get_elem = [&](auto i) {
-        return elements.at(i);
-    };
-    std::ranges::transform(std::views::iota(0u, elements.size()), std::back_inserter(permuted), get_elem);
+    for (auto p : permutation)
+        permuted.push_back(elements.at(p));
     elements = std::move(permuted);
 }
 
@@ -311,6 +354,7 @@ LocalMeshView< orders... >::LocalMeshView(const MeshPartition< orders... >& mesh
                                                 : LocalElementView{element, node_map, {}};
     };
     const auto boundaries = mesh.getBoundaryIdsCopy();
+    auto       cache      = detail::NodeCacheHotnessModel{};
     for (d_id_t domain_id : mesh.getDomainIds())
     {
         if (std::ranges::binary_search(boundaries, domain_id))
@@ -323,7 +367,7 @@ LocalMeshView< orders... >::LocalMeshView(const MeshPartition< orders... >& mesh
                 return;
             auto& local_vec = local_domain.elements.template getVector< LocalElementView< ET, EO > >();
             std::ranges::transform(el_vec, std::back_inserter(local_vec), element_to_local);
-            detail::reorderByAdjacency(local_vec);
+            detail::reorderByAdjacency(local_vec, cache);
         };
         global_domain.elements.visitVectors(make_vec_view);
         domains[domain_id] = std::move(local_domain);

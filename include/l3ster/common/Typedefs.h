@@ -13,6 +13,7 @@ using dim_t        = std::uint_fast8_t; // spatial dimension type
 using n_id_t       = std::uint64_t;     // node ID type
 using n_loc_id_t   = std::uint32_t;     // local node ID type
 using el_id_t      = std::uint64_t;     // element id type
+using el_loc_id_t  = std::uint32_t;     // element id type
 using el_o_t       = std::uint8_t;      // element order type
 using el_side_t    = std::uint8_t;      // index of element side (points/edges/faces) type
 using el_locind_t  = std::uint16_t;     // local element index: nodes/element must not overflow this
