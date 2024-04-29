@@ -74,10 +74,9 @@ struct LocalDomainView
 template < el_o_t... orders >
 struct LocalMeshView
 {
-    explicit LocalMeshView(const MeshPartition< orders... >& mesh);
+    explicit LocalMeshView(const MeshPartition< orders... >& mesh, const NodeMap& node_map);
 
     std::map< d_id_t, LocalDomainView< orders... > > domains;
-    NodeMap                                          node_map;
 };
 
 NodeMap::NodeMap(std::vector< n_id_t > global_nodes)
@@ -344,8 +343,7 @@ auto makeElementIdToSidesMap(const MeshPartition< orders... >& mesh)
 } // namespace detail
 
 template < el_o_t... orders >
-LocalMeshView< orders... >::LocalMeshView(const MeshPartition< orders... >& mesh)
-    : node_map{detail::computeNodeOrder(mesh)}
+LocalMeshView< orders... >::LocalMeshView(const MeshPartition< orders... >& mesh, const NodeMap& node_map)
 {
     const auto elem_side_map    = detail::makeElementIdToSidesMap(mesh);
     const auto element_to_local = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {

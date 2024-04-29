@@ -15,9 +15,7 @@ namespace lstr::util
 template < std::random_access_iterator It, typename F >
 std::vector< size_t > sortingPermutation(It first, It last, F&& compare)
     requires requires(It i, F f) {
-        {
-            f(*i, *i)
-        } -> std::convertible_to< bool >;
+        { f(*i, *i) } -> std::convertible_to< bool >;
     }
 {
     std::vector< size_t > indices(std::distance(first, last));
@@ -37,9 +35,7 @@ template < std::random_access_iterator                                It_in,
            std::output_iterator< decltype(*std::declval< It_in >()) > It_out >
 void copyPermuted(It_in first_in, It_in last_in, It_perm first_perm, It_out first_out)
     requires requires(It_perm it) {
-        {
-            *it
-        } -> std::convertible_to< std::ptrdiff_t >;
+        { *it } -> std::convertible_to< std::ptrdiff_t >;
     }
 {
     for (auto i = std::distance(first_in, last_in); i > 0; --i)
@@ -220,6 +216,7 @@ void sortRemoveDup(std::vector< T >& vec)
     std::ranges::sort(vec);
     const auto erase_range = std::ranges::unique(vec);
     vec.erase(erase_range.begin(), erase_range.end());
+    vec.shrink_to_fit();
 }
 
 template < std::array array >
@@ -245,8 +242,8 @@ Iter copyValuesAtInds(const std::array< T, N >& array, Iter out_iter, ConstexprV
 }
 
 template < IndexRange_c auto inds, typename T, size_t N >
-auto getValuesAtInds(const std::array< T, N >& array, ConstexprValue< inds > inds_ctwrpr = {})
-    -> std::array< T, std::ranges::size(inds) >
+auto getValuesAtInds(const std::array< T, N >& array,
+                     ConstexprValue< inds >    inds_ctwrpr = {}) -> std::array< T, std::ranges::size(inds) >
     requires(std::ranges::all_of(inds, [](size_t i) { return i < N; }))
 {
     std::array< T, std::ranges::size(inds) > retval;
@@ -272,7 +269,9 @@ void staggeredAllGather(const MpiComm& comm, std::span< const T > my_data, Proce
 
     auto       request            = MpiComm::Request{};
     const auto begin_broadcasting = [&](int send_rank) {
-        const auto comm_buf = my_rank == send_rank ? my_data_mut : std::span{recv_buf}.subspan(0, msg_sizes[send_rank]);
+        const auto comm_buf = my_rank == send_rank
+                                ? my_data_mut
+                                : std::span{recv_buf}.subspan(0, msg_sizes[static_cast< size_t >(send_rank)]);
         request             = comm.broadcastAsync(comm_buf, send_rank);
     };
     const auto finish_broadcasting = [&]() {

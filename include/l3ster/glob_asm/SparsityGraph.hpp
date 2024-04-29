@@ -3,6 +3,7 @@
 
 #include "l3ster/dofs/DofsFromNodes.hpp"
 #include "l3ster/dofs/MakeTpetraMap.hpp"
+#include "l3ster/dofs/NeighborManager.hpp"
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/CrsGraph.hpp"

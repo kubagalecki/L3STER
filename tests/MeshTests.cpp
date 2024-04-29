@@ -283,7 +283,8 @@ TEMPLATE_TEST_CASE("Local mesh view", "[mesh]", Order< 1 >, Order< 2 >, Order< 4
     constexpr auto node_dist = std::array{0., 1., 2., 3., 4.};
 
     constexpr auto check_local_view = [](const auto& global_mesh) {
-        const auto       local_view    = LocalMeshView{global_mesh};
+        const auto       node_map      = mesh::detail::computeNodeOrder(global_mesh);
+        const auto       local_view    = LocalMeshView{global_mesh, node_map};
         constexpr d_id_t domain_id     = 0;
         const auto       global_domain = global_mesh.getDomain(domain_id);
         const auto       local_domain  = local_view.domains.at(domain_id);
@@ -294,7 +295,7 @@ TEMPLATE_TEST_CASE("Local mesh view", "[mesh]", Order< 1 >, Order< 2 >, Order< 4
                 using global_t = std::remove_cvref_t< decltype(global_element) >;
                 if constexpr (local_t::type == global_t::type and local_t::order == global_t::order)
                 {
-                    const auto nodes = local_element.getGlobalNodes(local_view.node_map);
+                    const auto nodes = local_element.getGlobalNodes(node_map);
                     return nodes == global_element.getNodes() and local_element.getData() == global_element.getData();
                 }
                 return false;
@@ -315,7 +316,7 @@ TEMPLATE_TEST_CASE("Local mesh view", "[mesh]", Order< 1 >, Order< 2 >, Order< 4
                     for (const auto& [side, boundary] : local_element.getBoundaries())
                         if (boundary == boundary_id)
                         {
-                            const auto nodes = local_element.getGlobalNodes(local_view.node_map);
+                            const auto nodes = local_element.getGlobalNodes(node_map);
                             if (nodes == global_boundary_view->getNodes() and
                                 local_element.getData() == global_boundary_view->getData() and
                                 side == global_boundary_view.getSide())
