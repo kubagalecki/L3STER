@@ -51,8 +51,8 @@ struct NodeInfo
 };
 
 template < ElementType ET >
-auto makeElementFromNodeData(const std::array< NodeInfo, Element< ET, 1 >::n_nodes >& node_data, el_id_t id)
-    -> Element< ET, 1 >
+auto makeElementFromNodeData(const std::array< NodeInfo, Element< ET, 1 >::n_nodes >& node_data,
+                             el_id_t                                                  id) -> Element< ET, 1 >
 {
     using node_array_t   = std::array< n_id_t, Element< ET, 1 >::n_nodes >;
     using coords_array_t = ElementData< ET, 1 >::vertex_array_t;

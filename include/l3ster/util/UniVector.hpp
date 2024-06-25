@@ -203,7 +203,7 @@ template < typename... Ts >
 auto UniVector< Ts... >::at(std::size_t index) const -> const_ptr_variant_t
 {
     auto retval       = const_ptr_variant_t{};
-    auto try_find_for = [&, i = size_t{}]< typename T >(std::type_identity< T >) mutable {
+    auto try_find_for = [&, i = 0uz]< typename T >(std::type_identity< T >) mutable {
         const auto& vec = getVector< T >();
         if (index < i + vec.size())
         {

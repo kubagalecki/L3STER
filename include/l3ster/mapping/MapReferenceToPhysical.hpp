@@ -9,8 +9,8 @@
 namespace lstr::map
 {
 template < mesh::ElementType T, el_o_t O >
-auto mapToPhysicalSpace(const mesh::Element< T, O >& element, const Point< mesh::Element< T, O >::native_dim >& point)
-    -> Point< 3 >
+auto mapToPhysicalSpace(const mesh::Element< T, O >&                      element,
+                        const Point< mesh::Element< T, O >::native_dim >& point) -> Point< 3 >
     requires(util::contains({mesh::ElementType::Line, mesh::ElementType::Quad, mesh::ElementType::Hex}, T))
 {
     const mesh::Element< T, 1 > o1_el{{}, element.getData(), {}};

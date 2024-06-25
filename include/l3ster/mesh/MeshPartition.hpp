@@ -33,9 +33,9 @@ constexpr bool doesSideMatch(const Element< ET, EO >& element, const std::array<
 }
 
 template < ElementType ET, el_o_t EO, size_t N >
-constexpr auto matchBoundaryNodesToElement(const Element< ET, EO >&       element,
-                                           const std::array< n_id_t, N >& sorted_boundary_nodes)
-    -> std::optional< el_side_t >
+constexpr auto
+matchBoundaryNodesToElement(const Element< ET, EO >&       element,
+                            const std::array< n_id_t, N >& sorted_boundary_nodes) -> std::optional< el_side_t >
 {
     auto       matched_side   = el_side_t{};
     const auto fold_side_inds = [&]< el_side_t... sides >(std::integer_sequence< el_side_t, sides... >) {
@@ -210,8 +210,8 @@ public:
     }
 
 private:
-    inline static auto filterExistingDomainIds(const domain_map_t& domain_map, const util::ArrayOwner< d_id_t >& ids)
-        -> util::ArrayOwner< d_id_t >;
+    inline static auto filterExistingDomainIds(const domain_map_t&               domain_map,
+                                               const util::ArrayOwner< d_id_t >& ids) -> util::ArrayOwner< d_id_t >;
     inline static auto filterExistingBoundaryIds(const BoundaryManager&            boundary_manager,
                                                  const util::ArrayOwner< d_id_t >& ids) -> util::ArrayOwner< d_id_t >;
     // Deduce constness based on the domain map, helps with deduplication. Idea similar to C++23 "deducing this"
@@ -483,9 +483,8 @@ auto MeshPartition< orders... >::find(el_id_t id) const -> const_find_result_t
 template < el_o_t... orders >
 size_t MeshPartition< orders... >::getNElements() const
 {
-    return std::transform_reduce(m_domains.cbegin(), m_domains.cend(), size_t{}, std::plus{}, [](const auto& d) {
-        return d.second.elements.size();
-    });
+    return std::transform_reduce(
+        m_domains.cbegin(), m_domains.cend(), 0uz, std::plus{}, [](const auto& d) { return d.second.elements.size(); });
 }
 
 template < el_o_t... orders >
@@ -498,8 +497,7 @@ size_t MeshPartition< orders... >::computeTopoHash() const
     const auto hash_element = [&](const auto& element) {
         return hash_range(element.getNodes());
     };
-    const size_t topo_hash =
-        transformReduce(getDomainIds(), size_t{}, hash_element, std::bit_xor<>{}, std::execution::par);
+    const size_t topo_hash = transformReduce(getDomainIds(), 0uz, hash_element, std::bit_xor<>{}, std::execution::par);
     return topo_hash ^ hash_range(m_nodes);
 }
 
@@ -522,17 +520,15 @@ void MeshPartition< orders... >::visitImpl(Visitor&&                         vis
 }
 
 template < el_o_t... orders >
-auto MeshPartition< orders... >::filterExistingDomainIds(const domain_map_t&               domain_map,
-                                                         const util::ArrayOwner< d_id_t >& ids)
-    -> util::ArrayOwner< d_id_t >
+auto MeshPartition< orders... >::filterExistingDomainIds(
+    const domain_map_t& domain_map, const util::ArrayOwner< d_id_t >& ids) -> util::ArrayOwner< d_id_t >
 {
     return ids | std::views::filter([&](d_id_t id) { return domain_map.contains(id); });
 }
 
 template < el_o_t... orders >
-auto MeshPartition< orders... >::filterExistingBoundaryIds(const BoundaryManager&            boundary_manager,
-                                                           const util::ArrayOwner< d_id_t >& ids)
-    -> util::ArrayOwner< d_id_t >
+auto MeshPartition< orders... >::filterExistingBoundaryIds(
+    const BoundaryManager& boundary_manager, const util::ArrayOwner< d_id_t >& ids) -> util::ArrayOwner< d_id_t >
 {
     return ids | std::views::filter([&](d_id_t id) { return boundary_manager.contains(id); });
 }
@@ -553,9 +549,8 @@ auto makeDimToDomainMap(const MeshPartition< orders... >& mesh) -> std::map< dim
 } // namespace detail
 
 template < el_o_t... orders >
-auto MeshPartition< orders... >::makeBoundaryElementViews(const MeshPartition< orders... >& mesh,
-                                                          const util::ArrayOwner< d_id_t >& bnd_ids)
-    -> BoundaryView< orders... >
+auto MeshPartition< orders... >::makeBoundaryElementViews(
+    const MeshPartition< orders... >& mesh, const util::ArrayOwner< d_id_t >& bnd_ids) -> BoundaryView< orders... >
 {
     constexpr std::string_view not_found_error =
         "BoundaryView could not be constructed because some of the boundary elements are not edges/faces of "

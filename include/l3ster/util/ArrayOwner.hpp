@@ -1,18 +1,28 @@
 #ifndef L3STER_UTIL_ARRAYOWNER
 #define L3STER_UTIL_ARRAYOWNER
 
+#include <algorithm>
 #include <concepts>
 #include <cstdint>
 #include <memory>
 
 namespace lstr::util
 {
+struct CasheAlignTag
+{};
+inline constexpr CasheAlignTag cache_align_tag{};
+
+/// Fixed-size dynamically allocated array. Exposed a range interface
 template < std::default_initializable T >
 class ArrayOwner
 {
+    static constexpr std::size_t cacheline_size = 64;
+
 public:
     ArrayOwner() = default;
     explicit ArrayOwner(std::size_t size) : m_size{size}, m_data{std::make_unique_for_overwrite< T[] >(size)} {}
+    ArrayOwner(std::size_t size, std::align_val_t align) : m_size{size}, m_data{new(align) T[size]} {}
+    ArrayOwner(std::size_t size, CasheAlignTag) : ArrayOwner(size, std::max(cacheline_size, alignof(T))) {}
     template < std::ranges::range R >
     ArrayOwner(R&& range) // NOLINT implicit conversion and copy are intended
         requires std::constructible_from< T, std::ranges::range_reference_t< R > >;

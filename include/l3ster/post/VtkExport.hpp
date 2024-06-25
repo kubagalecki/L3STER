@@ -454,8 +454,8 @@ auto encodeField(const SolutionManager& solution_manager, Inds&& component_inds)
 }
 
 template < SizedRangeOfConvertibleTo_c< std::span< const size_t > > FieldComps >
-auto encodeSolution(const SolutionManager& solution_manager, FieldComps&& field_components)
-    -> std::vector< util::ArrayOwner< char > >
+auto encodeSolution(const SolutionManager& solution_manager,
+                    FieldComps&&           field_components) -> std::vector< util::ArrayOwner< char > >
 {
     auto retval         = std::vector< util::ArrayOwner< char > >(std::ranges::size(field_components));
     auto grouping_range = std::forward< FieldComps >(field_components) | std::views::common;
@@ -605,7 +605,7 @@ auto PvtuExporter::makeDataDescription(const util::ArrayOwner< std::string >&   
     retval += post::vtk::vtu_preamble;
     auto append_data_array =
         [&retval,
-         offset = size_t{}](std::string_view type, std::string_view name, size_t n_comps, size_t size_bytes) mutable {
+         offset = 0uz](std::string_view type, std::string_view name, size_t n_comps, size_t size_bytes) mutable {
             retval += R"(  <DataArray type=")";
             retval += type;
             retval += R"(" Name=")";

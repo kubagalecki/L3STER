@@ -1,4 +1,4 @@
-cmake_minimum_required( VERSION 3.19 )
+cmake_minimum_required( VERSION 3.20 )
 
 #######################################################################################################################
 
@@ -69,7 +69,7 @@ target_include_directories( L3STER INTERFACE
                             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                             $<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>
                             )
-set_target_properties( L3STER PROPERTIES INTERFACE_COMPILE_FEATURES cxx_std_20 )
+set_target_properties( L3STER PROPERTIES INTERFACE_COMPILE_FEATURES cxx_std_23 )
 target_link_libraries( L3STER INTERFACE ${L3STER_CMAKE_DEPENDENCIES} )
 target_link_libraries( L3STER INTERFACE ${L3STER_INTERFACE_DEPENDENCIES} )
 

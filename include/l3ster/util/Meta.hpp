@@ -203,8 +203,7 @@ template < size_t N >
 constexpr auto getTrueInds(const std::array< bool, N >& a) -> util::StaticVector< size_t, N >
 {
     auto retval = util::StaticVector< size_t, N >{};
-    std::ranges::copy_if(
-        std::views::iota(size_t{}, a.size()), std::back_inserter(retval), [&a](size_t i) { return a[i]; });
+    std::ranges::copy_if(std::views::iota(0uz, a.size()), std::back_inserter(retval), [&a](size_t i) { return a[i]; });
     return retval;
 }
 

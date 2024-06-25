@@ -679,7 +679,7 @@ TEST_CASE("Non-random access parallel for", "[util]")
                 parallel_accumulator.fetch_add(result, std::memory_order_relaxed);
             });
             const auto sequential_sum =
-                std::transform_reduce(map.cbegin(), map.cend(), size_t{}, std::plus{}, [](const auto& map_entry) {
+                std::transform_reduce(map.cbegin(), map.cend(), 0uz, std::plus{}, [](const auto& map_entry) {
                     const auto hash = std::hash< size_t >{};
                     return hash(hash(map_entry.first) ^ hash(map_entry.second));
                 });

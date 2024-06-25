@@ -8,6 +8,7 @@
 #include <array>
 #include <concepts>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <span>
@@ -72,6 +73,28 @@ To exactIntegerCast(From from, std::source_location loc = std::source_location::
     return static_cast< To >(from);
 }
 
+template < typename T >
+class CachelineAligned
+{
+public:
+    template < typename... Args >
+    explicit CachelineAligned(Args&&... args)
+        requires std::constructible_from< T, decltype(std::forward< Args >(args))... >
+        : m_value(std::forward< Args >(args)...)
+    {}
+
+    T&       operator*() noexcept { return m_value; }
+    const T& operator*() const noexcept { return m_value; }
+    T*       operator->() noexcept { return std::addressof(m_value); }
+    const T* operator->() const noexcept { return std::addressof(m_value); }
+
+private:
+    static constexpr size_t cacheline_size = 64;
+    static constexpr size_t alignment      = std::max(alignof(T), cacheline_size);
+
+    alignas(alignment) T m_value;
+};
+
 // Workaround: GCC Bug 97930
 // Needed as template parameter because libstdc++ std::pair is not structural (private base class)
 // TODO: rely on std::pair once fixed upstream
@@ -123,15 +146,24 @@ auto linspaceVector(T lo, T hi, size_t N) -> std::vector< T >
     return retval;
 }
 
-// Higher order functions
 template < typename Predicate >
-constexpr auto negatePredicate(Predicate&& p)
+constexpr auto negatePredicate(Predicate&& predicate)
 {
-    return [pred = std::forward< Predicate >(p)]< typename T >(T&& in)
+    return [predicate = std::forward< Predicate >(predicate)]< typename T >(T&& in)
         requires std::predicate< std::add_const_t< std::remove_cvref_t< Predicate > >, decltype(std::forward< T >(in)) >
     {
-        return not pred(std::forward< T >(in));
+        return not std::invoke(predicate, std::forward< T >(in));
     };
 }
+
+struct AtomicSumInto
+{
+    template < Arithmetic_c T >
+    void operator()(T& value, T update)
+    {
+        static_assert(std::atomic< T >::is_always_lock_free);
+        std::atomic_ref{value}.fetch_add(update, std::memory_order_relaxed);
+    }
+};
 } // namespace lstr::util
 #endif // L3STER_UTIL_COMMON_HPP

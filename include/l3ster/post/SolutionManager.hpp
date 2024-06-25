@@ -23,8 +23,8 @@ public:
     [[nodiscard]] inline auto getFieldView(size_t field_ind) const -> std::span< const val_t >;
     [[nodiscard]] auto        getNodeMap() const -> const node_map_t& { return m_node_to_dof_map; }
     template < size_t N >
-    [[nodiscard]] auto getNodeValues(n_id_t node, std::span< const size_t, N > field_inds) const
-        -> std::array< val_t, N >
+    [[nodiscard]] auto getNodeValues(n_id_t                       node,
+                                     std::span< const size_t, N > field_inds) const -> std::array< val_t, N >
         requires(N != std::dynamic_extent);
 
     void setField(size_t field_ind, val_t value) { std::ranges::fill(getFieldView(field_ind), value); }
@@ -98,8 +98,8 @@ SolutionManager::SolutionManager(const mesh::MeshPartition< orders... >& mesh, s
 }
 
 template < size_t N >
-[[nodiscard]] auto SolutionManager::getNodeValues(n_id_t node, std::span< const size_t, N > field_inds) const
-    -> std::array< val_t, N >
+[[nodiscard]] auto
+SolutionManager::getNodeValues(n_id_t node, std::span< const size_t, N > field_inds) const -> std::array< val_t, N >
     requires(N != std::dynamic_extent)
 {
     const auto local_node_ind = m_node_to_dof_map.at(node);

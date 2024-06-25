@@ -393,11 +393,10 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::describe(const 
         const auto        global_num_entries    = m_matrix->getGlobalNumEntries();
         std::stringstream msg;
         msg << "\nThe algebraic system has dimensions " << global_num_rows_range << " by " << global_num_cols
-            << "\nDistribution among MPI ranks (min, max, total):"
-            << "\nRows:             " << local_sizes_min[0] << ", " << local_sizes_max[0] << ", " << global_num_rows_sum
-            << "\nColumns:          " << local_sizes_min[1] << ", " << local_sizes_max[1] << ", " << global_num_cols
-            << "\nNon-zero entries: " << local_sizes_min[2] << ", " << local_sizes_max[2] << ", " << global_num_entries
-            << "\n\n";
+            << "\nDistribution among MPI ranks (min, max, total):" << "\nRows:             " << local_sizes_min[0]
+            << ", " << local_sizes_max[0] << ", " << global_num_rows_sum << "\nColumns:          " << local_sizes_min[1]
+            << ", " << local_sizes_max[1] << ", " << global_num_cols << "\nNon-zero entries: " << local_sizes_min[2]
+            << ", " << local_sizes_max[2] << ", " << global_num_entries << "\n\n";
         out << msg.view();
     }
     comm.barrier();

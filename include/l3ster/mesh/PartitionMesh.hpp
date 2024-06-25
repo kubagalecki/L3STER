@@ -28,8 +28,8 @@ inline auto convertPartWeights(util::ArrayOwner< real_t > wgts) -> util::ArrayOw
 }
 
 template < el_o_t... orders, ProblemDef problem_def >
-auto computeNodeWeights(const MeshPartition< orders... >& mesh, util::ConstexprValue< problem_def > probdef_ctwrpr)
-    -> util::ArrayOwner< idx_t >
+auto computeNodeWeights(const MeshPartition< orders... >&   mesh,
+                        util::ConstexprValue< problem_def > probdef_ctwrpr) -> util::ArrayOwner< idx_t >
 {
     if constexpr (problem_def.n_domains == 0)
         return {};
@@ -63,8 +63,8 @@ auto computeNodeWeights(const MeshPartition< orders... >& mesh, util::ConstexprV
 }
 
 template < el_o_t... orders >
-auto getDomainIds(const MeshPartition< orders... >& mesh, const util::ArrayOwner< d_id_t >& boundary_ids)
-    -> util::ArrayOwner< d_id_t >
+auto getDomainIds(const MeshPartition< orders... >& mesh,
+                  const util::ArrayOwner< d_id_t >& boundary_ids) -> util::ArrayOwner< d_id_t >
 {
     return mesh.getDomainIds() |
            std::views::filter([&](auto id) { return std::ranges::find(boundary_ids, id) == boundary_ids.end(); });
@@ -135,8 +135,8 @@ auto makeNodeCondensationMaps(const MeshPartition< orders... >& mesh) -> std::ar
     return {std::move(forward_map), std::move(reverse_map)};
 }
 
-inline auto condenseNodeWeights(util::ArrayOwner< idx_t > node_weights, const util::ArrayOwner< n_id_t >& reverse_map)
-    -> util::ArrayOwner< idx_t >
+inline auto condenseNodeWeights(util::ArrayOwner< idx_t >         node_weights,
+                                const util::ArrayOwner< n_id_t >& reverse_map) -> util::ArrayOwner< idx_t >
 {
     if (not node_weights.empty())
         for (size_t node_cond = 0; auto node_uncond : reverse_map)

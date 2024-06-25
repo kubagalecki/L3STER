@@ -46,8 +46,7 @@ public:
 
     inline auto getLocalNodes() const -> std::array< n_loc_id_t, n_nodes >
         requires optimize_internal;
-    inline auto getLocalNodes() const -> const std::array< n_loc_id_t, n_nodes >&
-        requires(not optimize_internal);
+    inline auto getLocalNodes() const -> const std::array< n_loc_id_t, n_nodes >& requires(not optimize_internal);
     inline auto getGlobalNodes(const NodeMap& map) const -> std::array< n_id_t, n_nodes >;
     auto        getData() const -> const Data& { return m_data; }
     inline auto getBoundaries() const -> util::StaticVector< bound_descr, n_sides >;
@@ -59,8 +58,9 @@ private:
 };
 
 template < ElementType ET, el_o_t EO, typename Map >
-LocalElementView(const Element< ET, EO >&, const Map&, std::span< const std::pair< el_side_t, d_id_t > >)
-    -> LocalElementView< ET, EO >;
+LocalElementView(const Element< ET, EO >&,
+                 const Map&,
+                 std::span< const std::pair< el_side_t, d_id_t > >) -> LocalElementView< ET, EO >;
 
 template < el_o_t... orders >
 struct LocalDomainView
@@ -125,11 +125,8 @@ auto LocalElementView< ET, EO >::getLocalNodes() const -> std::array< n_loc_id_t
 }
 
 template < ElementType ET, el_o_t EO >
-auto LocalElementView< ET, EO >::getLocalNodes() const -> const std::array< n_loc_id_t, n_nodes >&
-    requires(not optimize_internal)
-{
-    return m_nodes;
-}
+auto LocalElementView< ET, EO >::getLocalNodes() const
+    -> const std::array< n_loc_id_t, n_nodes >& requires(not optimize_internal) { return m_nodes; }
 
 template < ElementType ET, el_o_t EO >
 auto LocalElementView< ET, EO >::getGlobalNodes(const NodeMap& map) const -> std::array< n_id_t, n_nodes >

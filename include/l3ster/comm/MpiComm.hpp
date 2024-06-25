@@ -205,8 +205,8 @@ public:
     template < comm::MpiBorrowedBuf_c Data >
     [[nodiscard]] auto receiveAsync(Data&& data, int src = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG) const -> Request;
     [[nodiscard]] inline auto probe(int source = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG) const -> Status;
-    [[nodiscard]] inline auto probeAsync(int source = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG) const
-        -> std::pair< Status, bool >;
+    [[nodiscard]] inline auto probeAsync(int source = MPI_ANY_SOURCE,
+                                         int tag    = MPI_ANY_TAG) const -> std::pair< Status, bool >;
 
     // collectives
     void barrier() const { L3STER_INVOKE_MPI(MPI_Barrier, m_comm); }

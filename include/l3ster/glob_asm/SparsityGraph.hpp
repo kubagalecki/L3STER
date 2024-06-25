@@ -23,8 +23,8 @@ using rank_to_rank_to_dofs_map_t = robin_hood::unordered_flat_map< int, rank_to_
 
 // Establish in-neighbors and which of their ghost nodes I own
 template < el_o_t... orders >
-auto computeInNeighborGhostNodes(const MpiComm& comm, const mesh::MeshPartition< orders... >& mesh)
-    -> rank_to_nodes_map_t
+auto computeInNeighborGhostNodes(const MpiComm&                          comm,
+                                 const mesh::MeshPartition< orders... >& mesh) -> rank_to_nodes_map_t
 {
     const int  my_rank            = comm.getRank();
     auto       retval             = rank_to_nodes_map_t{};
@@ -189,7 +189,7 @@ inline auto exchangeNeighborDofInfo(const MpiComm&                    comm,
             constexpr auto get_set_size = [](const auto& map_elem) {
                 return map_elem.second.size();
             };
-            const size_t n_entries = std::transform_reduce(mos.begin(), mos.end(), size_t{}, std::plus{}, get_set_size);
+            const size_t n_entries = std::transform_reduce(mos.begin(), mos.end(), 0uz, std::plus{}, get_set_size);
             auto         retval    = FlatInfo{};
             auto& [flat_owners, flat_dofs] = retval;
             flat_owners.reserve(n_entries);
@@ -285,8 +285,8 @@ inline auto exchangeNeighborDofInfo(const MpiComm&                    comm,
 }
 
 // Combine DOF info (DOF + owner) which I computed with that which was sent to me
-inline auto combineDofInfo(rank_to_dofs_map_t dof_info, const rank_to_rank_to_dofs_map_t& out_dof_info)
-    -> rank_to_dofs_map_t
+inline auto combineDofInfo(rank_to_dofs_map_t                dof_info,
+                           const rank_to_rank_to_dofs_map_t& out_dof_info) -> rank_to_dofs_map_t
 {
     for (const auto& [_, info_map] : out_dof_info)
         for (const auto& [owner, dofs] : info_map)
@@ -384,7 +384,7 @@ auto computeMaxCrsGraphRowSizes(const mesh::MeshPartition< orders... >&         
     auto       retval_host_view  = retval.view_host();
     const auto crs_max_row_sizes = util::asSpan(retval_host_view);
     retval.modify_host();
-    std::ranges::fill(crs_max_row_sizes, size_t{});
+    std::ranges::fill(crs_max_row_sizes, 0uz);
     const auto update_domain_counts = [&]< auto dom_def >(util::ConstexprValue< dom_def >) {
         const auto update_element_counts =
             [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {

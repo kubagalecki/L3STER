@@ -137,11 +137,11 @@ private:
     template < PrecondType type >
     void initImpl(const Teuchos::RCP< const tpetra_operator_t >& op, const PrecondOpts< type >& options);
     template < PrecondType type >
-    auto initIfpack2Impl(const Teuchos::RCP< const tpetra_crsmatrix_t >& matrix, const PrecondOpts< type >& options)
-        -> Teuchos::RCP< tpetra_operator_t >;
+    auto initIfpack2Impl(const Teuchos::RCP< const tpetra_crsmatrix_t >& matrix,
+                         const PrecondOpts< type >&                      options) -> Teuchos::RCP< tpetra_operator_t >;
     template < PrecondType type >
-    auto initNativeImpl(const Teuchos::RCP< const util::DiagonalAwareOperator >& op, const PrecondOpts< type >& opts)
-        -> Teuchos::RCP< tpetra_operator_t >;
+    auto        initNativeImpl(const Teuchos::RCP< const util::DiagonalAwareOperator >& op,
+                               const PrecondOpts< type >& opts) -> Teuchos::RCP< tpetra_operator_t >;
     inline void computeImpl();
 
     template < PrecondType type >

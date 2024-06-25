@@ -18,8 +18,8 @@ struct NeighborInfo
     d_id_t                      domain;
 };
 
-inline auto makeNeighborInfoMap(const MeshPartition< 1 >& mesh)
-    -> robin_hood::unordered_flat_map< el_id_t, NeighborInfo >
+inline auto
+makeNeighborInfoMap(const MeshPartition< 1 >& mesh) -> robin_hood::unordered_flat_map< el_id_t, NeighborInfo >
 {
     auto retval = robin_hood::unordered_flat_map< el_id_t, NeighborInfo >(mesh.getNElements());
     for (d_id_t domain_id : mesh.getDomainIds())
@@ -49,8 +49,8 @@ auto initNewDomains(const MeshPartition< 1 >& mesh_old) -> MeshPartition< conver
 } // namespace detail
 
 template < el_o_t OC >
-auto convertMeshToOrder(const MeshPartition< 1 >& mesh, std::integral_constant< el_o_t, OC > = {})
-    -> MeshPartition< OC >
+auto convertMeshToOrder(const MeshPartition< 1 >& mesh,
+                        std::integral_constant< el_o_t, OC > = {}) -> MeshPartition< OC >
 {
     L3STER_PROFILE_FUNCTION;
     const auto nbr_info_map = detail::makeNeighborInfoMap(mesh);
