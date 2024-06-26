@@ -17,10 +17,9 @@ class PvtuExporter
 {
 public:
     template < el_o_t... orders >
-    explicit PvtuExporter(const mesh::MeshPartition< orders... >& mesh);
+    explicit PvtuExporter(std::shared_ptr< const MpiComm > comm, const mesh::MeshPartition< orders... >& mesh);
     template < std::ranges::range FieldCompInds >
     void exportSolution(std::string_view                       file_name,
-                        const MpiComm&                         comm,
                         const SolutionManager&                 solution_manager,
                         const util::ArrayOwner< std::string >& field_names,
                         FieldCompInds&&                        field_component_inds)
@@ -48,11 +47,9 @@ private:
     void initTopo(const mesh::MeshPartition< orders... >& mesh);
 
     inline void enqueuePvtuFileWrite(std::string_view                                      file_name,
-                                     const MpiComm&                                        comm,
                                      const util::ArrayOwner< std::string >&                field_names,
                                      const util::ArrayOwner< util::ArrayOwner< size_t > >& field_component_inds);
     inline void enqueueVtuFileWrite(std::string_view                                      file_name,
-                                    const MpiComm&                                        comm,
                                     const SolutionManager&                                solution_manager,
                                     const util::ArrayOwner< std::string >&                field_names,
                                     const util::ArrayOwner< util::ArrayOwner< size_t > >& field_component_inds);
@@ -65,10 +62,11 @@ private:
         requires std::ranges::borrowed_range< Text > or std::same_as< std::string, Text > or
                  std::same_as< util::ArrayOwner< char >, Text >;
 
-    size_t                    m_n_cells, m_n_nodes;
-    SectionSizes              m_section_sizes;
-    std::string               m_encoded_topo, m_encoded_coords;
-    std::vector< AsyncWrite > m_write_queue; // this needs to be destroyed before the encoded data
+    std::shared_ptr< const MpiComm > m_comm;
+    size_t                           m_n_cells, m_n_nodes;
+    SectionSizes                     m_section_sizes;
+    std::string                      m_encoded_topo, m_encoded_coords;
+    std::vector< AsyncWrite >        m_write_queue; // this needs to be destroyed before the encoded data
 };
 
 namespace post::vtk
@@ -510,7 +508,8 @@ auto makeFieldIndsArrayOwner(FieldCompInds&& inds) -> util::ArrayOwner< util::Ar
 } // namespace post::vtk
 
 template < el_o_t... orders >
-PvtuExporter::PvtuExporter(const mesh::MeshPartition< orders... >& mesh) : m_n_nodes{mesh.getAllNodes().size()}
+PvtuExporter::PvtuExporter(std::shared_ptr< const MpiComm > comm, const mesh::MeshPartition< orders... >& mesh)
+    : m_comm{std::move(comm)}, m_n_nodes{mesh.getAllNodes().size()}
 {
     L3STER_PROFILE_FUNCTION;
     updateNodeCoords(mesh);
@@ -519,7 +518,6 @@ PvtuExporter::PvtuExporter(const mesh::MeshPartition< orders... >& mesh) : m_n_n
 
 template < std::ranges::range FieldCompInds >
 void PvtuExporter::exportSolution(std::string_view                       file_name,
-                                  const MpiComm&                         comm,
                                   const SolutionManager&                 solution_manager,
                                   const util::ArrayOwner< std::string >& field_names,
                                   FieldCompInds&&                        field_component_inds_view)
@@ -533,9 +531,9 @@ void PvtuExporter::exportSolution(std::string_view                       file_na
 
     std::filesystem::create_directories(std::filesystem::absolute(file_name).parent_path());
     flushWriteQueue();
-    if (comm.getRank() == 0)
-        enqueuePvtuFileWrite(file_name, comm, field_names, field_component_inds);
-    enqueueVtuFileWrite(file_name, comm, solution_manager, field_names, field_component_inds);
+    if (m_comm->getRank() == 0)
+        enqueuePvtuFileWrite(file_name, field_names, field_component_inds);
+    enqueueVtuFileWrite(file_name, solution_manager, field_names, field_component_inds);
 }
 
 template < el_o_t... orders >
@@ -559,26 +557,24 @@ void PvtuExporter::initTopo(const mesh::MeshPartition< orders... >& mesh)
 }
 
 void PvtuExporter::enqueuePvtuFileWrite(std::string_view                                      file_name,
-                                        const MpiComm&                                        comm,
                                         const util::ArrayOwner< std::string >&                field_names,
                                         const util::ArrayOwner< util::ArrayOwner< size_t > >& field_component_inds)
 {
     const auto n_field_components_view = post::vtk::makeNumFieldComponentsView(field_component_inds);
     auto       pvtu_contents =
-        post::vtk::makePvtuFileContents(file_name, comm.getSize(), field_names, n_field_components_view);
+        post::vtk::makePvtuFileContents(file_name, m_comm->getSize(), field_names, n_field_components_view);
     const auto pvtu_name = std::filesystem::path(file_name).replace_extension("pvtu").string();
     auto       pvtu_file = post::vtk::openFileForExport(pvtu_name);
     enqueueWrite(std::move(pvtu_file), 0, std::move(pvtu_contents));
 }
 
 void PvtuExporter::enqueueVtuFileWrite(std::string_view                                      file_name,
-                                       const MpiComm&                                        comm,
                                        const SolutionManager&                                solution_manager,
                                        const util::ArrayOwner< std::string >&                field_names,
                                        const util::ArrayOwner< util::ArrayOwner< size_t > >& field_component_inds)
 {
     const auto file_name_vtu_ext = std::filesystem::path{file_name}.replace_extension("vtu").string();
-    const auto vtu_file_handle   = post::vtk::openVtuFile(file_name_vtu_ext, comm);
+    const auto vtu_file_handle   = post::vtk::openVtuFile(file_name_vtu_ext, *m_comm);
     auto       enqueue_write     = [this, &vtu_file_handle, pos = MPI_Offset{0}](auto&& text) mutable {
         pos += enqueueWrite(vtu_file_handle, pos, std::forward< decltype(text) >(text));
     };

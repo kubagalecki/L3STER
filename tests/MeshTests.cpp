@@ -283,7 +283,7 @@ TEMPLATE_TEST_CASE("Local mesh view", "[mesh]", Order< 1 >, Order< 2 >, Order< 4
     constexpr auto node_dist = std::array{0., 1., 2., 3., 4.};
 
     constexpr auto check_local_view = [](const auto& global_mesh) {
-        const auto       node_map      = mesh::detail::computeNodeOrder(global_mesh);
+        const auto       node_map      = mesh::computeNodeOrder(global_mesh);
         const auto       local_view    = LocalMeshView{global_mesh, node_map};
         constexpr d_id_t domain_id     = 0;
         const auto       global_domain = global_mesh.getDomain(domain_id);

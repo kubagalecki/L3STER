@@ -21,8 +21,8 @@ void test()
                                             defineDomain< domains.size() >(domains[3], 3)};
     constexpr auto probdef_ctwrpr = util::ConstexprValue< problem_def >{};
 
-    const auto comm = MpiComm{MPI_COMM_WORLD};
-    const auto mesh = readAndDistributeMesh(comm,
+    const auto comm = std::make_shared< MpiComm >(MPI_COMM_WORLD);
+    const auto mesh = readAndDistributeMesh(*comm,
                                             L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square_multidom.msh),
                                             mesh::gmsh_tag,
                                             {},
@@ -84,7 +84,7 @@ void test()
             REQUIRE(std::ranges::all_of(view, [&](double v_test) { return std::fabs(v - v_test) < eps; }));
             const char modified_local = std::ranges::any_of(view, [&](double v_test) { return v != v_test; });
             char       modified_global;
-            comm.allReduce(std::span{&modified_local, 1}, &modified_global, MPI_LOR);
+            comm->allReduce(std::span{&modified_local, 1}, &modified_global, MPI_LOR);
             REQUIRE(modified_global); // Check at least one entry was correctly written into
         };
         check(field_vals1, v1);

@@ -22,7 +22,7 @@ class AlgebraicSystem
 {
 public:
     template < ProblemDef problem_def, ProblemDef dirichlet_def >
-    AlgebraicSystem(const MpiComm&                                            comm,
+    AlgebraicSystem(std::shared_ptr< const MpiComm >                          comm,
                     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
                     util::ConstexprValue< problem_def >,
                     util::ConstexprValue< dirichlet_def >);
@@ -74,7 +74,7 @@ public:
 
     void solve(solvers::Solver_c auto& solver, const Teuchos::RCP< tpetra_femultivector_t >& solution) const;
 
-    inline void describe(const MpiComm& comm, std::ostream& out = std::cout) const;
+    inline void describe(std::ostream& out = std::cout) const;
 
 private:
     inline void setToZero();
@@ -89,6 +89,7 @@ private:
                             std::string_view     err_msg,
                             std::source_location src_loc = std::source_location::current()) const;
 
+    std::shared_ptr< const MpiComm >                          m_comm;
     std::shared_ptr< const mesh::MeshPartition< orders... > > m_mesh;
     Teuchos::RCP< tpetra_fecrsmatrix_t >                      m_matrix;
     Teuchos::RCP< tpetra_femultivector_t >                    m_rhs;
@@ -236,16 +237,16 @@ auto AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::initSolution() 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
 template < ProblemDef problem_def, ProblemDef dirichlet_def >
 AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::AlgebraicSystem(
-    const MpiComm&                                            comm,
+    std::shared_ptr< const MpiComm >                          comm,
     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
     util::ConstexprValue< problem_def >                       problemdef_ctwrpr,
     util::ConstexprValue< dirichlet_def >                     dbcdef_ctwrpr)
-    : m_mesh{std::move(mesh)}, m_state{State::OpenForAssembly}
+    : m_comm{std::move(comm)}, m_mesh{std::move(mesh)}, m_state{State::OpenForAssembly}
 {
-    const auto cond_map            = dofs::makeCondensationMap< CP >(comm, *m_mesh, problemdef_ctwrpr);
-    const auto dof_intervals       = computeDofIntervals(comm, *m_mesh, cond_map, problemdef_ctwrpr);
+    const auto cond_map            = dofs::makeCondensationMap< CP >(*m_comm, *m_mesh, problemdef_ctwrpr);
+    const auto dof_intervals       = computeDofIntervals(*m_comm, *m_mesh, cond_map, problemdef_ctwrpr);
     const auto node_global_dof_map = dofs::NodeToGlobalDofMap{dof_intervals, cond_map};
-    m_sparsity_graph               = makeSparsityGraph(comm, *m_mesh, node_global_dof_map, cond_map, problemdef_ctwrpr);
+    m_sparsity_graph = makeSparsityGraph(*m_comm, *m_mesh, node_global_dof_map, cond_map, problemdef_ctwrpr);
 
     L3STER_PROFILE_REGION_BEGIN("Create Tpetra objects");
     m_matrix = util::makeTeuchosRCP< tpetra_fecrsmatrix_t >(m_sparsity_graph);
@@ -376,16 +377,16 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::assertState(Sta
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::describe(const MpiComm& comm, std::ostream& out) const
+void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::describe(std::ostream& out) const
 {
     const auto local_num_rows    = m_matrix->getLocalNumRows();
     const auto local_num_cols    = m_matrix->getLocalNumCols();
     const auto local_num_entries = m_matrix->getLocalNumEntries();
     auto       local_sizes_max   = std::array{local_num_rows, local_num_cols, local_num_entries};
     auto       local_sizes_min   = local_sizes_max;
-    comm.reduceInPlace(local_sizes_max, 0, MPI_MAX);
-    comm.reduceInPlace(local_sizes_min, 0, MPI_MIN);
-    if (comm.getRank() == 0)
+    m_comm->reduceInPlace(local_sizes_max, 0, MPI_MAX);
+    m_comm->reduceInPlace(local_sizes_min, 0, MPI_MIN);
+    if (m_comm->getRank() == 0)
     {
         const auto        global_num_rows_range = m_matrix->getRangeMap()->getGlobalNumElements();
         const auto        global_num_rows_sum   = m_matrix->getGlobalNumRows();
@@ -399,7 +400,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::describe(const 
             << ", " << local_sizes_max[2] << ", " << global_num_entries << "\n\n";
         out << msg.view();
     }
-    comm.barrier();
+    m_comm->barrier();
 }
 } // namespace glob_asm
 
@@ -413,7 +414,7 @@ template < el_o_t... orders,
            ProblemDef            problem_def,
            ProblemDef            dirichlet_def = ProblemDef< 0, problem_def.n_fields >{},
            AlgebraicSystemParams params >
-auto makeAlgebraicSystem(const MpiComm&                                            comm,
+auto makeAlgebraicSystem(std::shared_ptr< const MpiComm >                          comm,
                          std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
                          util::ConstexprValue< problem_def >                       problemdef_ctwrpr = {},
                          util::ConstexprValue< dirichlet_def >                     dbcdef_ctwrpr     = {},
@@ -425,21 +426,21 @@ auto makeAlgebraicSystem(const MpiComm&                                         
     constexpr auto cp                = params.cond_policy;
     constexpr auto n_rhs             = params.n_rhs;
     return glob_asm::AlgebraicSystem< max_dofs_per_node, cp, n_rhs, orders... >{
-        comm, std::move(mesh), problemdef_ctwrpr, dbcdef_ctwrpr};
+        std::move(comm), std::move(mesh), problemdef_ctwrpr, dbcdef_ctwrpr};
 }
 
 template < el_o_t... orders,
            ProblemDef            problem_def,
            ProblemDef            dirichlet_def = ProblemDef< 0, problem_def.n_fields >{},
            AlgebraicSystemParams params        = {} >
-auto makeAlgebraicSystem(const MpiComm&                                      comm,
+auto makeAlgebraicSystem(std::shared_ptr< const MpiComm >                    comm,
                          std::shared_ptr< mesh::MeshPartition< orders... > > mesh,
                          util::ConstexprValue< problem_def >                 problemdef_ctwrpr,
                          util::ConstexprValue< dirichlet_def >               dbcdef_ctwrpr = {},
                          util::ConstexprValue< params >                      params_ctwrpr = {})
     -> glob_asm::AlgebraicSystem< problem_def.n_fields, params.cond_policy, params.n_rhs, orders... >
 {
-    return makeAlgebraicSystem(comm,
+    return makeAlgebraicSystem(std::move(comm),
                                std::shared_ptr< const mesh::MeshPartition< orders... > >{std::move(mesh)},
                                problemdef_ctwrpr,
                                dbcdef_ctwrpr,

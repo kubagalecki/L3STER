@@ -16,7 +16,7 @@ using namespace lstr::mesh;
 using namespace std::numbers;
 using namespace std::string_view_literals;
 
-void test2D(const MpiComm& comm)
+void test2D(const std::shared_ptr< MpiComm >& comm)
 {
     constexpr auto node_distx = std::invoke([] {
         auto retval = std::array< double, 11 >{};
@@ -32,7 +32,7 @@ void test2D(const MpiComm& comm)
     });
     constexpr auto mesh_order = 2;
     const auto     my_partition =
-        generateAndDistributeMesh< mesh_order >(comm, [&] { return mesh::makeSquareMesh(node_distx, node_disty); });
+        generateAndDistributeMesh< mesh_order >(*comm, [&] { return mesh::makeSquareMesh(node_distx, node_disty); });
 
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2;
     constexpr auto   problem_def       = ProblemDef{defineDomain< 4 >(domain_id, 1, 3),
@@ -65,15 +65,15 @@ void test2D(const MpiComm& comm)
     system_manager.setValues(solution, bot_top_kernel, {bot_boundary, top_boundary}, scalar_inds);
     system_manager.updateSolution(solution, all_field_inds, solution_manager, all_field_inds);
 
-    auto       exporter        = PvtuExporter{*my_partition};
+    auto       exporter        = PvtuExporter{comm, *my_partition};
     const auto field_names     = std::array{"C1"sv, "Cpi"sv, "vel"sv};
     const auto field_comp_inds = std::array< std::span< const size_t >, 3 >{
         std::span{std::addressof(scalar_inds[0]), 1}, std::span{std::addressof(scalar_inds[1]), 1}, vec_inds};
-    comm.barrier();
-    exporter.exportSolution("2D/results", comm, solution_manager, field_names, field_comp_inds);
+    comm->barrier();
+    exporter.exportSolution("2D/results", solution_manager, field_names, field_comp_inds);
 }
 
-void test3D(const MpiComm& comm)
+void test3D(const std::shared_ptr< MpiComm >& comm)
 {
     const auto node_dist = [] {
         auto retval = std::array< double, 7 >{};
@@ -82,7 +82,7 @@ void test3D(const MpiComm& comm)
         return retval;
     }();
     constexpr auto mesh_order = 2;
-    const auto my_partition   = generateAndDistributeMesh< mesh_order >(comm, [&] { return makeCubeMesh(node_dist); });
+    const auto my_partition   = generateAndDistributeMesh< mesh_order >(*comm, [&] { return makeCubeMesh(node_dist); });
 
     constexpr d_id_t domain_id           = 0;
     constexpr auto   problem_def         = ProblemDef{defineDomain< 6 >(domain_id, 0, 1, 2),
@@ -117,11 +117,10 @@ void test3D(const MpiComm& comm)
     system_manager.setValues(solution, dom_kernel, std::views::single(domain_id), domain_field_inds);
     system_manager.updateSolution(solution, field_inds, solution_manager, field_inds);
 
-    auto       exporter    = PvtuExporter{*my_partition};
+    auto       exporter    = PvtuExporter{comm, *my_partition};
     const auto field_names = std::array{"vec3D"sv, "normal"sv};
-    comm.barrier();
+    comm->barrier();
     exporter.exportSolution("3D/results.nonsense_extension",
-                            comm,
                             solution_manager,
                             field_names,
                             std::array{domain_field_inds, boundary_field_inds});
@@ -131,7 +130,7 @@ int main(int argc, char* argv[])
 {
     const auto max_par_guard = util::MaxParallelismGuard{4};
     const auto scope_guard   = L3sterScopeGuard{argc, argv};
-    const auto comm          = MpiComm{MPI_COMM_WORLD};
+    const auto comm          = std::make_shared< MpiComm >(MPI_COMM_WORLD);
     test2D(comm);
     test3D(comm);
     // TODO: Programatically check whether the data was exported correctly. For the time being, check manually...

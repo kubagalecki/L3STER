@@ -5,7 +5,7 @@ int main(int argc, char* argv[])
     using namespace lstr;
 
     const auto scope_guard = L3sterScopeGuard{argc, argv};
-    const auto comm        = MpiComm{MPI_COMM_WORLD};
+    const auto comm        = std::make_shared< MpiComm >(MPI_COMM_WORLD);
 
     // Physical region IDs - these were set in Gmsh
     constexpr int domain = 44, inlet = 45, wall = 46, outlet = 47;
@@ -28,14 +28,14 @@ int main(int argc, char* argv[])
     // Read mesh
     const std::string mesh_file  = argc > 1 ? argv[1] : "../karman.msh";
     constexpr int     mesh_order = 4;
-    const auto        mesh =
-        readAndDistributeMesh< mesh_order >(comm, mesh_file, mesh::gmsh_tag, {inlet, wall, outlet}, {}, probdef_ctwrpr);
+    const auto        mesh       = readAndDistributeMesh< mesh_order >(
+        *comm, mesh_file, mesh::gmsh_tag, {inlet, wall, outlet}, {}, probdef_ctwrpr);
 
     // Algebraic system used for both the steady and transient problems
     constexpr auto sys_opts         = AlgebraicSystemParams{.cond_policy = CondensationPolicy::ElementBoundary};
     constexpr auto sysopts_ctval    = L3STER_WRAP_CTVAL(sys_opts);
     auto           algebraic_system = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, dirdef_ctwrpr, sysopts_ctval);
-    algebraic_system.describe(comm);
+    algebraic_system.describe();
 
     // Time step
     constexpr double dt = .1;
@@ -257,11 +257,10 @@ int main(int argc, char* argv[])
         solution, std::views::iota(0, 4), solution_manager, util::concatRanges(vel_inds2, vort_inds, p_inds));
 
     // Paraview exporter object
-    auto exporter = PvtuExporter{*mesh};
+    auto exporter = PvtuExporter{comm, *mesh};
 
     // Export initial snapshot
     exporter.exportSolution("results/karman_0.pvtu",
-                            comm,
                             solution_manager,
                             {"Velocity", "Vorticity", "Pressure"},
                             util::gatherAsCommon(vel_inds2, vort_inds, p_inds));
@@ -269,8 +268,8 @@ int main(int argc, char* argv[])
     // Print flow rate info, note that the computed integrals are vectors of length 1, hence the "[0]"
     {
         const auto vel_getter   = solution_manager.makeFieldValueGetter(vel_inds1);
-        const auto inflow_rate  = -computeIntegral(comm, kernel_flowrate, *mesh, {inlet}, vel_getter)[0];
-        const auto outflow_rate = computeIntegral(comm, kernel_flowrate, *mesh, {outlet}, vel_getter)[0];
+        const auto inflow_rate  = -computeIntegral(*comm, kernel_flowrate, *mesh, {inlet}, vel_getter)[0];
+        const auto outflow_rate = computeIntegral(*comm, kernel_flowrate, *mesh, {outlet}, vel_getter)[0];
         print_row(0, inflow_rate, outflow_rate);
     }
 
@@ -299,14 +298,13 @@ int main(int argc, char* argv[])
 
         // Print flow rate info
         const auto current_vel_getter = solution_manager.makeFieldValueGetter(vel_inds2);
-        const auto inflow_rate        = -computeIntegral(comm, kernel_flowrate, *mesh, {inlet}, current_vel_getter)[0];
-        const auto outflow_rate       = computeIntegral(comm, kernel_flowrate, *mesh, {outlet}, current_vel_getter)[0];
+        const auto inflow_rate        = -computeIntegral(*comm, kernel_flowrate, *mesh, {inlet}, current_vel_getter)[0];
+        const auto outflow_rate       = computeIntegral(*comm, kernel_flowrate, *mesh, {outlet}, current_vel_getter)[0];
         print_row(time_step, inflow_rate, outflow_rate);
 
         // Export snapshot
         const auto file_name = "results/karman_" + std::to_string(time_step) + ".pvtu";
         exporter.exportSolution(file_name,
-                                comm,
                                 solution_manager,
                                 {"Velocity", "Vorticity", "Pressure"},
                                 util::gatherAsCommon(vel_inds2, vort_inds, p_inds));

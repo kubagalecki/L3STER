@@ -22,7 +22,7 @@ auto makeMesh(const MpiComm& comm, auto probdef_ctwrpr)
 template < CondensationPolicy CP >
 void test()
 {
-    const auto comm = MpiComm{MPI_COMM_WORLD};
+    const auto comm = std::make_shared< MpiComm >(MPI_COMM_WORLD);
 
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
     constexpr auto   problem_def    = ProblemDef{defineDomain< 3 >(domain_id, ALL_DOFS)};
@@ -31,7 +31,7 @@ void test()
         ProblemDef{defineDomain< 3 >(left_boundary, 0), defineDomain< 3 >(right_boundary, 0)};
     constexpr auto dirichletdef_ctwrpr = util::ConstexprValue< dirichlet_def >{};
 
-    const auto mesh = makeMesh(comm, probdef_ctwrpr);
+    const auto mesh = makeMesh(*comm, probdef_ctwrpr);
 
     constexpr auto adiabatic_bound_ids = std::array{bot_boundary, top_boundary};
     constexpr auto boundary_ids        = std::array{top_boundary, bot_boundary, left_boundary, right_boundary};
@@ -83,7 +83,7 @@ void test()
     assembleDomainProblem();
     assembleBoundaryProblem();
     alg_sys.endAssembly();
-    alg_sys.describe(comm);
+    alg_sys.describe();
     CHECK_THROWS(assembleDomainProblem());
     CHECK_THROWS(assembleBoundaryProblem());
     CHECK_THROWS(alg_sys.endAssembly());
@@ -115,16 +115,16 @@ void test()
     constexpr auto bnd_error_kernel = wrapBoundaryResidualKernel< params >(compute_error);
     const auto     fval_getter      = solution_manager.makeFieldValueGetter(dof_inds);
 
-    const auto error = computeNormL2(comm, dom_error_kernel, *mesh, std::views::single(domain_id), fval_getter);
-    const auto boundary_error = computeNormL2(comm, bnd_error_kernel, *mesh, boundary_ids, fval_getter);
-    if (comm.getRank() == 0 and error.norm() >= 1e-10)
+    const auto error = computeNormL2(*comm, dom_error_kernel, *mesh, std::views::single(domain_id), fval_getter);
+    const auto boundary_error = computeNormL2(*comm, bnd_error_kernel, *mesh, boundary_ids, fval_getter);
+    if (comm->getRank() == 0 and error.norm() >= 1e-10)
     {
         std::stringstream error_msg;
         error_msg << "The error exceeded the allowed tolerance. The L2 error components were:\nvalue:\t\t\t" << error[0]
                   << "\nx derivative:\t" << error[1] << "\ny derivative:\t" << error[2] << '\n';
         std::cerr << error_msg.view();
     }
-    comm.barrier();
+    comm->barrier();
     REQUIRE(error.norm() < 1e-10);
     REQUIRE(boundary_error.norm() < 1e-10);
 

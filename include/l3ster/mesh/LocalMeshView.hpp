@@ -151,50 +151,6 @@ auto LocalElementView< ET, EO >::getBoundaries() const -> util::StaticVector< bo
 
 namespace detail
 {
-template < el_o_t... orders >
-auto computeNodeOrder(const MeshPartition< orders... >& mesh) -> std::vector< n_id_t >
-{
-    auto       internal_node_set   = robin_hood::unordered_flat_set< n_id_t >{};
-    auto       internal_node_vec   = std::vector< n_id_t >{};
-    const auto mark_internal_nodes = [&](const auto& element) {
-        for (n_id_t node : getInternalNodes(element))
-        {
-            const auto [_, inserted] = internal_node_set.insert(node);
-            util::throwingAssert(inserted, "Internal node present in multiple elements");
-            internal_node_vec.push_back(node);
-        }
-    };
-    const dim_t max_dim = mesh.getMaxDim();
-    for (d_id_t domain_id : mesh.getDomainIds())
-    {
-        const auto& [elements, dim] = mesh.getDomain(domain_id);
-        if (dim == max_dim)
-            elements.visit(mark_internal_nodes, std::execution::seq);
-    }
-    const auto is_internal = [&](n_id_t node) {
-        return internal_node_set.contains(node);
-    };
-    auto retval = std::vector< n_id_t >{};
-    retval.reserve(mesh.getAllNodes().size());
-    std::ranges::copy_if(mesh.getOwnedNodes(), std::back_inserter(retval), util::negatePredicate(is_internal));
-    std::ranges::copy(internal_node_vec, std::back_inserter(retval));
-    std::ranges::copy(mesh.getGhostNodes(), std::back_inserter(retval));
-    util::throwingAssert(retval.size() == mesh.getAllNodes().size(), "Internal nodes cannot be ghost nodes");
-    return retval;
-}
-
-template < ElementType ET, el_o_t EO >
-auto nodeProjection(const LocalElementView< ET, EO >& element)
-{
-    return element.getLocalNodes();
-}
-
-template < ElementType ET, el_o_t EO >
-auto getMaxNode(const std::vector< LocalElementView< ET, EO > >& elements) -> n_loc_id_t
-{
-    return std::ranges::max(elements | std::views::transform(&nodeProjection< ET, EO >) | std::views::join);
-}
-
 /// Map from nodes to elements which contain them
 template < ElementType ET, el_o_t EO >
 auto computeNodeToElementMap(const std::vector< LocalElementView< ET, EO > >& elements) -> util::CrsGraph< el_loc_id_t >
@@ -338,6 +294,38 @@ auto makeElementIdToSidesMap(const MeshPartition< orders... >& mesh)
     return retval;
 }
 } // namespace detail
+
+template < el_o_t... orders >
+auto computeNodeOrder(const MeshPartition< orders... >& mesh) -> std::vector< n_id_t >
+{
+    auto       internal_node_set   = robin_hood::unordered_flat_set< n_id_t >{};
+    auto       internal_node_vec   = std::vector< n_id_t >{};
+    const auto mark_internal_nodes = [&](const auto& element) {
+        for (n_id_t node : getInternalNodes(element))
+        {
+            const auto [_, inserted] = internal_node_set.insert(node);
+            util::throwingAssert(inserted, "Internal node present in multiple elements");
+            internal_node_vec.push_back(node);
+        }
+    };
+    const dim_t max_dim = mesh.getMaxDim();
+    for (d_id_t domain_id : mesh.getDomainIds())
+    {
+        const auto& [elements, dim] = mesh.getDomain(domain_id);
+        if (dim == max_dim)
+            elements.visit(mark_internal_nodes, std::execution::seq);
+    }
+    const auto is_internal = [&](n_id_t node) {
+        return internal_node_set.contains(node);
+    };
+    auto retval = std::vector< n_id_t >{};
+    retval.reserve(mesh.getAllNodes().size());
+    std::ranges::copy_if(mesh.getOwnedNodes(), std::back_inserter(retval), util::negatePredicate(is_internal));
+    std::ranges::copy(internal_node_vec, std::back_inserter(retval));
+    std::ranges::copy(mesh.getGhostNodes(), std::back_inserter(retval));
+    util::throwingAssert(retval.size() == mesh.getAllNodes().size(), "Internal nodes cannot be ghost nodes");
+    return retval;
+}
 
 template < el_o_t... orders >
 LocalMeshView< orders... >::LocalMeshView(const MeshPartition< orders... >& mesh, const NodeMap& node_map)
