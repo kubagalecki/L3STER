@@ -8,10 +8,9 @@
 #include "l3ster/glob_asm/StaticCondensationManager.hpp"
 #include "l3ster/post/SolutionManager.hpp"
 #include "l3ster/solve/SolverInterface.hpp"
-#include "l3ster/util/Assertion.hpp"
 #include "l3ster/util/GlobalResource.hpp"
-#include "l3ster/util/TypeID.hpp"
-#include "l3ster/util/WeakCache.hpp"
+
+#include <format>
 
 namespace lstr
 {
@@ -388,17 +387,34 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::describe(std::o
     m_comm->reduceInPlace(local_sizes_min, 0, MPI_MIN);
     if (m_comm->getRank() == 0)
     {
-        const auto        global_num_rows_range = m_matrix->getRangeMap()->getGlobalNumElements();
-        const auto        global_num_rows_sum   = m_matrix->getGlobalNumRows();
-        const auto        global_num_cols       = m_matrix->getGlobalNumCols();
-        const auto        global_num_entries    = m_matrix->getGlobalNumEntries();
-        std::stringstream msg;
-        msg << "\nThe algebraic system has dimensions " << global_num_rows_range << " by " << global_num_cols
-            << "\nDistribution among MPI ranks (min, max, total):" << "\nRows:             " << local_sizes_min[0]
-            << ", " << local_sizes_max[0] << ", " << global_num_rows_sum << "\nColumns:          " << local_sizes_min[1]
-            << ", " << local_sizes_max[1] << ", " << global_num_cols << "\nNon-zero entries: " << local_sizes_min[2]
-            << ", " << local_sizes_max[2] << ", " << global_num_entries << "\n\n";
-        out << msg.view();
+        const auto global_num_rows_range = m_matrix->getRangeMap()->getGlobalNumElements();
+        const auto global_num_rows_sum   = m_matrix->getGlobalNumRows();
+        const auto global_num_cols       = m_matrix->getGlobalNumCols();
+        const auto global_num_entries    = m_matrix->getGlobalNumEntries();
+        out << std::format("\nThe algebraic system has dimensions {} by {}\n"
+                           "Distribution among MPI ranks:\n"
+                           "{:<10}|{:^17}|{:^17}|{:^17}|\n"
+                           "{:<10}|{:^17}|{:^17}|{:^17}|\n"
+                           "{:<10}|{:^17}|{:^17}|{:^17}|\n"
+                           "{:<10}|{:^17}|{:^17}|{:^17}|\n\n",
+                           global_num_rows_range,
+                           global_num_cols,
+                           "",
+                           "* MIN *",
+                           "* MAX *",
+                           "* TOTAL *",
+                           "ROWS",
+                           local_sizes_min[0],
+                           local_sizes_max[0],
+                           global_num_rows_sum,
+                           "COLUMNS",
+                           local_sizes_min[1],
+                           local_sizes_max[1],
+                           global_num_cols,
+                           "NON-ZEROS",
+                           local_sizes_min[2],
+                           local_sizes_max[2],
+                           global_num_entries);
     }
     m_comm->barrier();
 }
