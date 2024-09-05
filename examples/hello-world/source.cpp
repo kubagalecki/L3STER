@@ -10,6 +10,5 @@ int main(int argc, char* argv[])
     const auto comm = lstr::MpiComm{MPI_COMM_WORLD};
 
     // Print message
-    if (comm.getRank() == 0)
-        std::cout << "Hello, World!\nLove,\nL3STER program, rank 0 of " << comm.getSize() << '\n';
+    std::cout << std::format("Hello, World!\nLove,\nL3STER app, rank {} of {}\n\n", comm.getRank(), comm.getSize());
 }

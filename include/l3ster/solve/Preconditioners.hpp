@@ -46,7 +46,7 @@ public:
 class RichardsonPreconditioner final : public PreconditionerInterface< RichardsonPreconditioner >
 {
 public:
-    RichardsonPreconditioner(const Teuchos::RCP< const util::DiagonalAwareOperator >& A, val_t damp, int sweeps)
+    RichardsonPreconditioner(const Teuchos::RCP< const tpetra_operator_t >& A, val_t damp, int sweeps)
         : m_map{A->getRangeMap()}, m_damping_factor{damp}, m_sweeps{sweeps}
     {}
 
@@ -73,12 +73,15 @@ class JacobiPreconditioner final : public PreconditionerInterface< JacobiPrecond
 {
 public:
     JacobiPreconditioner(const Teuchos::RCP< const tpetra_operator_t >& A, val_t damping, val_t threshold, int sweeps)
-        : m_source{Teuchos::rcp_dynamic_cast< const util::DiagonalAwareOperator >(A, true)},
-          m_diag_inv_damped{m_source->initDiagonalCopy()},
+        : m_source{A},
+          m_diag_inv_damped{util::makeTeuchosRCP< tpetra_vector_t >(A->getDomainMap())},
           m_damping{damping},
           m_threshold{threshold},
           m_sweeps{sweeps}
-    {}
+    {
+        util::throwingAssert(A->hasDiagonal(),
+                             "Jacobi preconditioner must be initialized with a diagonal-aware operator");
+    }
 
     inline void computeImpl();
     auto        getMapImpl() const -> Teuchos::RCP< const tpetra_map_t > { return m_diag_inv_damped->getMap(); }
@@ -94,17 +97,17 @@ public:
     }
 
 private:
-    Teuchos::RCP< const util::DiagonalAwareOperator > m_source;
-    Teuchos::RCP< tpetra_vector_t >                   m_diag_inv_damped;
-    val_t                                             m_damping, m_threshold;
-    int                                               m_sweeps;
+    Teuchos::RCP< const tpetra_operator_t > m_source;
+    Teuchos::RCP< tpetra_vector_t >         m_diag_inv_damped;
+    val_t                                   m_damping, m_threshold;
+    int                                     m_sweeps;
 };
 
 void JacobiPreconditioner::computeImpl()
 {
-    m_source->fillDiagonalCopy(*m_diag_inv_damped);
+    m_source->getLocalDiagCopy(*m_diag_inv_damped);
     const auto diag_view_2d    = m_diag_inv_damped->getLocalViewHost(Tpetra::Access::ReadWrite);
-    const auto diag_view       = Kokkos::subview(diag_view_2d, Kokkos::ALL(), 0);
+    const auto diag_view       = Kokkos::subview(diag_view_2d, Kokkos::ALL, 0);
     const auto diag_len        = diag_view.extent(0);
     const auto damping         = m_damping;   // Avoid implicit `this` capture
     const auto threshold       = m_threshold; // Avoid implicit `this` capture

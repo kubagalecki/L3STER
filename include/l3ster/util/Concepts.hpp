@@ -56,7 +56,7 @@ inline constexpr bool is_vector< std::vector< T, Alloc > > = true;
 
 // Tuple-related cocnepts
 template < typename T >
-concept Array_c = detail::is_array< T >;
+concept Array_c = detail::is_array< std::remove_cvref_t< T > >;
 template < typename T, typename V >
 concept ArrayOf_c = Array_c< T > and std::same_as< typename T::value_type, V >;
 template < typename T >
@@ -131,12 +131,35 @@ concept tuple_invocable = detail::is_tuple_invocable< T, tuple_t >::value;
 template < typename T, typename R, typename tuple_t >
 concept tuple_r_invocable = detail::is_tuple_r_invocable< R, T, tuple_t >::value;
 
+// Functional
 template < typename T, typename Domain, typename Range >
 concept Mapping_c = requires(T f, Domain x) {
     { f(x) } -> std::convertible_to< Range >;
 };
 template < typename G, typename V >
 concept GeneratorFor_c = std::is_invocable_r_v< V, G >;
+
+template < typename T >
+concept Function_c = std::is_function_v< T >;
+
+namespace detail
+{
+template < typename Function >
+struct FunctionTraits
+{};
+template < typename Ret, typename... Args >
+struct FunctionTraits< Ret(Args...) >
+{
+    using Return = Ret;
+    template < template < typename... > typename Apply >
+    using ApplyToArgs = Apply< Args... >;
+    template < typename Callable >
+    static constexpr bool callable_as = std::is_invocable_r_v< Ret, Callable, Args... >;
+};
+} // namespace detail
+
+template < typename Callable, typename Function >
+concept CallableAs_c = Function_c< Function > and detail::FunctionTraits< Function >::template callable_as< Callable >;
 
 template < typename T, template < typename > typename Predicate >
 concept predicate_trait_specialized = requires {

@@ -2,6 +2,7 @@
 #define L3STER_DOFS_NODECONDENSATION_HPP
 
 #include "l3ster/comm/MpiComm.hpp"
+#include "l3ster/common/Enums.hpp"
 #include "l3ster/dofs/ProblemDefinition.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/util/ArrayOwner.hpp"
@@ -9,12 +10,6 @@
 
 namespace lstr
 {
-enum struct CondensationPolicy
-{
-    None,
-    ElementBoundary
-};
-
 template < CondensationPolicy cond_policy >
 struct CondensationPolicyTag
 {

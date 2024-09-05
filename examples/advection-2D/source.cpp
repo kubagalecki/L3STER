@@ -99,7 +99,7 @@ int main(int argc, char* argv[])
         std::array< std::array< int, 1 >, 1 >{sol_inds};
 
     // Export initial snapshot (phi = 0)
-    exporter.exportSolution("results/phi_0.pvtu", solution_manager, {"phi"}, phi_components);
+    exporter.exportSolution("results/phi_000.pvtu", solution_manager, {"phi"}, phi_components);
 
     constexpr int time_steps = 20;
     for (int time_step = 1; time_step <= time_steps; ++time_step)
@@ -120,7 +120,7 @@ int main(int argc, char* argv[])
         algebraic_system.updateSolution(solution, dof_inds, solution_manager, sol_inds);
 
         // Export snapshot
-        const auto file_name = "results/phi_" + std::to_string(time_step) + ".pvtu";
+        const auto file_name = std::format("results/phi_{:03}.pvtu", time_step);
         exporter.exportSolution(file_name, solution_manager, {"phi"}, phi_components);
     }
 }

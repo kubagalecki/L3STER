@@ -57,7 +57,12 @@ function( add_mpi_test source name nprocs )
     target_link_options( ${test_target} PRIVATE -fno-sanitize=all )
     target_link_libraries( ${test_target} L3STER::L3STER )
     set( test_env "GMON_OUT_PREFIX=profile_data;OMP_PROC_BIND=false" )
-    set( test_driver mpiexec )
+    if ( L3STER_MPI_DRIVER )
+        set( test_driver ${L3STER_MPI_DRIVER} )
+        set()
+    else ()
+        set( test_driver mpiexec )
+    endif ()
     if ( ${ARGC} EQUAL 4 )
         set( args ${ARGV4} )
     endif ()
@@ -67,10 +72,17 @@ function( add_mpi_test source name nprocs )
         set( test_dir ${CMAKE_CURRENT_BINARY_DIR}/${test_name} )
         file( MAKE_DIRECTORY ${test_dir} )
         list( APPEND L3STER_MPI_TESTS ${test_name} )
-        add_test( NAME ${test_name}
-                  COMMAND ${test_driver} ${test_params}
-                  WORKING_DIRECTORY ${test_dir}
-                  )
+        if ( ${np} EQUAL 1 )
+            add_test( NAME ${test_name}
+                      COMMAND $<TARGET_FILE:${test_target}>
+                      WORKING_DIRECTORY ${test_dir}
+                      )
+        else ()
+            add_test( NAME ${test_name}
+                      COMMAND ${test_driver} ${test_params}
+                      WORKING_DIRECTORY ${test_dir}
+                      )
+        endif ()
         set_tests_properties( ${test_name} PROPERTIES ENVIRONMENT "${test_env}" )
     endforeach ()
     set( L3STER_MPI_TESTS ${L3STER_MPI_TESTS} PARENT_SCOPE )
@@ -87,6 +99,7 @@ add_mpi_test( TpetraMapCreationTest.cpp Tpetra_Map_Creation "1;2;4" )
 add_mpi_test( SparsityGraphTest.cpp Sparsity_Graph "1;2;4;8;16" )
 add_mpi_test( DirichletBCTest.cpp Dirichlet_BC_Application "1;2;4" )
 add_mpi_test( Diffusion2DTest.cpp Solve_2D_diffusion_problem "1;2;4" )
+add_mpi_test( MatrixFreeTests.cpp Matrix_Free "1;2;4" )
 add_mpi_test( EmptyPartitionTest.cpp Handle_Empty_Partition "4" )
 add_mpi_test( MultiDomainTest.cpp Solve_Multi_Domain_Problem "1;2;4" )
 add_mpi_test( VtkExportTest.cpp Export_results_to_VTK "1;2;4" )

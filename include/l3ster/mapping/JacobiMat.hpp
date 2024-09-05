@@ -7,24 +7,26 @@
 
 namespace lstr::map
 {
-// Jacobi matrix in native dimension, i.e. y=0, z=0 for 1D, z=0 for 2D is assumed
-// Note: the generator returned from this function cannot outlive the element passed as its argument
+// Jacobi matrix in native dimension: assumes y=0, z=0 for 1D, z=0 for 2D
+template < mesh::ElementType ET, el_o_t EO >
+using JacobiMat = Eigen::Matrix< val_t, mesh::Element< ET, EO >::native_dim, mesh::Element< ET, EO >::native_dim >;
+
+// Note: the generator returned from this function cannot outlive the element data passed as its argument
 template < mesh::ElementType T, el_o_t O >
     requires(T == mesh::ElementType::Line or T == mesh::ElementType::Quad or T == mesh::ElementType::Hex)
-auto getNatJacobiMatGenerator(const mesh::Element< T, O >& element)
+auto getNatJacobiMatGenerator(const mesh::ElementData< T, O >& element_data)
 {
-    return [&element](const Point< mesh::Element< T, O >::native_dim >& point) {
+    return [&](const Point< mesh::Element< T, O >::native_dim >& point) -> JacobiMat< T, O > {
         constexpr auto nat_dim    = mesh::Element< T, O >::native_dim;
         constexpr auto n_o1_nodes = mesh::Element< T, 1 >::n_nodes;
-        using ret_t               = Eigen::Matrix< val_t, nat_dim, nat_dim >;
-        ret_t jac_mat             = ret_t::Zero();
+        auto           jac_mat    = JacobiMat< T, O >{JacobiMat< T, O >::Zero()};
         util::forConstexpr(
             [&]< size_t shapefun_ind >(std::integral_constant< size_t, shapefun_ind >) {
                 util::forConstexpr(
                     [&]< dim_t derdim_ind >(std::integral_constant< dim_t, derdim_ind >) {
                         util::forConstexpr(
                             [&]< dim_t spacedim_ind >(std::integral_constant< dim_t, spacedim_ind >) {
-                                const val_t vert_coord = element.getData().vertices[shapefun_ind][spacedim_ind];
+                                const val_t vert_coord = element_data.vertices[shapefun_ind][spacedim_ind];
                                 const val_t shapefun_val =
                                     basis::ReferenceBasisFunction< T,
                                                                    1,

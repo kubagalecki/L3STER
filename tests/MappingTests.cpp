@@ -56,7 +56,7 @@ TEST_CASE("Reference to physical mapping", "[mesh]")
         constexpr auto            el_nodes = typename element_type::node_array_t{};
         ElementData< el_t, el_o > data{{Point{1., 1., 1.}, Point{.5, .5, .5}}};
         const auto                element = element_type{el_nodes, data, 0};
-        const auto                mapped  = mapToPhysicalSpace(element, Point{0.});
+        const auto                mapped  = mapToPhysicalSpace(element.getData(), Point{0.});
         CHECK(mapped.x() == Approx(.75).margin(1e-15));
         CHECK(mapped.y() == Approx(.75).margin(1e-15));
         CHECK(mapped.z() == Approx(.75).margin(1e-15));
@@ -69,7 +69,7 @@ TEST_CASE("Reference to physical mapping", "[mesh]")
         constexpr auto            el_nodes = typename element_type::node_array_t{};
         ElementData< el_t, el_o > data{{Point{1., -1., 0.}, Point{2., -1., 0.}, Point{1., 1., 1.}, Point{2., 1., 1.}}};
         const auto                element = element_type{el_nodes, data, 0};
-        const auto                mapped  = mapToPhysicalSpace(element, Point{.5, -.5});
+        const auto                mapped  = mapToPhysicalSpace(element.getData(), Point{.5, -.5});
         CHECK(mapped.x() == Approx(1.75).margin(1e-15));
         CHECK(mapped.y() == Approx(-.5).margin(1e-15));
         CHECK(mapped.z() == Approx(.25).margin(1e-15));
@@ -89,7 +89,7 @@ TEST_CASE("Reference to physical mapping", "[mesh]")
                                         Point{.5, 1., 1.},
                                         Point{1., 1., 1.}}};
         const auto                element = element_type{el_nodes, data, 0};
-        const auto                mapped  = mapToPhysicalSpace(element, Point{0., 0., 0.});
+        const auto                mapped  = mapToPhysicalSpace(element.getData(), Point{0., 0., 0.});
         CHECK(mapped.x() == Approx(.75).margin(1e-15));
         CHECK(mapped.y() == Approx(.75).margin(1e-15));
         CHECK(mapped.z() == Approx(.75).margin(1e-15));
@@ -101,7 +101,7 @@ TEST_CASE("Jacobi matrix computation", "[mapping]")
     SECTION("Line")
     {
         const auto element         = getLineElement();
-        const auto jacobi_mat_eval = getNatJacobiMatGenerator(element);
+        const auto jacobi_mat_eval = getNatJacobiMatGenerator(element.getData());
         const auto val             = jacobi_mat_eval(Point{.42});
         CHECK(val[0] == Approx(.5).margin(1e-13));
     }
@@ -109,7 +109,7 @@ TEST_CASE("Jacobi matrix computation", "[mapping]")
     SECTION("Quad")
     {
         const auto element         = getQuadElement();
-        const auto jacobi_mat_eval = getNatJacobiMatGenerator(element);
+        const auto jacobi_mat_eval = getNatJacobiMatGenerator(element.getData());
         const auto val             = jacobi_mat_eval(Point{.5, .5});
         CHECK(val(0, 0) == Approx(7. / 8.).margin(1e-13));
         CHECK(val(0, 1) == Approx(3. / 8.).margin(1e-13));
@@ -120,7 +120,7 @@ TEST_CASE("Jacobi matrix computation", "[mapping]")
     SECTION("Hex")
     {
         const auto element         = getHexElement();
-        const auto jacobi_mat_eval = getNatJacobiMatGenerator(element);
+        const auto jacobi_mat_eval = getNatJacobiMatGenerator(element.getData());
         const auto val             = jacobi_mat_eval(Point{.5, .5, .5});
         CHECK(val(0, 0) == Approx(.5).margin(1e-13));
         CHECK(val(0, 1) == Approx(0.).margin(1e-13));
@@ -139,26 +139,34 @@ TEST_CASE("Boundary normal computation", "[mapping]")
     SECTION("Line")
     {
         const auto element         = getLineElement();
-        const auto jacobi_mat_eval = getNatJacobiMatGenerator(element);
-        const auto left_view       = BoundaryElementView{&element, 0};
-        const auto right_view      = BoundaryElementView{&element, 1};
-        const auto left_normal     = computeBoundaryNormal(left_view, jacobi_mat_eval(Point{0.}));
-        const auto right_normal    = computeBoundaryNormal(right_view, jacobi_mat_eval(Point{1.}));
+        const auto jacobi_mat_eval = getNatJacobiMatGenerator(element.getData());
+        const auto compute_normal  = [&]< ElementType ET, el_o_t EO >(const BoundaryElementView< ET, EO >& bev,
+                                                                     const Point< 1 >&                    point) {
+            return computeBoundaryNormal< ET, EO >(bev.getSide(), jacobi_mat_eval(point));
+        };
+        const auto left_view    = BoundaryElementView{&element, 0};
+        const auto right_view   = BoundaryElementView{&element, 1};
+        const auto left_normal  = compute_normal(left_view, Point{0.});
+        const auto right_normal = compute_normal(right_view, Point{1.});
         CHECK(left_normal[0] == Approx(-1.).margin(1e-13));
         CHECK(right_normal[0] == Approx(1.).margin(1e-13));
     }
     SECTION("Quad")
     {
         const auto element         = getQuadElement();
-        const auto jacobi_mat_eval = getNatJacobiMatGenerator(element);
-        const auto bot_view        = BoundaryElementView{&element, 0};
-        const auto top_view        = BoundaryElementView{&element, 1};
-        const auto left_view       = BoundaryElementView{&element, 2};
-        const auto right_view      = BoundaryElementView{&element, 3};
-        const auto bot_normal      = computeBoundaryNormal(bot_view, jacobi_mat_eval(Point{0., -1.}));
-        const auto top_normal      = computeBoundaryNormal(top_view, jacobi_mat_eval(Point{0., 1.}));
-        const auto left_normal     = computeBoundaryNormal(left_view, jacobi_mat_eval(Point{-1., 0.}));
-        const auto right_normal    = computeBoundaryNormal(right_view, jacobi_mat_eval(Point{1., 0.}));
+        const auto jacobi_mat_eval = getNatJacobiMatGenerator(element.getData());
+        const auto compute_normal  = [&]< ElementType ET, el_o_t EO >(const BoundaryElementView< ET, EO >& bev,
+                                                                     const Point< 2 >&                    point) {
+            return computeBoundaryNormal< ET, EO >(bev.getSide(), jacobi_mat_eval(point));
+        };
+        const auto bot_view     = BoundaryElementView{&element, 0};
+        const auto top_view     = BoundaryElementView{&element, 1};
+        const auto left_view    = BoundaryElementView{&element, 2};
+        const auto right_view   = BoundaryElementView{&element, 3};
+        const auto bot_normal   = compute_normal(bot_view, Point{0., -1.});
+        const auto top_normal   = compute_normal(top_view, Point{0., 1.});
+        const auto left_normal  = compute_normal(left_view, Point{-1., 0.});
+        const auto right_normal = compute_normal(right_view, Point{1., 0.});
         CHECK(bot_normal[0] == Approx(0.).margin(1e-13));
         CHECK(bot_normal[1] == Approx(-1.).margin(1e-13));
         CHECK(top_normal[0] == Approx(-1. / std::sqrt(5.)).margin(1e-13));
@@ -171,19 +179,23 @@ TEST_CASE("Boundary normal computation", "[mapping]")
     SECTION("Hex")
     {
         const auto element         = getHexElement();
-        const auto jacobi_mat_eval = getNatJacobiMatGenerator(element);
-        const auto front_view      = BoundaryElementView{&element, 0};
-        const auto back_view       = BoundaryElementView{&element, 1};
-        const auto bot_view        = BoundaryElementView{&element, 2};
-        const auto top_view        = BoundaryElementView{&element, 3};
-        const auto left_view       = BoundaryElementView{&element, 4};
-        const auto right_view      = BoundaryElementView{&element, 5};
-        const auto front_normal    = computeBoundaryNormal(front_view, jacobi_mat_eval(Point{0., 0., -1.}));
-        const auto back_normal     = computeBoundaryNormal(back_view, jacobi_mat_eval(Point{0., 0., 1.}));
-        const auto bot_normal      = computeBoundaryNormal(bot_view, jacobi_mat_eval(Point{0., -1., 0.}));
-        const auto top_normal      = computeBoundaryNormal(top_view, jacobi_mat_eval(Point{0., 1., 0.}));
-        const auto left_normal     = computeBoundaryNormal(left_view, jacobi_mat_eval(Point{-1., 0., 0.}));
-        const auto right_normal    = computeBoundaryNormal(right_view, jacobi_mat_eval(Point{1., 0., 0.}));
+        const auto jacobi_mat_eval = getNatJacobiMatGenerator(element.getData());
+        const auto compute_normal  = [&]< ElementType ET, el_o_t EO >(const BoundaryElementView< ET, EO >& bev,
+                                                                     const Point< 3 >&                    point) {
+            return computeBoundaryNormal< ET, EO >(bev.getSide(), jacobi_mat_eval(point));
+        };
+        const auto front_view   = BoundaryElementView{&element, 0};
+        const auto back_view    = BoundaryElementView{&element, 1};
+        const auto bot_view     = BoundaryElementView{&element, 2};
+        const auto top_view     = BoundaryElementView{&element, 3};
+        const auto left_view    = BoundaryElementView{&element, 4};
+        const auto right_view   = BoundaryElementView{&element, 5};
+        const auto front_normal = compute_normal(front_view, Point{0., 0., -1.});
+        const auto back_normal  = compute_normal(back_view, Point{0., 0., 1.});
+        const auto bot_normal   = compute_normal(bot_view, Point{0., -1., 0.});
+        const auto top_normal   = compute_normal(top_view, Point{0., 1., 0.});
+        const auto left_normal  = compute_normal(left_view, Point{-1., 0., 0.});
+        const auto right_normal = compute_normal(right_view, Point{1., 0., 0.});
         CHECK(front_normal[0] == Approx(0.).margin(1e-13));
         CHECK(front_normal[1] == Approx(0.).margin(1e-13));
         CHECK(front_normal[2] == Approx(-1.).margin(1e-13));
@@ -323,7 +335,7 @@ TEST_CASE("Basis function derivatives", "[mapping]")
     {
         const auto element    = getLineElement();
         const auto test_point = Point{0.};
-        const auto jac        = getNatJacobiMatGenerator(element)(test_point);
+        const auto jac        = getNatJacobiMatGenerator(element.getData())(test_point);
         const auto ref_ders = computeRefBasisDers< decltype(element)::type, decltype(element)::order, LB >(test_point);
         const auto bf_der   = computePhysBasisDers(jac, ref_ders);
         CHECK(bf_der(0, 0) == Approx(-1.).margin(1e-13));
@@ -334,7 +346,7 @@ TEST_CASE("Basis function derivatives", "[mapping]")
     {
         const auto element    = getQuadElement();
         const auto test_point = Point{0., 0.};
-        const auto jac        = getNatJacobiMatGenerator(element)(test_point);
+        const auto jac        = getNatJacobiMatGenerator(element.getData())(test_point);
         const auto ref_ders = computeRefBasisDers< decltype(element)::type, decltype(element)::order, LB >(test_point);
         const auto bf_der   = computePhysBasisDers(jac, ref_ders);
         CHECK(bf_der(0, 0) == Approx(-.25).margin(1e-13));
@@ -360,7 +372,7 @@ TEST_CASE("Basis function derivatives", "[mapping]")
                                                                                                    Point{1., 1., 1.}}},
                                                                0};
         const auto test_point = Point{0., 0., 0.};
-        const auto jac        = getNatJacobiMatGenerator(element)(test_point);
+        const auto jac        = getNatJacobiMatGenerator(element.getData())(test_point);
         const auto ref_ders = computeRefBasisDers< decltype(element)::type, decltype(element)::order, LB >(test_point);
         const auto bf_der   = computePhysBasisDers(jac, ref_ders);
         CHECK(bf_der(0, 0) == Approx(-.25).margin(1e-13));
@@ -444,7 +456,7 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
             const auto& ref_q =
                 basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide()).quadrature;
             for (auto qp : ref_q.points)
-                CHECK(mapToPhysicalSpace(*el_view, qp)[space_ind] == Approx{offs}.margin(1.e-15));
+                CHECK(mapToPhysicalSpace(el_view->getData(), qp)[space_ind] == Approx{offs}.margin(1.e-15));
         };
         view.element_views.visit(element_checker, std::execution::seq);
     };
@@ -466,7 +478,7 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
             const auto check_pos = [&](el_side_t side, val_t x_pos) {
                 const auto& ref_q  = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QLO >(side);
                 const auto& ref_p  = ref_q.quadrature.points.front();
-                const auto  phys_p = mapToPhysicalSpace(el, Point{ref_p});
+                const auto  phys_p = mapToPhysicalSpace(el.getData(), Point{ref_p});
                 CHECK(phys_p[0] == Approx{x_pos}.margin(1e-15));
                 CHECK(phys_p[1] == Approx{0.}.margin(1e-15));
                 CHECK(phys_p[2] == Approx{0.}.margin(1e-15));

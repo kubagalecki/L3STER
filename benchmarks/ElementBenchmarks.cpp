@@ -6,7 +6,7 @@ static void BM_JacobianComputation(benchmark::State& state)
     const auto point   = Point{.5, .5, .5};
     for (auto _ : state)
     {
-        const auto jacobi_mat_eval = map::getNatJacobiMatGenerator(element);
+        const auto jacobi_mat_eval = map::getNatJacobiMatGenerator(element.getData());
         auto       val             = jacobi_mat_eval(point);
         benchmark::DoNotOptimize(val);
     }
@@ -30,7 +30,7 @@ static void BM_BasisPhysicalDerivativeComputation(benchmark::State& state)
 {
     const auto element  = getExampleHexElement< 1 >();
     const auto point    = Point{.5, .5, .5};
-    const auto J        = map::getNatJacobiMatGenerator(element)(point);
+    const auto J        = map::getNatJacobiMatGenerator(element.getData())(point);
     const auto ref_ders = basis::computeRefBasisDers< mesh::ElementType::Hex, 1, basis::BasisType::Lagrange >(point);
     for (auto _ : state)
     {

@@ -8,6 +8,7 @@
 
 using namespace lstr;
 
+/*
 // A view of Tpetra::CrsMatrix as a Tpetra::Operator outside the inheritance hierarchy
 class TpetraMatrixAsOperatorStrongUpcast : virtual public util::DiagonalAwareOperator
 {
@@ -35,9 +36,10 @@ public:
 private:
     Teuchos::RCP< const tpetra_crsmatrix_t > m_matrix;
 };
+*/
 
 // Make 1D diffusion matrix
-auto makeSPDMatrix(size_t size) -> Teuchos::RCP< const lstr::tpetra_crsmatrix_t >
+auto makeSPDMatrix(size_t size) -> Teuchos::RCP< const tpetra_crsmatrix_t >
 {
     auto       comm     = util::makeTeuchosRCP< Teuchos::MpiComm< int > >(MPI_COMM_WORLD);
     const auto row_map  = util::makeTeuchosRCP< tpetra_map_t >(size, 0, comm);
@@ -141,10 +143,10 @@ bool checkNorms(const std::vector< val_t >& norms, std::string_view test_name, v
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     if (rank == 0)
     {
-        std::cerr << (pass ? "Passed" : "Failed") << " test:\t\t\t" << test_name << '\n' << "With error norms:\t";
+        std::cout << std::format("{:15}{}\n{:15}", (pass ? "Passed test:" : "Failed test:"), test_name, "Error norms:");
         for (auto n : norms)
-            std::cerr << n << '\t';
-        std::cerr << "\n\n";
+            std::cout << n << '\t';
+        std::cout << "\n\n";
     }
     return pass;
 }
@@ -158,7 +160,7 @@ bool lapackTest(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
     solver.solve(A, b, x);
     const auto norms = equalMV(solution, *x);
     x->putScalar(0.);
-    return checkNorms(norms, "Lapack direct solver test", 1e-10);
+    return checkNorms(norms, "Lapack direct solver", 1e-10);
 }
 
 bool klu2Test(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
@@ -170,7 +172,7 @@ bool klu2Test(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
     solver.solve(A, b, x);
     const auto norms = equalMV(solution, *x);
     x->putScalar(0.);
-    return checkNorms(norms, "KLU2 direct solver test", 1e-10);
+    return checkNorms(norms, "KLU2 direct solver", 1e-10);
 }
 
 bool cgNoprecTest(const Teuchos::RCP< const tpetra_operator_t >&    A,
@@ -182,7 +184,7 @@ bool cgNoprecTest(const Teuchos::RCP< const tpetra_operator_t >&    A,
     solver.solve(A, b, x);
     const auto norms = equalMV(solution, *x);
     x->putScalar(0.);
-    return checkNorms(norms, "Unpreconditioned CG solver test", 1e-5);
+    return checkNorms(norms, "Unpreconditioned CG solver", 1e-5);
 }
 
 bool cgRichardsonTest(const Teuchos::RCP< const tpetra_operator_t >&    A,
@@ -196,7 +198,7 @@ bool cgRichardsonTest(const Teuchos::RCP< const tpetra_operator_t >&    A,
     solver.solve(A, b, x);
     const auto norms = equalMV(solution, *x);
     x->putScalar(0.);
-    return checkNorms(norms, "Richardson preconditioner + CG solver test", 1e-5);
+    return checkNorms(norms, "Richardson preconditioner + CG solver", 1e-5);
 }
 
 bool cgJacobiTest(const Teuchos::RCP< const tpetra_operator_t >&    A,
@@ -210,7 +212,7 @@ bool cgJacobiTest(const Teuchos::RCP< const tpetra_operator_t >&    A,
     solver.solve(A, b, x);
     const auto norms = equalMV(solution, *x);
     x->putScalar(0.);
-    return checkNorms(norms, "Jacobi preconditioner + CG solver test", 1e-5);
+    return checkNorms(norms, "Jacobi preconditioner + CG solver", 1e-5);
 }
 
 bool cgSGSTest(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
@@ -224,7 +226,7 @@ bool cgSGSTest(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
     solver.solve(A, b, x);
     const auto norms = equalMV(solution, *x);
     x->putScalar(0.);
-    return checkNorms(norms, "Ifpack2 symmetric Gauss-Seidl preconditioner + CG solver test", 1e-5);
+    return checkNorms(norms, "Ifpack2 symmetric Gauss-Seidl preconditioner + CG solver", 1e-5);
 }
 
 bool cgChebyshevTest(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
@@ -238,7 +240,7 @@ bool cgChebyshevTest(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
     solver.solve(A, b, x);
     const auto norms = equalMV(solution, *x);
     x->putScalar(0.);
-    return checkNorms(norms, "Ifpack2 3rd order Chebyshev preconditioner + CG solver test", 1e-5);
+    return checkNorms(norms, "Ifpack2 3rd order Chebyshev preconditioner + CG solver", 1e-5);
 }
 
 int main(int argc, char* argv[])
@@ -251,10 +253,10 @@ int main(int argc, char* argv[])
     constexpr size_t size  = 100;
     constexpr size_t n_rhs = 2;
 
-    const auto A      = makeSPDMatrix(size);
-    const auto x      = util::makeTeuchosRCP< tpetra_multivector_t >(A->getRowMap(), n_rhs);
-    const auto b      = util::makeTeuchosRCP< tpetra_multivector_t >(A->getRowMap(), n_rhs);
-    const auto A_mfop = util::makeTeuchosRCP< TpetraMatrixAsOperatorStrongUpcast >(A);
+    const auto A = makeSPDMatrix(size);
+    const auto x = util::makeTeuchosRCP< tpetra_multivector_t >(A->getRowMap(), n_rhs);
+    const auto b = util::makeTeuchosRCP< tpetra_multivector_t >(A->getRowMap(), n_rhs);
+    //    const auto A_mfop = util::makeTeuchosRCP< TpetraMatrixAsOperatorStrongUpcast >(A);
 
     x->randomize();
     const auto solution = createCopy(*x);
@@ -276,9 +278,9 @@ int main(int argc, char* argv[])
     pass &= cgChebyshevTest(A, x, b, solution);
 
     // CG with native preconditioners
-    pass &= cgNoprecTest(A_mfop, x, b, solution);
-    pass &= cgRichardsonTest(A_mfop, x, b, solution);
-    pass &= cgJacobiTest(A_mfop, x, b, solution);
+    pass &= cgNoprecTest(A, x, b, solution);
+    pass &= cgRichardsonTest(A, x, b, solution);
+    pass &= cgJacobiTest(A, x, b, solution);
 
     return pass ? EXIT_SUCCESS : EXIT_FAILURE;
 }

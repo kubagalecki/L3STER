@@ -76,9 +76,8 @@ inline auto makeInMap(std::span< const global_dof_t > my_owned_dofs,
 inline auto makeOutMap(const NeighborManager::nbr_map_t& in_map, const MpiComm& comm) -> NeighborManager::nbr_map_t
 {
     const auto                   comm_size = static_cast< size_t >(comm.getSize());
-    util::ArrayOwner< unsigned > in_sz(comm_size), out_sz(comm_size);
-    std::ranges::fill(in_sz, 0u);
-    auto get_req = [reqs = std::vector< MpiComm::Request >{}]() mutable -> auto& {
+    util::ArrayOwner< unsigned > in_sz(comm_size, 0), out_sz(comm_size);
+    auto                         get_req = [reqs = std::vector< MpiComm::Request >{}]() mutable -> auto& {
         return reqs.emplace_back();
     };
     for (const auto& [rank, dofs] : in_map)

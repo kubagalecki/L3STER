@@ -14,58 +14,14 @@
 
 namespace lstr::mesh
 {
-namespace detail
-{
-template < el_side_t side, ElementType ET, el_o_t EO, size_t N >
-constexpr bool doesSideMatch(const Element< ET, EO >& element, const std::array< n_id_t, N >& sorted_boundary_nodes)
-{
-    const auto&    side_node_inds = std::get< side >(ElementTraits< Element< ET, EO > >::boundary_table);
-    constexpr auto n_side_nodes   = std::tuple_size_v< std::remove_cvref_t< decltype(side_node_inds) > >;
-    if constexpr (n_side_nodes == N)
-    {
-        auto side_nodes = std::array< n_id_t, n_side_nodes >{};
-        std::ranges::copy(util::makeIndexedView(element.getNodes(), side_node_inds), side_nodes.begin());
-        std::ranges::sort(side_nodes);
-        return std::ranges::equal(side_nodes, sorted_boundary_nodes);
-    }
-    else
-        return false;
-}
-
-template < ElementType ET, el_o_t EO, size_t N >
-constexpr auto
-matchBoundaryNodesToElement(const Element< ET, EO >&       element,
-                            const std::array< n_id_t, N >& sorted_boundary_nodes) -> std::optional< el_side_t >
-{
-    auto       matched_side   = el_side_t{};
-    const auto fold_side_inds = [&]< el_side_t... sides >(std::integer_sequence< el_side_t, sides... >) {
-        const auto match_side = [&]< el_side_t side >(std::integral_constant< el_side_t, side >) {
-            if (detail::doesSideMatch< side >(element, sorted_boundary_nodes))
-            {
-                matched_side = side;
-                return true;
-            }
-            else
-                return false;
-        };
-        return (match_side(std::integral_constant< el_side_t, sides >{}) or ...);
-    };
-    constexpr auto side_inds = std::make_integer_sequence< el_side_t, ElementTraits< Element< ET, EO > >::n_sides >{};
-    const auto     matched   = fold_side_inds(side_inds);
-    if (matched)
-        return {matched_side};
-    else
-        return std::nullopt;
-}
-} // namespace detail
-
 template < el_o_t... orders >
 class MeshPartition
 {
     static_assert(sizeof...(orders) > 0);
-    using DefaultExec = const std::execution::sequenced_policy&;
 
 public:
+    using DefaultExec = const std::execution::sequenced_policy&;
+
     inline static auto makeBoundaryElementViews(const MeshPartition< orders... >& mesh,
                                                 const util::ArrayOwner< d_id_t >& bnd_ids) -> BoundaryView< orders... >;
 
@@ -78,19 +34,11 @@ private:
         {
             initBoundaryViews(mesh, bnd_ids);
         }
-        void initBoundaryViews(const MeshPartition< orders... >& mesh, const util::ArrayOwner< d_id_t >& bnd_ids)
-        {
-            m_boundary_views.clear();
-            for (d_id_t id : bnd_ids)
-            {
-                auto bv = makeBoundaryElementViews(mesh, std::views::single(id));
-                m_boundary_views.emplace(id, std::move(bv));
-            }
-        }
-
-        bool contains(d_id_t id) const { return m_boundary_views.contains(id); }
-        auto getBoundaryIdsView() const { return m_boundary_views | std::views::keys; }
-        auto getBoundary(d_id_t id) const -> const BoundaryView< orders... >& { return m_boundary_views.at(id); }
+        inline void initBoundaryViews(const MeshPartition< orders... >& mesh,
+                                      const util::ArrayOwner< d_id_t >& bnd_ids);
+        bool        contains(d_id_t id) const { return m_boundary_views.contains(id); }
+        auto        getBoundaryIdsView() const { return m_boundary_views | std::views::keys; }
+        auto        getBoundary(d_id_t id) const -> const BoundaryView< orders... >& { return m_boundary_views.at(id); }
 
     private:
         std::map< d_id_t, BoundaryView< orders... > > m_boundary_views;
@@ -119,7 +67,7 @@ public:
     {}
     template < SizedRangeOfConvertibleTo_c< n_id_t > Owned, SizedRangeOfConvertibleTo_c< n_id_t > Ghost >
     MeshPartition(domain_map_t                      domains,
-                  Owned&&                           nodes,
+                  Owned&&                           owned_nodes,
                   Ghost&&                           ghost_nodes,
                   const util::ArrayOwner< d_id_t >& boundary_ids);
 
@@ -184,14 +132,14 @@ public:
         requires BoundaryTransformReducible_c< Zero, Transform, Reduction, orders... >;
 
     // observers
-    inline size_t getNElements() const;
-    auto          getNDomains() const { return m_domains.size(); }
-    auto          getDomainIds() const { return m_domains | std::views::keys; }
-    auto          getDomain(d_id_t id) const -> const Domain< orders... >& { return m_domains.at(id); }
-    auto          getOwnedNodes() const -> node_span_t { return m_nodes | std::views::take(m_n_owned_nodes); }
-    auto          getGhostNodes() const -> node_span_t { return m_nodes | std::views::drop(m_n_owned_nodes); }
-    auto          getAllNodes() const -> node_span_t { return m_nodes; }
-    auto          getMaxDim() const -> dim_t;
+    inline auto getNElements() const -> size_t;
+    auto        getNDomains() const { return m_domains.size(); }
+    auto        getDomainIds() const { return m_domains | std::views::keys; }
+    auto        getDomain(d_id_t id) const -> const Domain< orders... >& { return m_domains.at(id); }
+    auto        getOwnedNodes() const -> node_span_t { return m_nodes | std::views::take(m_n_owned_nodes); }
+    auto        getGhostNodes() const -> node_span_t { return m_nodes | std::views::drop(m_n_owned_nodes); }
+    auto        getAllNodes() const -> node_span_t { return m_nodes; }
+    inline auto getMaxDim() const -> dim_t;
 
     inline size_t computeTopoHash() const;
     bool          isGhostNode(n_id_t node) const { return std::ranges::binary_search(getGhostNodes(), node); }
@@ -228,6 +176,18 @@ private:
     size_t                     m_n_owned_nodes;
     BoundaryManager            m_boundary_manager;
 };
+
+template < el_o_t... orders >
+void MeshPartition< orders... >::BoundaryManager::initBoundaryViews(const MeshPartition< orders... >& mesh,
+                                                                    const util::ArrayOwner< d_id_t >& bnd_ids)
+{
+    m_boundary_views.clear();
+    for (d_id_t id : bnd_ids)
+    {
+        auto bv = makeBoundaryElementViews(mesh, std::views::single(id));
+        m_boundary_views.emplace(id, std::move(bv));
+    }
+}
 
 template < el_o_t... orders >
 auto MeshPartition< orders... >::getMaxDim() const -> dim_t
@@ -330,8 +290,14 @@ MeshPartition< orders... >::MeshPartition(domain_map_t                      doma
       m_n_owned_nodes{std::ranges::size(owned_nodes)},
       m_boundary_manager{*this, boundary_ids}
 {
-    const auto ghost_pos = std::ranges::copy(std::forward< Owned >(owned_nodes), m_nodes.begin()).out;
-    std::ranges::copy(std::forward< Ghost >(ghost_nodes), ghost_pos);
+    const auto owned_nodes_span = std::span{m_nodes}.subspan(0, m_n_owned_nodes);
+    util::throwingAssert(std::ranges::size(owned_nodes) <= owned_nodes_span.size());
+    std::ranges::copy(std::forward< Owned >(owned_nodes), owned_nodes_span.begin());
+    std::ranges::sort(owned_nodes_span);
+    const auto ghost_nodes_span = std::span{m_nodes}.subspan(m_n_owned_nodes);
+    util::throwingAssert(std::ranges::size(ghost_nodes) <= ghost_nodes_span.size());
+    std::ranges::copy(std::forward< Ghost >(ghost_nodes), ghost_nodes_span.begin());
+    std::ranges::sort(ghost_nodes_span);
 }
 
 // Implementation note: It should be possible to sequentially traverse elements in a deterministic order (e.g. the mesh
@@ -481,7 +447,7 @@ auto MeshPartition< orders... >::find(el_id_t id) const -> const_find_result_t
 }
 
 template < el_o_t... orders >
-size_t MeshPartition< orders... >::getNElements() const
+auto MeshPartition< orders... >::getNElements() const -> size_t
 {
     return std::transform_reduce(
         m_domains.cbegin(), m_domains.cend(), 0uz, std::plus{}, [](const auto& d) { return d.second.elements.size(); });
@@ -545,6 +511,48 @@ auto makeDimToDomainMap(const MeshPartition< orders... >& mesh) -> std::map< dim
         retval[dim].push_back(id);
     }
     return retval;
+}
+
+template < el_side_t side, ElementType ET, el_o_t EO, size_t N >
+constexpr bool doesSideMatch(const Element< ET, EO >& element, const std::array< n_id_t, N >& sorted_boundary_nodes)
+{
+    const auto&    side_node_inds = std::get< side >(ElementTraits< Element< ET, EO > >::boundary_table);
+    constexpr auto n_side_nodes   = std::tuple_size_v< std::remove_cvref_t< decltype(side_node_inds) > >;
+    if constexpr (n_side_nodes == N)
+    {
+        auto side_nodes = std::array< n_id_t, n_side_nodes >{};
+        std::ranges::copy(util::makeIndexedView(element.getNodes(), side_node_inds), side_nodes.begin());
+        std::ranges::sort(side_nodes);
+        return std::ranges::equal(side_nodes, sorted_boundary_nodes);
+    }
+    else
+        return false;
+}
+
+template < ElementType ET, el_o_t EO, size_t N >
+constexpr auto
+matchBoundaryNodesToElement(const Element< ET, EO >&       element,
+                            const std::array< n_id_t, N >& sorted_boundary_nodes) -> std::optional< el_side_t >
+{
+    auto       matched_side   = el_side_t{};
+    const auto fold_side_inds = [&]< el_side_t... sides >(std::integer_sequence< el_side_t, sides... >) {
+        const auto match_side = [&]< el_side_t side >(std::integral_constant< el_side_t, side >) {
+            if (detail::doesSideMatch< side >(element, sorted_boundary_nodes))
+            {
+                matched_side = side;
+                return true;
+            }
+            else
+                return false;
+        };
+        return (match_side(std::integral_constant< el_side_t, sides >{}) or ...);
+    };
+    constexpr auto side_inds = std::make_integer_sequence< el_side_t, ElementTraits< Element< ET, EO > >::n_sides >{};
+    const auto     matched   = fold_side_inds(side_inds);
+    if (matched)
+        return {matched_side};
+    else
+        return std::nullopt;
 }
 } // namespace detail
 

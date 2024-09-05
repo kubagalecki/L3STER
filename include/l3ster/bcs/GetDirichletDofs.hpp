@@ -2,16 +2,22 @@
 #define L3STER_BCS_GETDIRICHLETDOFS_HPP
 
 #include "l3ster/dofs/DofsFromNodes.hpp"
+#include "l3ster/util/TrilinosUtils.hpp"
 
 namespace lstr::bcs
 {
+struct DirichletDofs
+{
+    std::vector< global_dof_t > owned, shared;
+};
+
 template < el_o_t... orders, CondensationPolicy CP, ProblemDef problem_def, ProblemDef dirichlet_def >
 auto getDirichletDofs(const mesh::MeshPartition< orders... >&                 mesh,
                       const Teuchos::RCP< const tpetra_fecrsgraph_t >&        sparsity_graph,
                       const dofs::NodeToGlobalDofMap< problem_def.n_fields >& node_to_dof_map,
                       const dofs::NodeCondensationMap< CP >&                  cond_map,
                       util::ConstexprValue< problem_def >,
-                      util::ConstexprValue< dirichlet_def > dirichletdef_ctwrpr)
+                      util::ConstexprValue< dirichlet_def > dirichletdef_ctwrpr) -> DirichletDofs
 {
     static_assert(CP == CondensationPolicy::None or CP == CondensationPolicy::ElementBoundary,
                   "The current implementation may not work for future condensation policies");
@@ -64,8 +70,8 @@ auto getDirichletDofs(const mesh::MeshPartition< orders... >&                 me
 
     const auto marked_owned_dirichlet_dofs = mark_owned_dirichlet_dofs();
     const auto marked_col_dirichlet_dofs   = mark_dirichlet_dof_cols(marked_owned_dirichlet_dofs->getVector(0));
-    return std::make_pair(extract_marked_dofs(marked_owned_dirichlet_dofs->getVector(0)),
-                          extract_marked_dofs(marked_col_dirichlet_dofs));
+    return {extract_marked_dofs(marked_owned_dirichlet_dofs->getVector(0)),
+            extract_marked_dofs(marked_col_dirichlet_dofs)};
 }
 } // namespace lstr::bcs
 #endif // L3STER_BCS_GETDIRICHLETDOFS_HPP

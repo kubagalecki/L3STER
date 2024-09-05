@@ -159,7 +159,7 @@ inline constexpr std::string_view vtu_preamble  = R"(<?xml version="1.0"?>
 <VTKFile type="UnstructuredGrid" version="1.0" byte_order="LittleEndian" header_type="UInt64">
 <UnstructuredGrid>
 )";
-inline constexpr std::string_view vtu_postamble = "</AppendedData>\n</VTKFile>";
+inline constexpr std::string_view vtu_postamble = "\n</AppendedData>\n</VTKFile>";
 
 // Data serialization
 template < mesh::ElementType ET, el_o_t EO >

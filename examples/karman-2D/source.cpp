@@ -202,31 +202,14 @@ int main(int argc, char* argv[])
     // L3STER interface to KLU2 direct solver
     auto solver = solvers::KLU2{};
 
-    // Utilities for printing the table of results
-    constexpr auto print_padded =
-        [](const std::string& a, const std::string& b, const std::string& c, const std::string& d) {
-            // Column widths for results table
-            constexpr int w1 = 11, w2 = 8, w3 = 9, w4 = 16;
-            std::cout << std::left << std::setw(w1) << a << std::setw(w2) << b << std::setw(w3) << c << std::setw(w4)
-                      << d << '\n';
-        };
-    const auto print_row = [&](int step, double inflow, double outflow) {
-        constexpr auto ts = [](double value, int precision = 3) {
-            // Convert double to string with given precision (don't do this in performance-sensitive code)
-            std::ostringstream stream;
-            stream << std::fixed << std::setprecision(precision) << value;
-            return stream.str();
-        };
-        print_padded(std::to_string(step), ts(inflow), ts(outflow), ts((inflow - outflow) / inflow * 100., 2) + "%");
+    // Utility for printing the table of results
+    const auto report_flowrate = [&](int iter, double in, double out) {
+        const double err = (in - out) / in * 100.;
+        std::cout << std::format("{:^10}|{:^8.4f}|{:^9.4f}|{:^21.3f}\n", iter, in, out, err);
     };
 
-    // Table header
-    print_padded("Time step", "Inflow", "Outflow", "Flow rate error");
-
-    // Header separator
-    std::cout << std::setfill('-');
-    print_padded("", "", "", "");
-    std::cout << std::setfill(' ');
+    // Print table header
+    std::cout << std::format("{:^10}|{:^8}|{:^9}|{:^21}\n", "Time step", "Inflow", "Outflow", "Flow rate error [%]");
 
     // Newton iterations for the steady state solution
     const int steady_iters = 10;
@@ -260,7 +243,7 @@ int main(int argc, char* argv[])
     auto exporter = PvtuExporter{comm, *mesh};
 
     // Export initial snapshot
-    exporter.exportSolution("results/karman_0.pvtu",
+    exporter.exportSolution("results/karman_000.pvtu",
                             solution_manager,
                             {"Velocity", "Vorticity", "Pressure"},
                             util::gatherAsCommon(vel_inds2, vort_inds, p_inds));
@@ -270,7 +253,7 @@ int main(int argc, char* argv[])
         const auto vel_getter   = solution_manager.makeFieldValueGetter(vel_inds1);
         const auto inflow_rate  = -computeIntegral(*comm, kernel_flowrate, *mesh, {inlet}, vel_getter)[0];
         const auto outflow_rate = computeIntegral(*comm, kernel_flowrate, *mesh, {outlet}, vel_getter)[0];
-        print_row(0, inflow_rate, outflow_rate);
+        report_flowrate(0, inflow_rate, outflow_rate);
     }
 
     constexpr int time_steps = 200;
@@ -293,17 +276,17 @@ int main(int argc, char* argv[])
         algebraic_system.solve(solver, solution);
 
         // Place the computed values in the solution manager
-        algebraic_system.updateSolution(
-            solution, std::views::iota(0, 4), solution_manager, util::concatRanges(vel_inds2, vort_inds, p_inds));
+        const auto solution_manager_inds = util::concatRanges(vel_inds2, vort_inds, p_inds);
+        algebraic_system.updateSolution(solution, std::views::iota(0, 4), solution_manager, solution_manager_inds);
 
         // Print flow rate info
         const auto current_vel_getter = solution_manager.makeFieldValueGetter(vel_inds2);
         const auto inflow_rate        = -computeIntegral(*comm, kernel_flowrate, *mesh, {inlet}, current_vel_getter)[0];
         const auto outflow_rate       = computeIntegral(*comm, kernel_flowrate, *mesh, {outlet}, current_vel_getter)[0];
-        print_row(time_step, inflow_rate, outflow_rate);
+        report_flowrate(time_step, inflow_rate, outflow_rate);
 
         // Export snapshot
-        const auto file_name = "results/karman_" + std::to_string(time_step) + ".pvtu";
+        const auto file_name = std::format("results/karman_{:03}.pvtu", time_step);
         exporter.exportSolution(file_name,
                                 solution_manager,
                                 {"Velocity", "Vorticity", "Pressure"},

@@ -43,7 +43,7 @@ include( "cmake/ImportLibrary.cmake" )
 
 # Import libraries
 # Trilinos
-define_trilinos_target( ${L3STER_ENABLE_VERBOSITY} 13.4 Tpetra Belos MueLu )
+define_trilinos_target( ${L3STER_ENABLE_VERBOSITY} 14.0 Tpetra Belos MueLu )
 list( APPEND L3STER_INTERFACE_DEPENDENCIES Trilinos )
 
 # Eigen
@@ -63,6 +63,14 @@ list( APPEND L3STER_CMAKE_DEPENDENCIES TBB::tbb )
 #######################################################################################################################
 
 ### Define the L3STER target ###
+
+include( "cmake/HardwareInfo.cmake" )
+hardwareInfo()
+list( JOIN L3STER_CACHE_SIZES "uz,\n  " L3STER_CACHE_SIZES )
+string( APPEND L3STER_CACHE_SIZES "uz" )
+configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/include/l3ster/util/CacheSizesAtCompileTime.hpp.in"
+                "${CMAKE_CURRENT_SOURCE_DIR}/include/l3ster/util/CacheSizesAtCompileTime.hpp"
+                )
 
 add_library( L3STER INTERFACE )
 target_include_directories( L3STER INTERFACE

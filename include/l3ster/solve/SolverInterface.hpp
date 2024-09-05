@@ -18,11 +18,18 @@ struct SolverVerbosity
 
 struct IterSolverOpts
 {
-    double          tol        = 1e-6;
-    int             max_iters  = 10'000;
-    SolverVerbosity verbosity  = {};
-    int             print_freq = 10;
-    int             block_size = 1;
+    double          tol           = 1e-6;   // Iterative solver tolerance
+    int             max_iters     = 10'000; // Max number of iterations
+    bool            throw_on_fail = true;   // Whether to throw if convergence exceeds the tolerance
+    SolverVerbosity verbosity     = {};     // Verbosity level (see above)
+    int             print_freq    = 10;     // How often to print the convergence information
+    int             block_size    = 1;      // Block size is currently always 1, this is future-proofing
+};
+
+struct IterSolveInfo
+{
+    val_t tol;
+    int   num_iters;
 };
 
 namespace solvers
@@ -52,9 +59,9 @@ public:
         : m_solver_opts{solver_opts}, m_preconditioner{precond_opts}
     {}
 
-    inline void solve(const Teuchos::RCP< const tpetra_operator_t >&    A,
-                      const Teuchos::RCP< const tpetra_multivector_t >& b,
-                      const Teuchos::RCP< tpetra_multivector_t >&       x);
+    inline IterSolveInfo solve(const Teuchos::RCP< const tpetra_operator_t >&    A,
+                               const Teuchos::RCP< const tpetra_multivector_t >& b,
+                               const Teuchos::RCP< tpetra_multivector_t >&       x);
 
 protected:
     IterSolverOpts        m_solver_opts;
@@ -86,9 +93,9 @@ void DirectSolverInterface< CRTP >::solve(const Teuchos::RCP< const tpetra_crsma
 }
 
 template < typename CRTP >
-void IterativeSolverInterface< CRTP >::solve(const Teuchos::RCP< const tpetra_operator_t >&    A,
-                                             const Teuchos::RCP< const tpetra_multivector_t >& b,
-                                             const Teuchos::RCP< tpetra_multivector_t >&       x)
+IterSolveInfo IterativeSolverInterface< CRTP >::solve(const Teuchos::RCP< const tpetra_operator_t >&    A,
+                                                      const Teuchos::RCP< const tpetra_multivector_t >& b,
+                                                      const Teuchos::RCP< tpetra_multivector_t >&       x)
 {
     util::throwingAssert(x->getNumVectors() == b->getNumVectors(),
                          "The LHS and RHS multivectors must have the same number of columns");
@@ -101,7 +108,7 @@ void IterativeSolverInterface< CRTP >::solve(const Teuchos::RCP< const tpetra_op
         m_is_initialized = true;
     }
     m_preconditioner.compute();
-    static_cast< CRTP* >(this)->solveImpl(A, b, x);
+    return static_cast< CRTP* >(this)->solveImpl(A, b, x);
 }
 } // namespace solvers
 } // namespace lstr

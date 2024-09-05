@@ -32,9 +32,18 @@ struct Domain
     using find_result_t       = std::optional< typename el_univec_t::ptr_variant_t >;
     using const_find_result_t = std::optional< typename el_univec_t::const_ptr_variant_t >;
 
+    [[nodiscard]] inline size_t numElements() const;
+
     el_univec_t elements;
     dim_t       dim = uninitialized_dim;
 };
+
+template < el_o_t... orders >
+size_t Domain< orders... >::numElements() const
+{
+    const auto sizes = elements.sizes();
+    return std::reduce(sizes.begin(), sizes.end());
+}
 
 template < ElementType ET, el_o_t EO, el_o_t... orders >
 void pushToDomain(Domain< orders... >& domain, const Element< ET, EO >& element)

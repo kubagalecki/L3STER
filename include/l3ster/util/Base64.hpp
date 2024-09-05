@@ -1,6 +1,8 @@
 #ifndef L3STER_UTIL_BASE64_HPP
 #define L3STER_UTIL_BASE64_HPP
 
+#include "l3ster/util/Simd.hpp"
+
 #include "oneapi/tbb/parallel_for.h"
 
 #include <array>
@@ -10,10 +12,6 @@
 #include <numeric>
 #include <ranges>
 #include <span>
-
-#if defined(__AVX2__)
-#include <immintrin.h>
-#endif
 
 namespace lstr::util
 {

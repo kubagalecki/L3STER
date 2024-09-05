@@ -98,7 +98,7 @@ static void BM_MakeLocalMeshView(benchmark::State& state)
 
     for (auto _ : state)
     {
-        const auto node_map   = mesh::computeNodeOrder(mesh);
+        const auto node_map   = mesh::NodeMap{mesh::computeNodeOrder(mesh)};
         auto       local_view = mesh::LocalMeshView{mesh, node_map};
         benchmark::DoNotOptimize(local_view);
     }

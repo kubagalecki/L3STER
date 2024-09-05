@@ -109,7 +109,7 @@ inline auto readMesh(std::string_view                  file_path,
 {
     L3STER_PROFILE_FUNCTION;
 
-    auto file_map       = util::MmappedFile{std::string{file_path}};
+    auto file_map       = util::MmappedFile{file_path};
     auto file_streambuf = util::MmappedStreambuf{std::move(file_map)};
     auto file           = std::istream{&file_streambuf};
 

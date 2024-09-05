@@ -73,6 +73,47 @@ To exactIntegerCast(From from, std::source_location loc = std::source_location::
     return static_cast< To >(from);
 }
 
+namespace detail
+{
+template < std::uintmax_t max_representable, std::intmax_t min_representable >
+struct SmallestIntegralImpl
+{
+    using type = decltype(std::invoke([] {
+        if constexpr (min_representable < 0)
+        {
+            if constexpr (max_representable <= std::numeric_limits< std::int8_t >::max() and
+                          min_representable >= std::numeric_limits< std::int8_t >::min())
+                return std::int8_t{};
+            else if constexpr (max_representable <= std::numeric_limits< std::int16_t >::max() and
+                               min_representable >= std::numeric_limits< std::int16_t >::min())
+                return std::int16_t{};
+            else if constexpr (max_representable <= std::numeric_limits< std::int32_t >::max() and
+                               min_representable >= std::numeric_limits< std::int32_t >::min())
+                return std::int32_t{};
+            else if constexpr (max_representable <= std::numeric_limits< std::int64_t >::max() and
+                               min_representable >= std::numeric_limits< std::int64_t >::min())
+                return std::int64_t{};
+        }
+        else
+        {
+            if constexpr (max_representable <= std::numeric_limits< std::uint8_t >::max())
+                return std::uint8_t{};
+            else if constexpr (max_representable <= std::numeric_limits< std::uint16_t >::max())
+                return std::uint16_t{};
+            else if constexpr (max_representable <= std::numeric_limits< std::uint32_t >::max())
+                return std::uint32_t{};
+            else if constexpr (max_representable <= std::numeric_limits< std::uint64_t >::max())
+                return std::uint64_t{};
+        }
+    }));
+};
+} // namespace detail
+
+template < std::uintmax_t max_representable, std::intmax_t min_representable = 0 >
+    requires(not std::same_as< typename detail::SmallestIntegralImpl< max_representable, min_representable >::type,
+                               void >)
+using smallest_integral_t = detail::SmallestIntegralImpl< max_representable, min_representable >::type;
+
 template < typename T >
 class CachelineAligned
 {

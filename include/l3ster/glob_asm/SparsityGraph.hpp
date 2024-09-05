@@ -52,8 +52,7 @@ inline auto computeInNeighbors(const rank_to_nodes_map_t& in_nbr_to_nodes) -> st
 inline auto computeOutNeighbors(const MpiComm& comm, const rank_to_nodes_map_t& in_nbr_to_nodes) -> std::vector< int >
 {
     const int                comm_size = comm.getSize();
-    util::ArrayOwner< char > out_nbr_bmap(comm_size), in_nbr_bmap(comm_size);
-    std::ranges::fill(out_nbr_bmap, 0);
+    util::ArrayOwner< char > out_nbr_bmap(comm_size, 0), in_nbr_bmap(comm_size);
     for (int out_nbr_rank : in_nbr_to_nodes | std::views::transform([](const auto& rh_pair) { return rh_pair.first; }))
         out_nbr_bmap[out_nbr_rank] = 1;
     comm.allToAllAsync(out_nbr_bmap, in_nbr_bmap).wait();

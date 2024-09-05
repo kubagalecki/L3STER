@@ -1,11 +1,12 @@
-#include "l3ster/comm/DistributeMesh.hpp"
-#include "l3ster/glob_asm/AlgebraicSystem.hpp"
-#include "l3ster/mesh/primitives/SquareMesh.hpp"
-#include "l3ster/post/NormL2.hpp"
-#include "l3ster/solve/Amesos2Solvers.hpp"
-#include "l3ster/util/ScopeGuards.hpp"
 
 #include "Common.hpp"
+
+#include "l3ster/comm/DistributeMesh.hpp"
+#include "l3ster/glob_asm/MatrixFree.hpp"
+#include "l3ster/mesh/primitives/SquareMesh.hpp"
+#include "l3ster/post/NormL2.hpp"
+#include "l3ster/solve/BelosSolvers.hpp"
+#include "l3ster/util/ScopeGuards.hpp"
 
 using namespace lstr;
 using namespace lstr::glob_asm;
@@ -19,10 +20,11 @@ auto makeMesh(const MpiComm& comm, auto probdef_ctwrpr)
     return generateAndDistributeMesh< mesh_order >(comm, [&] { return makeSquareMesh(node_dist); }, {}, probdef_ctwrpr);
 }
 
-template < CondensationPolicy CP >
-void test()
+int main(int argc, char* argv[])
 {
-    const auto comm = std::make_shared< MpiComm >(MPI_COMM_WORLD);
+    const auto max_par_guard = util::MaxParallelismGuard{4};
+    const auto scope_guard   = L3sterScopeGuard{argc, argv};
+    const auto comm          = std::make_shared< MpiComm >(MPI_COMM_WORLD);
 
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
     constexpr auto   problem_def    = ProblemDef{defineDomain< 3 >(domain_id, ALL_DOFS)};
@@ -34,12 +36,14 @@ void test()
     const auto mesh = makeMesh(*comm, probdef_ctwrpr);
     summarizeMesh(*comm, *mesh);
 
-    constexpr auto adiabatic_bound_ids = std::array{bot_boundary, top_boundary};
-    constexpr auto boundary_ids        = std::array{top_boundary, bot_boundary, left_boundary, right_boundary};
+    [[maybe_unused]] constexpr auto adiabatic_bound_ids = std::array{bot_boundary, top_boundary};
+    [[maybe_unused]] constexpr auto boundary_ids =
+        std::array{top_boundary, bot_boundary, left_boundary, right_boundary};
 
-    constexpr auto alg_params       = AlgebraicSystemParams{.cond_policy = CP};
+    constexpr auto alg_params       = AlgebraicSystemParams{.eval_strategy = OperatorEvaluationStrategy::MatrixFree};
     constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
     auto           alg_sys = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, dirichletdef_ctwrpr, algparams_ctwrpr);
+    alg_sys.describe();
 
     constexpr auto diff_params = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3};
     constexpr auto diffusion_kernel2d =
@@ -68,38 +72,23 @@ void test()
     constexpr auto dirbc_params        = KernelParams{.dimension = 2, .n_equations = 1};
     constexpr auto dirichlet_bc_kernel = wrapBoundaryResidualKernel< dirbc_params >(
         [](const auto& in, auto& out) { out[0] = in.point.space.x() / node_dist.back(); });
-
-    const auto assembleDomainProblem = [&] {
-        alg_sys.assembleProblem(diffusion_kernel2d, std::views::single(domain_id));
-    };
-    const auto assembleBoundaryProblem = [&] {
-        alg_sys.assembleProblem(neumann_bc_kernel, adiabatic_bound_ids);
-    };
-
     constexpr auto dirichlet_bound_ids = std::array{left_boundary, right_boundary};
     alg_sys.setDirichletBCValues(dirichlet_bc_kernel, dirichlet_bound_ids, std::array{0});
 
     // Check constraints on assembly state
     alg_sys.beginAssembly();
-    assembleDomainProblem();
-    assembleBoundaryProblem();
+    alg_sys.assembleProblem(diffusion_kernel2d, std::views::single(domain_id));
+    alg_sys.assembleProblem(neumann_bc_kernel, adiabatic_bound_ids);
     alg_sys.endAssembly();
-    alg_sys.describe();
-    CHECK_THROWS(assembleDomainProblem());
-    CHECK_THROWS(assembleBoundaryProblem());
-    CHECK_THROWS(alg_sys.endAssembly());
 
-    {
-        auto dummy_problem = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, {}, algparams_ctwrpr);
-        dummy_problem.endAssembly();
-    }
-
-    constexpr auto dof_inds = util::makeIotaArray< size_t, 3 >();
-
-    auto solver   = solvers::Lapack{};
-    auto solution = alg_sys.initSolution();
+    constexpr auto solver_opts  = IterSolverOpts{.tol = 1e-10};
+    constexpr auto precond_opts = JacobiOpts{};
+    auto           solver       = CG{solver_opts, precond_opts};
+    auto           solution     = alg_sys.initSolution();
     alg_sys.solve(solver, solution);
-    auto solution_manager = SolutionManager{*mesh, problem_def.n_fields};
+
+    constexpr auto dof_inds         = util::makeIotaArray< size_t, 3 >();
+    auto           solution_manager = SolutionManager{*mesh, problem_def.n_fields};
     alg_sys.updateSolution(solution, dof_inds, solution_manager, dof_inds);
 
     // Check results
@@ -116,9 +105,8 @@ void test()
     constexpr auto bnd_error_kernel = wrapBoundaryResidualKernel< params >(compute_error);
     const auto     fval_getter      = solution_manager.makeFieldValueGetter(dof_inds);
 
-    constexpr auto eps   = 1.e-10;
-    const auto     error = computeNormL2(*comm, dom_error_kernel, *mesh, std::views::single(domain_id), fval_getter);
-    const auto     boundary_error = computeNormL2(*comm, bnd_error_kernel, *mesh, boundary_ids, fval_getter);
+    const auto error = computeNormL2(*comm, dom_error_kernel, *mesh, std::views::single(domain_id), fval_getter);
+    const auto boundary_error = computeNormL2(*comm, bnd_error_kernel, *mesh, boundary_ids, fval_getter);
     if (comm->getRank() == 0)
         std::cout << std::format("L2 error components:\n{:<15}{}\n{:<15}{}\n{:<15}{}\n",
                                  "value:",
@@ -128,17 +116,7 @@ void test()
                                  "y derivative:",
                                  error[2]);
     comm->barrier();
+    constexpr auto eps = 1.e-8;
     REQUIRE(error.norm() < eps);
     REQUIRE(boundary_error.norm() < eps);
-
-    alg_sys.beginAssembly();
-}
-
-// Solve 2D diffusion problem
-int main(int argc, char* argv[])
-{
-    const auto max_par_guard = util::MaxParallelismGuard{4};
-    const auto scope_guard   = L3sterScopeGuard{argc, argv};
-    test< CondensationPolicy::None >();
-    test< CondensationPolicy::ElementBoundary >();
 }

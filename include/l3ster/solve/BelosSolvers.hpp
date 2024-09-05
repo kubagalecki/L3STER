@@ -22,6 +22,7 @@ namespace lstr::solvers
 {
 class BelosSolverInterface : public IterativeSolverInterface< BelosSolverInterface >
 {
+    using Base             = IterativeSolverInterface< BelosSolverInterface >;
     using solver_t         = Belos::SolverManager< val_t, tpetra_multivector_t, tpetra_operator_t >;
     using linear_problem_t = Belos::LinearProblem< val_t, tpetra_multivector_t, tpetra_operator_t >;
 
@@ -33,12 +34,12 @@ public:
         : IterativeSolverInterface< BelosSolverInterface >(solver_opts, precond_opts), m_solver_name{name}
     {}
 
-    inline void initializeImpl(const Teuchos::RCP< const tpetra_operator_t >&    A,
-                               const Teuchos::RCP< const tpetra_multivector_t >& b,
-                               const Teuchos::RCP< tpetra_multivector_t >&       x);
-    inline void solveImpl(const Teuchos::RCP< const tpetra_operator_t >&,
-                          const Teuchos::RCP< const tpetra_multivector_t >&,
-                          const Teuchos::RCP< tpetra_multivector_t >&);
+    inline void          initializeImpl(const Teuchos::RCP< const tpetra_operator_t >&    A,
+                                        const Teuchos::RCP< const tpetra_multivector_t >& b,
+                                        const Teuchos::RCP< tpetra_multivector_t >&       x);
+    inline IterSolveInfo solveImpl(const Teuchos::RCP< const tpetra_operator_t >&,
+                                   const Teuchos::RCP< const tpetra_multivector_t >&,
+                                   const Teuchos::RCP< tpetra_multivector_t >&);
 
 private:
     inline void initSolver();
@@ -62,12 +63,16 @@ void BelosSolverInterface::initializeImpl(const Teuchos::RCP< const tpetra_opera
     m_solver->setProblem(m_linear_problem);
 }
 
-void BelosSolverInterface::solveImpl(const Teuchos::RCP< const tpetra_operator_t >&,
-                                     const Teuchos::RCP< const tpetra_multivector_t >&,
-                                     const Teuchos::RCP< tpetra_multivector_t >&)
+IterSolveInfo BelosSolverInterface::solveImpl(const Teuchos::RCP< const tpetra_operator_t >&,
+                                              const Teuchos::RCP< const tpetra_multivector_t >&,
+                                              const Teuchos::RCP< tpetra_multivector_t >&)
 {
     const auto solve_status = m_solver->solve();
-    util::throwingAssert(solve_status == Belos::Converged, "Solver failed to converge");
+    const auto converged    = solve_status == Belos::Converged;
+    util::throwingAssert(not Base::m_solver_opts.throw_on_fail or converged, "Solver failed to converge");
+    const int  num_iters = m_solver->getNumIters();
+    const auto tol       = m_solver->achievedTol();
+    return {tol, num_iters};
 }
 
 void BelosSolverInterface::initSolver()

@@ -10,10 +10,16 @@ enum struct Space
     Z
 };
 
-enum struct Access
+enum struct CondensationPolicy
 {
-    ReadOnly,
-    ReadWrite
+    None,
+    ElementBoundary
+};
+
+enum struct OperatorEvaluationStrategy
+{
+    GlobalAssembly,
+    MatrixFree
 };
 } // namespace lstr
 #endif // L3STER_COMMON_ENUMS_HPP

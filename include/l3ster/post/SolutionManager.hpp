@@ -5,6 +5,7 @@
 #include "l3ster/util/EigenUtils.hpp"
 #include "l3ster/util/RobinHoodHashTables.hpp"
 
+#include "Kokkos_Core.hpp"
 #include <memory>
 
 namespace lstr
@@ -17,15 +18,17 @@ public:
     template < el_o_t... orders >
     inline SolutionManager(const mesh::MeshPartition< orders... >& mesh, size_t n_fields, val_t initial = 0.);
 
-    [[nodiscard]] auto        nFields() const -> size_t { return m_n_fields; }
-    [[nodiscard]] auto        nNodes() const -> size_t { return m_n_nodes; }
-    [[nodiscard]] inline auto getFieldView(size_t field_ind) -> std::span< val_t >;
-    [[nodiscard]] inline auto getFieldView(size_t field_ind) const -> std::span< const val_t >;
-    [[nodiscard]] auto        getNodeMap() const -> const node_map_t& { return m_node_to_dof_map; }
+    auto        nFields() const -> size_t { return m_n_fields; }
+    auto        nNodes() const -> size_t { return m_n_nodes; }
+    inline auto getFieldView(size_t field_ind) -> std::span< val_t >;
+    inline auto getFieldView(size_t field_ind) const -> std::span< const val_t >;
+    auto        getNodeMap() const -> const node_map_t& { return m_node_to_dof_map; }
+    inline auto getRawView() -> Kokkos::View< val_t**, Kokkos::LayoutLeft >;
+    inline auto getRawView() const -> Kokkos::View< const val_t**, Kokkos::LayoutLeft >;
     template < size_t N >
-    [[nodiscard]] auto getNodeValues(n_id_t                       node,
-                                     std::span< const size_t, N > field_inds) const -> std::array< val_t, N >
-        requires(N != std::dynamic_extent);
+    auto getNodeValuesGlobal(n_id_t node, const std::array< size_t, N >& field_inds) const -> std::array< val_t, N >;
+    template < size_t N >
+    auto getNodeValuesLocal(n_loc_id_t node, const std::array< size_t, N >& field_inds) const -> std::array< val_t, N >;
 
     void setField(size_t field_ind, val_t value) { std::ranges::fill(getFieldView(field_ind), value); }
 
@@ -40,7 +43,10 @@ public:
 
     public:
         template < size_t n_nodes >
-        auto operator()(const std::array< n_id_t, n_nodes >& nodes) const
+        auto getGloballyIndexed(const std::array< n_id_t, n_nodes >& nodes) const
+            -> util::eigen::RowMajorMatrix< val_t, n_nodes, n_fields >;
+        template < size_t n_nodes >
+        auto getLocallyIndexed(const std::array< n_loc_id_t, n_nodes >& nodes) const
             -> util::eigen::RowMajorMatrix< val_t, n_nodes, n_fields >;
 
     private:
@@ -64,7 +70,14 @@ class SolutionManager::FieldValueGetter< 0 >
 {
 public:
     template < size_t n_nodes >
-    auto operator()(const std::array< n_id_t, n_nodes >&) const -> util::eigen::RowMajorMatrix< val_t, n_nodes, 0 >
+    auto
+    getGloballyIndexed(const std::array< n_id_t, n_nodes >&) const -> util::eigen::RowMajorMatrix< val_t, n_nodes, 0 >
+    {
+        return {};
+    }
+    template < size_t n_nodes >
+    auto getLocallyIndexed(const std::array< n_loc_id_t, n_nodes >&) const
+        -> util::eigen::RowMajorMatrix< val_t, n_nodes, 0 >
     {
         return {};
     }
@@ -73,15 +86,27 @@ inline constexpr auto empty_field_val_getter = SolutionManager::FieldValueGetter
 
 template < size_t n_fields >
 template < size_t n_nodes >
-auto SolutionManager::FieldValueGetter< n_fields >::operator()(const std::array< n_id_t, n_nodes >& nodes) const
+auto SolutionManager::FieldValueGetter< n_fields >::getGloballyIndexed(const std::array< n_id_t, n_nodes >& nodes) const
     -> util::eigen::RowMajorMatrix< val_t, n_nodes, n_fields >
 {
     util::eigen::RowMajorMatrix< val_t, n_nodes, n_fields > retval;
-    for (size_t node_ind = 0; auto node : nodes)
-    {
-        const auto node_vals = m_parent->getNodeValues(node, std::span{m_field_inds});
-        std::ranges::copy(node_vals, std::next(retval.data(), n_fields * node_ind++));
-    }
+    const auto                                              vals_from_node = [&](auto node) {
+        return m_parent->getNodeValuesGlobal(node, m_field_inds);
+    };
+    std::ranges::copy(nodes | std::views::transform(vals_from_node) | std::views::join, retval.data());
+    return retval;
+}
+
+template < size_t n_fields >
+template < size_t n_nodes >
+auto SolutionManager::FieldValueGetter< n_fields >::getLocallyIndexed(
+    const std::array< n_loc_id_t, n_nodes >& nodes) const -> util::eigen::RowMajorMatrix< val_t, n_nodes, n_fields >
+{
+    util::eigen::RowMajorMatrix< val_t, n_nodes, n_fields > retval;
+    const auto                                              vals_from_node = [&](auto node) {
+        return m_parent->getNodeValuesLocal(node, m_field_inds);
+    };
+    std::ranges::copy(nodes | std::views::transform(vals_from_node) | std::views::join, retval.data());
     return retval;
 }
 
@@ -93,18 +118,26 @@ SolutionManager::SolutionManager(const mesh::MeshPartition< orders... >& mesh, s
       m_node_to_dof_map(m_n_nodes)
 {
     std::fill_n(m_nodal_values.get(), m_n_nodes * m_n_fields, initial);
-    for (ptrdiff_t i = 0; auto node : mesh.getAllNodes())
-        m_node_to_dof_map.emplace(node, i++);
+    for (auto&& [i, node] : mesh.getAllNodes() | std::views::enumerate)
+        m_node_to_dof_map.emplace(node, i);
 }
 
 template < size_t N >
-[[nodiscard]] auto
-SolutionManager::getNodeValues(n_id_t node, std::span< const size_t, N > field_inds) const -> std::array< val_t, N >
-    requires(N != std::dynamic_extent)
+auto SolutionManager::getNodeValuesGlobal(n_id_t                         node,
+                                          const std::array< size_t, N >& field_inds) const -> std::array< val_t, N >
 {
     const auto local_node_ind = m_node_to_dof_map.at(node);
     auto       retval         = std::array< val_t, N >{};
     std::ranges::transform(field_inds, retval.begin(), [&](auto i) { return getFieldView(i)[local_node_ind]; });
+    return retval;
+}
+
+template < size_t N >
+auto SolutionManager::getNodeValuesLocal(n_loc_id_t                     node,
+                                         const std::array< size_t, N >& field_inds) const -> std::array< val_t, N >
+{
+    auto retval = std::array< val_t, N >{};
+    std::ranges::transform(field_inds, retval.begin(), [&](auto i) { return getFieldView(i)[node]; });
     return retval;
 }
 
@@ -116,6 +149,16 @@ auto SolutionManager::getFieldView(size_t field_ind) const -> std::span< const v
 auto SolutionManager::getFieldView(size_t field_ind) -> std::span< val_t >
 {
     return {std::next(m_nodal_values.get(), static_cast< ptrdiff_t >(field_ind * m_n_nodes)), m_n_nodes};
+}
+
+auto SolutionManager::getRawView() -> Kokkos::View< val_t**, Kokkos::LayoutLeft >
+{
+    return Kokkos::View< val_t**, Kokkos::LayoutLeft >{m_nodal_values.get(), m_n_nodes, m_n_fields};
+}
+
+auto SolutionManager::getRawView() const -> Kokkos::View< const val_t**, Kokkos::LayoutLeft >
+{
+    return Kokkos::View< const val_t**, Kokkos::LayoutLeft >{m_nodal_values.get(), m_n_nodes, m_n_fields};
 }
 
 template < std::integral Index, size_t n_fields >

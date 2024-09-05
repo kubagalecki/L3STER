@@ -777,7 +777,7 @@ TEST_CASE("Memory-mapping utils", "[utils]")
 TEST_CASE("Type-erased overload set tests", "[util]")
 {
     using namespace std::string_literals;
-    using teos_t              = util::TypeErasedOverload< int, int, const std::string& >;
+    using teos_t              = util::TypeErasedOverload< int(int), int(const std::string&) >;
     constexpr auto check_vals = [](const teos_t& teos) {
         CHECK(teos(1) == 0);
         CHECK(teos("str"s) == 1);
@@ -785,7 +785,7 @@ TEST_CASE("Type-erased overload set tests", "[util]")
 
     SECTION("Target fits in buffer")
     {
-        const int  int_val = 0, str_val = 1;
+        constexpr int  int_val = 0, str_val = 1;
         const auto process_int = [&](int) {
             return int_val;
         };

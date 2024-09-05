@@ -7,6 +7,7 @@
 #include "l3ster/util/IndexMap.hpp"
 #include "l3ster/util/RobinHoodHashTables.hpp"
 #include "l3ster/util/TbbUtils.hpp"
+#include "l3ster/util/TrilinosUtils.hpp"
 
 // Some general notes:
 // The import/export classes below essentially perform similar tasks to Tpetra::Import/Export, with the following
@@ -76,12 +77,16 @@ ImportExportContext(const MpiComm& comm,
 template < Arithmetic_c Scalar, std::signed_integral LocalIndex >
 class ImportExportBase
 {
+    // Each import/export object has a unique ID, which is used to deconflict comms from different objects
+    inline static unsigned counter   = 0;
+    static constexpr int   half_bits = sizeof(int) * CHAR_BIT / 2;
+    static constexpr int   lo_mask   = -1 >> half_bits;
+
 public:
-    const auto& getContext() const { return *m_context; }
+    auto getContext() const { return m_context; }
 
 protected:
-    static int makeImportTag(int tag) { return (tag << tag_shift) | import_tag; }
-    static int makeExportTag(int tag) { return (tag << tag_shift) | export_tag; }
+    int makeTag(int tag) { return (tag & lo_mask) | std::bit_cast< int >(m_id << half_bits); }
 
     using context_shared_ptr_t = std::shared_ptr< const ImportExportContext< LocalIndex > >;
 
@@ -90,7 +95,8 @@ protected:
           m_num_vecs{num_vecs},
           m_requests(num_vecs * m_context->getNumNbrs()),
           m_pack_buf(num_vecs * m_context->getOwnedInds().size()),
-          m_max_owned{m_context->getOwnedInds().empty() ? -1 : std::ranges::max(m_context->getOwnedInds())}
+          m_max_owned{m_context->getOwnedInds().empty() ? -1 : std::ranges::max(m_context->getOwnedInds())},
+          m_id{counter++}
     {}
 
     bool isOwnedSizeSufficient(size_t size) const;
@@ -102,12 +108,7 @@ protected:
     util::ArrayOwner< Scalar >                                 m_pack_buf;
     size_t                                                     m_owned_stride{}, m_shared_stride{};
     LocalIndex                                                 m_max_owned{};
-
-private:
-    // Deconflict import/export messages via lowest bit of tag
-    static constexpr int import_tag = 0;
-    static constexpr int export_tag = 1;
-    static constexpr int tag_shift  = 1;
+    const unsigned                                             m_id;
 };
 
 /// Performs import, i.e., data at shared indices is received from owning ranks
@@ -127,6 +128,25 @@ public:
     bool        testReceive() const { return m_recv_complete.test(std::memory_order_acquire); }
     void        waitReceive() { MpiComm::Request::waitAll(getRecvRequests()); }
     void        wait() { MpiComm::Request::waitAll(Base::m_requests); }
+    void        doBlockingImport(const MpiComm& comm)
+    {
+        postComms(comm);
+        wait();
+    }
+
+    template < util::KokkosView_c View >
+    void setOwned(View&& view)
+        requires(std::remove_cvref_t< View >::rank() == 2)
+    {
+        setOwned(util::flatten(view), view.stride(0));
+    }
+    template < util::KokkosView_c View >
+    void setShared(View&& view)
+        requires(std::remove_cvref_t< View >::rank() == 2 and
+                 not std::is_const_v< typename std::remove_cvref_t< View >::value_type >)
+    {
+        setShared(util::flatten(view), view.stride(0));
+    }
 
 private:
     inline void postSends(const MpiComm& comm);
@@ -157,6 +177,20 @@ public:
     inline void postRecvs(const MpiComm& comm);
     template < std::invocable< Scalar&, Scalar > Combine >
     void wait(Combine&& combine);
+
+    template < util::KokkosView_c View >
+    void setOwned(View&& view)
+        requires(std::remove_cvref_t< View >::rank() == 2 and
+                 not std::is_const_v< typename std::remove_cvref_t< View >::value_type >)
+    {
+        setOwned(util::flatten(view), view.stride(0));
+    }
+    template < util::KokkosView_c View >
+    void setShared(View&& view)
+        requires(std::remove_cvref_t< View >::rank() == 2)
+    {
+        setShared(util::flatten(view), view.stride(0));
+    }
 
 private:
     inline auto getSendRequests() -> std::span< MpiComm::Request >;
@@ -354,7 +388,7 @@ void Import< Scalar, LocalIndex >::postRecvs(const MpiComm& comm)
         for (const auto& [src_rank, inds_offset, inds_size] : Base::m_context->getSharedRange())
         {
             const auto recv_span = shared_vec.subspan(inds_offset, inds_size);
-            const int  tag       = Base::makeImportTag(static_cast< int >(vec));
+            const int  tag       = Base::makeTag(static_cast< int >(vec));
             req_span[req_ind++]  = comm.receiveAsync(recv_span, src_rank, tag);
         }
     }
@@ -371,7 +405,7 @@ void Import< Scalar, LocalIndex >::postSends(const MpiComm& comm)
         for (const auto& [dest_rank, inds] : Base::m_context->getOwnedRange())
         {
             const auto send_data = buf_span.subspan(buf_index, inds.size());
-            const int  tag       = Base::makeImportTag(static_cast< int >(vec));
+            const int  tag       = Base::makeTag(static_cast< int >(vec));
             req_span[i++]        = comm.sendAsync(send_data, dest_rank, tag);
             buf_index += send_data.size();
         }
@@ -449,7 +483,7 @@ void Export< Scalar, LocalIndex >::postRecvs(const lstr::MpiComm& comm)
         for (const auto& [rank, inds] : Base::m_context->getOwnedRange())
         {
             const auto recv_span = std::span{Base::m_pack_buf}.subspan(offset, inds.size());
-            const int  tag       = Base::makeExportTag(static_cast< int >(vec));
+            const int  tag       = Base::makeTag(static_cast< int >(vec));
             recv_reqs[req_ind++] = comm.receiveAsync(recv_span, rank, tag);
             offset += inds.size();
         }
@@ -467,7 +501,7 @@ void Export< Scalar, LocalIndex >::postSends(const MpiComm& comm)
         for (const auto& [rank, inds_offset, inds_size] : Base::m_context->getSharedRange())
         {
             const auto dest_data = send_span.subspan(inds_offset, inds_size);
-            const int  tag       = Base::makeExportTag(static_cast< int >(vec));
+            const int  tag       = Base::makeTag(static_cast< int >(vec));
             send_reqs[req_ind++] = comm.sendAsync(dest_data, rank, tag);
         }
     }

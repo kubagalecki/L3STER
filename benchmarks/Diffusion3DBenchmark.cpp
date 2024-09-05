@@ -133,10 +133,11 @@ int main(int argc, char* argv[])
 
     if (comm->getRank() == 0)
     {
-        std::cout << "The L2 error components are:";
-        for (int i = 0; i < error.size(); ++i)
-            std::cout << "\n\t" << error[i];
-        std::cout << std::endl;
+        std::cout << std::format("\nThe L2 error components are:\n  {:.3e}\n  {:.3e}\n  {:.3e}\n  {:.3e}\n\n",
+                                 error[0],
+                                 error[1],
+                                 error[2],
+                                 error[3]);
     }
 
     L3STER_PROFILE_REGION_BEGIN("Export results to VTK");

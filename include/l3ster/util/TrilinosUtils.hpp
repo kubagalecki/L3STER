@@ -11,6 +11,17 @@
 
 namespace lstr::util
 {
+namespace detail
+{
+template < typename T >
+inline constexpr bool is_kokkos_view = false;
+template < typename... Params >
+inline constexpr bool is_kokkos_view< Kokkos::View< Params... > > = true;
+} // namespace detail
+
+template < typename T >
+concept KokkosView_c = detail::is_kokkos_view< std::decay_t< T > >;
+
 template < typename R >
 auto asTeuchosView(R&& range)
     requires std::ranges::contiguous_range< R > and std::ranges::sized_range< R > and
@@ -24,6 +35,12 @@ auto asSpan(const Kokkos::View< T*, Layout, Params... >& view) -> std::span< T >
     requires std::same_as< Layout, Kokkos::LayoutLeft > or std::same_as< Layout, Kokkos::LayoutRight >
 {
     return {view.data(), view.extent(0)};
+}
+
+template < typename... Params >
+auto flatten(const Kokkos::View< Params... >& view) -> std::span< typename Kokkos::View< Params... >::value_type >
+{
+    return {view.data(), view.span()};
 }
 
 template < Arithmetic_c T, typename Layout, typename... Params >
@@ -129,14 +146,5 @@ auto getSubgraph(const Teuchos::RCP< const tpetra_crsgraph_t >& full_graph,
     retval->fillComplete();
     return retval;
 }
-
-// The interface for diagonal-aware operators was only added in 14.0, but we can easily roll our own
-class DiagonalAwareOperator : virtual public tpetra_operator_t
-{
-public:
-    virtual Teuchos::RCP< tpetra_vector_t > initDiagonalCopy() const                 = 0;
-    virtual void                            fillDiagonalCopy(tpetra_vector_t&) const = 0;
-    virtual ~DiagonalAwareOperator()                                                 = default;
-};
 } // namespace lstr::util
 #endif // L3STER_UTILS_TRILINOSUTILS_HPP

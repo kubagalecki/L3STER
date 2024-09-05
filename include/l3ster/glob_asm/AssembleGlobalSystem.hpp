@@ -4,6 +4,7 @@
 #include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 #include "l3ster/glob_asm/StaticCondensationManager.hpp"
 #include "l3ster/mesh/BoundaryView.hpp"
+#include "l3ster/mesh/LocalMeshView.hpp"
 #include "l3ster/post/SolutionManager.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
@@ -31,6 +32,25 @@ namespace detail
 {
 template < el_o_t... orders >
 bool checkDomainDimension(const mesh::MeshPartition< orders... >& mesh,
+                          const util::ArrayOwner< d_id_t >&       ids,
+                          d_id_t                                  dim)
+{
+    const auto check_domain_dim = [&](d_id_t id) {
+        try
+        {
+            const auto domain_dim = mesh.getDomain(id).dim;
+            return domain_dim == dim;
+        }
+        catch (const std::out_of_range&) // Domain not present in partition means kernel will not be invoked
+        {
+            return true;
+        }
+    };
+    return std::ranges::all_of(ids, check_domain_dim);
+}
+
+template < el_o_t... orders >
+bool checkDomainDimension(const mesh::LocalMeshView< orders... >& mesh,
                           const util::ArrayOwner< d_id_t >&       ids,
                           d_id_t                                  dim)
 {
@@ -79,7 +99,7 @@ void assembleGlobalSystem(const DomainEquationKernel< Kernel, params >&         
             constexpr auto  BT             = asm_opts.basis_type;
             constexpr auto  QT             = asm_opts.quad_type;
             constexpr q_o_t QO             = 2 * asm_opts.order(EO);
-            const auto      field_vals     = fval_getter(element.getNodes());
+            const auto      field_vals     = fval_getter.getGloballyIndexed(element.getNodes());
             const auto&     rbq            = basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
             const auto& [loc_mat, loc_rhs] = assembleLocalSystem(kernel, element, field_vals, rbq, time);
             condensation_manager.condenseSystem(
@@ -122,7 +142,7 @@ void assembleGlobalSystem(const BoundaryEquationKernel< Kernel, params >&       
                 constexpr auto  BT         = asm_opts.basis_type;
                 constexpr auto  QT         = asm_opts.quad_type;
                 constexpr q_o_t QO         = 2 * asm_opts.order(EO);
-                const auto      field_vals = fval_getter(el_view->getNodes());
+                const auto      field_vals = fval_getter.getGloballyIndexed(el_view->getNodes());
                 const auto& qbv = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
                 const auto& [loc_mat, loc_rhs] = assembleLocalSystem(kernel, el_view, field_vals, qbv, time);
                 condensation_manager.condenseSystem(

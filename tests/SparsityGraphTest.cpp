@@ -22,9 +22,8 @@ public:
     {
         const auto node_to_dof_map = dofs::NodeToGlobalDofMap{dof_intervals, cond_map};
         const auto max_dof =
-            std::ranges::max(node_to_dof_map(cond_map.getCondensedIds().back()) | std::views::filter([](auto dof) {
-                                 return dof != dofs::NodeToGlobalDofMap< problem_def.n_fields >::invalid_dof;
-                             }));
+            std::ranges::max(node_to_dof_map(cond_map.getCondensedIds().back()) |
+                             std::views::filter(dofs::NodeToGlobalDofMap< problem_def.n_fields >::isValid));
         m_dim     = static_cast< size_t >(max_dof + 1);
         m_entries = util::DynamicBitset{m_dim * m_dim};
 

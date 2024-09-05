@@ -7,16 +7,16 @@ namespace lstr::map
 {
 template < mesh::ElementType ET, el_o_t EO >
 auto computeBoundaryNormal(
-    mesh::BoundaryElementView< ET, EO >                                                                     el_view,
+    el_side_t                                                                                               side,
     const Eigen::Matrix< val_t, mesh::Element< ET, EO >::native_dim, mesh::Element< ET, EO >::native_dim >& jacobi_mat)
     -> Eigen::Vector< val_t, mesh::Element< ET, EO >::native_dim >
 {
     Eigen::Vector< val_t, mesh::Element< ET, EO >::native_dim > retval;
     if constexpr (ET == mesh::ElementType::Line)
-        retval[0] = el_view.getSide() == 0 ? -1. : 1.;
+        retval[0] = side == 0 ? -1. : 1.;
     else if constexpr (ET == mesh::ElementType::Quad)
     {
-        switch (el_view.getSide())
+        switch (side)
         {
         case 0:
             retval[0] = jacobi_mat(0, 1);
@@ -38,7 +38,7 @@ auto computeBoundaryNormal(
     }
     else if constexpr (ET == mesh::ElementType::Hex)
     {
-        switch (el_view.getSide())
+        switch (side)
         {
         case 0:
             retval = -jacobi_mat.row(0).cross(jacobi_mat.row(1));

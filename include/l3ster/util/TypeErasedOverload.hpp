@@ -1,6 +1,8 @@
 #ifndef L3STER_UTIL_TYPEERASEDOVERLOAD_HPP
 #define L3STER_UTIL_TYPEERASEDOVERLOAD_HPP
 
+#include "l3ster/util/Concepts.hpp"
+
 #include <array>
 #include <cstddef>
 #include <functional>
@@ -33,36 +35,47 @@ const Fun* getTargetPtr(const void* ptr)
     return getTargetPtr< Fun >(const_cast< void* >(ptr));
 }
 
-template < typename Return, typename Arg, typename CRTP >
+template < typename CRTP, typename Return, typename... Args >
 class TypeErasedInvoker
 {
 public:
     TypeErasedInvoker() = default;
     template < typename Fun >
     TypeErasedInvoker(std::type_identity< Fun >)
-        requires std::is_invocable_r_v< Return, std::add_const_t< Fun >, Arg >
-        : m_invoker{+[](const void* fun_ptr, Arg arg) -> Return {
+        requires std::is_invocable_r_v< Return, std::add_const_t< Fun >, Args... >
+        : m_invoker{+[](const void* fun_ptr, Args... args) -> Return {
               const auto target_ptr = detail::getTargetPtr< std::add_const_t< Fun > >(fun_ptr);
-              return std::invoke(*target_ptr, arg);
+              return std::invoke(*target_ptr, args...);
           }}
     {}
 
-    auto operator()(Arg arg) const -> Return
+    auto operator()(Args... args) const -> Return
     {
         const auto target_ptr = static_cast< const CRTP* >(this)->getTargetPtr();
-        return std::invoke(m_invoker, target_ptr, arg);
+        return std::invoke(m_invoker, target_ptr, args...);
     }
 
 protected:
     void copyInvoker(const TypeErasedInvoker& other) { m_invoker = other.m_invoker; }
 
 private:
-    Return (*m_invoker)(const void*, Arg) = nullptr;
+    Return (*m_invoker)(const void*, Args...) = nullptr;
 };
+
+template < typename CRTP, Function_c Function >
+struct TypeErasedInvokerDeductionHelper
+{
+    using Type = decltype(std::invoke(
+        []< typename Ret, typename... Args >(Ret(Args...)) { return TypeErasedInvoker< CRTP, Ret, Args... >{}; },
+        std::declval< Function >()));
+};
+template < typename CRTP, Function_c Function >
+using MakeTypeErasedInvoker = TypeErasedInvokerDeductionHelper< CRTP, Function >::Type;
+
 } // namespace detail
 
-template < typename Return, typename... Args >
-class TypeErasedOverload : public detail::TypeErasedInvoker< Return, Args, TypeErasedOverload< Return, Args... > >...
+template < Function_c... Overloads >
+class TypeErasedOverload : public detail::MakeTypeErasedInvoker< TypeErasedOverload< Overloads... >, Overloads >...
 {
     // Due to lack of variadic friendship this is as fine-grained as we can get
     template < typename Ret, typename Arg, typename CRTP >
@@ -88,8 +101,8 @@ public:
     TypeErasedOverload() = default;
     template < typename Fun >
     TypeErasedOverload(Fun&& fun)
-        requires((std::is_invocable_r_v< Return, const std::remove_cvref_t< Fun >&, Args > and ...) and
-                 std::is_nothrow_move_constructible_v< std::remove_cvref_t< Fun > >);
+        requires(std::is_nothrow_move_constructible_v< std::remove_cvref_t< Fun > > and
+                 (CallableAs_c< std::add_lvalue_reference_t< std::remove_cvref_t< Fun > >, Overloads > and ...));
 
     TypeErasedOverload(const TypeErasedOverload&)            = delete;
     TypeErasedOverload& operator=(const TypeErasedOverload&) = delete;
@@ -98,34 +111,33 @@ public:
     ~TypeErasedOverload() { dtorImpl(); }
 
     explicit operator bool() const { return m_special_members; }
-    using detail::TypeErasedInvoker< Return, Args, TypeErasedOverload< Return, Args... > >::operator()...;
+    using detail::MakeTypeErasedInvoker< TypeErasedOverload< Overloads... >, Overloads >::operator()...;
 
 private:
-    alignas(void*) std::array< std::byte, detail::type_erased_overload_sso_size > m_target_buf;
+    alignas(void*) std::array< std::byte, detail::type_erased_overload_sso_size > m_target_buf{};
     void (*m_special_members)(void*, void*, OperationType) = nullptr;
 };
 
-template < typename Return, typename... Args >
+template < Function_c... Overloads >
 template < typename Fun >
-TypeErasedOverload< Return, Args... >::TypeErasedOverload(Fun&& fun)
-    requires((std::is_invocable_r_v< Return, const std::remove_cvref_t< Fun >&, Args > and ...) and
-             std::is_nothrow_move_constructible_v< std::remove_cvref_t< Fun > >)
-    : detail::TypeErasedInvoker< Return, Args, TypeErasedOverload< Return, Args... > >(
+TypeErasedOverload< Overloads... >::TypeErasedOverload(Fun&& fun)
+    requires(std::is_nothrow_move_constructible_v< std::remove_cvref_t< Fun > > and
+             (CallableAs_c< std::add_lvalue_reference_t< std::remove_cvref_t< Fun > >, Overloads > and ...))
+    : detail::MakeTypeErasedInvoker< TypeErasedOverload< Overloads... >, Overloads >(
           std::type_identity< std::remove_cvref_t< Fun > >{})...,
       m_special_members{makeSpecialMemberImpl< std::remove_cvref_t< Fun > >()}
 {
     initTarget(std::forward< Fun >(fun), m_target_buf.data());
 }
 
-template < typename Return, typename... Args >
-TypeErasedOverload< Return, Args... >::TypeErasedOverload(TypeErasedOverload&& other) noexcept
+template < Function_c... Overloads >
+TypeErasedOverload< Overloads... >::TypeErasedOverload(TypeErasedOverload&& other) noexcept
 {
     moveImpl(std::move(other));
 }
 
-template < typename Return, typename... Args >
-TypeErasedOverload< Return, Args... >&
-TypeErasedOverload< Return, Args... >::operator=(TypeErasedOverload&& other) noexcept
+template < Function_c... Overloads >
+TypeErasedOverload< Overloads... >& TypeErasedOverload< Overloads... >::operator=(TypeErasedOverload&& other) noexcept
 {
     if (this != &other)
     {
@@ -135,9 +147,9 @@ TypeErasedOverload< Return, Args... >::operator=(TypeErasedOverload&& other) noe
     return *this;
 }
 
-template < typename Return, typename... Args >
+template < Function_c... Overloads >
 template < typename Fun >
-void TypeErasedOverload< Return, Args... >::initTarget(Fun&& f, std::byte* buf)
+void TypeErasedOverload< Overloads... >::initTarget(Fun&& f, std::byte* buf)
 {
     using target_t = std::remove_cvref_t< Fun >;
     if constexpr (detail::SsoCapableTypeErasedFun_c< target_t >)
@@ -149,9 +161,9 @@ void TypeErasedOverload< Return, Args... >::initTarget(Fun&& f, std::byte* buf)
     }
 }
 
-template < typename Return, typename... Args >
+template < Function_c... Overloads >
 template < typename Fun >
-auto TypeErasedOverload< Return, Args... >::makeSpecialMemberImpl() -> void (*)(void*, void*, OperationType)
+auto TypeErasedOverload< Overloads... >::makeSpecialMemberImpl() -> void (*)(void*, void*, OperationType)
 {
     return +[](void* my_target_buf, void* other_target_buf, OperationType op) {
         const auto my_target = detail::getTargetPtr< Fun >(my_target_buf);
@@ -179,8 +191,8 @@ auto TypeErasedOverload< Return, Args... >::makeSpecialMemberImpl() -> void (*)(
     };
 }
 
-template < typename Return, typename... Args >
-void TypeErasedOverload< Return, Args... >::moveImpl(TypeErasedOverload&& other)
+template < Function_c... Overloads >
+void TypeErasedOverload< Overloads... >::moveImpl(TypeErasedOverload&& other)
 {
     m_special_members = other.m_special_members;
     if (m_special_members)
@@ -190,17 +202,17 @@ void TypeErasedOverload< Return, Args... >::moveImpl(TypeErasedOverload&& other)
     }
 }
 
-template < typename Return, typename... Args >
-void TypeErasedOverload< Return, Args... >::dtorImpl()
+template < Function_c... Overloads >
+void TypeErasedOverload< Overloads... >::dtorImpl()
 {
     if (m_special_members)
         std::invoke(m_special_members, m_target_buf.data(), nullptr, OperationType::Destroy);
 }
 
-template < typename Return, typename... Args >
-void TypeErasedOverload< Return, Args... >::copyInvokersImpl(const TypeErasedOverload& other)
+template < Function_c... Overloads >
+void TypeErasedOverload< Overloads... >::copyInvokersImpl(const TypeErasedOverload& other)
 {
-    (detail::TypeErasedInvoker< Return, Args, TypeErasedOverload< Return, Args... > >::copyInvoker(other), ...);
+    (detail::MakeTypeErasedInvoker< TypeErasedOverload< Overloads... >, Overloads >::copyInvoker(other), ...);
 }
 } // namespace lstr::util
 #endif // L3STER_UTIL_TYPEERASEDOVERLOAD_HPP

@@ -7,7 +7,7 @@ static void BM_PhysBasisDersComputation(benchmark::State& state)
     constexpr auto BT          = basis::BasisType::Lagrange;
     const auto     element     = getExampleHexElement< EO >();
     const auto&    ref_basis   = basis::getReferenceBasisAtDomainQuadrature< BT, mesh::ElementType::Hex, EO, QT, QO >();
-    const auto     jac_mat_gen = map::getNatJacobiMatGenerator(element);
+    const auto     jac_mat_gen = map::getNatJacobiMatGenerator(element.getData());
     for (auto _ : state)
         for (size_t qp_ind = 0; qp_ind < ref_basis.quadrature.size; ++qp_ind)
         {

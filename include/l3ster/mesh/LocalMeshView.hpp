@@ -3,20 +3,23 @@
 
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/util/CrsGraph.hpp"
+#include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/StaticVector.hpp"
+#include "l3ster/util/TbbUtils.hpp"
 
 namespace lstr::mesh
 {
 class NodeMap
 {
 public:
-    inline NodeMap(std::vector< n_id_t > global_nodes);
+    inline explicit NodeMap(util::ArrayOwner< n_id_t > global_nodes);
 
     n_loc_id_t toLocal(n_id_t gid) const { return m_gid2lid_map.at(gid); }
     n_id_t     toGlobal(n_loc_id_t lid) const { return m_global_nodes.at(lid); }
+    size_t     size() const { return m_global_nodes.size(); }
 
 private:
-    std::vector< n_id_t >                                m_global_nodes;
+    util::ArrayOwner< n_id_t >                           m_global_nodes;
     robin_hood::unordered_flat_map< n_id_t, n_loc_id_t > m_gid2lid_map;
 };
 
@@ -34,6 +37,11 @@ class LocalElementView
     using Nodes = std::array< n_loc_id_t, n_stored_nodes >;
     using Sides = std::array< d_id_t, n_sides >;
 
+    struct BoundaryDescription
+    {
+        el_side_t side;
+        d_id_t    boundary_domain;
+    };
     using bound_descr = std::pair< el_side_t, d_id_t >;
 
 public:
@@ -50,6 +58,10 @@ public:
     inline auto getGlobalNodes(const NodeMap& map) const -> std::array< n_id_t, n_nodes >;
     auto        getData() const -> const Data& { return m_data; }
     inline auto getBoundaries() const -> util::StaticVector< bound_descr, n_sides >;
+    [[nodiscard]] bool hasBoundaries() const
+        requires(n_sides > 0);
+    [[nodiscard]] bool hasBoundaries() const
+        requires(n_sides == 0);
 
 private:
     Nodes m_nodes;
@@ -70,16 +82,141 @@ struct LocalDomainView
     univec_t elements;
 };
 
-/// Locally-indexed view of a mesh
-template < el_o_t... orders >
-struct LocalMeshView
+template < ElementType ET, el_o_t EO >
+struct LocalElementBoundaryView
 {
-    explicit LocalMeshView(const MeshPartition< orders... >& mesh, const NodeMap& node_map);
+    static constexpr auto type  = ET;
+    static constexpr auto order = EO;
 
-    std::map< d_id_t, LocalDomainView< orders... > > domains;
+    LocalElementBoundaryView(const LocalElementView< ET, EO >* ptr, el_side_t side) : m_element{ptr}, m_side{side} {}
+
+    auto operator->() const -> const LocalElementView< ET, EO >* { return m_element; }
+    auto operator*() const -> const LocalElementView< ET, EO >& { return *m_element; }
+
+    [[nodiscard]] auto        getSide() const { return m_side; }
+    [[nodiscard]] inline auto getSideNodeInds() const -> std::span< const el_locind_t >;
+
+private:
+    const LocalElementView< ET, EO >* m_element;
+    el_side_t                         m_side;
 };
 
-NodeMap::NodeMap(std::vector< n_id_t > global_nodes)
+template < ElementType ET, el_o_t EO >
+auto LocalElementBoundaryView< ET, EO >::getSideNodeInds() const -> std::span< const el_locind_t >
+{
+    return mesh::getSideNodeIndices< ET, EO >(m_side);
+}
+
+/// Locally-indexed view of a mesh
+template < el_o_t... orders >
+class LocalMeshView
+{
+public:
+    LocalMeshView() = default;
+    explicit LocalMeshView(const MeshPartition< orders... >& mesh, const NodeMap& node_map);
+
+    template < typename Visitor, SimpleExecutionPolicy_c ExecPolicy = MeshPartition< orders... >::DefaultExec >
+    void visit(Visitor&& visitor, ExecPolicy&& policy = {}) const;
+    template < typename Visitor, SimpleExecutionPolicy_c ExecPolicy = MeshPartition< orders... >::DefaultExec >
+    void visit(Visitor&& visitor, const util::ArrayOwner< d_id_t >& domains, ExecPolicy&& policy = {}) const;
+    template < typename Visitor, SimpleExecutionPolicy_c ExecPolicy = MeshPartition< orders... >::DefaultExec >
+    void visitBoundaries(Visitor&& visitor, ExecPolicy&& policy = {}) const;
+    template < typename Visitor, SimpleExecutionPolicy_c ExecPolicy = MeshPartition< orders... >::DefaultExec >
+    void visitBoundaries(Visitor&& visitor, const util::ArrayOwner< d_id_t >& domains, ExecPolicy&& policy = {}) const;
+
+    auto getDomains() const -> const auto& { return m_domains; }
+    bool isOwned(n_loc_id_t node) const { return node < m_owned_limit; }
+    auto getOwnedNodePredicate() const
+    {
+        return [this](n_loc_id_t node) {
+            return isOwned(node);
+        };
+    }
+
+    auto getDomainDim(d_id_t domain) const -> std::optional< dim_t >
+    {
+        const auto iter = m_dims.find(domain);
+        if (iter != m_dims.end())
+            return {iter->second};
+        else
+            return std::nullopt;
+    }
+    template < RangeOfConvertibleTo_c< d_id_t > Domains >
+    bool checkDomainDims(Domains&& domains, dim_t dimension_expected) const
+    {
+        const auto assert_dim = [&](d_id_t domain) {
+            const auto dimension_found = getDomainDim(domain);
+            return dimension_found.value_or(dimension_expected) == dimension_expected;
+        };
+        return std::ranges::all_of(std::forward< Domains >(domains), assert_dim);
+    }
+    dim_t getMaxDim() const { return m_dims.empty() ? invalid_dim : std::ranges::max(m_dims | std::views::values); }
+
+private:
+    std::map< d_id_t, LocalDomainView< orders... > > m_domains;
+    std::map< d_id_t, dim_t >                        m_dims;
+    n_loc_id_t                                       m_owned_limit = 0;
+};
+
+template < el_o_t... orders >
+template < typename Visitor, SimpleExecutionPolicy_c ExecPolicy >
+void LocalMeshView< orders... >::visit(Visitor&&                         visitor,
+                                       const util::ArrayOwner< d_id_t >& domains,
+                                       ExecPolicy&&                      policy) const
+{
+    auto       present_ids    = domains | std::views::filter([&](d_id_t d) { return m_domains.contains(d); });
+    const auto domain_visitor = [&](d_id_t domain_id) {
+        m_domains.at(domain_id).elements.visit(visitor, policy);
+    };
+    if constexpr (DecaysTo_c< ExecPolicy, std::execution::sequenced_policy >)
+        std::ranges::for_each(present_ids, domain_visitor);
+    else
+    {
+        const auto present_ids_rand_acc = util::ArrayOwner{present_ids};
+        util::tbb::parallelFor(present_ids_rand_acc, domain_visitor);
+    }
+}
+
+template < el_o_t... orders >
+template < typename Visitor, SimpleExecutionPolicy_c ExecPolicy >
+void LocalMeshView< orders... >::visit(Visitor&& visitor, ExecPolicy&& policy) const
+{
+    visit(std::forward< Visitor >(visitor), m_domains | std::views::keys, std::forward< ExecPolicy >(policy));
+}
+
+template < el_o_t... orders >
+template < typename Visitor, SimpleExecutionPolicy_c ExecPolicy >
+void LocalMeshView< orders... >::visitBoundaries(Visitor&&                         visitor,
+                                                 const util::ArrayOwner< d_id_t >& domains,
+                                                 ExecPolicy&&                      policy) const
+{
+    const auto dom_set = robin_hood::unordered_flat_set< d_id_t >{domains.begin(), domains.end()};
+    const auto in_set  = [&](const auto& pair) {
+        return dom_set.contains(pair.second);
+    };
+    const auto visit_el_boundaries = [&]< ElementType ET, el_o_t EO >(const LocalElementView< ET, EO >& element) {
+        if (not element.hasBoundaries())
+            return;
+        for (auto side : element.getBoundaries() | std::views::filter(in_set) | std::views::keys)
+            std::invoke(visitor, LocalElementBoundaryView{&element, side});
+    };
+    visit(visit_el_boundaries, std::forward< ExecPolicy >(policy));
+}
+
+template < el_o_t... orders >
+template < typename Visitor, SimpleExecutionPolicy_c ExecPolicy >
+void LocalMeshView< orders... >::visitBoundaries(Visitor&& visitor, ExecPolicy&& policy) const
+{
+    const auto visit_el_boundaries = [&]< ElementType ET, el_o_t EO >(const LocalElementView< ET, EO >& element) {
+        if (not element.hasBoundaries())
+            return;
+        for (auto side : element.getBoundaries() | std::views::keys)
+            std::invoke(visitor, LocalElementBoundaryView{&element, side});
+    };
+    visit(visit_el_boundaries, std::forward< ExecPolicy >(policy));
+}
+
+NodeMap::NodeMap(util::ArrayOwner< n_id_t > global_nodes)
     : m_global_nodes{std::move(global_nodes)}, m_gid2lid_map(m_global_nodes.size())
 {
     for (n_loc_id_t lid = 0; n_id_t gid : m_global_nodes)
@@ -147,6 +284,20 @@ auto LocalElementView< ET, EO >::getBoundaries() const -> util::StaticVector< bo
         ++side;
     }
     return retval;
+}
+
+template < ElementType ET, el_o_t EO >
+bool LocalElementView< ET, EO >::hasBoundaries() const
+    requires(n_sides == 0)
+{
+    return false;
+}
+
+template < ElementType ET, el_o_t EO >
+bool LocalElementView< ET, EO >::hasBoundaries() const
+    requires(n_sides > 0)
+{
+    return std::ranges::any_of(m_sides, [](d_id_t domain) { return domain != invalid_domain_id; });
 }
 
 namespace detail
@@ -296,7 +447,7 @@ auto makeElementIdToSidesMap(const MeshPartition< orders... >& mesh)
 } // namespace detail
 
 template < el_o_t... orders >
-auto computeNodeOrder(const MeshPartition< orders... >& mesh) -> std::vector< n_id_t >
+auto computeNodeOrder(const MeshPartition< orders... >& mesh) -> util::ArrayOwner< n_id_t >
 {
     auto       internal_node_set   = robin_hood::unordered_flat_set< n_id_t >{};
     auto       internal_node_vec   = std::vector< n_id_t >{};
@@ -318,18 +469,21 @@ auto computeNodeOrder(const MeshPartition< orders... >& mesh) -> std::vector< n_
     const auto is_internal = [&](n_id_t node) {
         return internal_node_set.contains(node);
     };
-    auto retval = std::vector< n_id_t >{};
-    retval.reserve(mesh.getAllNodes().size());
-    std::ranges::copy_if(mesh.getOwnedNodes(), std::back_inserter(retval), util::negatePredicate(is_internal));
-    std::ranges::copy(internal_node_vec, std::back_inserter(retval));
-    std::ranges::copy(mesh.getGhostNodes(), std::back_inserter(retval));
-    util::throwingAssert(retval.size() == mesh.getAllNodes().size(), "Internal nodes cannot be ghost nodes");
+    const size_t num_internal = std::ranges::count_if(mesh.getOwnedNodes(), util::negatePredicate(is_internal));
+    const size_t num_total    = num_internal + internal_node_vec.size() + mesh.getGhostNodes().size();
+    util::throwingAssert(num_total == mesh.getAllNodes().size(), "Internal nodes cannot be ghost nodes");
+    auto retval = util::ArrayOwner< n_id_t >(num_total);
+    auto iter   = std::ranges::copy_if(mesh.getOwnedNodes(), retval.begin(), util::negatePredicate(is_internal)).out;
+    iter        = std::ranges::copy(internal_node_vec, iter).out;
+    std::ranges::copy(mesh.getGhostNodes(), iter);
     return retval;
 }
 
 template < el_o_t... orders >
 LocalMeshView< orders... >::LocalMeshView(const MeshPartition< orders... >& mesh, const NodeMap& node_map)
 {
+    const auto owned_nodes = mesh.getOwnedNodes();
+    m_owned_limit = static_cast< n_loc_id_t >(owned_nodes.empty() ? 0uz : (node_map.toLocal(owned_nodes.back()) + 1));
     const auto elem_side_map    = detail::makeElementIdToSidesMap(mesh);
     const auto element_to_local = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
         const auto side_info = elem_side_map.find(element.getId());
@@ -353,9 +507,10 @@ LocalMeshView< orders... >::LocalMeshView(const MeshPartition< orders... >& mesh
             detail::reorderByAdjacency(local_vec, cache);
         };
         global_domain.elements.visitVectors(make_vec_view);
-        domains[domain_id] = std::move(local_domain);
+        m_domains[domain_id] = std::move(local_domain);
     }
+    for (d_id_t dom_id : mesh.getDomainIds())
+        m_dims[dom_id] = mesh.getDomain(dom_id).dim;
 }
-
 } // namespace lstr::mesh
 #endif // L3STER_MESH_LOCALMESHVIEW_HPP

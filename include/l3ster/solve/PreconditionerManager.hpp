@@ -140,8 +140,8 @@ private:
     auto initIfpack2Impl(const Teuchos::RCP< const tpetra_crsmatrix_t >& matrix,
                          const PrecondOpts< type >&                      options) -> Teuchos::RCP< tpetra_operator_t >;
     template < PrecondType type >
-    auto        initNativeImpl(const Teuchos::RCP< const util::DiagonalAwareOperator >& op,
-                               const PrecondOpts< type >& opts) -> Teuchos::RCP< tpetra_operator_t >;
+    auto        initNativeImpl(const Teuchos::RCP< const tpetra_operator_t >& op,
+                               const PrecondOpts< type >&                     opts) -> Teuchos::RCP< tpetra_operator_t >;
     inline void computeImpl();
 
     template < PrecondType type >
@@ -155,18 +155,20 @@ void PreconditionerManager::assertValidConfig(const Teuchos::RCP< const tpetra_o
 {
     if (getType() == PrecondType::None or getType() == PrecondType::Richardson)
         return; // Available for all operators
-    if (auto as_mat = Teuchos::rcp_dynamic_cast< const tpetra_crsmatrix_t >(op, false); not as_mat.is_null())
+    if (auto as_crsmat = Teuchos::rcp_dynamic_cast< const tpetra_crsmatrix_t >(op, false); as_crsmat)
         return; // All preconditioners are available if the underlying operator is a Tpetra::CrsMatrix
-    const auto as_diag_op = Teuchos::rcp_dynamic_cast< const util::DiagonalAwareOperator >(op, false);
     util::throwingAssert(
-        getType() == PrecondType::Jacobi and not as_diag_op.is_null(),
-        "The Jacobi preconditioner is available only for matrix-free operators which expose the diagonal.");
+        getType() != PrecondType::Chebyshev,
+        "The Chebyshev preconditioner is available only for operators which are backed by a CRS matrix");
+    util::throwingAssert(
+        getType() == PrecondType::Jacobi and op->hasDiagonal(),
+        "The Jacobi preconditioner is available only for matrix-free operators which expose the diagonal");
 }
 
 void PreconditionerManager::computeImpl()
 {
     const auto try_compute_as = [&]< typename T >(util::TypePack< T >) {
-        const auto downcast_ptr = Teuchos::rcp_dynamic_cast< T >(m_precond_op);
+        const auto downcast_ptr = Teuchos::rcp_dynamic_cast< T >(m_precond_op, false);
         const auto success      = not downcast_ptr.is_null();
         if (success)
             downcast_ptr->compute();
@@ -220,7 +222,7 @@ auto PreconditionerManager::parsmakeIfpack2Params(const PrecondOpts< type >& opt
 }
 
 template < PrecondType type >
-auto PreconditionerManager::initNativeImpl(const Teuchos::RCP< const util::DiagonalAwareOperator >& op,
+auto PreconditionerManager::initNativeImpl(const Teuchos::RCP< const tpetra_operator_t >& op,
                                            const PrecondOpts< type >& opts) -> Teuchos::RCP< tpetra_operator_t >
 {
     if constexpr (type == PrecondType::Richardson)
@@ -250,27 +252,10 @@ void PreconditionerManager::initImpl(const Teuchos::RCP< const tpetra_operator_t
 {
     if constexpr (type == PrecondType::None)
         return;
-
-    const auto try_init_as = [&]< typename T >(util::TypePack< T >, const auto& initialize) {
-        const auto downcast_ptr = Teuchos::rcp_dynamic_cast< const T >(op);
-        const auto success      = not downcast_ptr.is_null();
-        if (success)
-            m_precond_op = std::invoke(initialize, downcast_ptr);
-        return success;
-    };
-    constexpr auto matrix        = util::TypePack< tpetra_crsmatrix_t >{};
-    constexpr auto diag_aware_op = util::TypePack< util::DiagonalAwareOperator >{};
-    const auto     init_ifpack2  = [&](const Teuchos::RCP< const tpetra_crsmatrix_t >& crsmat) {
-        return initIfpack2Impl(crsmat, options);
-    };
-    const auto init_native = [&](const Teuchos::RCP< const util::DiagonalAwareOperator >& diag_op) {
-        return initNativeImpl(diag_op, options);
-    };
-
-    if (try_init_as(matrix, init_ifpack2))
-        return;
-    if (try_init_as(diag_aware_op, init_native))
-        return;
+    if (const auto as_crsmatrix = Teuchos::rcp_dynamic_cast< const tpetra_crsmatrix_t >(op, false); as_crsmatrix)
+        m_precond_op = initIfpack2Impl(as_crsmatrix, options);
+    else
+        m_precond_op = initNativeImpl(op, options);
 }
 } // namespace lstr::solvers
 
