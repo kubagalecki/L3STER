@@ -36,9 +36,8 @@ int main(int argc, char* argv[])
     const auto mesh = makeMesh(*comm, probdef_ctwrpr);
     summarizeMesh(*comm, *mesh);
 
-    [[maybe_unused]] constexpr auto adiabatic_bound_ids = std::array{bot_boundary, top_boundary};
-    [[maybe_unused]] constexpr auto boundary_ids =
-        std::array{top_boundary, bot_boundary, left_boundary, right_boundary};
+    constexpr auto adiabatic_bound_ids = std::array{bot_boundary, top_boundary};
+    constexpr auto boundary_ids        = std::array{top_boundary, bot_boundary, left_boundary, right_boundary};
 
     constexpr auto alg_params       = AlgebraicSystemParams{.eval_strategy = OperatorEvaluationStrategy::MatrixFree};
     constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
@@ -84,12 +83,11 @@ int main(int argc, char* argv[])
     constexpr auto solver_opts  = IterSolverOpts{.tol = 1e-10};
     constexpr auto precond_opts = JacobiOpts{};
     auto           solver       = CG{solver_opts, precond_opts};
-    auto           solution     = alg_sys.initSolution();
-    alg_sys.solve(solver, solution);
+    alg_sys.solve(solver);
 
     constexpr auto dof_inds         = util::makeIotaArray< size_t, 3 >();
-    auto           solution_manager = SolutionManager{*mesh, problem_def.n_fields};
-    alg_sys.updateSolution(solution, dof_inds, solution_manager, dof_inds);
+    auto           solution_manager = SolutionManager{*mesh, diff_params.n_unknowns};
+    alg_sys.updateSolution(dof_inds, solution_manager, dof_inds);
 
     // Check results
     constexpr auto params        = KernelParams{.dimension = 2, .n_equations = 3, .n_fields = 3};
@@ -119,4 +117,6 @@ int main(int argc, char* argv[])
     constexpr auto eps = 1.e-8;
     REQUIRE(error.norm() < eps);
     REQUIRE(boundary_error.norm() < eps);
+
+    alg_sys.beginAssembly(); // for code coverage
 }

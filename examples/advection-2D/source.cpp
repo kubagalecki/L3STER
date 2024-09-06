@@ -83,9 +83,6 @@ int main(int argc, char* argv[])
     const auto phi_prev_ind    = std::array< size_t, 1 >{0}; // array of indices of components to access
     const auto phi_prev_getter = solution_manager.makeFieldValueGetter(phi_prev_ind);
 
-    // Solution vector for the algebraic system
-    auto solution = algebraic_system.initSolution();
-
     // L3STER interface to KLU2 direct solver
     auto solver = solvers::KLU2{};
 
@@ -114,10 +111,10 @@ int main(int argc, char* argv[])
         algebraic_system.endAssembly();
 
         // Solve
-        algebraic_system.solve(solver, solution);
+        algebraic_system.solve(solver);
 
         // Place the computed values in the solution manager
-        algebraic_system.updateSolution(solution, dof_inds, solution_manager, sol_inds);
+        algebraic_system.updateSolution(dof_inds, solution_manager, sol_inds);
 
         // Export snapshot
         const auto file_name = std::format("results/phi_{:03}.pvtu", time_step);

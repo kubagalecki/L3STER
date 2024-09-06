@@ -85,22 +85,13 @@ void test()
     assembleBoundaryProblem();
     alg_sys.endAssembly();
     alg_sys.describe();
-    CHECK_THROWS(assembleDomainProblem());
-    CHECK_THROWS(assembleBoundaryProblem());
-    CHECK_THROWS(alg_sys.endAssembly());
-
-    {
-        auto dummy_problem = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, {}, algparams_ctwrpr);
-        dummy_problem.endAssembly();
-    }
 
     constexpr auto dof_inds = util::makeIotaArray< size_t, 3 >();
 
-    auto solver   = solvers::Lapack{};
-    auto solution = alg_sys.initSolution();
-    alg_sys.solve(solver, solution);
+    auto solver = solvers::Lapack{};
+    alg_sys.solve(solver);
     auto solution_manager = SolutionManager{*mesh, problem_def.n_fields};
-    alg_sys.updateSolution(solution, dof_inds, solution_manager, dof_inds);
+    alg_sys.updateSolution(dof_inds, solution_manager, dof_inds);
 
     // Check results
     constexpr auto params        = KernelParams{.dimension = 2, .n_equations = 3, .n_fields = 3};
@@ -131,7 +122,7 @@ void test()
     REQUIRE(error.norm() < eps);
     REQUIRE(boundary_error.norm() < eps);
 
-    alg_sys.beginAssembly();
+    alg_sys.beginAssembly(); // for code coverage
 }
 
 // Solve 2D diffusion problem

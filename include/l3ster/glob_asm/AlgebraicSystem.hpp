@@ -28,17 +28,10 @@ public:
 
     inline auto getMatrix() const -> Teuchos::RCP< const tpetra_crsmatrix_t >;
     inline auto getRhs() const -> Teuchos::RCP< const tpetra_multivector_t >;
-
-    inline auto initSolution(size_t cols = n_rhs) const -> Teuchos::RCP< tpetra_femultivector_t >;
-    template < IndexRange_c SolInds, IndexRange_c SolManInds >
-    void updateSolution(const Teuchos::RCP< const tpetra_femultivector_t >& solution,
-                        SolInds&&                                           sol_inds,
-                        SolutionManager&                                    sol_man,
-                        SolManInds&&                                        sol_man_inds);
+    inline auto getSolution() const -> Teuchos::RCP< tpetra_multivector_t >;
 
     inline void beginAssembly();
     inline void endAssembly();
-
     template < EquationKernel_c         Kernel,
                ArrayOf_c< size_t > auto field_inds = util::makeIotaArray< size_t, max_dofs_per_node >(),
                size_t                   n_fields   = 0,
@@ -52,14 +45,6 @@ public:
         requires(Kernel::parameters.n_rhs == n_rhs);
 
     template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
-    void setValues(const Teuchos::RCP< tpetra_femultivector_t >&                 solution,
-                   const Kernel&                                                 kernel,
-                   const util::ArrayOwner< d_id_t >&                             domain_ids,
-                   const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                   const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter = {},
-                   val_t                                                         time             = 0.) const;
-
-    template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setDirichletBCValues(const Kernel&                                                 kernel,
                               const util::ArrayOwner< d_id_t >&                             domain_ids,
                               const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
@@ -71,11 +56,30 @@ public:
                               const std::array< dofind_t, n_vals >& dof_inds)
         requires(n_rhs == 1);
 
-    void solve(solvers::Solver_c auto& solver, const Teuchos::RCP< tpetra_femultivector_t >& solution) const;
+    void solve(solvers::Solver_c auto& solver) const;
+
+    template < IndexRange_c SolInds, IndexRange_c SolManInds >
+    void updateSolution(SolInds&& sol_inds, SolutionManager& sol_man, SolManInds&& sol_man_inds);
 
     inline void describe(std::ostream& out = std::cout) const;
 
+    template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
+    void setValues(const Teuchos::RCP< tpetra_femultivector_t >&                 vector,
+                   const Kernel&                                                 kernel,
+                   const util::ArrayOwner< d_id_t >&                             domain_ids,
+                   const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
+                   const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter = {},
+                   val_t                                                         time             = 0.) const;
+    template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
+    void setValues(const Teuchos::RCP< tpetra_multivector_t >&                   vector,
+                   const Kernel&                                                 kernel,
+                   const util::ArrayOwner< d_id_t >&                             domain_ids,
+                   const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
+                   const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter = {},
+                   val_t                                                         time             = 0.) const;
+
 private:
+    inline auto initMultiVector(size_t cols = n_rhs) const -> Teuchos::RCP< tpetra_femultivector_t >;
     inline void setToZero();
     inline void applyDirichletBCs();
 
@@ -91,7 +95,7 @@ private:
     std::shared_ptr< const MpiComm >                          m_comm;
     std::shared_ptr< const mesh::MeshPartition< orders... > > m_mesh;
     Teuchos::RCP< tpetra_fecrsmatrix_t >                      m_matrix;
-    Teuchos::RCP< tpetra_femultivector_t >                    m_rhs;
+    Teuchos::RCP< tpetra_femultivector_t >                    m_rhs, m_solution;
     Teuchos::RCP< const tpetra_fecrsgraph_t >                 m_sparsity_graph;
     std::optional< const bcs::DirichletBCAlgebraic >          m_dirichlet_bcs;
     Teuchos::RCP< tpetra_femultivector_t >                    m_dirichlet_values;
@@ -101,26 +105,23 @@ private:
 };
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::solve(
-    solvers::Solver_c auto& solver, const Teuchos::RCP< tpetra_femultivector_t >& solution) const
+void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::solve(solvers::Solver_c auto& solver) const
 {
     L3STER_PROFILE_FUNCTION;
-    solution->switchActiveMultiVector();
-    solver.solve(m_matrix, m_rhs, solution);
-    solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);
-    solution->switchActiveMultiVector();
+    m_solution->switchActiveMultiVector();
+    solver.solve(m_matrix, m_rhs, m_solution);
+    m_solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);
+    m_solution->switchActiveMultiVector();
 #ifdef L3STER_PROFILE_EXECUTION
-    solution->getMap()->getComm()->barrier();
+    m_solution->getMap()->getComm()->barrier();
 #endif
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
 template < IndexRange_c SolInds, IndexRange_c SolManInds >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::updateSolution(
-    const Teuchos::RCP< const tpetra_femultivector_t >& solution,
-    SolInds&&                                           sol_inds,
-    SolutionManager&                                    sol_man,
-    SolManInds&&                                        sol_man_inds)
+void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::updateSolution(SolInds&&        sol_inds,
+                                                                                SolutionManager& sol_man,
+                                                                                SolManInds&&     sol_man_inds)
 {
     util::throwingAssert(std::ranges::distance(sol_man_inds) == std::ranges::distance(sol_inds) * ptrdiff_t{n_rhs},
                          "Source and destination indices lengths must match");
@@ -129,7 +130,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::updateSolution(
     util::throwingAssert(std::ranges::none_of(sol_man_inds, [&](size_t i) { return i >= sol_man.nFields(); }),
                          "Destination index out of bounds");
 
-    const auto solution_view = solution->getLocalViewHost(Tpetra::Access::ReadOnly);
+    const auto solution_view = m_solution->getLocalViewHost(Tpetra::Access::ReadOnly);
     m_condensation_manager.recoverSolution(*m_mesh,
                                            m_node_dof_map,
                                            util::asSpans< n_rhs >(solution_view),
@@ -190,7 +191,7 @@ void averageNodeVals(tpetra_femultivector_t& values, tpetra_femultivector_t& num
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
 template < ResidualKernel_c Kernel, std::integral dofind_t, size_t n_fields >
 void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
-    const Teuchos::RCP< tpetra_femultivector_t >&                 solution,
+    const Teuchos::RCP< tpetra_femultivector_t >&                 vector,
     const Kernel&                                                 kernel,
     const util::ArrayOwner< d_id_t >&                             domain_ids,
     const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
@@ -199,9 +200,9 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
 {
     util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
                          "The DOF indices are out of bounds for the problem");
-    util::throwingAssert(n_rhs == solution->getNumVectors(), "The number of columns and number of RHS must match");
+    util::throwingAssert(n_rhs == vector->getNumVectors(), "The number of columns and number of RHS must match");
 
-    auto       num_contribs       = initSolution(1);
+    auto       num_contribs       = initMultiVector(1);
     const auto compute_local_vals = [&](const tpetra_femultivector_t::host_view_type& vals_view,
                                         const tpetra_femultivector_t::host_view_type& num_contribs_view) {
         computeValuesAtNodes(kernel,
@@ -214,7 +215,21 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
                              num_contribs_view,
                              time);
     };
-    detail::averageNodeVals(*solution, *num_contribs, compute_local_vals);
+    detail::averageNodeVals(*vector, *num_contribs, compute_local_vals);
+}
+
+template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
+template < ResidualKernel_c Kernel, std::integral dofind_t, size_t n_fields >
+void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
+    const Teuchos::RCP< tpetra_multivector_t >&                   vector,
+    const Kernel&                                                 kernel,
+    const util::ArrayOwner< d_id_t >&                             domain_ids,
+    const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
+    const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
+    val_t                                                         time) const
+{
+    const auto vector_downcast = Teuchos::rcp_dynamic_cast< tpetra_femultivector_t >(vector);
+    setValues(vector_downcast, kernel, domain_ids, dof_inds, field_val_getter, time);
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
@@ -230,7 +245,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCV
     util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
                          "The DOF indices are out of bounds for the problem");
 
-    auto       num_contribs       = initSolution(1);
+    auto       num_contribs       = initMultiVector(1);
     const auto compute_local_vals = [&](const tpetra_femultivector_t::host_view_type& vals_view,
                                         const tpetra_femultivector_t::host_view_type& num_contribs_view) {
         computeValuesAtNodes(kernel,
@@ -259,7 +274,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCV
                          "The DOF indices are out of bounds for the problem");
 
     const auto values_wrapped     = std::array{std::span{values}};
-    auto       num_contribs       = initSolution(1);
+    auto       num_contribs       = initMultiVector(1);
     const auto compute_local_vals = [&](const tpetra_femultivector_t::host_view_type& vals_view,
                                         const tpetra_femultivector_t::host_view_type& num_contribs_view) {
         computeValuesAtNodes(
@@ -285,7 +300,15 @@ auto AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::getRhs() const
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-auto AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::initSolution(size_t cols) const
+auto AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::getSolution() const
+    -> Teuchos::RCP< tpetra_multivector_t >
+{
+    assertState(State::Closed, "`getSolution()` was called before `endAssembly()`");
+    return m_solution;
+}
+
+template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
+auto AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::initMultiVector(size_t cols) const
     -> Teuchos::RCP< tpetra_femultivector_t >
 {
     return util::makeTeuchosRCP< tpetra_femultivector_t >(
@@ -307,8 +330,9 @@ AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::AlgebraicSystem(
     m_sparsity_graph = makeSparsityGraph(*m_comm, *m_mesh, node_global_dof_map, cond_map, problemdef_ctwrpr);
 
     L3STER_PROFILE_REGION_BEGIN("Create Tpetra objects");
-    m_matrix = util::makeTeuchosRCP< tpetra_fecrsmatrix_t >(m_sparsity_graph);
-    m_rhs    = initSolution();
+    m_matrix   = util::makeTeuchosRCP< tpetra_fecrsmatrix_t >(m_sparsity_graph);
+    m_rhs      = initMultiVector();
+    m_solution = initMultiVector();
     m_matrix->beginAssembly();
     m_rhs->beginAssembly();
     L3STER_PROFILE_REGION_END("Create Tpetra objects");
@@ -327,7 +351,7 @@ AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::AlgebraicSystem(
         L3STER_PROFILE_REGION_END("Dirichlet BCs");
     }
     if (m_dirichlet_bcs.has_value())
-        m_dirichlet_values = initSolution();
+        m_dirichlet_values = initMultiVector();
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >

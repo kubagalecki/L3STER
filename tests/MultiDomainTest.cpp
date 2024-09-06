@@ -59,9 +59,8 @@ void test()
     assemble_problem_in_dom(util::ConstexprValue< 3 >{});
     alg_sys.endAssembly();
 
-    auto solver   = solvers::Lapack{};
-    auto solution = alg_sys.initSolution();
-    alg_sys.solve(solver, solution);
+    auto solver = solvers::Lapack{};
+    alg_sys.solve(solver);
 
     auto solution_manager = SolutionManager{*mesh, problem_def.n_fields * 2};
     for (size_t i = 0; i != problem_def.n_fields; ++i)
@@ -71,7 +70,7 @@ void test()
     }
     constexpr auto dof_inds     = util::makeIotaArray< size_t, problem_def.n_fields >();
     constexpr auto sol_man_inds = util::makeIotaArray< size_t, problem_def.n_fields * 2 >();
-    alg_sys.updateSolution(solution, dof_inds, solution_manager, sol_man_inds);
+    alg_sys.updateSolution(dof_inds, solution_manager, sol_man_inds);
 
     constexpr double eps = 1e-8;
     for (size_t i = 0; i != problem_def.n_fields; ++i)

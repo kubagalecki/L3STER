@@ -83,7 +83,10 @@ auto convertMeshToOrder(const MeshPartition< 1 >& mesh,
             };
             std::ranges::for_each(dual_graph.getElementAdjacent(el.getId()), match_nbr_nodes);
 
-            for (size_t i = 0; i != mask.size(); ++i)
+            for (auto i : ElementTraits< Element< T, OC > >::boundary_node_inds)
+                if (not mask[i])
+                    new_nodes[i] = max_node++;
+            for (auto i : ElementTraits< Element< T, OC > >::internal_node_inds)
                 if (not mask[i])
                     new_nodes[i] = max_node++;
 

@@ -49,3 +49,4 @@ function( addMpiBenchmark source name nprocs )
 endfunction()
 
 addmpibenchmark( Diffusion3DBenchmark.cpp Solve_diffusion_problem_3D "1" )
+addmpibenchmark( Diffusion3DBenchmarkMatrixFree.cpp Solve_diffusion_problem_3D_Matrix_Free "1" )

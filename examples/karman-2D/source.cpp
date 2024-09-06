@@ -196,9 +196,6 @@ int main(int argc, char* argv[])
     const auto vort_inds = std::array{4};    // Vorticity
     const auto p_inds    = std::array{5};    // Pressure
 
-    // Solution vector for the algebraic system
-    auto solution = algebraic_system.initSolution();
-
     // L3STER interface to KLU2 direct solver
     auto solver = solvers::KLU2{};
 
@@ -229,15 +226,15 @@ int main(int argc, char* argv[])
         algebraic_system.endAssembly();
 
         // Solve
-        algebraic_system.solve(solver, solution);
+        algebraic_system.solve(solver);
 
         // Place the computed values in the solution manager
-        algebraic_system.updateSolution(solution, vel_inds1, solution_manager, vel_inds1);
+        algebraic_system.updateSolution(vel_inds1, solution_manager, vel_inds1);
     }
 
     // Set the remaining solution components to the steady state solution
     algebraic_system.updateSolution(
-        solution, std::views::iota(0, 4), solution_manager, util::concatRanges(vel_inds2, vort_inds, p_inds));
+        std::views::iota(0, 4), solution_manager, util::concatRanges(vel_inds2, vort_inds, p_inds));
 
     // Paraview exporter object
     auto exporter = PvtuExporter{comm, *mesh};
@@ -273,11 +270,11 @@ int main(int argc, char* argv[])
         algebraic_system.endAssembly();
 
         // Solve
-        algebraic_system.solve(solver, solution);
+        algebraic_system.solve(solver);
 
         // Place the computed values in the solution manager
         const auto solution_manager_inds = util::concatRanges(vel_inds2, vort_inds, p_inds);
-        algebraic_system.updateSolution(solution, std::views::iota(0, 4), solution_manager, solution_manager_inds);
+        algebraic_system.updateSolution(std::views::iota(0, 4), solution_manager, solution_manager_inds);
 
         // Print flow rate info
         const auto current_vel_getter = solution_manager.makeFieldValueGetter(vel_inds2);

@@ -50,16 +50,10 @@ public:
 
     [[nodiscard]] inline auto getOperator() const -> Teuchos::RCP< const tpetra_operator_t >;
     [[nodiscard]] inline auto getRhs() const -> Teuchos::RCP< const tpetra_multivector_t >;
-
-    inline auto initSolution() const -> Teuchos::RCP< tpetra_multivector_t >;
-    inline void updateSolution(const Teuchos::RCP< const tpetra_multivector_t >& solution,
-                               const util::ArrayOwner< size_t >&                 sol_inds,
-                               SolutionManager&                                  sol_man,
-                               const util::ArrayOwner< size_t >&                 sol_man_inds);
+    [[nodiscard]] inline auto getSolution() const -> Teuchos::RCP< tpetra_multivector_t >;
 
     inline void beginAssembly();
     inline void endAssembly();
-
     template < EquationKernel_c         Kernel,
                ArrayOf_c< size_t > auto field_inds = util::makeIotaArray< size_t, max_dofs_per_node >(),
                size_t                   n_fields   = 0,
@@ -71,14 +65,6 @@ public:
                          util::ConstexprValue< asm_opts >                     asm_options       = {},
                          val_t                                                time              = 0.)
         requires(Kernel::parameters.n_rhs == n_rhs);
-
-    template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
-    void setValues(const Teuchos::RCP< tpetra_multivector_t >&                   solution,
-                   const Kernel&                                                 kernel,
-                   const util::ArrayOwner< d_id_t >&                             domain_ids,
-                   const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                   const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter = {},
-                   val_t                                                         time             = 0.);
 
     template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setDirichletBCValues(const Kernel&                                                 kernel,
@@ -93,9 +79,21 @@ public:
         requires(n_rhs == 1);
 
     template < solvers::IterativeSolver_c Solver >
-    void solve(Solver& solver, const Teuchos::RCP< tpetra_multivector_t >& solution) const;
+    void solve(Solver& solver) const;
+
+    inline void updateSolution(const util::ArrayOwner< size_t >& sol_inds,
+                               SolutionManager&                  sol_man,
+                               const util::ArrayOwner< size_t >& sol_man_inds);
 
     inline void describe(std::ostream& out = std::cout) const;
+
+    template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
+    void setValues(const Teuchos::RCP< tpetra_multivector_t >&                   vector,
+                   const Kernel&                                                 kernel,
+                   const util::ArrayOwner< d_id_t >&                             domain_ids,
+                   const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
+                   const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter = {},
+                   val_t                                                         time             = 0.);
 
 private:
     using view_t       = decltype(std::declval< tpetra_multivector_t >().getLocalViewHost(Tpetra::Access::ReadWrite));
@@ -155,6 +153,7 @@ private:
         OpenForAssembly,
         Closed
     };
+
     inline void applyImpl(const tpetra_multivector_t& x, tpetra_multivector_t& y, val_t alpha, val_t beta) const;
     auto        getOperatorMap() const -> Teuchos::RCP< const tpetra_map_t > { return m_operator_map; }
     inline void copyDiagImpl(tpetra_vector_t& diag) const;
@@ -203,7 +202,7 @@ private:
     std::shared_ptr< const MpiComm >                          m_comm;
     std::shared_ptr< const mesh::MeshPartition< orders... > > m_mesh;
     mesh::LocalMeshView< orders... >                          m_interior_mesh, m_border_mesh;
-    Teuchos::RCP< tpetra_multivector_t >                      m_rhs;
+    Teuchos::RCP< tpetra_multivector_t >                      m_rhs, m_solution;
     view_t                                                    m_rhs_view;
     util::ArrayOwner< val_t >                                 m_diagonal;
     std::unique_ptr< comm::Import< val_t, local_dof_t > >     m_import;
@@ -229,10 +228,10 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::zeroExportBuf() co
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
 template < solvers::IterativeSolver_c Solver >
-void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::solve(
-    Solver& solver, const Teuchos::RCP< tpetra_multivector_t >& solution) const
+void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::solve(Solver& solver) const
 {
-    solver.solve(getOperator(), m_rhs, solution);
+    L3STER_PROFILE_FUNCTION;
+    solver.solve(getOperator(), m_rhs, m_solution);
 }
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
@@ -632,6 +631,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::endAssembly()
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
 void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::computeDiagAndRhs()
 {
+    L3STER_PROFILE_FUNCTION;
     const auto visit_border_domain = [&](d_id_t domain) {
         const auto& dom_kernels = m_kernel_maps.domain_init.at(domain);
         const auto  init_border =
@@ -700,6 +700,14 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::getRhs() const
     return m_rhs;
 }
 
+template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
+auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::getSolution() const
+    -> Teuchos::RCP< tpetra_multivector_t >
+{
+    assertState(State::Closed, "`getSolution()` was called before `endAssembly()`");
+    return m_solution;
+}
+
 namespace detail
 {
 template < el_o_t... orders >
@@ -751,6 +759,7 @@ MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::MatrixFreeSystem(
     m_node_dof_map                      = dofs::LocalDofMap{cond_map, node2dof, node_map, all_dofs, n_owned_dofs};
     m_operator_map                      = detail::makeOperatorMap(*m_comm, owned_dofs);
     m_rhs                               = util::makeTeuchosRCP< tpetra_multivector_t >(m_operator_map, n_rhs);
+    m_solution                          = util::makeTeuchosRCP< tpetra_multivector_t >(m_operator_map, n_rhs);
     m_rhs_view                          = m_rhs->getLocalViewHost(Tpetra::Access::ReadWrite);
     m_diagonal                          = util::ArrayOwner< val_t >(all_dofs.size()); // Alloc shared inds for export
     const auto context = std::make_shared< comm::ImportExportContext< local_dof_t > >(*m_comm, owned_dofs, shared_dofs);
@@ -780,6 +789,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::applyImpl(const tp
     // synchronization - workers are free to resume evaluating the interior as soon as all border work is assigned, they
     // don't need to wait for the border to actually finish.
 
+    L3STER_PROFILE_REGION_BEGIN("Evaluate matrix-free operator");
     util::throwingAssert(x.getNumVectors() == n_rhs);
     util::throwingAssert(y.getNumVectors() == n_rhs);
     beta == 0. ? y.putScalar(0.) : y.scale(beta);
@@ -841,9 +851,12 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::applyImpl(const tp
                 dest.store(new_value, std::memory_order_relaxed);
             }
         };
+
         util::tbb::parallelFor(domains, visit_interior_domain);
+        L3STER_PROFILE_REGION_BEGIN("Impose Dirichlet BCs");
         if (m_dirichlet_bc)
             util::tbb::parallelFor(m_dirichlet_bc->getOwnedDirichletDofs(), handle_dirichlet_dof);
+        L3STER_PROFILE_REGION_END("Impose Dirichlet BCs");
     };
     interior_tasks.run_and_wait([&] { apply_interior(); });
     hp_arena.execute([&] { border_tasks.wait(); });
@@ -855,6 +868,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::applyImpl(const tp
 
     m_export->wait(util::AtomicSumInto{});
     m_import->wait();
+    L3STER_PROFILE_REGION_END("Evaluate matrix-free operator");
 }
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
@@ -875,22 +889,16 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::assertState(State 
 }
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
-auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::initSolution() const
-    -> Teuchos::RCP< tpetra_multivector_t >
-{
-    return util::makeTeuchosRCP< tpetra_multivector_t >(m_operator_map, n_rhs);
-}
-
-template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
 template < ResidualKernel_c Kernel, std::integral dofind_t, size_t n_fields >
 void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::setValues(
-    const Teuchos::RCP< tpetra_multivector_t >&                   solution,
+    const Teuchos::RCP< tpetra_multivector_t >&                   vector,
     const Kernel&                                                 kernel,
     const util::ArrayOwner< d_id_t >&                             domain_ids,
     const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
     const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
     val_t                                                         time)
 {
+    util::throwingAssert(vector->getNumVectors() == n_rhs);
     computeValuesAtNodes(kernel,
                          *m_comm,
                          m_interior_mesh,
@@ -900,7 +908,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::setValues(
                          m_node_dof_map,
                          dof_inds,
                          field_val_getter,
-                         solution->getLocalViewHost(Tpetra::Access::ReadWrite),
+                         vector->getLocalViewHost(Tpetra::Access::ReadWrite),
                          time);
 }
 
@@ -943,6 +951,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::setDirichletBCValu
     util::throwingAssert(m_dirichlet_bc.has_value(), "`setDirichletBCValues` called but no Dirichlet BCs were defined");
     if (not m_dirichlet_bc->isEmpty())
     {
+        const auto vals_to_set = std::array{std::span{values}};
         const auto owned_range = std::pair< size_t, size_t >{0, m_operator_map->getLocalNumElements()};
         computeValuesAtNodes(*m_comm,
                              m_interior_mesh,
@@ -951,7 +960,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::setDirichletBCValu
                              domain_ids,
                              m_node_dof_map,
                              dof_inds,
-                             values,
+                             vals_to_set,
                              Kokkos::subview(m_dirichlet_values, owned_range, Kokkos::ALL));
         m_bcs_need_import = true;
     }
@@ -959,10 +968,9 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::setDirichletBCValu
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
 void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::updateSolution(
-    const Teuchos::RCP< const tpetra_multivector_t >& solution,
-    const util::ArrayOwner< size_t >&                 sol_inds,
-    SolutionManager&                                  sol_man,
-    const util::ArrayOwner< size_t >&                 sol_man_inds)
+    const util::ArrayOwner< size_t >& sol_inds,
+    SolutionManager&                  sol_man,
+    const util::ArrayOwner< size_t >& sol_man_inds)
 {
     util::throwingAssert(sol_man_inds.size() == sol_inds.size() * n_rhs,
                          "Source and destination indices lengths must match");
@@ -971,7 +979,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::updateSolution(
     util::throwingAssert(std::ranges::none_of(sol_man_inds, [&](size_t i) { return i >= sol_man.nFields(); }),
                          "Destination index out of bounds");
 
-    const auto solution_view   = solution->getLocalViewHost(Tpetra::Access::ReadOnly);
+    const auto solution_view   = m_solution->getLocalViewHost(Tpetra::Access::ReadOnly);
     const auto solution_access = BorderAccessor{solution_view, const_view_t{m_import_shared_buf}};
     const auto sol_man_view    = sol_man.getRawView();
     const auto save_elem_vals  = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::LocalElementView< ET, EO >& elem) {

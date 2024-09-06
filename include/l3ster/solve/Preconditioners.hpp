@@ -1,6 +1,7 @@
 #ifndef L3STER_SOLVE_PRECONDITIONERS_HPP
 #define L3STER_SOLVE_PRECONDITIONERS_HPP
 
+#include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/TrilinosUtils.hpp"
 
 namespace lstr::solvers
@@ -92,8 +93,10 @@ public:
                           val_t alpha,
                           val_t beta) const
     {
+        L3STER_PROFILE_REGION_BEGIN("Apply Jacobi preconditioner");
         for (int i = 0; i != m_sweeps; ++i)
             Y.elementWiseMultiply(alpha, *m_diag_inv_damped, X, beta);
+        L3STER_PROFILE_REGION_END("Apply Jacobi preconditioner");
     }
 
 private:

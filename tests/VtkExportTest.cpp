@@ -43,9 +43,9 @@ void test2D(const std::shared_ptr< MpiComm >& comm)
     constexpr auto   vec_inds          = std::array< size_t, 2 >{1, 3};
     constexpr auto   all_field_inds    = util::makeIotaArray< size_t, problem_def.n_fields >();
 
-    auto system_manager   = makeAlgebraicSystem(comm, my_partition, problemdef_ctwrpr);
+    auto system_manager = makeAlgebraicSystem(comm, my_partition, problemdef_ctwrpr);
+    system_manager.endAssembly();
     auto solution_manager = SolutionManager{*my_partition, problem_def.n_fields};
-    auto solution         = system_manager.initSolution();
 
     constexpr auto params           = KernelParams{.dimension = 2, .n_equations = 2};
     const auto     bot_top_kernel   = wrapBoundaryResidualKernel< params >([&](const auto&, auto& out) {
@@ -61,9 +61,9 @@ void test2D(const std::shared_ptr< MpiComm >& comm)
         out[0]              = 1. - std::exp(lambda * p.x()) * std::cos(2. * pi * p.y());
         out[1]              = lambda * std::exp(lambda * p.x()) * std::sin(2 * pi * p.y()) / (2. * pi);
     });
-    system_manager.setValues(solution, kovasznay_kernel, {domain_id}, vec_inds);
-    system_manager.setValues(solution, bot_top_kernel, {bot_boundary, top_boundary}, scalar_inds);
-    system_manager.updateSolution(solution, all_field_inds, solution_manager, all_field_inds);
+    system_manager.setValues(system_manager.getSolution(), kovasznay_kernel, {domain_id}, vec_inds);
+    system_manager.setValues(system_manager.getSolution(), bot_top_kernel, {bot_boundary, top_boundary}, scalar_inds);
+    system_manager.updateSolution(all_field_inds, solution_manager, all_field_inds);
 
     auto       exporter        = PvtuExporter{comm, *my_partition};
     const auto field_names     = std::array{"C1"sv, "Cpi"sv, "vel"sv};
@@ -98,9 +98,9 @@ void test3D(const std::shared_ptr< MpiComm >& comm)
     constexpr auto   boundary_field_inds = std::array< size_t, 3 >{3, 4, 5};
     constexpr auto   field_inds          = util::makeIotaArray< size_t, n_fields >();
 
-    auto system_manager   = makeAlgebraicSystem(comm, my_partition, problemdef_ctwrpr);
+    auto system_manager = makeAlgebraicSystem(comm, my_partition, problemdef_ctwrpr);
+    system_manager.endAssembly();
     auto solution_manager = SolutionManager{*my_partition, n_fields};
-    auto solution         = system_manager.initSolution();
 
     constexpr auto ker_params   = KernelParams{.dimension = 3, .n_equations = 3};
     const auto     dom_kernel   = wrapDomainResidualKernel< ker_params >([&](const auto& in, auto& out) {
@@ -113,9 +113,10 @@ void test3D(const std::shared_ptr< MpiComm >& comm)
     constexpr auto boundary_ids = util::makeIotaArray< d_id_t, 6 >(1);
     const auto     bnd_kernel =
         wrapBoundaryResidualKernel< ker_params >([](const auto& in, auto& out) { out = in.normal; });
-    system_manager.setValues(solution, bnd_kernel, boundary_ids, boundary_field_inds);
-    system_manager.setValues(solution, dom_kernel, std::views::single(domain_id), domain_field_inds);
-    system_manager.updateSolution(solution, field_inds, solution_manager, field_inds);
+    system_manager.setValues(system_manager.getSolution(), bnd_kernel, boundary_ids, boundary_field_inds);
+    system_manager.setValues(
+        system_manager.getSolution(), dom_kernel, std::views::single(domain_id), domain_field_inds);
+    system_manager.updateSolution(field_inds, solution_manager, field_inds);
 
     auto       exporter    = PvtuExporter{comm, *my_partition};
     const auto field_names = std::array{"vec3D"sv, "normal"sv};

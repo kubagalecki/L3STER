@@ -6,6 +6,7 @@
 #include "l3ster/mapping/BoundaryNormal.hpp"
 #include "l3ster/mapping/ComputePhysBasisDer.hpp"
 #include "l3ster/mesh/Element.hpp"
+#include "l3ster/util/Caliper.hpp"
 
 namespace lstr::map
 {
@@ -70,6 +71,7 @@ auto mapDomain(JacobiMatGenerator&&                                            j
                const std::array< val_t, mesh::Element< ET, EO >::native_dim >& point,
                const RefDersMat< ET, EO >&                                     ref_basis_ders)
 {
+    L3STER_PROFILE_FUNCTION;
     using retval_t = DomainMappingResult< mesh::Element< ET, EO >::n_nodes, mesh::Element< ET, EO >::native_dim >;
     return retval_t{std::forward< JacobiMatGenerator >(jacobi_gen), point, ref_basis_ders};
 }
@@ -80,6 +82,7 @@ auto mapBoundary(JacobiMatGenerator&&                                           
                  const RefDersMat< ET, EO >&                                     ref_basis_ders,
                  el_side_t                                                       side)
 {
+    L3STER_PROFILE_FUNCTION;
     using retval_t = BoundaryMappingResult< mesh::Element< ET, EO >::n_nodes, mesh::Element< ET, EO >::native_dim >;
     constexpr auto el_typeinfo = util::ValuePack< ET, EO >{};
     return retval_t{std::forward< JacobiMatGenerator >(jacobi_gen), point, ref_basis_ders, side, el_typeinfo};

@@ -12,7 +12,11 @@ auto getExampleHexElement()
 {
     using el_t = mesh::Element< mesh::ElementType::Hex, O >;
     std::array< n_id_t, el_t::n_nodes > nodes;
-    std::iota(begin(nodes), end(nodes), 0);
+    n_id_t                              node = 0;
+    for (auto i : mesh::ElementTraits< mesh::Element< mesh::ElementType::Hex, O > >::boundary_node_inds)
+        nodes.at(i) = node++;
+    for (auto i : mesh::ElementTraits< mesh::Element< mesh::ElementType::Hex, O > >::internal_node_inds)
+        nodes.at(i) = node++;
     el_t element{nodes,
                  mesh::ElementData< mesh::ElementType::Hex, O >{{Point{0., 0., 0.},
                                                                  Point{1., 0., 0.},
