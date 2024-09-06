@@ -17,8 +17,8 @@ auto transposeOperators(const std::array< Eigen::Matrix< val_t, R, C, Maj >, N >
     -> std::array< Eigen::Matrix< val_t, C, R, Eigen::ColMajor >, N >
 {
     auto retval = std::array< Eigen::Matrix< val_t, C, R, Eigen::ColMajor >, N >{};
-    for (size_t i = 0; i != N; ++i)
-        retval[i] = operators[i].transpose();
+    for (auto&& [ret, op] : std::views::zip(retval, operators))
+        ret = op.transpose();
     return retval;
 }
 
@@ -37,7 +37,8 @@ auto computeATrans(const std::array< Eigen::Matrix< val_t, R, C, Eigen::ColMajor
 template < size_t operator_size, size_t update_size, size_t n_rhs >
 class OperatorEvaluationManager
 {
-    static constexpr size_t updates_per_batch = std::invoke([] {
+    static consteval size_t batchSizeHeuristic()
+    {
         constexpr size_t ilp_fma       = 2;
         constexpr size_t min_cols      = ilp_fma * util::simd_width / sizeof(val_t);
         const auto       try_fit_cache = [&](size_t cache_bytes) -> std::optional< size_t > {
@@ -55,7 +56,8 @@ class OperatorEvaluationManager
         for (auto cache_size : util::cache_sizes)
             retval = retval.or_else([&] { return try_fit_cache(cache_size); });
         return retval.value_or(std::lcm(min_cols, update_size) / update_size);
-    });
+    }
+    static constexpr size_t updates_per_batch = batchSizeHeuristic();
     static constexpr size_t batch_update_size = update_size * updates_per_batch;
     using batch_update_matrix_t = Eigen::Matrix< val_t, operator_size, batch_update_size, Eigen::ColMajor >;
     using operand_t             = Eigen::Matrix< val_t, operator_size, n_rhs, Eigen::ColMajor >;
@@ -97,12 +99,27 @@ bool OperatorEvaluationManager< operator_size, update_size, n_rhs >::fillBatch(
     const util::eigen::RowMajorMatrix< lstr::val_t, dim, n_bases >&               basis_ders,
     val_t                                                                         weight)
 {
+    // Note: this function is performance critical
+    // Filling the batch matrix column by column allows the compiler to keep the A^T columns in registers
+
+    L3STER_PROFILE_FUNCTION;
     const auto As_trans = detail::transposeOperators(kernel_result);
-    for (int basis = 0; basis != n_bases; ++basis)
+    using col_t         = Eigen::Vector< val_t, n_unknowns >;
+    for (int eq = 0; eq != update_size; ++eq)
     {
-        const auto bval = basis_vals[basis];
-        const auto At   = detail::computeATrans(As_trans, bval, basis_ders.col(basis));
-        m_update_matrix->template block< n_unknowns, update_size >(basis * n_unknowns, m_filled_cols) = At;
+        const auto  dest_col = m_filled_cols + eq;
+        const col_t val_col  = As_trans.front().col(eq);
+        auto        der_cols = std::array< col_t, dim >{};
+        for (int i = 0; i != dim; ++i)
+            der_cols[i] = As_trans[i + 1].col(eq);
+        for (int basis = 0; basis != n_bases; ++basis)
+        {
+            const auto dest_row = basis * n_unknowns;
+            col_t      col      = val_col * basis_vals[basis];
+            for (int d = 0; d != dim; ++d)
+                col += der_cols[d] * basis_ders(d, basis);
+            m_update_matrix->template block< n_unknowns, 1 >(dest_row, dest_col) = col;
+        }
     }
     m_weights.template segment< update_size >(m_filled_cols).setConstant(weight);
     m_filled_cols += update_size;
@@ -113,6 +130,7 @@ template < size_t operator_size, size_t update_size, size_t n_rhs >
 void OperatorEvaluationManager< operator_size, update_size, n_rhs >::flushImpl(
     auto&& update_block, const OperatorEvaluationManager::operand_t& x, OperatorEvaluationManager::operand_t& y)
 {
+    L3STER_PROFILE_FUNCTION;
     constexpr int intermediate_size = std::remove_cvref_t< decltype(update_block) >::ColsAtCompileTime;
     using A_times_x_t               = Eigen::Matrix< val_t, intermediate_size, 1, Eigen::ColMajor, batch_update_size >;
 
