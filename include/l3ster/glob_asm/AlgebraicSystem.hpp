@@ -56,7 +56,10 @@ public:
                               const std::array< dofind_t, n_vals >& dof_inds)
         requires(n_rhs == 1);
 
-    void solve(solvers::Solver_c auto& solver) const;
+    template < solvers::DirectSolver_c Solver >
+    void solve(Solver& solver) const;
+    template < solvers::IterativeSolver_c Solver >
+    IterSolveInfo solve(Solver& solver) const;
 
     template < IndexRange_c SolInds, IndexRange_c SolManInds >
     void updateSolution(SolInds&& sol_inds, SolutionManager& sol_man, SolManInds&& sol_man_inds);
@@ -105,7 +108,8 @@ private:
 };
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::solve(solvers::Solver_c auto& solver) const
+template < solvers::DirectSolver_c Solver >
+void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::solve(Solver& solver) const
 {
     L3STER_PROFILE_FUNCTION;
     m_solution->switchActiveMultiVector();
@@ -115,6 +119,21 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::solve(solvers::
 #ifdef L3STER_PROFILE_EXECUTION
     m_solution->getMap()->getComm()->barrier();
 #endif
+}
+
+template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
+template < solvers::IterativeSolver_c Solver >
+IterSolveInfo AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::solve(Solver& solver) const
+{
+    L3STER_PROFILE_FUNCTION;
+    m_solution->switchActiveMultiVector();
+    const auto solve_info = solver.solve(m_matrix, m_rhs, m_solution);
+    m_solution->doOwnedToOwnedPlusShared(Tpetra::CombineMode::REPLACE);
+    m_solution->switchActiveMultiVector();
+#ifdef L3STER_PROFILE_EXECUTION
+    m_solution->getMap()->getComm()->barrier();
+#endif
+    return solve_info;
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
