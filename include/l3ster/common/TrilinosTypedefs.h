@@ -13,12 +13,25 @@
 #pragma GCC diagnostic ignored "-Wvolatile"
 #pragma GCC diagnostic ignored "-Wconversion"
 #pragma GCC diagnostic ignored "-Wfloat-conversion"
+#pragma GCC diagnostic ignored "-Wreturn-type"
+#pragma GCC diagnostic ignored "-Wcpp"
 #endif
 
 #include "Kokkos_Core.hpp"
+
 #include "Tpetra_FECrsMatrix.hpp"
 #include "Tpetra_FEMultiVector.hpp"
 #include "Tpetra_Vector.hpp"
+
+#include "Ifpack2_Factory.hpp"
+
+#ifdef L3STER_TRILINOS_HAS_AMESOS2
+#include "Amesos2.hpp"
+#endif
+
+#ifdef L3STER_TRILINOS_HAS_BELOS
+#include "BelosSolverFactory_Tpetra.hpp"
+#endif
 
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic pop

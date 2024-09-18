@@ -43,7 +43,9 @@ include( "cmake/ImportLibrary.cmake" )
 
 # Import libraries
 # Trilinos
-define_trilinos_target( ${L3STER_ENABLE_VERBOSITY} 14.0 Tpetra Belos MueLu )
+set( L3STER_REQUIRED_Trilinos_PACKAGES "Kokkos;Tpetra;Ifpack2" )
+set( L3STER_OPTIONAL_Trilinos_PACKAGES "Belos;Amesos2;MueLu" )
+define_trilinos_target( ${L3STER_ENABLE_VERBOSITY} 14.0 "${L3STER_REQUIRED_Trilinos_PACKAGES}" "${L3STER_OPTIONAL_Trilinos_PACKAGES}" )
 list( APPEND L3STER_INTERFACE_DEPENDENCIES Trilinos )
 
 # Eigen
@@ -80,6 +82,10 @@ target_include_directories( L3STER INTERFACE
 set_target_properties( L3STER PROPERTIES INTERFACE_COMPILE_FEATURES cxx_std_23 )
 target_link_libraries( L3STER INTERFACE ${L3STER_CMAKE_DEPENDENCIES} )
 target_link_libraries( L3STER INTERFACE ${L3STER_INTERFACE_DEPENDENCIES} )
+foreach ( pkg IN LISTS L3STER_OPTIONAL_Trilinos_PACKAGES )
+    string( TOUPPER "${pkg}" PKG )
+    target_compile_definitions( L3STER INTERFACE "L3STER_TRILINOS_HAS_${PKG}" )
+endforeach ()
 
 # Explicitly state L3STER sources - this is helpful to the IDE, but not required for a correct build
 file( GLOB_RECURSE L3STER_SOURCES

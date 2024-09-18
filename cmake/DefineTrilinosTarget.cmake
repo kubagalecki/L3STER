@@ -9,27 +9,22 @@
 # Arguments:
 #   Verbosity       (bool)   - determines whether function will print status
 #   PackageList     (string) - built Trilinos packages (Trilinos_PACKAGE_LIST variable)
-#   PackageNames    (list)   - semicolon-separated list of packages to find (case insensitive)
+#   PackageNamesReq (list)   - semicolon-separated list of required Trilinos packages (case insensitive)
+#   PackageNamesOpt (list)   - semicolon-separated list of optional Trilinos packages (case insensitive), optional argument
 #
 # Return values (i.e. variables set in parent scope):
-#   MissingPackages (list)   - semicolon-separated list of packages which were not found
+#   MissingPackages (list)          - semicolon-separated list of required packages which were not found
+#   Trilinos_<Package>_FOUND (bool) - flags indicating which optional packages were found
 #
-function( detect_trilinos_packages Verbosity PackageList PackageNames )
+function( detect_trilinos_packages Verbosity PackageList PackageNamesReq )
 
-    if ( NOT PackageNames )
-        return()
-    endif ()
-
+    string( TOLOWER "${PackageList}" PackageList )
+    unset( MissingPackages )
     if ( Verbosity )
         message( STATUS "Detecting required Trilinos packages" )
         list( APPEND CMAKE_MESSAGE_INDENT "  " )
     endif ()
-
-    unset( MissingPackages )
-
-    string( TOLOWER "${PackageList}" PackageList )
-
-    foreach ( pkg IN LISTS PackageNames )
+    foreach ( pkg IN LISTS PackageNamesReq )
         if ( Verbosity )
             message( STATUS "Detecting ${pkg}" )
         endif ()
@@ -55,8 +50,37 @@ function( detect_trilinos_packages Verbosity PackageList PackageNames )
             message( STATUS "Detecting required Trilinos packages - all found" )
         endif ()
     endif ()
-
     set( MissingPackages "${MissingPackages}" PARENT_SCOPE )
+
+    if ( ${ARGC} GREATER_EQUAL 4 )
+        set( PackageNamesOpt "${ARGV3}" )
+        if ( Verbosity )
+            message( STATUS "Detecting optional Trilinos packages" )
+            list( APPEND CMAKE_MESSAGE_INDENT "  " )
+        endif ()
+        foreach ( pkg IN LISTS PackageNamesOpt )
+            if ( Verbosity )
+                message( STATUS "Detecting ${pkg}" )
+            endif ()
+            string( TOLOWER ${pkg} Name_LC )
+            list( FIND PackageList ${Name_LC} pkg_index )
+            if ( NOT pkg_index EQUAL -1 )
+                if ( Verbosity )
+                    message( STATUS "Detecting ${pkg} - found" )
+                endif ()
+                set( Trilinos_${pkg}_FOUND ON PARENT_SCOPE )
+            else ()
+                if ( Verbosity )
+                    message( STATUS "Detecting ${pkg} - not found" )
+                endif ()
+            endif ()
+        endforeach ()
+        if ( Verbosity )
+            list( POP_BACK CMAKE_MESSAGE_INDENT )
+            message( STATUS "Detecting optional Trilinos packages - finished" )
+        endif ()
+    endif ()
+
 endfunction()
 
 ###################################################################################################
@@ -132,14 +156,15 @@ endfunction()
 #   variable (see below) after this function completes.
 #
 # Arguments:
-#   Verbosity               (bool)   - determines whether function will print status
-#   PackageName...          (string) - each argument after the first will be treated as a case-
-#                                        insensitive name of a Trilinos package to be found
+#   Verbosity        (bool)    - determines whether function will print status
+#   Version          (string)  - minimum required version of trilinos
+#   PackageNamesReq  (list)    - semicolon-separated list of Trilinos packages which are required, optional argument
+#   PackageNamesOpt  (list)    - semicolon-separated list of Trilinos packages which are optional, optional argument
 #
 # Return values (i.e. variables set in parent scope):
 #   MissingTrilinosPackages (list)   - semicolon-separated list containing the names of the
-#                                        packages which were requested but not built, set only if
-#                                        at least one package was not found
+#                                      packages which were requested but not built, set only if
+#                                      at least one package was not found
 #
 function( define_trilinos_target Verbosity Version )
 
@@ -151,12 +176,14 @@ function( define_trilinos_target Verbosity Version )
     find_package( Trilinos REQUIRED )
     check_package_version( Trilinos "${Version}" "${Trilinos_VERSION}" )
     if ( NOT Trilinos_VERSION_OK )
-        message( FATAL_ERROR "The provided version of Trilinos is less than the required version.\nProvided: ${Trilinos_VERSION}. Required: ${Version}" )
+        message( SEND_ERROR "The provided version of Trilinos is less than the required version.\nProvided: ${Trilinos_VERSION}. Required: ${Version}" )
     endif ()
 
-    if ( NOT ${Trilinos_CXX_COMPILER} STREQUAL ${CMAKE_CXX_COMPILER} )
+    file( REAL_PATH "${Trilinos_CXX_COMPILER}" Trilinos_CXX_COMPILER )
+    file( REAL_PATH "${CMAKE_CXX_COMPILER}" abspath_CXX_COMPILER )
+    if ( NOT "${Trilinos_CXX_COMPILER}" STREQUAL "${abspath_CXX_COMPILER}" )
         message( WARNING " Detected different C++ compiler than the one Trilinos was built with.\n"
-                 " Detected compiler:               ${CMAKE_CXX_COMPILER}\n"
+                 " Detected compiler:               ${abspath_CXX_COMPILER}\n"
                  " Compiler used to build Trilinos: ${Trilinos_CXX_COMPILER}\n"
                  "You should likely be using an MPI compiler wrapper (e.g. mpic++) to compile L3STER applications. "
                  "The wrapper is responsible for linking against MPI. If you have multiple versions of MPI installed, "
@@ -165,12 +192,21 @@ function( define_trilinos_target Verbosity Version )
                  "that you are responsible for ensuring compatibility. If you're uncertain of what this all means, "
                  "it's probably safest to force CMake to configure using the compiler specified above by passing:\n"
                  " -DCMAKE_CXX_COMPILER=${Trilinos_CXX_COMPILER}\n"
-                 "or setting the equivalent in a toolchain file.\n"
-                 "Please note that this warning only compares the path strings of the two compilers. If the two paths "
-                 "printed above alias the same file, please disregard this warning.\n" )
+                 "or setting the equivalent in a toolchain file.\n" )
     endif ()
 
-    detect_trilinos_packages( ${Verbosity} "${Trilinos_PACKAGE_LIST}" "${ARGN}" )
+    if ( ${ARGC} GREATER_EQUAL 4 )
+        detect_trilinos_packages( ${Verbosity} "${Trilinos_PACKAGE_LIST}" "${ARGV2}" "${ARGV3}" )
+        foreach ( pkg IN LISTS PackageNamesOpt )
+            if ( Trilinos_${pkg}_FOUND )
+                set( Trilinos_${pkg}_FOUND ON PARENT_SCOPE )
+            endif ()
+        endforeach ()
+    elseif ( ${ARGC} EQUAL 3 )
+        detect_trilinos_packages( ${Verbosity} "${Trilinos_PACKAGE_LIST}" "${ARGV2}" )
+    elseif ( ${ARGC} EQUAL 2 )
+        detect_trilinos_packages( ${Verbosity} "${Trilinos_PACKAGE_LIST}" "" )
+    endif ()
     if ( MissingPackages )
         string( REPLACE ";" "\n- " fmt_mp "${MissingPackages}" )
         message( SEND_ERROR " Trilinos was built without the following required packages:\n- ${fmt_mp}\n" )

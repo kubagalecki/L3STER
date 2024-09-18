@@ -106,7 +106,7 @@ int main(int argc, char* argv[])
     constexpr auto dirichlet_bc_kernel =
         wrapBoundaryResidualKernel< dbc_params >([](const auto&, auto& out) { out[0] = 0.; });
 
-    constexpr auto alg_params    = AlgebraicSystemParams{.cond_policy = CondensationPolicy::None};
+    constexpr auto alg_params    = AlgebraicSystemParams{.cond_policy = CondensationPolicy::ElementBoundary};
     constexpr auto algpar_ctwrpr = L3STER_WRAP_CTVAL(alg_params);
     auto alg_system = makeAlgebraicSystem(comm, my_partition, probdef_ctwrpr, dirichletdef_ctwrpr, algpar_ctwrpr);
     alg_system.beginAssembly();

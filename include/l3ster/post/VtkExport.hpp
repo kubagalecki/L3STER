@@ -173,7 +173,7 @@ consteval size_t numSubels()
     else if constexpr (ET == mesh::ElementType::Hex)
         return el_o * el_o * el_o;
     else
-        static_assert(ET != ET); // Assert every element type has a corresponding branch
+        static_assert(util::always_false< ET >); // Assert every element type has a corresponding branch
 }
 
 template < mesh::ElementType ET, el_o_t EO >
@@ -186,7 +186,7 @@ consteval size_t numSubelNodes()
     else if constexpr (ET == mesh::ElementType::Hex)
         return 8;
     else
-        static_assert(ET != ET); // Assert every element type has a corresponding branch
+        static_assert(util::always_false< ET >); // Assert every element type has a corresponding branch
 }
 
 template < mesh::ElementType ET, el_o_t EO >
@@ -205,7 +205,7 @@ consteval unsigned char subelCellType()
     else if constexpr (ET == mesh::ElementType::Hex)
         return 12;
     else
-        static_assert(ET != ET); // Assert every element type has a corresponding branch
+        static_assert(util::always_false< ET >); // Assert every element type has a corresponding branch
 }
 
 template < mesh::ElementType ET, el_o_t EO >
@@ -257,7 +257,7 @@ auto serializeElementSubtopo(const mesh::Element< ET, EO >& element)
                 }
     }
     else
-        static_assert(ET != ET); // Assert every element type has a corresponding branch
+        static_assert(util::always_false< ET >); // Assert every element type has a corresponding branch
     return retval;
 }
 
@@ -317,7 +317,7 @@ auto serializeTopology(const mesh::MeshPartition< orders... >& mesh)
         });
         std::fill_n(std::back_inserter(cell_types), numSubels< ET, EO >(), subelCellType< ET, EO >());
         std::generate_n(std::back_inserter(offsets), numSubels< ET, EO >(), [&offset]() {
-            offset += numSubelNodes< ET, EO >();
+            offset += static_cast< decltype(offset) >(numSubelNodes< ET, EO >());
             return offset;
         });
     };

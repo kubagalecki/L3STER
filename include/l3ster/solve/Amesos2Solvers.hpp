@@ -1,23 +1,8 @@
 #ifndef L3STER_AMESOS2SOLVERS_HPP
 #define L3STER_AMESOS2SOLVERS_HPP
 
+#include "l3ster/common/TrilinosTypedefs.h"
 #include "l3ster/solve/SolverInterface.hpp"
-
-// Disable diagnostics triggered by Trilinos
-#if defined(__GNUC__) || defined(__GNUG__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wreturn-type"
-#pragma GCC diagnostic ignored "-Wconversion"
-#pragma GCC diagnostic ignored "-Wfloat-conversion"
-#pragma GCC diagnostic ignored "-Wvolatile"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#endif
-
-#include "Amesos2.hpp"
-
-#if defined(__GNUC__) || defined(__GNUG__)
-#pragma GCC diagnostic pop
-#endif
 
 namespace lstr::solvers
 {

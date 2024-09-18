@@ -1,23 +1,9 @@
 #ifndef L3STER_SOLVE_PRECONDITIONER_MANAGER_HPP
 #define L3STER_SOLVE_PRECONDITIONER_MANAGER_HPP
 
+#include "l3ster/common/TrilinosTypedefs.h"
 #include "l3ster/solve/Preconditioners.hpp"
 #include "l3ster/util/Meta.hpp"
-
-// Disable diagnostics triggered by Trilinos
-#if defined(__GNUC__) || defined(__GNUG__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wreturn-type"
-#pragma GCC diagnostic ignored "-Wconversion"
-#pragma GCC diagnostic ignored "-Wfloat-conversion"
-#pragma GCC diagnostic ignored "-Wvolatile"
-#endif
-
-#include "Ifpack2_Factory.hpp"
-
-#if defined(__GNUC__) || defined(__GNUG__)
-#pragma GCC diagnostic pop
-#endif
 
 #include <algorithm>
 #include <array>

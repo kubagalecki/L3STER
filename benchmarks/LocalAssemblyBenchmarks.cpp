@@ -101,6 +101,36 @@ inline constexpr auto ns3d_kernel = [](const auto& in, auto& out) {
     rhs[2] = u * wx + v * wy + w * wz;
 };
 
+inline constexpr auto diff3d_kernel = [](const auto&, auto& out) {
+    auto& [operators, rhs] = out;
+    auto& [A0, Ax, Ay, Az] = operators;
+
+    constexpr double k = 1.; // diffusivity
+    constexpr double s = 1.; // source
+
+    // -k * div q = s
+    Ax(0, 1) = -k;
+    Ay(0, 2) = -k;
+    Az(0, 3) = -k;
+    rhs[0]   = s;
+
+    // grad T = q
+    A0(1, 1) = -1.;
+    Ax(1, 0) = 1.;
+    A0(2, 2) = -1.;
+    Ay(2, 0) = 1.;
+    A0(3, 3) = -1.;
+    Az(3, 0) = 1.;
+
+    // rot q = 0
+    Ay(4, 3) = 1.;
+    Az(4, 2) = -1.;
+    Ax(5, 3) = -1.;
+    Az(5, 1) = 1.;
+    Ax(6, 2) = 1.;
+    Ay(6, 1) = -1.;
+};
+
 template < el_o_t EO >
 static void BM_NS3DLocalAssembly(benchmark::State& state)
 {
@@ -184,7 +214,7 @@ static void BM_NS3DLocalEvaluation(benchmark::State& state)
 
     const auto flops_per_qp = /* physical basis derivative computation */ n_nodes * 3 * 3 * 2 +
                               /* field value computation */ n_fields * n_nodes * 2 * 4 +
-                              /* operator evaluation */ loc_mat_rows * n_eq * 4 + n_eq * 2;
+                              /* operator evaluation */ params.n_equations * (n_nodes * params.n_unknowns * 4 + 2);
     const auto n_qp           = ref_bas_at_quad.quadrature.size;
     state.counters["DPFlops"] = benchmark::Counter{static_cast< double >(state.iterations()) * n_qp * flops_per_qp,
                                                    benchmark::Counter::kIsRate,
@@ -197,3 +227,48 @@ static void BM_NS3DLocalEvaluation(benchmark::State& state)
 NS3D_EVAL_BENCH(2, Microsecond);
 NS3D_EVAL_BENCH(4, Millisecond);
 NS3D_EVAL_BENCH(6, Second);
+
+template < el_o_t EO >
+static void BM_DiffS3DLocalEvaluation(benchmark::State& state)
+{
+    constexpr auto  params = KernelParams{.dimension = 3, .n_equations = 7, .n_unknowns = 4};
+    constexpr auto  QT     = quad::QuadratureType::GaussLegendre;
+    constexpr auto  BT     = basis::BasisType::Lagrange;
+    constexpr q_o_t QO     = 2 * EO;
+
+    const auto element            = getExampleHexElement< EO >();
+    const auto node_map           = mesh::NodeMap{std::views::iota(0uz, element.getNodes().size())};
+    const auto local_element      = mesh::LocalElementView{element, node_map, {}};
+    using nodal_vals_t            = Eigen::Matrix< val_t, element.n_nodes, params.n_fields >;
+    const nodal_vals_t nodal_vals = nodal_vals_t::Random();
+    constexpr auto     n_nodes    = mesh::Element< mesh::ElementType ::Hex, EO >::n_nodes;
+
+    const auto& ref_bas_at_quad =
+        basis::getReferenceBasisAtDomainQuadrature< BT, mesh::ElementType::Hex, EO, QT, QO >();
+
+    constexpr auto kernel = wrapDomainEquationKernel< params >(diff3d_kernel);
+
+    Eigen::Vector< val_t, element.n_nodes * params.n_unknowns > x;
+    x.setRandom();
+
+    for (auto _ : state)
+    {
+        auto y = glob_asm::evaluateLocalOperator(kernel, local_element, nodal_vals, ref_bas_at_quad, 0., x);
+        benchmark::DoNotOptimize(y);
+    }
+
+    const auto flops_per_qp = /* physical basis derivative computation */ n_nodes * 3 * 3 * 2 +
+                              /* field value computation */ params.n_fields * n_nodes * 2 * 4 +
+                              /* operator evaluation */ params.n_equations * (n_nodes * params.n_unknowns * 4 + 2);
+    const auto n_qp           = ref_bas_at_quad.quadrature.size;
+    state.counters["DPFlops"] = benchmark::Counter{static_cast< double >(state.iterations()) * n_qp * flops_per_qp,
+                                                   benchmark::Counter::kIsRate,
+                                                   benchmark::Counter::kIs1000};
+}
+#define DIFF3D_EVAL_BENCH(ELO, UNIT)                                                                                   \
+    BENCHMARK_TEMPLATE(BM_DiffS3DLocalEvaluation, ELO)                                                                 \
+        ->Name("Local Diff3D operator evaluation [Hex, EO " #ELO "]")                                                  \
+        ->Unit(benchmark::k##UNIT);
+DIFF3D_EVAL_BENCH(2, Microsecond);
+DIFF3D_EVAL_BENCH(4, Microsecond);
+DIFF3D_EVAL_BENCH(6, Millisecond);

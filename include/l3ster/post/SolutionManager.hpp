@@ -4,8 +4,8 @@
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/util/EigenUtils.hpp"
 #include "l3ster/util/RobinHoodHashTables.hpp"
+#include "l3ster/util/TrilinosUtils.hpp"
 
-#include "Kokkos_Core.hpp"
 #include <memory>
 
 namespace lstr
