@@ -6,19 +6,19 @@
 FROM ubuntu:latest
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata && apt-get upgrade -y --fix-missing
-RUN apt-get install -y git curl tar python3 unzip xz-utils bzip2 lbzip2 patch binutils cmake make gcovr gpg gcc-12 g++-12 gfortran-12
+RUN apt-get install -y git curl tar python3 unzip xz-utils bzip2 lbzip2 patch binutils cmake make gcovr gpg gcc g++ gfortran
 RUN git clone https://github.com/spack/spack.git && \
-    cd spack && git checkout tags/v0.19.0 -b v0.19.0 && cd .. && \
+    cd spack && git checkout tags/v0.22.2 -b v0.22.2 && cd .. && \
     . spack/share/spack/setup-env.sh && spack compiler find
 RUN . spack/share/spack/setup-env.sh && \
     spack external find tar xz curl git cmake && \
-    spack install trilinos@13.4.0 cxxstd=17 +openmp && \
+    spack install trilinos cxxstd=17 +openmp +amesos2 +belos +tpetra +ifpack2 ^kokkos +openmp&& \
     spack gc -y && \
     spack clean -a
 RUN . spack/share/spack/setup-env.sh && \
     spack install eigen && \
-    spack install catch2@2.13.8 && \
+    spack install catch2@2.13.10 && \
     spack install intel-oneapi-tbb && \
-    spack install metis && \
+    spack install parmetis && \
     spack gc -y && \
     spack clean -a
