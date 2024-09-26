@@ -7,7 +7,7 @@ else
 fi
 
 . /spack/share/spack/setup-env.sh
-spack load eigen catch2 tbb trilinos mpi metis
+spack env activate build-env
 
 mkdir -p build
 cd build || exit 1

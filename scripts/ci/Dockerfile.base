@@ -7,18 +7,10 @@ FROM ubuntu:latest
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata && apt-get upgrade -y --fix-missing
 RUN apt-get install -y git curl tar python3 unzip xz-utils bzip2 lbzip2 patch binutils cmake make gcovr gpg gcc g++ gfortran
-RUN git clone https://github.com/spack/spack.git && \
-    cd spack && git checkout tags/v0.22.2 -b v0.22.2 && cd .. && \
-    . spack/share/spack/setup-env.sh && spack compiler find
-RUN . spack/share/spack/setup-env.sh && \
-    spack external find tar xz curl git cmake && \
-    spack install trilinos cxxstd=17 +openmp +amesos2 +belos +tpetra +ifpack2 ^kokkos +openmp&& \
-    spack gc -y && \
-    spack clean -a
-RUN . spack/share/spack/setup-env.sh && \
-    spack install eigen && \
-    spack install catch2@2.13.10 && \
-    spack install intel-oneapi-tbb && \
-    spack install parmetis && \
-    spack gc -y && \
-    spack clean -a
+RUN git clone https://github.com/spack/spack.git &&\
+  cd spack && git checkout tags/v0.22.2 -b v0.22.2 && cd .. &&\
+  . spack/share/spack/setup-env.sh && spack compiler find && spack external find binutils cmake coreutils curl diffutils findutils git gmake openssh perl python sed tar
+RUN . spack/share/spack/setup-env.sh &&\
+  spack env create build-env && spack env activate build-env &&\
+  spack add eigen catch2@2.13.10 intel-oneapi-tbb parmetis kokkos+openmp trilinos cxxstd=17 +openmp +amesos2 +belos +tpetra +ifpack2 +muelu
+RUN . spack/share/spack/setup-env.sh && spack env activate build-env && spack concretize && spack install && spack gc -y && spack clean -a
