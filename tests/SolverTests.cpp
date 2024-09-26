@@ -1,42 +1,13 @@
 #include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/solve/Amesos2Solvers.hpp"
 #include "l3ster/solve/BelosSolvers.hpp"
-
-#include "Tpetra_Core.hpp"
+#include "l3ster/solve/Ifpack2Preconditioners.hpp"
+#include "l3ster/solve/NativePreconditioners.hpp"
 
 #include <numeric>
 
 using namespace lstr;
-
-/*
-// A view of Tpetra::CrsMatrix as a Tpetra::Operator outside the inheritance hierarchy
-class TpetraMatrixAsOperatorStrongUpcast : virtual public util::DiagonalAwareOperator
-{
-public:
-    TpetraMatrixAsOperatorStrongUpcast(const Teuchos::RCP< const tpetra_crsmatrix_t >& matrix) : m_matrix{matrix} {}
-
-    Teuchos::RCP< const tpetra_map_t > getDomainMap() const override { return m_matrix->getDomainMap(); }
-    Teuchos::RCP< const tpetra_map_t > getRangeMap() const override { return m_matrix->getRangeMap(); }
-    bool                               hasTransposeApply() const override { return m_matrix->hasTransposeApply(); }
-    void                               apply(const tpetra_multivector_t& x,
-                                             tpetra_multivector_t&       y,
-                                             Teuchos::ETransp            trans,
-                                             val_t                       alpha,
-                                             val_t                       beta) const override
-    {
-        m_matrix->apply(x, y, trans, alpha, beta);
-    }
-
-    Teuchos::RCP< tpetra_vector_t > initDiagonalCopy() const override
-    {
-        return util::makeTeuchosRCP< tpetra_vector_t >(m_matrix->getRowMap(), false);
-    }
-    void fillDiagonalCopy(tpetra_vector_t& diag) const override { m_matrix->getLocalDiagCopy(diag); };
-
-private:
-    Teuchos::RCP< const tpetra_crsmatrix_t > m_matrix;
-};
-*/
+using namespace lstr::solvers;
 
 // Make 1D diffusion matrix
 auto makeSPDMatrix(size_t size) -> Teuchos::RCP< const tpetra_crsmatrix_t >
@@ -118,7 +89,8 @@ auto makeSPDMatrix(size_t size) -> Teuchos::RCP< const tpetra_crsmatrix_t >
     return matrix;
 }
 
-auto equalMV(const tpetra_multivector_t& v1, const tpetra_multivector_t& v2) -> std::vector< val_t >
+#ifdef L3STER_TRILINOS_HAS_AMESOS2
+auto diffMVNorm(const tpetra_multivector_t& v1, const tpetra_multivector_t& v2) -> val_t
 {
     auto diff = createCopy(v1);
     {
@@ -133,115 +105,114 @@ auto equalMV(const tpetra_multivector_t& v1, const tpetra_multivector_t& v2) -> 
 
     auto col_norms = std::vector< val_t >(diff.getNumVectors());
     diff.norm2(col_norms);
-    return col_norms;
+    return std::sqrt(
+        std::transform_reduce(col_norms.begin(), col_norms.end(), 0., std::plus{}, [](auto n) { return n * n; }));
 }
 
-bool checkNorms(const std::vector< val_t >& norms, std::string_view test_name, val_t tol = 1e-6)
+void printDirectHeader()
 {
-    const auto pass = std::ranges::all_of(norms, [tol](val_t n) { return n <= tol; });
-    int        rank{};
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    if (rank == 0)
-    {
-        std::cout << std::format("{:15}{}\n{:15}", (pass ? "Passed test:" : "Failed test:"), test_name, "Error norms:");
-        for (auto n : norms)
-            std::cout << n << '\t';
-        std::cout << "\n\n";
-    }
-    return pass;
+    std::cout << std::format("{:-^73}\n{:^15}{:^12}{:^10}\n", " DIRECT SOLVER TESTS ", "Name", "Error", "Status");
 }
 
-bool lapackTest(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
-                const Teuchos::RCP< tpetra_multivector_t >&       x,
-                const Teuchos::RCP< const tpetra_multivector_t >& b,
-                const tpetra_multivector_t&                       solution)
+template < DirectSolver_c Solver >
+bool runDirectTest(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
+                   const Teuchos::RCP< tpetra_multivector_t >&       x,
+                   const Teuchos::RCP< const tpetra_multivector_t >& b,
+                   const tpetra_multivector_t&                       solution,
+                   std::string_view                                  name)
 {
-    auto solver = solvers::Lapack{};
-    solver.solve(A, b, x);
-    const auto norms = equalMV(solution, *x);
+    auto solver = Solver{};
     x->putScalar(0.);
-    return checkNorms(norms, "Lapack direct solver", 1e-10);
+    solver.solve(A, b, x);
+    const auto err_norm = diffMVNorm(*x, solution);
+    const bool passed   = err_norm <= 1e-8;
+    if (A->getComm()->getRank() == 0)
+        std::cout << std::format("{:<15}{:^12.3}{:^10}\n", name, err_norm, passed ? "PASS" : "FAIL");
+    return passed;
 }
 
-bool klu2Test(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
-              const Teuchos::RCP< tpetra_multivector_t >&       x,
-              const Teuchos::RCP< const tpetra_multivector_t >& b,
-              const tpetra_multivector_t&                       solution)
+bool directSolverSuite(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
+                       const Teuchos::RCP< tpetra_multivector_t >&       x,
+                       const Teuchos::RCP< const tpetra_multivector_t >& b,
+                       const tpetra_multivector_t&                       solution)
 {
-    auto solver = solvers::KLU2{};
-    solver.solve(A, b, x);
-    const auto norms = equalMV(solution, *x);
-    x->putScalar(0.);
-    return checkNorms(norms, "KLU2 direct solver", 1e-10);
+    bool passed = true;
+    if (A->getComm()->getRank() == 0)
+        printDirectHeader();
+
+    if (A->getComm()->getSize() == 1) // KLU2 fails when nranks > 1 :(
+        passed &= runDirectTest< ::lstr::solvers::KLU2 >(A, x, b, solution, "Amesos2::KLU2");
+    passed &= runDirectTest< ::lstr::solvers::Lapack >(A, x, b, solution, "Amesos2::Lapack");
+
+    if (A->getComm()->getRank() == 0)
+        std::cout << std::endl;
+    return passed;
 }
 
-bool cgNoprecTest(const Teuchos::RCP< const tpetra_operator_t >&    A,
-                  const Teuchos::RCP< tpetra_multivector_t >&       x,
-                  const Teuchos::RCP< const tpetra_multivector_t >& b,
-                  const tpetra_multivector_t&                       solution)
+#else
+bool directSolverSuite(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
+                       const Teuchos::RCP< tpetra_multivector_t >&       x,
+                       const Teuchos::RCP< const tpetra_multivector_t >& b,
+                       const tpetra_multivector_t&                       solution)
 {
-    auto solver = CG{{.verbosity{.summary = false}}};
-    solver.solve(A, b, x);
-    const auto norms = equalMV(solution, *x);
-    x->putScalar(0.);
-    return checkNorms(norms, "Unpreconditioned CG solver", 1e-5);
+    return true;
+}
+#endif
+
+#ifdef L3STER_TRILINOS_HAS_BELOS
+void printIterHeader()
+{
+    std::cout << std::format(
+        "{:-^73}\n{:^35}{:^12}{:^16}{:^10}\n", " ITERATIVE SOLVER TESTS ", "Name", "Error", "Iterations", "Status");
 }
 
-bool cgRichardsonTest(const Teuchos::RCP< const tpetra_operator_t >&    A,
-                      const Teuchos::RCP< tpetra_multivector_t >&       x,
-                      const Teuchos::RCP< const tpetra_multivector_t >& b,
-                      const tpetra_multivector_t&                       solution)
+template < PreconditionerOptions_c Opts = NullPreconditioner::Options >
+bool runIterTest(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
+                 const Teuchos::RCP< tpetra_multivector_t >&       x,
+                 const Teuchos::RCP< const tpetra_multivector_t >& b,
+                 std::string_view                                  name,
+                 const Opts&                                       precond_opts = {})
 {
-    const auto solver_opts  = IterSolverOpts{.verbosity = {.summary = false}};
-    auto       precond_opts = RichardsonOpts{.damping = .5};
-    auto       solver       = CG{solver_opts, precond_opts};
-    solver.solve(A, b, x);
-    const auto norms = equalMV(solution, *x);
+    const auto solver_opts = IterSolverOpts{.verbosity = {.summary = false}};
+    auto       solver      = CG{solver_opts, precond_opts};
     x->putScalar(0.);
-    return checkNorms(norms, "Richardson preconditioner + CG solver", 1e-5);
+    const auto [err_norm, iters] = solver.solve(A, b, x);
+    const bool passed            = err_norm <= IterSolverOpts{}.tol;
+    if (A->getComm()->getRank() == 0)
+        std::cout << std::format("{:<35}{:^12.3e}{:^16}{:^10}\n", name, err_norm, iters, passed ? "PASS" : "FAIL");
+    return passed;
 }
 
-bool cgJacobiTest(const Teuchos::RCP< const tpetra_operator_t >&    A,
-                  const Teuchos::RCP< tpetra_multivector_t >&       x,
-                  const Teuchos::RCP< const tpetra_multivector_t >& b,
-                  const tpetra_multivector_t&                       solution)
+bool iterativeSolverSuite(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
+                          const Teuchos::RCP< tpetra_multivector_t >&       x,
+                          const Teuchos::RCP< const tpetra_multivector_t >& b)
 {
-    const auto solver_opts  = IterSolverOpts{.verbosity = {.summary = false}};
-    auto       precond_opts = JacobiOpts{.damping = .5};
-    auto       solver       = CG{solver_opts, precond_opts};
-    solver.solve(A, b, x);
-    const auto norms = equalMV(solution, *x);
-    x->putScalar(0.);
-    return checkNorms(norms, "Jacobi preconditioner + CG solver", 1e-5);
-}
+    bool passed = true;
+    if (A->getComm()->getRank() == 0)
+        printIterHeader();
+    passed &= runIterTest(A, x, b, "CG without precond.");
+    passed &= runIterTest(A, x, b, "CG + native Richardson precond.", NativeRichardsonOpts{});
+    passed &= runIterTest(A, x, b, "CG + native Jacobi precond.", NativeJacobiOpts{});
 
-bool cgSGSTest(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
-               const Teuchos::RCP< tpetra_multivector_t >&       x,
-               const Teuchos::RCP< const tpetra_multivector_t >& b,
-               const tpetra_multivector_t&                       solution)
-{
-    const auto solver_opts  = IterSolverOpts{.verbosity = {.summary = false}};
-    auto       precond_opts = SGSOpts{.damping = .5};
-    auto       solver       = CG{solver_opts, precond_opts};
-    solver.solve(A, b, x);
-    const auto norms = equalMV(solution, *x);
-    x->putScalar(0.);
-    return checkNorms(norms, "Ifpack2 symmetric Gauss-Seidl preconditioner + CG solver", 1e-5);
-}
+#ifdef L3STER_TRILINOS_HAS_IFPACK2
+    passed &= passed &= runIterTest(A, x, b, "CG + Ifpack2 Richardson precond.", Ifpack2RichardsonOpts{});
+    passed &= passed &= runIterTest(A, x, b, "CG + Ifpack2 Jacobi precond.", Ifpack2JacobiOpts{});
+    passed &= passed &= runIterTest(A, x, b, "CG + Ifpack2 SGS precond.", Ifpack2SGSOpts{});
+    passed &= passed &= runIterTest(A, x, b, "CG + Ifpack2 Chebyshev precond.", Ifpack2ChebyshevOpts{});
+#endif
 
-bool cgChebyshevTest(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
-                     const Teuchos::RCP< tpetra_multivector_t >&       x,
-                     const Teuchos::RCP< const tpetra_multivector_t >& b,
-                     const tpetra_multivector_t&                       solution)
-{
-    const auto solver_opts  = IterSolverOpts{.verbosity = {.summary = false}};
-    auto       precond_opts = ChebyshevOpts{.degree = 3};
-    auto       solver       = CG{solver_opts, precond_opts};
-    solver.solve(A, b, x);
-    const auto norms = equalMV(solution, *x);
-    x->putScalar(0.);
-    return checkNorms(norms, "Ifpack2 3rd order Chebyshev preconditioner + CG solver", 1e-5);
+    if (A->getComm()->getRank() == 0)
+        std::cout << std::endl;
+    return passed;
 }
+#else
+bool iterativeSolverSuite(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
+                          const Teuchos::RCP< tpetra_multivector_t >&       x,
+                          const Teuchos::RCP< const tpetra_multivector_t >& b)
+{
+    return true;
+}
+#endif
 
 int main(int argc, char* argv[])
 {
@@ -256,7 +227,6 @@ int main(int argc, char* argv[])
     const auto A = makeSPDMatrix(size);
     const auto x = util::makeTeuchosRCP< tpetra_multivector_t >(A->getRowMap(), n_rhs);
     const auto b = util::makeTeuchosRCP< tpetra_multivector_t >(A->getRowMap(), n_rhs);
-    //    const auto A_mfop = util::makeTeuchosRCP< TpetraMatrixAsOperatorStrongUpcast >(A);
 
     x->randomize();
     const auto solution = createCopy(*x);
@@ -267,20 +237,8 @@ int main(int argc, char* argv[])
     bool pass = true;
 
     // Direct solvers
-    pass &= lapackTest(A, x, b, solution);
-    pass &= A->getComm()->getSize() != 1 ? true : klu2Test(A, x, b, solution); // KLU2 fails when nranks > 1 :(
-
-    // CG with Ifpack2 preconditioners
-    pass &= cgNoprecTest(A, x, b, solution);
-    pass &= cgRichardsonTest(A, x, b, solution);
-    pass &= cgJacobiTest(A, x, b, solution);
-    pass &= cgSGSTest(A, x, b, solution);
-    pass &= cgChebyshevTest(A, x, b, solution);
-
-    // CG with native preconditioners
-    pass &= cgNoprecTest(A, x, b, solution);
-    pass &= cgRichardsonTest(A, x, b, solution);
-    pass &= cgJacobiTest(A, x, b, solution);
+    pass &= directSolverSuite(A, x, b, solution);
+    pass &= iterativeSolverSuite(A, x, b);
 
     return pass ? EXIT_SUCCESS : EXIT_FAILURE;
 }

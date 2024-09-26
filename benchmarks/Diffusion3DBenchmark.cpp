@@ -116,7 +116,7 @@ int main(int argc, char* argv[])
     alg_system.describe();
 
     constexpr auto solver_opts  = IterSolverOpts{.verbosity = {.summary = true, .timing = true}};
-    constexpr auto precond_opts = JacobiOpts{};
+    constexpr auto precond_opts = Ifpack2JacobiOpts{};
     auto           solver       = CG{solver_opts, precond_opts};
     alg_system.solve(solver);
 

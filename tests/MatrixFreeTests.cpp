@@ -6,6 +6,7 @@
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 #include "l3ster/post/NormL2.hpp"
 #include "l3ster/solve/BelosSolvers.hpp"
+#include "l3ster/solve/NativePreconditioners.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
 using namespace lstr;
@@ -81,7 +82,7 @@ int main(int argc, char* argv[])
     alg_sys.endAssembly();
 
     constexpr auto solver_opts  = IterSolverOpts{.tol = 1e-10};
-    constexpr auto precond_opts = JacobiOpts{};
+    constexpr auto precond_opts = NativeJacobiOpts{};
     auto           solver       = CG{solver_opts, precond_opts};
     alg_sys.solve(solver);
 

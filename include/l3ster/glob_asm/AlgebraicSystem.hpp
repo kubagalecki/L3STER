@@ -59,7 +59,7 @@ public:
     template < solvers::DirectSolver_c Solver >
     void solve(Solver& solver) const;
     template < solvers::IterativeSolver_c Solver >
-    IterSolveInfo solve(Solver& solver) const;
+    IterSolveResult solve(Solver& solver) const;
 
     template < IndexRange_c SolInds, IndexRange_c SolManInds >
     void updateSolution(SolInds&& sol_inds, SolutionManager& sol_man, SolManInds&& sol_man_inds);
@@ -123,7 +123,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::solve(Solver& s
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
 template < solvers::IterativeSolver_c Solver >
-IterSolveInfo AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::solve(Solver& solver) const
+IterSolveResult AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::solve(Solver& solver) const
 {
     L3STER_PROFILE_FUNCTION;
     m_solution->switchActiveMultiVector();

@@ -4,26 +4,29 @@
 #include "l3ster/common/TrilinosTypedefs.h"
 #include "l3ster/solve/SolverInterface.hpp"
 
+#ifdef L3STER_TRILINOS_HAS_AMESOS2
+
 namespace lstr::solvers
 {
-class Amesos2SolverInterface : public DirectSolverInterface< Amesos2SolverInterface >
+class Amesos2SolverInterface
 {
 public:
-    Amesos2SolverInterface(std::string_view name) : m_name{name} {}
+    Amesos2SolverInterface(std::string name) : m_name{std::move(name)} {}
 
-    void initializeImpl(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
-                        const Teuchos::RCP< const tpetra_multivector_t >& b,
-                        const Teuchos::RCP< tpetra_multivector_t >&       x)
+    auto solve(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
+               const Teuchos::RCP< const tpetra_multivector_t >& b,
+               const Teuchos::RCP< tpetra_multivector_t >&       x) -> DirectSolveResult
     {
-        m_solver = Amesos2::create(m_name, A, x, b);
-        util::throwingAssert(m_solver->matrixShapeOK(), "Incompatible matrix/vector dimensions");
-        m_solver->preOrdering().symbolicFactorization();
-    }
-    void solveImpl(const Teuchos::RCP< const tpetra_crsmatrix_t >&,
-                   const Teuchos::RCP< const tpetra_multivector_t >&,
-                   const Teuchos::RCP< tpetra_multivector_t >&)
-    {
+        util::throwingAssert(x->getNumVectors() == b->getNumVectors(),
+                             "The LHS and RHS multivectors must have the same number of columns");
+        if (not m_solver)
+        {
+            m_solver = Amesos2::create(m_name, A, x, b);
+            util::throwingAssert(m_solver->matrixShapeOK(), "Incompatible matrix/vector dimensions");
+            m_solver->preOrdering().symbolicFactorization();
+        }
         m_solver->numericFactorization().solve();
+        return {};
     }
 
 private:
@@ -43,4 +46,5 @@ public:
     Lapack() : Amesos2SolverInterface("Lapack") {}
 };
 } // namespace lstr::solvers
+#endif // L3STER_TRILINOS_HAS_AMESOS2
 #endif // L3STER_AMESOS2SOLVERS_HPP

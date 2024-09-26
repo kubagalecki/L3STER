@@ -12,6 +12,8 @@
 #include "l3ster/post/VtkExport.hpp"
 #include "l3ster/solve/Amesos2Solvers.hpp"
 #include "l3ster/solve/BelosSolvers.hpp"
+#include "l3ster/solve/Ifpack2Preconditioners.hpp"
+#include "l3ster/solve/NativePreconditioners.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
 #endif // L3STER_HPP

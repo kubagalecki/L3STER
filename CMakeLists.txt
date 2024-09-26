@@ -43,8 +43,8 @@ include( "cmake/ImportLibrary.cmake" )
 
 # Import libraries
 # Trilinos
-set( L3STER_REQUIRED_Trilinos_PACKAGES "Kokkos;Tpetra;Ifpack2" )
-set( L3STER_OPTIONAL_Trilinos_PACKAGES "Belos;Amesos2;MueLu" )
+set( L3STER_REQUIRED_Trilinos_PACKAGES "Kokkos;Tpetra" )
+set( L3STER_OPTIONAL_Trilinos_PACKAGES "Belos;Ifpack2;Amesos2;MueLu" )
 define_trilinos_target( ${L3STER_ENABLE_VERBOSITY} 14.0 "${L3STER_REQUIRED_Trilinos_PACKAGES}" "${L3STER_OPTIONAL_Trilinos_PACKAGES}" )
 list( APPEND L3STER_INTERFACE_DEPENDENCIES Trilinos )
 

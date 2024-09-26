@@ -79,7 +79,7 @@ public:
         requires(n_rhs == 1);
 
     template < solvers::IterativeSolver_c Solver >
-    IterSolveInfo solve(Solver& solver) const;
+    IterSolveResult solve(Solver& solver) const;
 
     inline void updateSolution(const util::ArrayOwner< size_t >& sol_inds,
                                SolutionManager&                  sol_man,
@@ -228,7 +228,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::zeroExportBuf() co
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
 template < solvers::IterativeSolver_c Solver >
-IterSolveInfo MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::solve(Solver& solver) const
+IterSolveResult MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::solve(Solver& solver) const
 {
     L3STER_PROFILE_FUNCTION;
     return solver.solve(getOperator(), m_rhs, m_solution);
