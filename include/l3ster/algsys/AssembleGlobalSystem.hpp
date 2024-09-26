@@ -1,8 +1,8 @@
-#ifndef L3STER_GLOB_ASM_ASSEMBLEGLOBALSYSTEM_HPP
-#define L3STER_GLOB_ASM_ASSEMBLEGLOBALSYSTEM_HPP
+#ifndef L3STER_ALGSYS_ASSEMBLEGLOBALSYSTEM_HPP
+#define L3STER_ALGSYS_ASSEMBLEGLOBALSYSTEM_HPP
 
 #include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
-#include "l3ster/glob_asm/StaticCondensationManager.hpp"
+#include "l3ster/algsys/StaticCondensationManager.hpp"
 #include "l3ster/mesh/BoundaryView.hpp"
 #include "l3ster/mesh/LocalMeshView.hpp"
 #include "l3ster/post/SolutionManager.hpp"
@@ -26,7 +26,7 @@ struct AssemblyOptions
 };
 } // namespace lstr
 
-namespace lstr::glob_asm
+namespace lstr::algsys
 {
 namespace detail
 {
@@ -153,5 +153,5 @@ void assembleGlobalSystem(const BoundaryEquationKernel< Kernel, params >&       
     const auto max_par_guard = util::MaxParallelismGuard{n_cores};
     mesh.visitBoundaries(process_element, boundary_ids, std::execution::par);
 }
-} // namespace lstr::glob_asm
-#endif // L3STER_GLOB_ASM_ASSEMBLEGLOBALSYSTEM_HPP
+} // namespace lstr::algsys
+#endif // L3STER_ALGSYS_ASSEMBLEGLOBALSYSTEM_HPP

@@ -1,7 +1,7 @@
 #ifndef L3STER_POST_INTEGRAL_HPP
 #define L3STER_POST_INTEGRAL_HPP
 
-#include "l3ster/glob_asm/AssembleGlobalSystem.hpp"
+#include "l3ster/algsys/AssembleGlobalSystem.hpp"
 #include "l3ster/quad/EvalQuadrature.hpp"
 
 namespace lstr
@@ -22,7 +22,7 @@ auto evalElementIntegral(
         const auto& ref_ders             = basis_at_qps.basis.derivatives[qp_ind];
         const auto [phys_ders, jacobian] = map::mapDomain< ET, EO >(jacobi_gen, ref_coords, ref_ders);
         const auto kernel_result =
-            glob_asm::evalKernel(kernel, ref_coords, basis_vals, phys_ders, node_vals, element.getData(), time);
+            algsys::evalKernel(kernel, ref_coords, basis_vals, phys_ders, node_vals, element.getData(), time);
         return jacobian * kernel_result;
     };
     return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, detail::initResidualKernelResult< params >());
@@ -42,7 +42,8 @@ auto evalElementBoundaryIntegral(
         const auto& ref_ders                     = basis_at_qps.basis.derivatives[qp_ind];
         const auto  side                         = el_view.getSide();
         const auto [phys_ders, jacobian, normal] = map::mapBoundary< ET, EO >(jacobi_gen, ref_coords, ref_ders, side);
-        const auto kernel_result                 = glob_asm::evalKernel(
+        const auto kernel_result                 =
+            algsys::evalKernel(
             kernel, ref_coords, basis_vals, phys_ders, node_vals, el_view->getData(), time, normal);
         return jacobian * kernel_result;
     };

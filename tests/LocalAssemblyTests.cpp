@@ -1,14 +1,14 @@
 #include "catch2/catch.hpp"
 
 #include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
-#include "l3ster/glob_asm/AssembleLocalSystem.hpp"
-#include "l3ster/glob_asm/EvaluateLocalOperator.hpp"
+#include "l3ster/algsys/AssembleLocalSystem.hpp"
+#include "l3ster/algsys/EvaluateLocalOperator.hpp"
 #include "l3ster/mapping/ComputePhysBasisDer.hpp"
 #include "l3ster/mesh/NodePhysicalLocation.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 
 using namespace lstr;
-using namespace lstr::glob_asm;
+using namespace lstr::algsys;
 
 inline constexpr auto diffusion_kernel_2D = []([[maybe_unused]] const auto& in, auto& out) noexcept {
     auto& [operators, rhs] = out;

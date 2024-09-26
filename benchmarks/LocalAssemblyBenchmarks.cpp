@@ -156,7 +156,7 @@ static void BM_NS3DLocalAssembly(benchmark::State& state)
 
     for (auto _ : state)
     {
-        const auto& local_sys = glob_asm::assembleLocalSystem(kernel, element, nodal_vals, ref_bas_at_quad, 0.);
+        const auto& local_sys = algsys::assembleLocalSystem(kernel, element, nodal_vals, ref_bas_at_quad, 0.);
         benchmark::DoNotOptimize(&local_sys);
         benchmark::ClobberMemory();
     }
@@ -208,7 +208,7 @@ static void BM_NS3DLocalEvaluation(benchmark::State& state)
 
     for (auto _ : state)
     {
-        auto y = glob_asm::evaluateLocalOperator(kernel, local_element, nodal_vals, ref_bas_at_quad, 0., x);
+        auto y = algsys::evaluateLocalOperator(kernel, local_element, nodal_vals, ref_bas_at_quad, 0., x);
         benchmark::DoNotOptimize(y);
     }
 
@@ -253,7 +253,7 @@ static void BM_DiffS3DLocalEvaluation(benchmark::State& state)
 
     for (auto _ : state)
     {
-        auto y = glob_asm::evaluateLocalOperator(kernel, local_element, nodal_vals, ref_bas_at_quad, 0., x);
+        auto y = algsys::evaluateLocalOperator(kernel, local_element, nodal_vals, ref_bas_at_quad, 0., x);
         benchmark::DoNotOptimize(y);
     }
 

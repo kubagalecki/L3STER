@@ -1,4 +1,4 @@
-#include "l3ster/glob_asm/SparsityGraph.hpp"
+#include "l3ster/algsys/SparsityGraph.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
@@ -9,7 +9,7 @@
 
 using namespace lstr;
 using namespace lstr::dofs;
-using namespace lstr::glob_asm;
+using namespace lstr::algsys;
 
 class DenseGraph
 {

@@ -1,5 +1,5 @@
-#ifndef L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP
-#define L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP
+#ifndef L3STER_ALGSYS_ASSEMBLELOCALSYSTEM_HPP
+#define L3STER_ALGSYS_ASSEMBLELOCALSYSTEM_HPP
 
 #include "l3ster/basisfun/ReferenceBasisAtQuadrature.hpp"
 #include "l3ster/common/KernelInterface.hpp"
@@ -11,7 +11,7 @@
 #include "l3ster/util/SetStackSize.hpp"
 #include "l3ster/util/Simd.hpp"
 
-namespace lstr::glob_asm
+namespace lstr::algsys
 {
 template < int n_nodes, int n_fields >
 auto computeFieldVals(const Eigen::Vector< val_t, n_nodes >&                         basis_vals,
@@ -240,5 +240,5 @@ const auto& assembleLocalSystem(
     basis_at_qps.forEach(process_qp);
     return local_system_manager.getSystem();
 }
-} // namespace lstr::glob_asm
-#endif // L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP
+} // namespace lstr::algsys
+#endif // L3STER_ALGSYS_ASSEMBLELOCALSYSTEM_HPP

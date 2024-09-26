@@ -1,14 +1,14 @@
-#ifndef L3STER_ASSEMBLY_EVALUATELOCALOPERATOR
-#define L3STER_ASSEMBLY_EVALUATELOCALOPERATOR
+#ifndef L3STER_ALGSYS_EVALUATELOCALOPERATOR
+#define L3STER_ALGSYS_EVALUATELOCALOPERATOR
 
-#include "l3ster/glob_asm/AssembleLocalSystem.hpp"
+#include "l3ster/algsys/AssembleLocalSystem.hpp"
 #include "l3ster/mesh/LocalMeshView.hpp"
 #include "l3ster/util/CacheSizesAtCompileTime.hpp"
 
 #include <numeric>
 #include <optional>
 
-namespace lstr::glob_asm
+namespace lstr::algsys
 {
 namespace detail
 {
@@ -322,5 +322,5 @@ auto precomputeOperatorDiagonalAndRhs(
     basis_at_qps.forEach(process_qp);
     return retval;
 }
-} // namespace lstr::glob_asm
-#endif // L3STER_ASSEMBLY_EVALUATELOCALOPERATOR
+} // namespace lstr::algsys
+#endif // L3STER_ALGSYS_EVALUATELOCALOPERATOR

@@ -1,5 +1,5 @@
-#ifndef L3STER_GLOB_ASM_MAKETPETRAMAP_HPP
-#define L3STER_GLOB_ASM_MAKETPETRAMAP_HPP
+#ifndef L3STER_DOFS_MAKETPETRAMAP_HPP
+#define L3STER_DOFS_MAKETPETRAMAP_HPP
 
 #include "l3ster/dofs/NodeToDofMap.hpp"
 #include "l3ster/util/TrilinosUtils.hpp"
@@ -50,4 +50,4 @@ inline auto makeTpetraMap(std::span< const global_dof_t >               dofs,
     return util::makeTeuchosRCP< const tpetra_map_t >(compute_size, dofs_teuchos_view, 0, std::move(comm));
 }
 } // namespace lstr::dofs
-#endif // L3STER_GLOB_ASM_MAKETPETRAMAP_HPP
+#endif // L3STER_DOFS_MAKETPETRAMAP_HPP

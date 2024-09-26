@@ -1,27 +1,25 @@
-#ifndef L3STER_GLOB_ASM_ALGEBRAICSYSTEM_HPP
-#define L3STER_GLOB_ASM_ALGEBRAICSYSTEM_HPP
+#ifndef L3STER_ALGSYS_ASSEMBLEDSYSTEM_HPP
+#define L3STER_ALGSYS_ASSEMBLEDSYSTEM_HPP
 
+#include "l3ster/algsys/ComputeValuesAtNodes.hpp"
+#include "l3ster/algsys/SparsityGraph.hpp"
+#include "l3ster/algsys/StaticCondensationManager.hpp"
 #include "l3ster/bcs/DirichletBC.hpp"
 #include "l3ster/bcs/GetDirichletDofs.hpp"
-#include "l3ster/glob_asm/ComputeValuesAtNodes.hpp"
-#include "l3ster/glob_asm/SparsityGraph.hpp"
-#include "l3ster/glob_asm/StaticCondensationManager.hpp"
 #include "l3ster/post/SolutionManager.hpp"
 #include "l3ster/solve/SolverInterface.hpp"
 #include "l3ster/util/GlobalResource.hpp"
 
 #include <format>
 
-namespace lstr
-{
-namespace glob_asm
+namespace lstr::algsys
 {
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-class AlgebraicSystem
+class AssembledSystem
 {
 public:
     template < ProblemDef problem_def, ProblemDef dirichlet_def >
-    AlgebraicSystem(std::shared_ptr< const MpiComm >                          comm,
+    AssembledSystem(std::shared_ptr< const MpiComm >                          comm,
                     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
                     util::ConstexprValue< problem_def >,
                     util::ConstexprValue< dirichlet_def >);
@@ -109,7 +107,7 @@ private:
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
 template < solvers::DirectSolver_c Solver >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::solve(Solver& solver) const
+void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::solve(Solver& solver) const
 {
     L3STER_PROFILE_FUNCTION;
     m_solution->switchActiveMultiVector();
@@ -123,7 +121,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::solve(Solver& s
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
 template < solvers::IterativeSolver_c Solver >
-IterSolveResult AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::solve(Solver& solver) const
+IterSolveResult AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::solve(Solver& solver) const
 {
     L3STER_PROFILE_FUNCTION;
     m_solution->switchActiveMultiVector();
@@ -138,7 +136,7 @@ IterSolveResult AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::solv
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
 template < IndexRange_c SolInds, IndexRange_c SolManInds >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::updateSolution(SolInds&&        sol_inds,
+void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::updateSolution(SolInds&&        sol_inds,
                                                                                 SolutionManager& sol_man,
                                                                                 SolManInds&&     sol_man_inds)
 {
@@ -209,7 +207,7 @@ void averageNodeVals(tpetra_femultivector_t& values, tpetra_femultivector_t& num
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
 template < ResidualKernel_c Kernel, std::integral dofind_t, size_t n_fields >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
+void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
     const Teuchos::RCP< tpetra_femultivector_t >&                 vector,
     const Kernel&                                                 kernel,
     const util::ArrayOwner< d_id_t >&                             domain_ids,
@@ -239,7 +237,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
 template < ResidualKernel_c Kernel, std::integral dofind_t, size_t n_fields >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
+void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
     const Teuchos::RCP< tpetra_multivector_t >&                   vector,
     const Kernel&                                                 kernel,
     const util::ArrayOwner< d_id_t >&                             domain_ids,
@@ -253,7 +251,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
 template < ResidualKernel_c Kernel, std::integral dofind_t, size_t n_fields >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCValues(
+void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCValues(
     const Kernel&                                                 kernel,
     const util::ArrayOwner< d_id_t >&                             domain_ids,
     const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
@@ -282,7 +280,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCV
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
 template < size_t n_vals, std::integral dofind_t >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCValues(
+void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCValues(
     const std::array< val_t, n_vals >&    values,
     const util::ArrayOwner< d_id_t >&     domain_ids,
     const std::array< dofind_t, n_vals >& dof_inds)
@@ -303,7 +301,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCV
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-auto AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::getMatrix() const
+auto AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::getMatrix() const
     -> Teuchos::RCP< const tpetra_crsmatrix_t >
 {
     assertState(State::Closed, "`getMatrix()` was called before `endAssembly()`");
@@ -311,7 +309,7 @@ auto AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::getMatrix() con
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-auto AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::getRhs() const
+auto AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::getRhs() const
     -> Teuchos::RCP< const tpetra_multivector_t >
 {
     assertState(State::Closed, "`getRhs()` was called before `endAssembly()`");
@@ -319,7 +317,7 @@ auto AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::getRhs() const
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-auto AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::getSolution() const
+auto AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::getSolution() const
     -> Teuchos::RCP< tpetra_multivector_t >
 {
     assertState(State::Closed, "`getSolution()` was called before `endAssembly()`");
@@ -327,7 +325,7 @@ auto AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::getSolution() c
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-auto AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::initMultiVector(size_t cols) const
+auto AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::initMultiVector(size_t cols) const
     -> Teuchos::RCP< tpetra_femultivector_t >
 {
     return util::makeTeuchosRCP< tpetra_femultivector_t >(
@@ -336,7 +334,7 @@ auto AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::initMultiVector
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
 template < ProblemDef problem_def, ProblemDef dirichlet_def >
-AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::AlgebraicSystem(
+AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::AssembledSystem(
     std::shared_ptr< const MpiComm >                          comm,
     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
     util::ConstexprValue< problem_def >                       problemdef_ctwrpr,
@@ -374,7 +372,7 @@ AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::AlgebraicSystem(
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::beginAssembly()
+void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::beginAssembly()
 {
     L3STER_PROFILE_FUNCTION;
     if (m_state == State::OpenForAssembly)
@@ -388,7 +386,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::beginAssembly()
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::endAssembly()
+void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::endAssembly()
 {
     L3STER_PROFILE_FUNCTION;
     assertState(State::OpenForAssembly, "`endAssembly()` was called more than once");
@@ -414,7 +412,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::endAssembly()
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setToZero()
+void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setToZero()
 {
     m_matrix->setAllToScalar(0.);
     m_rhs->putScalar(0.);
@@ -422,7 +420,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::setToZero()
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
 template < EquationKernel_c Kernel, ArrayOf_c< size_t > auto field_inds, size_t n_fields, AssemblyOptions asm_opts >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::assembleProblem(
+void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::assembleProblem(
     const Kernel&                                        kernel,
     const util::ArrayOwner< d_id_t >&                    domain_ids,
     const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
@@ -453,7 +451,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::assembleProblem
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::applyDirichletBCs()
+void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::applyDirichletBCs()
 {
     L3STER_PROFILE_FUNCTION;
     m_matrix->beginModify();
@@ -470,7 +468,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::applyDirichletB
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::assertState(State                expected,
+void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::assertState(State                expected,
                                                                              std::string_view     err_msg,
                                                                              std::source_location src_loc) const
 {
@@ -478,7 +476,7 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::assertState(Sta
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::describe(std::ostream& out) const
+void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::describe(std::ostream& out) const
 {
     const auto local_num_rows    = m_matrix->getLocalNumRows();
     const auto local_num_cols    = m_matrix->getLocalNumCols();
@@ -521,45 +519,5 @@ void AlgebraicSystem< max_dofs_per_node, CP, n_rhs, orders... >::describe(std::o
     }
     m_comm->barrier();
 }
-} // namespace glob_asm
-
-template < el_o_t... orders,
-           ProblemDef            problem_def,
-           ProblemDef            dirichlet_def = ProblemDef< 0, problem_def.n_fields >{},
-           AlgebraicSystemParams params        = {} >
-auto makeAlgebraicSystem(std::shared_ptr< const MpiComm >                          comm,
-                         std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-                         util::ConstexprValue< problem_def >                       problemdef_ctwrpr = {},
-                         util::ConstexprValue< dirichlet_def >                     dbcdef_ctwrpr     = {},
-                         util::ConstexprValue< params >                                              = {})
-    -> glob_asm::AlgebraicSystem< problem_def.n_fields, params.cond_policy, params.n_rhs, orders... >
-    requires(params.eval_strategy == OperatorEvaluationStrategy::GlobalAssembly)
-{
-    L3STER_PROFILE_FUNCTION;
-    constexpr auto max_dofs_per_node = problem_def.n_fields;
-    constexpr auto cp                = params.cond_policy;
-    constexpr auto n_rhs             = params.n_rhs;
-    return glob_asm::AlgebraicSystem< max_dofs_per_node, cp, n_rhs, orders... >{
-        std::move(comm), std::move(mesh), problemdef_ctwrpr, dbcdef_ctwrpr};
-}
-
-template < el_o_t... orders,
-           ProblemDef            problem_def,
-           ProblemDef            dirichlet_def = ProblemDef< 0, problem_def.n_fields >{},
-           AlgebraicSystemParams params        = {} >
-auto makeAlgebraicSystem(std::shared_ptr< const MpiComm >                    comm,
-                         std::shared_ptr< mesh::MeshPartition< orders... > > mesh,
-                         util::ConstexprValue< problem_def >                 problemdef_ctwrpr,
-                         util::ConstexprValue< dirichlet_def >               dbcdef_ctwrpr = {},
-                         util::ConstexprValue< params >                      params_ctwrpr = {})
-    -> glob_asm::AlgebraicSystem< problem_def.n_fields, params.cond_policy, params.n_rhs, orders... >
-    requires(params.eval_strategy == OperatorEvaluationStrategy::GlobalAssembly)
-{
-    return makeAlgebraicSystem(std::move(comm),
-                               std::shared_ptr< const mesh::MeshPartition< orders... > >{std::move(mesh)},
-                               problemdef_ctwrpr,
-                               dbcdef_ctwrpr,
-                               params_ctwrpr);
-}
-} // namespace lstr
-#endif // L3STER_GLOB_ASM_ALGEBRAICSYSTEM_HPP
+} // namespace lstr::algsys
+#endif // L3STER_ALGSYS_ASSEMBLEDSYSTEM_HPP

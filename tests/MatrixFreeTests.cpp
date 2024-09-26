@@ -1,8 +1,8 @@
 
 #include "Common.hpp"
 
+#include "l3ster/algsys/MakeAlgebraicSystem.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
-#include "l3ster/glob_asm/MatrixFree.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 #include "l3ster/post/NormL2.hpp"
 #include "l3ster/solve/BelosSolvers.hpp"
@@ -10,7 +10,7 @@
 #include "l3ster/util/ScopeGuards.hpp"
 
 using namespace lstr;
-using namespace lstr::glob_asm;
+using namespace lstr::algsys;
 using namespace lstr::mesh;
 
 constexpr auto node_dist = std::array{0., 1., 2., 3., 4., 5., 6.};

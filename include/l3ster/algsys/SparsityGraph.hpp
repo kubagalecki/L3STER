@@ -1,5 +1,5 @@
-#ifndef L3STER_GLOB_ASM_SPARSITYGRAPH_HPP
-#define L3STER_GLOB_ASM_SPARSITYGRAPH_HPP
+#ifndef L3STER_ALGSYS_SPARSITYGRAPH_HPP
+#define L3STER_ALGSYS_SPARSITYGRAPH_HPP
 
 #include "l3ster/dofs/DofsFromNodes.hpp"
 #include "l3ster/dofs/MakeTpetraMap.hpp"
@@ -11,7 +11,7 @@
 #include "l3ster/util/IndexMap.hpp"
 #include "l3ster/util/StaticVector.hpp"
 
-namespace lstr::glob_asm
+namespace lstr::algsys
 {
 namespace detail
 {
@@ -541,5 +541,5 @@ auto makeSparsityGraph(const MpiComm&                                          c
     return detail::makeTpetraCrsGraph(
         comm, owned_row_dofs, owned_plus_shared_row_dofs, col_dofs, std::move(crs_graph), row_sizes);
 }
-} // namespace lstr::glob_asm
-#endif // L3STER_GLOB_ASM_SPARSITYGRAPH_HPP
+} // namespace lstr::algsys
+#endif // L3STER_ALGSYS_SPARSITYGRAPH_HPP

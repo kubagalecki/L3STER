@@ -1,13 +1,13 @@
-#ifndef L3STER_GLOB_ASM_STATICCONDENSATIONMANAGER_HPP
-#define L3STER_GLOB_ASM_STATICCONDENSATIONMANAGER_HPP
+#ifndef L3STER_ALGSYS_STATICCONDENSATIONMANAGER_HPP
+#define L3STER_ALGSYS_STATICCONDENSATIONMANAGER_HPP
 
 #include "l3ster/dofs/DofsFromNodes.hpp"
-#include "l3ster/glob_asm/ScatterLocalSystem.hpp"
+#include "l3ster/algsys/ScatterLocalSystem.hpp"
 #include "l3ster/post/SolutionManager.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 #include "l3ster/util/TbbUtils.hpp"
 
-namespace lstr::glob_asm
+namespace lstr::algsys
 {
 template < typename Derived >
 class StaticCondensationManagerInterface
@@ -527,5 +527,5 @@ auto StaticCondensationManager< CondensationPolicy::ElementBoundary >::computeLo
     }
     return retval;
 }
-} // namespace lstr::glob_asm
-#endif // L3STER_GLOB_ASM_STATICCONDENSATIONMANAGER_HPP
+} // namespace lstr::algsys
+#endif // L3STER_ALGSYS_STATICCONDENSATIONMANAGER_HPP

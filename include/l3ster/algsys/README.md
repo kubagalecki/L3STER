@@ -1,4 +1,4 @@
-# `glob_asm`
+# `algsys`
 
 This directory contains facilities for assembling the sparse algebraic problems corresponding to the supplied PDEs and mesh.
 This includes:

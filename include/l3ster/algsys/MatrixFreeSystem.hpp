@@ -1,18 +1,18 @@
-#ifndef L3STER_MATRIXFREE_HPP
-#define L3STER_MATRIXFREE_HPP
+#ifndef L3STER_ALGSYS_MATRIXFREESYSTEM_HPP
+#define L3STER_ALGSYS_MATRIXFREESYSTEM_HPP
 
+#include "l3ster/algsys/ComputeValuesAtNodes.hpp"
+#include "l3ster/algsys/EvaluateLocalOperator.hpp"
+#include "l3ster/algsys/SparsityGraph.hpp"
 #include "l3ster/bcs/LocalDirichletBC.hpp"
 #include "l3ster/comm/ImportExport.hpp"
-#include "l3ster/glob_asm/ComputeValuesAtNodes.hpp"
-#include "l3ster/glob_asm/EvaluateLocalOperator.hpp"
-#include "l3ster/glob_asm/SparsityGraph.hpp"
 #include "l3ster/mesh/SplitMesh.hpp"
 #include "l3ster/post/SolutionManager.hpp"
 #include "l3ster/solve/SolverInterface.hpp"
 #include "l3ster/util/GlobalResource.hpp"
 #include "l3ster/util/TypeErasedOverload.hpp"
 
-namespace lstr::glob_asm
+namespace lstr::algsys
 {
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
 class MatrixFreeSystem
@@ -1009,49 +1009,5 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::updateSolution(
     m_border_mesh.visit(save_elem_vals, std::execution::par);
     m_import->wait();
 }
-} // namespace lstr::glob_asm
-
-namespace lstr
-{
-template < el_o_t... orders,
-           ProblemDef            problem_def,
-           ProblemDef            dirichlet_def = ProblemDef< 0, problem_def.n_fields >{},
-           AlgebraicSystemParams params        = {} >
-auto makeAlgebraicSystem(std::shared_ptr< const MpiComm >                          comm,
-                         std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-                         util::ConstexprValue< problem_def >                       problemdef_ctwrpr = {},
-                         util::ConstexprValue< dirichlet_def >                     dbcdef_ctwrpr     = {},
-                         util::ConstexprValue< params >                                              = {})
-    -> glob_asm::MatrixFreeSystem< problem_def.n_fields, params.n_rhs, orders... >
-    requires(params.eval_strategy == OperatorEvaluationStrategy::MatrixFree)
-{
-    static_assert(params.cond_policy == CondensationPolicy::None,
-                  "Matrix-free operator evaluation and static condensation are mutually exclusive");
-
-    L3STER_PROFILE_FUNCTION;
-    constexpr auto max_dofs_per_node = problem_def.n_fields;
-    constexpr auto n_rhs             = params.n_rhs;
-    return glob_asm::MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >{
-        std::move(comm), std::move(mesh), problemdef_ctwrpr, dbcdef_ctwrpr};
-}
-
-template < el_o_t... orders,
-           ProblemDef            problem_def,
-           ProblemDef            dirichlet_def = ProblemDef< 0, problem_def.n_fields >{},
-           AlgebraicSystemParams params        = {} >
-auto makeAlgebraicSystem(std::shared_ptr< const MpiComm >                    comm,
-                         std::shared_ptr< mesh::MeshPartition< orders... > > mesh,
-                         util::ConstexprValue< problem_def >                 problemdef_ctwrpr,
-                         util::ConstexprValue< dirichlet_def >               dbcdef_ctwrpr = {},
-                         util::ConstexprValue< params >                      params_ctwrpr = {})
-    -> glob_asm::MatrixFreeSystem< problem_def.n_fields, params.n_rhs, orders... >
-    requires(params.eval_strategy == OperatorEvaluationStrategy::MatrixFree)
-{
-    return makeAlgebraicSystem(std::move(comm),
-                               std::shared_ptr< const mesh::MeshPartition< orders... > >{std::move(mesh)},
-                               problemdef_ctwrpr,
-                               dbcdef_ctwrpr,
-                               params_ctwrpr);
-}
-} // namespace lstr
-#endif // L3STER_MATRIXFREE_HPP
+} // namespace lstr::algsys
+#endif // L3STER_ALGSYS_MATRIXFREESYSTEM_HPP

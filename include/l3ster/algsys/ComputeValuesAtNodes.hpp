@@ -1,16 +1,16 @@
-#ifndef L3STER_GLOB_ASM_COMPUTEVALUESATNODES_HPP
-#define L3STER_GLOB_ASM_COMPUTEVALUESATNODES_HPP
+#ifndef L3STER_ALGSYS_COMPUTEVALUESATNODES_HPP
+#define L3STER_ALGSYS_COMPUTEVALUESATNODES_HPP
 
 #include "l3ster/basisfun/ReferenceBasisAtNodes.hpp"
 #include "l3ster/comm/ImportExport.hpp"
-#include "l3ster/glob_asm/AssembleGlobalSystem.hpp"
+#include "l3ster/algsys/AssembleGlobalSystem.hpp"
 #include "l3ster/mesh/LocalMeshView.hpp"
 #include "l3ster/mesh/NodePhysicalLocation.hpp"
 #include "l3ster/util/Ranges.hpp"
 
 #include <atomic>
 
-namespace lstr::glob_asm
+namespace lstr::algsys
 {
 /// Access separate owned/shared views using linear index
 /// Views types are erased so that the accessor is trivial
@@ -534,5 +534,5 @@ void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&      k
     detail::averageElementContributions(
         comm, owned_values, shared_values, num_contribs, exporter, do_interior, do_border);
 }
-} // namespace lstr::glob_asm
-#endif // L3STER_GLOB_ASM_COMPUTEVALUESATNODES_HPP
+} // namespace lstr::algsys
+#endif // L3STER_ALGSYS_COMPUTEVALUESATNODES_HPP
