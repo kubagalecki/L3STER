@@ -114,8 +114,8 @@ consteval dim_t getHighestMatchableDim()
 }
 
 template < dim_t DIM, el_o_t O, ElementType T1, ElementType T2 >
-auto elementIntersectionSpansAtDim(const Element< T1, 1 >& el1, const Element< T2, 1 >& el2)
-    -> std::array< std::span< const el_locind_t >, 2 >
+auto elementIntersectionSpansAtDim(const Element< T1, 1 >& el1,
+                                   const Element< T2, 1 >& el2) -> std::array< std::span< const el_locind_t >, 2 >
 {
     using span_t = std::span< const el_locind_t >;
     span_t           intersect_inds1, intersect_inds2;
@@ -156,8 +156,8 @@ auto elementIntersectionSpansAtDim(const Element< T1, 1 >& el1, const Element< T
 }
 
 template < el_o_t O, ElementType T1, ElementType T2 >
-auto elementIntersection(const Element< T1, 1 >& el1, const Element< T2, 1 >& el2)
-    -> std::array< std::span< const el_locind_t >, 2 >
+auto elementIntersection(const Element< T1, 1 >& el1,
+                         const Element< T2, 1 >& el2) -> std::array< std::span< const el_locind_t >, 2 >
 {
     constexpr auto highest_matchable = detail::getHighestMatchableDim< T1, T2 >();
 
@@ -182,7 +182,7 @@ consteval auto getPointMatcher()
 {
     return [](const Point< 3 >& p1, const Point< 3 >& p2) {
         constexpr double tolerance = 1e-12;
-        return (Eigen::Vector< val_t, 3 >{p1} - Eigen::Vector< val_t, 3 >{p2}).norm() < tolerance;
+        return (p1.asEigenVec() - p2.asEigenVec()).norm() < tolerance;
     };
 }
 } // namespace detail

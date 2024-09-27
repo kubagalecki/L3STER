@@ -1,13 +1,13 @@
-#ifndef L3STER_GLOB_ASM_STATICCONDENSATIONMANAGER_HPP
-#define L3STER_GLOB_ASM_STATICCONDENSATIONMANAGER_HPP
+#ifndef L3STER_ALGSYS_STATICCONDENSATIONMANAGER_HPP
+#define L3STER_ALGSYS_STATICCONDENSATIONMANAGER_HPP
 
 #include "l3ster/dofs/DofsFromNodes.hpp"
-#include "l3ster/glob_asm/ScatterLocalSystem.hpp"
+#include "l3ster/algsys/ScatterLocalSystem.hpp"
 #include "l3ster/post/SolutionManager.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 #include "l3ster/util/TbbUtils.hpp"
 
-namespace lstr::glob_asm
+namespace lstr::algsys
 {
 template < typename Derived >
 class StaticCondensationManagerInterface
@@ -239,7 +239,7 @@ void StaticCondensationManagerInterface< Derived >::updateSolutionPrimaryDofs(
             {
                 const auto src_sol_span = condensed_solutions[rhs_ind];
                 const auto dest_span    = dest_col_views[target_ind++];
-                if (local_dof != dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >::invalid_dof)
+                if (dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >::isValid(local_dof))
                     dest_span[local_node_ind] = src_sol_span[local_dof];
             }
         }
@@ -507,7 +507,7 @@ auto StaticCondensationManager< CondensationPolicy::ElementBoundary >::computeLo
                     retval.primary_src_inds[primary_write_ind]    = local_system_ind++;
                     retval.primary_dest_inds[primary_write_ind++] = primary_ind++;
                 }
-                else if (node_dofs[i] != dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >::invalid_dof)
+                else if (dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >::isValid(node_dofs[i]))
                     ++primary_ind;
             }
         }
@@ -527,5 +527,5 @@ auto StaticCondensationManager< CondensationPolicy::ElementBoundary >::computeLo
     }
     return retval;
 }
-} // namespace lstr::glob_asm
-#endif // L3STER_GLOB_ASM_STATICCONDENSATIONMANAGER_HPP
+} // namespace lstr::algsys
+#endif // L3STER_ALGSYS_STATICCONDENSATIONMANAGER_HPP

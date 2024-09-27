@@ -15,16 +15,12 @@ namespace detail
 {
 template < typename T >
 concept NoexceptSimplyPlusable_c = requires(T a, T b) {
-    {
-        a + b
-    } noexcept -> std::convertible_to< T >;
+    { a + b } noexcept -> std::convertible_to< T >;
 };
 
 template < typename T, typename Q >
 concept QuadIntegrable_c = requires(T fun, Q::q_points_t::value_type point, Q::weights_t::value_type weight) {
-    {
-        std::apply(fun, point) * weight
-    } -> NoexceptSimplyPlusable_c;
+    { std::apply(fun, point) * weight } -> NoexceptSimplyPlusable_c;
 };
 
 template < typename Integrand, typename Q >
@@ -67,15 +63,14 @@ concept QuadIntegrable_c = ReturnInvocable_c< Integrand, Zero, ptrdiff_t, const 
 // calculation, where certain quantities (e.g. basis derivatives) can be precomputed collectively for all
 // quadrature points, and then accessed by index during quadrature evaluation
 template < typename Integrand, q_l_t quad_length, dim_t quad_dim, typename Zero >
-auto evalQuadrature(Integrand&& integrand, const Quadrature< quad_length, quad_dim >& quad, Zero zero)
+auto evalQuadrature(Integrand&& integrand, const Quadrature< quad_length, quad_dim >& quadrature, Zero zero)
     requires QuadIntegrable_c< Integrand, Zero, quad_dim >
 {
-    for (ptrdiff_t i = 0; const auto& qp : quad.points)
+    for (auto&& [i, quad] : std::views::zip(quadrature.points, quadrature.weights) | std::views::enumerate)
     {
-        const auto integrand_value = integrand(i, qp);
-        const auto weight          = quad.weights[i];
+        const auto& [point, weight] = quad;
+        const auto integrand_value  = integrand(i, point);
         zero += integrand_value * weight;
-        ++i;
     }
     return zero;
 }

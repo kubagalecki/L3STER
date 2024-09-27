@@ -73,9 +73,9 @@ public:
     size_t getNCores(size_t node) const { return m_machine.at(node).second.size(); }
     size_t getNCores() const
     {
-        auto node_range = std::views::iota(size_t{}, getNNodes()) | std::views::common;
+        auto node_range = std::views::iota(0uz, getNNodes()) | std::views::common;
         return std::transform_reduce(
-            std::ranges::cbegin(node_range), std::ranges::cend(node_range), size_t{}, std::plus{}, [this](size_t node) {
+            std::ranges::cbegin(node_range), std::ranges::cend(node_range), 0uz, std::plus{}, [this](size_t node) {
                 return getNCores(node);
             });
     }
@@ -85,13 +85,13 @@ public:
     }
     size_t getNHwThreads() const
     {
-        auto node_range = std::views::iota(size_t{}, getNNodes()) | std::views::common;
+        auto node_range = std::views::iota(0uz, getNNodes()) | std::views::common;
         return std::transform_reduce(
-            std::ranges::cbegin(node_range), std::ranges::cend(node_range), size_t{}, std::plus{}, [this](size_t node) {
-                auto core_range = std::views::iota(size_t{}, getNCores(node)) | std::views::common;
+            std::ranges::cbegin(node_range), std::ranges::cend(node_range), 0uz, std::plus{}, [this](size_t node) {
+                auto core_range = std::views::iota(0uz, getNCores(node)) | std::views::common;
                 return std::transform_reduce(std::ranges::cbegin(core_range),
                                              std::ranges::cend(core_range),
-                                             size_t{},
+                                             0uz,
                                              std::plus{},
                                              [this, node](size_t core) { return getNHwThreads(node, core); });
             });

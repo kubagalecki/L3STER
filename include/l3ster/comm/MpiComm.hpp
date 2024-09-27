@@ -111,6 +111,9 @@ public:
 
         template < comm::MpiBuiltinType_c T >
         [[nodiscard]] auto numElems() const -> int;
+        template < typename T >
+        [[nodiscard]] auto numElems() const -> int
+            requires(not comm::MpiBuiltinType_c< T > and std::is_trivially_copyable_v< T >);
 
         [[nodiscard]] int getSource() const { return m_status.MPI_SOURCE; }
         [[nodiscard]] int getTag() const { return m_status.MPI_TAG; }
@@ -202,8 +205,8 @@ public:
     template < comm::MpiBorrowedBuf_c Data >
     [[nodiscard]] auto receiveAsync(Data&& data, int src = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG) const -> Request;
     [[nodiscard]] inline auto probe(int source = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG) const -> Status;
-    [[nodiscard]] inline auto probeAsync(int source = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG) const
-        -> std::pair< Status, bool >;
+    [[nodiscard]] inline auto probeAsync(int source = MPI_ANY_SOURCE,
+                                         int tag    = MPI_ANY_TAG) const -> std::pair< Status, bool >;
 
     // collectives
     void barrier() const { L3STER_INVOKE_MPI(MPI_Barrier, m_comm); }
@@ -254,6 +257,16 @@ auto MpiComm::Status::numElems() const -> int
 {
     int retval{};
     L3STER_INVOKE_MPI(MPI_Get_elements, &m_status, comm::MpiType< T >::value(), &retval);
+    return retval;
+}
+
+template < typename T >
+auto MpiComm::Status::numElems() const -> int
+    requires(not comm::MpiBuiltinType_c< T > and std::is_trivially_copyable_v< T >)
+{
+    int retval{};
+    L3STER_INVOKE_MPI(MPI_Get_elements, &m_status, MPI_BYTE, &retval);
+    retval /= static_cast< int >(sizeof(T));
     return retval;
 }
 

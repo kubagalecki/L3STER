@@ -27,7 +27,7 @@ auto makeMesh(const MpiComm& comm, auto probdef_ctwrpr)
 int main(int argc, char* argv[])
 {
     const auto scope_guard = L3sterScopeGuard{argc, argv};
-    const auto comm        = MpiComm{MPI_COMM_WORLD};
+    const auto comm        = std::make_shared< MpiComm >(MPI_COMM_WORLD);
 
     // Assign names to physical domain IDs for readability
     constexpr int domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
@@ -43,11 +43,11 @@ int main(int argc, char* argv[])
     constexpr auto dirdef_ctwrpr  = L3STER_WRAP_CTVAL(dirichlet_def);
 
     // std::shared_ptr to the current rank's mesh partition
-    const auto mesh = makeMesh(comm, probdef_ctwrpr);
+    const auto mesh = makeMesh(*comm, probdef_ctwrpr);
 
     // Algebraic system which we will need to fill
     auto algebraic_system = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, dirdef_ctwrpr);
-    algebraic_system.describe(comm);
+    algebraic_system.describe();
 
     // Time step
     constexpr double dt = .1;
@@ -83,14 +83,11 @@ int main(int argc, char* argv[])
     const auto phi_prev_ind    = std::array< size_t, 1 >{0}; // array of indices of components to access
     const auto phi_prev_getter = solution_manager.makeFieldValueGetter(phi_prev_ind);
 
-    // Solution vector for the algebraic system
-    auto solution = algebraic_system.initSolution();
-
     // L3STER interface to KLU2 direct solver
     auto solver = solvers::KLU2{};
 
     // Paraview exporter object
-    auto exporter = PvtuExporter{*mesh};
+    auto exporter = PvtuExporter{comm, *mesh};
 
     // Subsequently used indices
     const auto dof_inds       = std::array{0}; // Indices of DOFs in the solution vector
@@ -99,7 +96,7 @@ int main(int argc, char* argv[])
         std::array< std::array< int, 1 >, 1 >{sol_inds};
 
     // Export initial snapshot (phi = 0)
-    exporter.exportSolution("results/phi_0.pvtu", comm, solution_manager, {"phi"}, phi_components);
+    exporter.exportSolution("results/phi_000.pvtu", solution_manager, {"phi"}, phi_components);
 
     constexpr int time_steps = 20;
     for (int time_step = 1; time_step <= time_steps; ++time_step)
@@ -114,13 +111,13 @@ int main(int argc, char* argv[])
         algebraic_system.endAssembly();
 
         // Solve
-        algebraic_system.solve(solver, solution);
+        algebraic_system.solve(solver);
 
         // Place the computed values in the solution manager
-        algebraic_system.updateSolution(solution, dof_inds, solution_manager, sol_inds);
+        algebraic_system.updateSolution(dof_inds, solution_manager, sol_inds);
 
         // Export snapshot
-        const auto file_name = "results/phi_" + std::to_string(time_step) + ".pvtu";
-        exporter.exportSolution(file_name, comm, solution_manager, {"phi"}, phi_components);
+        const auto file_name = std::format("results/phi_{:03}.pvtu", time_step);
+        exporter.exportSolution(file_name, solution_manager, {"phi"}, phi_components);
     }
 }

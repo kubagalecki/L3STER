@@ -1,5 +1,5 @@
+#include "l3ster/algsys/MakeAlgebraicSystem.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
-#include "l3ster/glob_asm/AlgebraicSystem.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 #include "l3ster/post/NormL2.hpp"
 #include "l3ster/solve/Amesos2Solvers.hpp"
@@ -9,7 +9,7 @@
 #include "TestDataPath.h"
 
 using namespace lstr;
-using namespace lstr::glob_asm;
+using namespace lstr::algsys;
 
 template < CondensationPolicy CP >
 void test()
@@ -21,8 +21,8 @@ void test()
                                             defineDomain< domains.size() >(domains[3], 3)};
     constexpr auto probdef_ctwrpr = util::ConstexprValue< problem_def >{};
 
-    const auto comm = MpiComm{MPI_COMM_WORLD};
-    const auto mesh = readAndDistributeMesh(comm,
+    const auto comm = std::make_shared< MpiComm >(MPI_COMM_WORLD);
+    const auto mesh = readAndDistributeMesh(*comm,
                                             L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square_multidom.msh),
                                             mesh::gmsh_tag,
                                             {},
@@ -59,9 +59,8 @@ void test()
     assemble_problem_in_dom(util::ConstexprValue< 3 >{});
     alg_sys.endAssembly();
 
-    auto solver   = solvers::Lapack{};
-    auto solution = alg_sys.initSolution();
-    alg_sys.solve(solver, solution);
+    auto solver = solvers::Lapack{};
+    alg_sys.solve(solver);
 
     auto solution_manager = SolutionManager{*mesh, problem_def.n_fields * 2};
     for (size_t i = 0; i != problem_def.n_fields; ++i)
@@ -71,7 +70,7 @@ void test()
     }
     constexpr auto dof_inds     = util::makeIotaArray< size_t, problem_def.n_fields >();
     constexpr auto sol_man_inds = util::makeIotaArray< size_t, problem_def.n_fields * 2 >();
-    alg_sys.updateSolution(solution, dof_inds, solution_manager, sol_man_inds);
+    alg_sys.updateSolution(dof_inds, solution_manager, sol_man_inds);
 
     constexpr double eps = 1e-8;
     for (size_t i = 0; i != problem_def.n_fields; ++i)
@@ -84,7 +83,7 @@ void test()
             REQUIRE(std::ranges::all_of(view, [&](double v_test) { return std::fabs(v - v_test) < eps; }));
             const char modified_local = std::ranges::any_of(view, [&](double v_test) { return v != v_test; });
             char       modified_global;
-            comm.allReduce(std::span{&modified_local, 1}, &modified_global, MPI_LOR);
+            comm->allReduce(std::span{&modified_local, 1}, &modified_global, MPI_LOR);
             REQUIRE(modified_global); // Check at least one entry was correctly written into
         };
         check(field_vals1, v1);

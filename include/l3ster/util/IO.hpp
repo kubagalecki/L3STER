@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <concepts>
+#include <filesystem>
 #include <fstream>
 #include <ranges>
 
@@ -44,7 +45,7 @@ class MmappedFile
 {
 public:
     MmappedFile() = default;
-    inline MmappedFile(const std::string& filename);
+    inline MmappedFile(const std::filesystem::path& filename);
 
     [[nodiscard]] auto   view() const -> std::string_view { return {get(), size()}; }
     [[nodiscard]] char*  get() const { return m_data.get(); }
@@ -63,7 +64,7 @@ private:
     std::unique_ptr< char, MunmapDeleter > m_data;
 };
 
-MmappedFile::MmappedFile(const std::string& filename)
+MmappedFile::MmappedFile(const std::filesystem::path& filename)
 {
     auto open_mode = O_RDONLY;
 #ifdef _LARGEFILE64_SOURCE

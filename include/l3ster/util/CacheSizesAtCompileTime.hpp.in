@@ -1,0 +1,12 @@
+#ifndef L3STER_UTIL_CACHESIZESATCOMPILETIME_HPP
+#define L3STER_UTIL_CACHESIZESATCOMPILETIME_HPP
+
+#include <array>
+
+namespace lstr::util
+{
+inline constexpr auto cache_sizes = std::array{
+  @L3STER_CACHE_SIZES@
+};
+}
+#endif // L3STER_UTIL_CACHESIZESATCOMPILETIME_HPP

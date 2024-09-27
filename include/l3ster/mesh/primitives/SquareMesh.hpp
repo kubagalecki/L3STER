@@ -16,11 +16,11 @@ auto makeSquareMesh(Rx&& distx, Ry&& disty) -> MeshPartition< 1 >
     const size_t e_dy = n_dy - 1;
 
     auto domains = MeshPartition< 1 >::domain_map_t{};
-    domains[0].getElementVector< ElementType::Quad, 1 >().reserve(e_dx * e_dy);
-    domains[1].getElementVector< ElementType::Line, 1 >().reserve(e_dx);
-    domains[2].getElementVector< ElementType::Line, 1 >().reserve(e_dx);
-    domains[3].getElementVector< ElementType::Line, 1 >().reserve(e_dy);
-    domains[4].getElementVector< ElementType::Line, 1 >().reserve(e_dy);
+    domains[0].elements.getVector< Element< ElementType::Quad, 1 > >().reserve(e_dx * e_dy);
+    domains[1].elements.getVector< Element< ElementType::Line, 1 > >().reserve(e_dx);
+    domains[2].elements.getVector< Element< ElementType::Line, 1 > >().reserve(e_dx);
+    domains[3].elements.getVector< Element< ElementType::Line, 1 > >().reserve(e_dy);
+    domains[4].elements.getVector< Element< ElementType::Line, 1 > >().reserve(e_dy);
 
     el_id_t el_ind = 0;
 
@@ -35,7 +35,7 @@ auto makeSquareMesh(Rx&& distx, Ry&& disty) -> MeshPartition< 1 >
                                                        Point{distx[ix + 1], disty[iy], 0.},
                                                        Point{distx[ix], disty[iy + 1], 0.},
                                                        Point{distx[ix + 1], disty[iy + 1], 0.}};
-            domains[0].getElementVector< ElementType::Quad, 1 >().emplace_back(nodes, verts, el_ind++);
+            emplaceInDomain< ElementType::Quad, 1 >(domains[0], nodes, verts, el_ind++);
         }
     }
 
@@ -50,8 +50,8 @@ auto makeSquareMesh(Rx&& distx, Ry&& disty) -> MeshPartition< 1 >
         auto verts2 = verts1;
         std::ranges::for_each(verts2, [&](auto& v) { v = Point{v.x(), disty[e_dy], 0.}; });
 
-        domains[1].getElementVector< ElementType::Line, 1 >().emplace_back(nodes1, verts1, el_ind++);
-        domains[2].getElementVector< ElementType::Line, 1 >().emplace_back(nodes2, verts2, el_ind++);
+        emplaceInDomain< ElementType::Line, 1 >(domains[1], nodes1, verts1, el_ind++);
+        emplaceInDomain< ElementType::Line, 1 >(domains[2], nodes2, verts2, el_ind++);
     }
 
     // x = const faces
@@ -65,8 +65,8 @@ auto makeSquareMesh(Rx&& distx, Ry&& disty) -> MeshPartition< 1 >
         auto verts2 = verts1;
         std::ranges::for_each(verts2, [&](auto& v) { v = Point{distx[e_dx], v.y(), 0.}; });
 
-        domains[3].getElementVector< ElementType::Line, 1 >().emplace_back(nodes1, verts1, el_ind++);
-        domains[4].getElementVector< ElementType::Line, 1 >().emplace_back(nodes2, verts2, el_ind++);
+        emplaceInDomain< ElementType::Line, 1 >(domains[3], nodes1, verts1, el_ind++);
+        emplaceInDomain< ElementType::Line, 1 >(domains[4], nodes2, verts2, el_ind++);
     }
 
     std::vector< n_id_t > nodes(n_dx * n_dy);

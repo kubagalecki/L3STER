@@ -2,62 +2,40 @@
 # Locates the requested library on disc and wraps it into an imported target. This utility is meant for importing
 # CMake-unaware libraries into CMake projects.
 # Arguments:
-#   1) name of the library header: `lib_name.hpp` (please include the extension)
-#   2) boolean indicating whether to report progress
+#   lib_name          (string)    -  name of the library
+#   REQUIRED          (optional)  -  whether to signal an error if library isn't found
 # Effects:
-#   Creates an imported target named `lib_name`, which can be consumed as a dependency using target_link_libraries.
-#   If the requested header or corresponding library cannot be found, a non-fatal error is reported.
+#   Creates an interface target named `lib_name-imported`, which can be consumed as a dependency using target_link_libraries.
 #
-function( importLibrary header verbosity )
-    get_filename_component( lib_name ${header} NAME_WE )
-    if ( verbosity )
-        message( STATUS "Detecting ${lib_name}" )
+function( importLibrary lib_name )
+    message( STATUS "Detecting ${lib_name}" )
+
+    list( FIND ARGV "REQUIRED" required_pos )
+    if ( NOT ${required_pos} EQUAL -1 )
+        set( required "TRUE" )
     endif ()
 
-    # Check whether the requested dependency is a Trilinos TPL
-    get_target_property( trilinos_libs Trilinos INTERFACE_LINK_LIBRARIES )
-    foreach ( trilinos_lib ${trilinos_libs} )
-        if ( IS_ABSOLUTE ${trilinos_lib} )
-            get_filename_component( trilinos_lib_name ${trilinos_lib} NAME_WE )
-            string( FIND ${trilinos_lib_name} ${lib_name} found_in_trilinos_tpls )
-            if ( NOT ${found_in_trilinos_tpls} EQUAL -1 )
-                if ( verbosity )
-                    message( STATUS "Detecting ${lib_name} - found as Trilinos TPL" )
-                endif ()
-                return()
-            endif ()
+    unset( ${lib_name}_LIB CACHE )
+    find_library( ${lib_name}_LIB ${lib_name} NO_CACHE )
+    if ( ${lib_name}_LIB-NOTFOUND )
+        message( STATUS "Detecting ${lib_name} - not found" )
+        if ( required )
+            message( FATAL_ERROR "The library \"${lib_name}\" was not found. Try setting ${lib_name}_ROOT=/path/to/library" )
+        else ()
+            set( ${lib_name}_FOUND "FALSE" PARENT_SCOPE )
+            return()
         endif ()
-    endforeach ()
+    else ()
+        message( STATUS "Detecting ${lib_name} - found: ${${lib_name}_LIB}" )
+    endif ()
+    cmake_path( GET ${lib_name}_LIB PARENT_PATH ${lib_name}_LIBDIR )
 
-    unset( lib_include_dir CACHE )
-    unset( lib_path CACHE )
-    if ( ${lib_name}_DIR )
-        find_path( lib_include_dir ${header} PATHS ${${lib_name}_DIR} PATH_SUFFIXES include NO_DEFAULT_PATH )
+    add_library( ${lib_name}-import INTERFACE )
+    target_link_libraries( ${lib_name}-import INTERFACE "${${lib_name}_LIB}" )
+
+    cmake_path( SET ${lib_name}_INCLUDEDIR NORMALIZE "${${lib_name}_LIBDIR}/../include" )
+    cmake_path( ABSOLUTE_PATH ${lib_name}_INCLUDEDIR )
+    if ( EXISTS "${${lib_name}_INCLUDEDIR}" AND IS_DIRECTORY "${${lib_name}_INCLUDEDIR}" )
+        target_include_directories( ${lib_name}-import INTERFACE "${${lib_name}_INCLUDEDIR}" )
     endif ()
-    find_path( lib_include_dir ${header} )
-    if ( NOT lib_include_dir )
-        if ( Verbosity )
-            message( STATUS "Detecting ${lib_name} - not found" )
-        endif ()
-        message( SEND_ERROR "Could not locate ${header}. Try setting the variable ${lib_name}_DIR to indicate the "
-                 "install path" )
-        return()
-    endif ()
-    find_library( lib_path ${lib_name} HINTS ${lib_include_dir} ${lib_include_dir}/.. PATH_SUFFIXES lib )
-    if ( NOT lib_path )
-        if ( verbosity )
-            message( STATUS "Detecting ${lib_name} - not found" )
-        endif ()
-        message( SEND_ERROR "Could not locate the ${lib_name} library in the expected directory relative to the header "
-                 "file. Try setting the variable ${lib_name}_DIR to indicate the correct install path" )
-        return()
-    endif ()
-    if ( verbosity )
-        message( STATUS "Detecting ${lib_name} - found" )
-    endif ()
-    add_library( ${lib_name} INTERFACE )
-    target_include_directories( ${lib_name} INTERFACE "${lib_include_dir}" )
-    target_link_libraries( ${lib_name} INTERFACE "${lib_path}" )
-    list( APPEND L3STER_INTERFACE_DEPENDENCIES ${lib_name} )
-    set( L3STER_INTERFACE_DEPENDENCIES ${L3STER_INTERFACE_DEPENDENCIES} PARENT_SCOPE )
 endfunction()

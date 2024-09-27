@@ -1,20 +1,17 @@
-#ifndef L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP
-#define L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP
+#ifndef L3STER_ALGSYS_ASSEMBLELOCALSYSTEM_HPP
+#define L3STER_ALGSYS_ASSEMBLELOCALSYSTEM_HPP
 
 #include "l3ster/basisfun/ReferenceBasisAtQuadrature.hpp"
 #include "l3ster/common/KernelInterface.hpp"
 #include "l3ster/common/Structs.hpp"
-#include "l3ster/mapping/BoundaryIntegralJacobian.hpp"
-#include "l3ster/mapping/BoundaryNormal.hpp"
-#include "l3ster/mapping/ComputePhysBasisDer.hpp"
-#include "l3ster/mapping/JacobiMat.hpp"
 #include "l3ster/mapping/MapReferenceToPhysical.hpp"
 #include "l3ster/math/IntegerMath.hpp"
 #include "l3ster/mesh/BoundaryElementView.hpp"
 #include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/SetStackSize.hpp"
+#include "l3ster/util/Simd.hpp"
 
-namespace lstr::glob_asm
+namespace lstr::algsys
 {
 template < int n_nodes, int n_fields >
 auto computeFieldVals(const Eigen::Vector< val_t, n_nodes >&                         basis_vals,
@@ -22,10 +19,7 @@ auto computeFieldVals(const Eigen::Vector< val_t, n_nodes >&                    
 {
     std::array< val_t, n_fields > retval;
     if constexpr (n_fields != 0)
-    {
-        const Eigen::Vector< val_t, n_fields > field_vals_packed = node_vals.transpose() * basis_vals;
-        std::ranges::copy(field_vals_packed, begin(retval));
-    }
+        Eigen::Map< Eigen::Vector< val_t, n_fields > >{retval.data()} = node_vals.transpose() * basis_vals;
     return retval;
 }
 
@@ -36,9 +30,8 @@ auto computeFieldDers(const util::eigen::RowMajorMatrix< val_t, dim, n_nodes >& 
     std::array< std::array< val_t, n_fields >, dim > retval;
     if constexpr (n_fields != 0)
     {
-        const util::eigen::RowMajorMatrix< val_t, dim, n_fields > field_ders_packed = basis_ders * node_vals;
-        for (size_t dim_ind = 0; dim_ind < static_cast< size_t >(dim); ++dim_ind)
-            std::copy_n(std::next(field_ders_packed.data(), dim_ind * n_fields), n_fields, retval[dim_ind].begin());
+        const auto retval_data = reinterpret_cast< val_t* >(retval.data());
+        Eigen::Map< util::eigen::RowMajorMatrix< val_t, dim, n_fields > >{retval_data} = basis_ders * node_vals;
     }
     return retval;
 }
@@ -46,7 +39,7 @@ auto computeFieldDers(const util::eigen::RowMajorMatrix< val_t, dim, n_nodes >& 
 template < size_t problem_size, size_t update_size, size_t n_rhs >
 class LocalSystemManager
 {
-    static constexpr size_t target_update_size = 128;
+    static constexpr size_t target_update_size = 16 * util::simd_width / sizeof(val_t);
     static constexpr size_t updates_per_batch  = math::intDivRoundUp(target_update_size, update_size);
     static constexpr size_t batch_update_size  = update_size * updates_per_batch;
     using batch_update_matrix_t = Eigen::Matrix< val_t, problem_size, batch_update_size, Eigen::ColMajor >;
@@ -184,6 +177,22 @@ auto LocalSystemManager< problem_size, update_size, n_rhs >::setZero() -> LocalS
     return *this;
 }
 
+auto evalKernel(const auto& kernel,
+                const auto& point,
+                const auto& basis_vals,
+                const auto& phys_basis_ders,
+                const auto& node_vals,
+                const auto& element_data,
+                val_t       time,
+                const auto&... args)
+{
+    const auto field_vals  = computeFieldVals(basis_vals, node_vals);
+    const auto field_ders  = computeFieldDers(phys_basis_ders, node_vals);
+    const auto phys_coords = map::mapToPhysicalSpace(element_data, point);
+    const auto eval_point  = SpaceTimePoint{phys_coords, time};
+    return kernel({field_vals, field_ders, eval_point, args...});
+}
+
 template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >
 const auto& assembleLocalSystem(
     const DomainEquationKernel< Kernel, params >&                                                  kernel,
@@ -192,29 +201,19 @@ const auto& assembleLocalSystem(
     const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,
     val_t                                                                                          time)
 {
-    static_assert(params.dimension == mesh::ElementTraits< mesh::Element< ET, EO > >::native_dim);
-
     L3STER_PROFILE_FUNCTION;
-    const auto jacobi_mat_generator = map::getNatJacobiMatGenerator(element);
-    auto&      local_system_manager = getLocalSystemManager< params, mesh::Element< ET, EO >::n_nodes >();
-    const auto process_qp           = [&](auto point, val_t weight, const auto& bas_vals, const auto& ref_bas_ders) {
-        const auto jacobi_mat      = jacobi_mat_generator(point);
-        const auto phys_basis_ders = map::computePhysBasisDers(jacobi_mat, ref_bas_ders);
-        const auto field_vals      = computeFieldVals(bas_vals, node_vals);
-        const auto field_ders      = computeFieldDers(ref_bas_ders, node_vals);
-        const auto phys_coords     = map::mapToPhysicalSpace(element, point);
-        const auto eval_point      = SpaceTimePoint{phys_coords, time};
-        const auto kernel_in = typename KernelInterface< params >::DomainInput{field_vals, field_ders, eval_point};
-        const auto [A, F]    = kernel(kernel_in);
-        const val_t jacobian = jacobi_mat.determinant();
+    static_assert(params.dimension == mesh::ElementTraits< mesh::Element< ET, EO > >::native_dim);
+    const auto& el_data              = element.getData();
+    const auto  jacobi_gen           = map::getNatJacobiMatGenerator(el_data);
+    auto&       local_system_manager = getLocalSystemManager< params, mesh::Element< ET, EO >::n_nodes >();
+    const auto  process_qp = [&](const auto& point, val_t weight, const auto& basis_vals, const auto& ref_ders) {
+        const auto [phys_ders, jacobian] = map::mapDomain< ET, EO >(jacobi_gen, point, ref_ders);
         util::throwingAssert(jacobian > 0., "Encountered degenerate element ( |J| <= 0 )");
-        local_system_manager.update(A, F, bas_vals, phys_basis_ders, jacobian * weight);
+        const auto [A, F]             = evalKernel(kernel, point, basis_vals, phys_ders, node_vals, el_data, time);
+        const auto rank_update_weight = jacobian * weight;
+        local_system_manager.update(A, F, basis_vals, phys_ders, rank_update_weight);
     };
-    for (size_t qp_ind = 0; qp_ind < basis_at_qps.quadrature.size; ++qp_ind)
-        process_qp(basis_at_qps.quadrature.points[qp_ind],
-                   basis_at_qps.quadrature.weights[qp_ind],
-                   basis_at_qps.basis.values[qp_ind],
-                   basis_at_qps.basis.derivatives[qp_ind]);
+    basis_at_qps.forEach(process_qp);
     return local_system_manager.getSystem();
 }
 
@@ -226,32 +225,20 @@ const auto& assembleLocalSystem(
     const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,
     val_t                                                                                          time)
 {
-    static_assert(params.dimension == mesh::ElementTraits< mesh::Element< ET, EO > >::native_dim);
-
     L3STER_PROFILE_FUNCTION;
-    const auto jacobi_mat_generator = map::getNatJacobiMatGenerator(*el_view);
-    auto&      local_system_manager = getLocalSystemManager< params, mesh::Element< ET, EO >::n_nodes >();
-    const auto process_qp           = [&](auto point, val_t weight, const auto& bas_vals, const auto& ref_bas_ders) {
-        const auto jacobi_mat      = jacobi_mat_generator(point);
-        const auto phys_basis_ders = map::computePhysBasisDers(jacobi_mat, ref_bas_ders);
-        const auto field_vals      = computeFieldVals(bas_vals, node_vals);
-        const auto field_ders      = computeFieldDers(ref_bas_ders, node_vals);
-        const auto phys_coords     = map::mapToPhysicalSpace(*el_view, point);
-        const auto eval_point      = SpaceTimePoint{phys_coords, time};
-        const auto normal          = map::computeBoundaryNormal(el_view, jacobi_mat);
-        const auto kernel_in =
-            typename KernelInterface< params >::BoundaryInput{field_vals, field_ders, eval_point, normal};
-        const auto [A, F]             = kernel(kernel_in);
-        const auto bound_jac          = map::computeBoundaryIntegralJacobian(el_view, jacobi_mat);
-        const auto rank_update_weight = bound_jac * weight;
-        local_system_manager.update(A, F, bas_vals, phys_basis_ders, rank_update_weight);
+    static_assert(params.dimension == mesh::ElementTraits< mesh::Element< ET, EO > >::native_dim);
+    const auto& el_data              = el_view->getData();
+    const auto  jacobi_gen           = map::getNatJacobiMatGenerator(el_data);
+    auto&       local_system_manager = getLocalSystemManager< params, mesh::Element< ET, EO >::n_nodes >();
+    const auto  process_qp           = [&](auto point, val_t weight, const auto& basis_vals, const auto& ref_ders) {
+        const auto side                          = el_view.getSide();
+        const auto [phys_ders, jacobian, normal] = map::mapBoundary< ET, EO >(jacobi_gen, point, ref_ders, side);
+        const auto [A, F] = evalKernel(kernel, point, basis_vals, phys_ders, node_vals, el_data, time, normal);
+        const auto rank_update_weight = jacobian * weight;
+        local_system_manager.update(A, F, basis_vals, phys_ders, rank_update_weight);
     };
-    for (size_t qp_ind = 0; qp_ind < basis_at_qps.quadrature.size; ++qp_ind)
-        process_qp(basis_at_qps.quadrature.points[qp_ind],
-                   basis_at_qps.quadrature.weights[qp_ind],
-                   basis_at_qps.basis.values[qp_ind],
-                   basis_at_qps.basis.derivatives[qp_ind]);
+    basis_at_qps.forEach(process_qp);
     return local_system_manager.getSystem();
 }
-} // namespace lstr::glob_asm
-#endif // L3STER_ASSEMBLY_ASSEMBLELOCALSYSTEM_HPP
+} // namespace lstr::algsys
+#endif // L3STER_ALGSYS_ASSEMBLELOCALSYSTEM_HPP

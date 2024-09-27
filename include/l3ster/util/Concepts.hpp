@@ -56,7 +56,7 @@ inline constexpr bool is_vector< std::vector< T, Alloc > > = true;
 
 // Tuple-related cocnepts
 template < typename T >
-concept Array_c = detail::is_array< T >;
+concept Array_c = detail::is_array< std::remove_cvref_t< T > >;
 template < typename T, typename V >
 concept ArrayOf_c = Array_c< T > and std::same_as< typename T::value_type, V >;
 template < typename T >
@@ -72,9 +72,7 @@ template < typename T, std::size_t I >
 concept tuple_gettable = requires(T t) {
     typename std::tuple_element< I, T >;
     typename std::tuple_element_t< I, T >;
-    {
-        std::get< I >(t)
-    } -> std::same_as< std::tuple_element_t< I, T > >;
+    { std::get< I >(t) } -> std::same_as< std::tuple_element_t< I, T > >;
 };
 
 template < typename, typename >
@@ -90,9 +88,7 @@ template < typename T >
 concept tuple_like = requires {
     std::tuple_size< T >::value;
     std::tuple_size_v< T >;
-    {
-        std::tuple_size_v< T >
-    } -> std::convertible_to< std::size_t >;
+    { std::tuple_size_v< T > } -> std::convertible_to< std::size_t >;
     typename detail::fold_tuple_gettable< T, std::make_index_sequence< std::tuple_size_v< T > > >;
 };
 
@@ -135,33 +131,48 @@ concept tuple_invocable = detail::is_tuple_invocable< T, tuple_t >::value;
 template < typename T, typename R, typename tuple_t >
 concept tuple_r_invocable = detail::is_tuple_r_invocable< R, T, tuple_t >::value;
 
+// Functional
 template < typename T, typename Domain, typename Range >
 concept Mapping_c = requires(T f, Domain x) {
-    {
-        f(x)
-    } -> std::convertible_to< Range >;
+    { f(x) } -> std::convertible_to< Range >;
 };
 template < typename G, typename V >
 concept GeneratorFor_c = std::is_invocable_r_v< V, G >;
 
+template < typename T >
+concept Function_c = std::is_function_v< T >;
+
+namespace detail
+{
+template < typename Function >
+struct FunctionTraits
+{};
+template < typename Ret, typename... Args >
+struct FunctionTraits< Ret(Args...) >
+{
+    using Return = Ret;
+    template < template < typename... > typename Apply >
+    using ApplyToArgs = Apply< Args... >;
+    template < typename Callable >
+    static constexpr bool callable_as = std::is_invocable_r_v< Ret, Callable, Args... >;
+};
+} // namespace detail
+
+template < typename Callable, typename Function >
+concept CallableAs_c = Function_c< Function > and detail::FunctionTraits< Function >::template callable_as< Callable >;
+
 template < typename T, template < typename > typename Predicate >
 concept predicate_trait_specialized = requires {
-    {
-        Predicate< std::decay_t< T > >::value
-    } -> std::convertible_to< bool >;
+    { Predicate< std::decay_t< T > >::value } -> std::convertible_to< bool >;
 };
 
 template < typename Fun, typename Ret, typename... Args >
 concept ReturnInvocable_c = std::invocable< Fun, Args... > and requires(Fun f, Args... args) {
-    {
-        std::invoke(f, args...)
-    } -> std::convertible_to< Ret >;
+    { std::invoke(f, args...) } -> std::convertible_to< Ret >;
 };
 template < typename Reduction, typename Element >
 concept ReductionFor_c = requires(Reduction r, Element e) {
-    {
-        std::invoke(r, e, e)
-    } -> std::convertible_to< Element >;
+    { std::invoke(r, e, e) } -> std::convertible_to< Element >;
 };
 
 // Execution policy concepts

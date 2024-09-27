@@ -37,7 +37,7 @@ TEST_CASE("Solution Manager", "[sol_man]")
         part.visit(
             [&](const auto& element) {
                 for (auto n : element.getNodes())
-                    for (auto fv : sm.getNodeValues(n, std::span{field_inds}))
+                    for (auto fv : sm.getNodeValuesGlobal(n, field_inds))
                         CHECK(fv == static_cast< val_t >(i));
             },
             std::execution::par);
@@ -53,7 +53,7 @@ TEST_CASE("Solution Manager", "[sol_man]")
         part.visit(
             [&](const auto& element) {
                 for (auto n : element.getNodes())
-                    for (auto fv : sm.getNodeValues(n, std::span{field_inds}))
+                    for (auto fv : sm.getNodeValuesGlobal(n, field_inds))
                         CHECK(fv == 42.);
             },
             std::execution::par);

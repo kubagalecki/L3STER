@@ -9,6 +9,7 @@ namespace lstr::map
 template < int native_dim, int n_bases >
 auto computePhysBasisDers(const Eigen::Matrix< val_t, native_dim, native_dim >&            jacobi_mat,
                           const util::eigen::RowMajorMatrix< val_t, native_dim, n_bases >& ref_ders)
+    -> Eigen::Matrix< val_t, native_dim, n_bases >
 {
     return Eigen::Matrix< val_t, native_dim, n_bases >{jacobi_mat.inverse() * ref_ders};
 }

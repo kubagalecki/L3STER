@@ -26,7 +26,7 @@ auto makeMesh(const lstr::MpiComm& comm, auto probdef_ctwrpr)
 int main(int argc, char* argv[])
 {
     L3sterScopeGuard scope_guard{argc, argv};
-    const MpiComm    comm{MPI_COMM_WORLD};
+    const auto       comm = std::make_shared< MpiComm >(MPI_COMM_WORLD);
 
     constexpr d_id_t      domain_id           = 0;
     static constexpr auto boundary_ids        = util::makeIotaArray< d_id_t, 6 >(1);
@@ -43,7 +43,7 @@ int main(int argc, char* argv[])
     constexpr auto        probdef_ctwrpr      = util::ConstexprValue< problem_def >{};
     constexpr auto        dirichletdef_ctwrpr = util::ConstexprValue< dirichlet_def >{};
 
-    const auto my_partition = makeMesh(comm, probdef_ctwrpr);
+    const auto my_partition = makeMesh(*comm, probdef_ctwrpr);
 
     constexpr auto field_inds  = util::makeIotaArray< size_t, problem_def.n_fields >();
     constexpr auto T_inds      = std::array< size_t, 1 >{0};
@@ -113,37 +113,35 @@ int main(int argc, char* argv[])
     alg_system.assembleProblem(diffusion_kernel3d, {domain_id});
     alg_system.setDirichletBCValues(dirichlet_bc_kernel, boundary_ids, T_inds);
     alg_system.endAssembly();
-    alg_system.describe(comm);
+    alg_system.describe();
 
     constexpr auto solver_opts  = IterSolverOpts{.verbosity = {.summary = true, .timing = true}};
-    constexpr auto precond_opts = ChebyshevOpts{.degree = 3};
+    constexpr auto precond_opts = Ifpack2JacobiOpts{};
     auto           solver       = CG{solver_opts, precond_opts};
-    auto           solution     = alg_system.initSolution();
-    alg_system.solve(solver, solution);
+    alg_system.solve(solver);
 
     L3STER_PROFILE_REGION_BEGIN("Solution management");
     auto solution_manager = SolutionManager{*my_partition, problem_def.n_fields};
-    alg_system.updateSolution(solution, dof_inds, solution_manager, field_inds);
+    alg_system.updateSolution(dof_inds, solution_manager, field_inds);
     L3STER_PROFILE_REGION_END("Solution management");
 
     L3STER_PROFILE_REGION_BEGIN("Compute solution error");
     const auto fval_getter = solution_manager.makeFieldValueGetter(field_inds);
-    const auto error       = computeNormL2(comm, error_kernel, *my_partition, {domain_id}, fval_getter);
+    const auto error       = computeNormL2(*comm, error_kernel, *my_partition, {domain_id}, fval_getter);
     L3STER_PROFILE_REGION_END("Compute solution error");
 
-    if (comm.getRank() == 0)
-    {
-        std::cout << "The L2 error components are:";
-        for (int i = 0; i < error.size(); ++i)
-            std::cout << "\n\t" << error[i];
-        std::cout << std::endl;
-    }
+    if (comm->getRank() == 0)
+        std::cout << std::format("\nThe L2 error components are:\n  {:.3e}\n  {:.3e}\n  {:.3e}\n  {:.3e}\n\n",
+                                 error[0],
+                                 error[1],
+                                 error[2],
+                                 error[3]);
 
     L3STER_PROFILE_REGION_BEGIN("Export results to VTK");
-    auto           exporter    = PvtuExporter{*my_partition};
+    auto           exporter    = PvtuExporter{comm, *my_partition};
     const auto     export_inds = util::gatherAsCommon(T_inds, T_grad_inds);
     constexpr auto field_names = std::array{"T"sv, "gradT"sv};
-    exporter.exportSolution("Cube_Diffusion.pvtu", comm, solution_manager, field_names, export_inds);
+    exporter.exportSolution("Cube_Diffusion.pvtu", solution_manager, field_names, export_inds);
     exporter.flushWriteQueue();
     L3STER_PROFILE_REGION_END("Export results to VTK");
 }

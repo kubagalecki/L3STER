@@ -39,8 +39,8 @@ DirichletBCAlgebraic::DirichletBCAlgebraic(const Teuchos::RCP< const tpetra_crsg
     const auto is_bc_col = [&](global_dof_t dof) {
         return std::ranges::binary_search(bc_cols, dof);
     };
-    m_dirichlet_col_mat = util::makeTeuchosRCP< tpetra_crsmatrix_t >(util::getSubgraph(
-        sparsity_graph, [&](global_dof_t row) { return not is_bc_row(row); }, is_bc_col));
+    m_dirichlet_col_mat = util::makeTeuchosRCP< tpetra_crsmatrix_t >(
+        util::getSubgraph(sparsity_graph, [&](global_dof_t row) { return not is_bc_row(row); }, is_bc_col));
 
     m_owned_bc_dofs.reserve(std::ranges::size(bc_rows));
     m_bc_local_col_inds_offsets.reserve(sparsity_graph->getLocalNumRows() + 1);
@@ -103,7 +103,7 @@ void DirichletBCAlgebraic::apply(const tpetra_multivector_t& bc_vals,
             const auto local_cols = util::getLocalRowView(matrix_crs_graph, local_row);
             const auto global_row = matrix_row_map.getGlobalElement(local_row);
             const auto diag_ind =
-                *std::ranges::find(std::views::iota(size_t{}, local_cols.extent(0)), global_row, [&](auto index) {
+                *std::ranges::find(std::views::iota(0uz, local_cols.extent(0)), global_row, [&](auto index) {
                     return matrix_col_map.getGlobalElement(local_cols[index]);
                 });
             local_vals[diag_ind] = 1.;

@@ -1,4 +1,4 @@
-#include "l3ster/glob_asm/SparsityGraph.hpp"
+#include "l3ster/algsys/SparsityGraph.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
@@ -9,7 +9,7 @@
 
 using namespace lstr;
 using namespace lstr::dofs;
-using namespace lstr::glob_asm;
+using namespace lstr::algsys;
 
 class DenseGraph
 {
@@ -22,9 +22,8 @@ public:
     {
         const auto node_to_dof_map = dofs::NodeToGlobalDofMap{dof_intervals, cond_map};
         const auto max_dof =
-            std::ranges::max(node_to_dof_map(cond_map.getCondensedIds().back()) | std::views::filter([](auto dof) {
-                                 return dof != dofs::NodeToGlobalDofMap< problem_def.n_fields >::invalid_dof;
-                             }));
+            std::ranges::max(node_to_dof_map(cond_map.getCondensedIds().back()) |
+                             std::views::filter(dofs::NodeToGlobalDofMap< problem_def.n_fields >::isValid));
         m_dim     = static_cast< size_t >(max_dof + 1);
         m_entries = util::DynamicBitset{m_dim * m_dim};
 
@@ -87,7 +86,7 @@ void test(const MpiComm& comm)
         return convertMeshToOrder< 2 >(mesh);
     });
     auto       full_mesh_copy = copy(full_mesh);
-    const auto my_partition   = distributeMesh(comm, std::move(full_mesh_copy));
+    const auto my_partition   = comm::distributeMesh(comm, std::move(full_mesh_copy), {}, {.renumber = false});
 
     constexpr auto problem_def =
         ProblemDef{defineDomain< 2 >(0, 1), defineDomain< 2 >(1, 0), defineDomain< 2 >(3, 0, 1)};

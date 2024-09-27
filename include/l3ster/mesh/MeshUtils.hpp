@@ -12,7 +12,6 @@ auto findDomainElement(const MeshPartition< orders... >& mesh,
     -> std::optional< std::pair< element_cptr_variant_t< orders... >, el_side_t > >
 {
     auto       retval              = std::optional< std::pair< element_cptr_variant_t< orders... >, el_side_t > >{};
-    auto       emplacement_mutex   = std::mutex{};
     const auto bnd_el_nodes_sorted = util::getSortedArray(bnd_el.getNodes());
     const auto match_domain_el     = [&]< ElementType DET, el_o_t DEO >(const Element< DET, DEO >& domain_el) {
         if constexpr (ElementTraits< Element< DET, DEO > >::native_dim ==
@@ -20,16 +19,13 @@ auto findDomainElement(const MeshPartition< orders... >& mesh,
         {
             const auto matched_side = detail::matchBoundaryNodesToElement(domain_el, bnd_el_nodes_sorted);
             if (matched_side)
-            {
-                const auto lock = std::lock_guard{emplacement_mutex}; // In a correct scenario there is no contention
                 retval.emplace(&domain_el, *matched_side);
-            }
             return matched_side.has_value();
         }
         else
             return false;
     };
-    mesh.find(match_domain_el, domain_ids, std::execution::par);
+    mesh.find(match_domain_el, domain_ids);
     return retval;
 }
 

@@ -1,6 +1,7 @@
 #ifndef L3STER_COMMON_INTERFACE_HPP
 #define L3STER_COMMON_INTERFACE_HPP
 
+#include "l3ster/common/Enums.hpp"
 #include "l3ster/util/Common.hpp"
 #include "l3ster/util/EigenUtils.hpp"
 
@@ -16,6 +17,13 @@ struct KernelParams
     size_t n_unknowns = 1;
     size_t n_fields   = 0;
     size_t n_rhs      = 1;
+};
+
+struct AlgebraicSystemParams
+{
+    OperatorEvaluationStrategy eval_strategy = OperatorEvaluationStrategy::GlobalAssembly;
+    CondensationPolicy         cond_policy   = CondensationPolicy::None;
+    size_t                     n_rhs         = 1;
 };
 
 template < KernelParams params >
@@ -68,28 +76,28 @@ auto initResidualKernelResult() -> KernelInterface< params >::Rhs
 } // namespace detail
 
 template < typename K, KernelParams params >
-concept DomainEquationKernel_c =
-    std::move_constructible< K > and std::invocable< std::add_const_t< std::decay_t< K > >,
-                                                     const typename KernelInterface< params >::DomainInput&,
-                                                     typename KernelInterface< params >::Result& >;
+concept DomainEquationKernel_c = std::is_nothrow_move_constructible_v< K > and
+                                 std::invocable< std::add_const_t< std::decay_t< K > >,
+                                                 const typename KernelInterface< params >::DomainInput&,
+                                                 typename KernelInterface< params >::Result& >;
 
 template < typename K, KernelParams params >
-concept BoundaryEquationKernel_c =
-    std::move_constructible< K > and std::invocable< std::add_const_t< std::decay_t< K > >,
-                                                     const typename KernelInterface< params >::BoundaryInput&,
-                                                     typename KernelInterface< params >::Result& >;
+concept BoundaryEquationKernel_c = std::is_nothrow_move_constructible_v< K > and
+                                   std::invocable< std::add_const_t< std::decay_t< K > >,
+                                                   const typename KernelInterface< params >::BoundaryInput&,
+                                                   typename KernelInterface< params >::Result& >;
 
 template < typename K, KernelParams params >
-concept DomainResidualKernel_c =
-    std::move_constructible< K > and std::invocable< std::add_const_t< std::decay_t< K > >,
-                                                     const typename KernelInterface< params >::DomainInput&,
-                                                     typename KernelInterface< params >::Rhs& >;
+concept DomainResidualKernel_c = std::is_nothrow_move_constructible_v< K > and
+                                 std::invocable< std::add_const_t< std::decay_t< K > >,
+                                                 const typename KernelInterface< params >::DomainInput&,
+                                                 typename KernelInterface< params >::Rhs& >;
 
 template < typename K, KernelParams params >
-concept BoundaryResidualKernel_c =
-    std::move_constructible< K > and std::invocable< std::add_const_t< std::decay_t< K > >,
-                                                     const typename KernelInterface< params >::BoundaryInput&,
-                                                     typename KernelInterface< params >::Rhs& >;
+concept BoundaryResidualKernel_c = std::is_nothrow_move_constructible_v< K > and
+                                   std::invocable< std::add_const_t< std::decay_t< K > >,
+                                                   const typename KernelInterface< params >::BoundaryInput&,
+                                                   typename KernelInterface< params >::Rhs& >;
 
 template < typename Kernel, KernelParams params >
     requires DomainEquationKernel_c< Kernel, params >
@@ -220,8 +228,13 @@ inline constexpr auto is_boundary_residual_kernel< ResidualBoundaryKernel< Kerne
 
 template < typename T >
 concept EquationKernel_c = detail::is_domain_equation_kernel< T > or detail::is_boundary_equation_kernel< T >;
-
 template < typename T >
 concept ResidualKernel_c = detail::is_domain_residual_kernel< T > or detail::is_boundary_residual_kernel< T >;
+template < typename T >
+concept DomainKernel_c = detail::is_domain_equation_kernel< T > or detail::is_domain_residual_kernel< T >;
+template < typename T >
+concept BoundaryKernel_c = detail::is_boundary_equation_kernel< T > or detail::is_boundary_residual_kernel< T >;
+template < typename T >
+concept Kernel_c = DomainKernel_c< T > or BoundaryKernel_c< T >;
 } // namespace lstr
 #endif // L3STER_COMMON_INTERFACE_HPP

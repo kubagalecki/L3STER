@@ -1,23 +1,37 @@
 #ifndef L3STER_UTIL_ARRAYOWNER
 #define L3STER_UTIL_ARRAYOWNER
 
+#include "l3ster/util/Assertion.hpp"
+
+#include <algorithm>
 #include <concepts>
 #include <cstdint>
 #include <memory>
 
 namespace lstr::util
 {
+struct CacheAlign
+{};
+inline constexpr CacheAlign cache_align{};
+
+/// Fixed-size dynamically allocated array. Exposed a range interface
 template < std::default_initializable T >
 class ArrayOwner
 {
+    static constexpr std::size_t cacheline_size = 64;
+
 public:
-    ArrayOwner() = default;
-    explicit ArrayOwner(std::size_t size) : m_size{size}, m_data{std::make_unique_for_overwrite< T[] >(size)} {}
+    using size_type = std::size_t;
+    ArrayOwner()    = default;
+    explicit ArrayOwner(size_type size) : m_size{size}, m_data{std::make_unique_for_overwrite< T[] >(size)} {}
+    ArrayOwner(size_type size, std::align_val_t align) : m_size{size}, m_data{new(align) T[size]} {}
+    ArrayOwner(size_type size, CacheAlign) : ArrayOwner(size, std::align_val_t{std::max(cacheline_size, alignof(T))}) {}
     template < std::ranges::range R >
     ArrayOwner(R&& range) // NOLINT implicit conversion and copy are intended
         requires std::constructible_from< T, std::ranges::range_reference_t< R > >;
     template < std::convertible_to< T > Vals >
     ArrayOwner(std::initializer_list< Vals > vals);
+    ArrayOwner(size_type size, const T& init) : ArrayOwner(size) { std::ranges::fill(*this, init); }
 
     T*       begin() { return m_data.get(); }
     const T* begin() const { return m_data.get(); }
@@ -27,24 +41,24 @@ public:
     const T* cend() const { return end(); }
     T*       data() { return m_data.get(); }
     const T* data() const { return m_data.get(); }
-    T&       operator[](std::size_t i) { return m_data[i]; }
-    const T& operator[](std::size_t i) const { return m_data[i]; }
-    T&       at(std::size_t i)
+    T&       operator[](size_type i) { return m_data[i]; }
+    const T& operator[](size_type i) const { return m_data[i]; }
+    T&       at(size_type i, std::source_location sl = std::source_location::current())
     {
-        assertInRange(i);
+        util::throwingAssert(i < m_size, {}, sl);
         return m_data[i];
     }
-    const T& at(std::size_t i) const
+    const T& at(size_type i, std::source_location sl = std::source_location::current()) const
     {
-        assertInRange(i);
+        util::throwingAssert(i < m_size, {}, sl);
         return m_data[i];
     }
-    T&          front() { return m_data[0]; }
-    const T&    front() const { return m_data[0]; }
-    T&          back() { return m_data[m_size - 1]; }
-    const T&    back() const { return m_data[m_size - 1]; }
-    std::size_t size() const { return m_size; }
-    bool        empty() const { return m_size == 0; }
+    T&        front() { return m_data[0]; }
+    const T&  front() const { return m_data[0]; }
+    T&        back() { return m_data[m_size - 1]; }
+    const T&  back() const { return m_data[m_size - 1]; }
+    size_type size() const { return m_size; }
+    bool      empty() const { return m_size == 0; }
 
     friend auto operator<=>(const ArrayOwner& a, const ArrayOwner< T >& b)
     {
@@ -53,13 +67,7 @@ public:
     friend bool operator==(const ArrayOwner& a, const ArrayOwner< T >& b) { return std::ranges::equal(a, b); }
 
 private:
-    void assertInRange(std::size_t i) const
-    {
-        if (i >= m_size)
-            throw std::out_of_range{"Out of bounds access to ArrayOwner"};
-    }
-
-    std::size_t            m_size{};
+    size_type              m_size{};
     std::unique_ptr< T[] > m_data;
 };
 template < std::ranges::range R >

@@ -1,12 +1,12 @@
-#ifndef L3STER_GLOB_ASM_SCATTERLOCALSYSTEM_HPP
-#define L3STER_GLOB_ASM_SCATTERLOCALSYSTEM_HPP
+#ifndef L3STER_ALGSYS_SCATTERLOCALSYSTEM_HPP
+#define L3STER_ALGSYS_SCATTERLOCALSYSTEM_HPP
 
-#include "l3ster/glob_asm/AssembleLocalSystem.hpp"
+#include "l3ster/algsys/AssembleLocalSystem.hpp"
 #include "l3ster/util/TrilinosUtils.hpp"
 
 #include <atomic>
 
-namespace lstr::glob_asm
+namespace lstr::algsys
 {
 namespace detail
 {
@@ -52,5 +52,5 @@ void scatterLocalSystem(const util::eigen::RowMajorSquareMatrix< val_t, local_si
         }
     }
 }
-} // namespace lstr::glob_asm
-#endif // L3STER_GLOB_ASM_SCATTERLOCALSYSTEM_HPP
+} // namespace lstr::algsys
+#endif // L3STER_ALGSYS_SCATTERLOCALSYSTEM_HPP

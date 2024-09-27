@@ -1,8 +1,7 @@
 #include "Common.hpp"
 
+#include "l3ster/algsys/MakeAlgebraicSystem.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
-#include "l3ster/glob_asm/AlgebraicSystem.hpp"
-#include "l3ster/glob_asm/ComputeValuesAtNodes.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 #include "l3ster/post/VtkExport.hpp"
@@ -11,12 +10,12 @@
 #include <numbers>
 
 using namespace lstr;
-using namespace lstr::glob_asm;
+using namespace lstr::algsys;
 using namespace lstr::mesh;
 using namespace std::numbers;
 using namespace std::string_view_literals;
 
-void test2D(const MpiComm& comm)
+void test2D(const std::shared_ptr< MpiComm >& comm)
 {
     constexpr auto node_distx = std::invoke([] {
         auto retval = std::array< double, 11 >{};
@@ -32,7 +31,7 @@ void test2D(const MpiComm& comm)
     });
     constexpr auto mesh_order = 2;
     const auto     my_partition =
-        generateAndDistributeMesh< mesh_order >(comm, [&] { return mesh::makeSquareMesh(node_distx, node_disty); });
+        generateAndDistributeMesh< mesh_order >(*comm, [&] { return mesh::makeSquareMesh(node_distx, node_disty); });
 
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2;
     constexpr auto   problem_def       = ProblemDef{defineDomain< 4 >(domain_id, 1, 3),
@@ -43,9 +42,9 @@ void test2D(const MpiComm& comm)
     constexpr auto   vec_inds          = std::array< size_t, 2 >{1, 3};
     constexpr auto   all_field_inds    = util::makeIotaArray< size_t, problem_def.n_fields >();
 
-    auto system_manager   = makeAlgebraicSystem(comm, my_partition, problemdef_ctwrpr);
+    auto system_manager = makeAlgebraicSystem(comm, my_partition, problemdef_ctwrpr);
+    system_manager.endAssembly();
     auto solution_manager = SolutionManager{*my_partition, problem_def.n_fields};
-    auto solution         = system_manager.initSolution();
 
     constexpr auto params           = KernelParams{.dimension = 2, .n_equations = 2};
     const auto     bot_top_kernel   = wrapBoundaryResidualKernel< params >([&](const auto&, auto& out) {
@@ -61,19 +60,19 @@ void test2D(const MpiComm& comm)
         out[0]              = 1. - std::exp(lambda * p.x()) * std::cos(2. * pi * p.y());
         out[1]              = lambda * std::exp(lambda * p.x()) * std::sin(2 * pi * p.y()) / (2. * pi);
     });
-    system_manager.setValues(solution, kovasznay_kernel, {domain_id}, vec_inds);
-    system_manager.setValues(solution, bot_top_kernel, {bot_boundary, top_boundary}, scalar_inds);
-    system_manager.updateSolution(solution, all_field_inds, solution_manager, all_field_inds);
+    system_manager.setValues(system_manager.getSolution(), kovasznay_kernel, {domain_id}, vec_inds);
+    system_manager.setValues(system_manager.getSolution(), bot_top_kernel, {bot_boundary, top_boundary}, scalar_inds);
+    system_manager.updateSolution(all_field_inds, solution_manager, all_field_inds);
 
-    auto       exporter        = PvtuExporter{*my_partition};
+    auto       exporter        = PvtuExporter{comm, *my_partition};
     const auto field_names     = std::array{"C1"sv, "Cpi"sv, "vel"sv};
     const auto field_comp_inds = std::array< std::span< const size_t >, 3 >{
         std::span{std::addressof(scalar_inds[0]), 1}, std::span{std::addressof(scalar_inds[1]), 1}, vec_inds};
-    comm.barrier();
-    exporter.exportSolution("2D/results", comm, solution_manager, field_names, field_comp_inds);
+    comm->barrier();
+    exporter.exportSolution("2D/results", solution_manager, field_names, field_comp_inds);
 }
 
-void test3D(const MpiComm& comm)
+void test3D(const std::shared_ptr< MpiComm >& comm)
 {
     const auto node_dist = [] {
         auto retval = std::array< double, 7 >{};
@@ -82,7 +81,7 @@ void test3D(const MpiComm& comm)
         return retval;
     }();
     constexpr auto mesh_order = 2;
-    const auto my_partition   = generateAndDistributeMesh< mesh_order >(comm, [&] { return makeCubeMesh(node_dist); });
+    const auto my_partition   = generateAndDistributeMesh< mesh_order >(*comm, [&] { return makeCubeMesh(node_dist); });
 
     constexpr d_id_t domain_id           = 0;
     constexpr auto   problem_def         = ProblemDef{defineDomain< 6 >(domain_id, 0, 1, 2),
@@ -98,9 +97,9 @@ void test3D(const MpiComm& comm)
     constexpr auto   boundary_field_inds = std::array< size_t, 3 >{3, 4, 5};
     constexpr auto   field_inds          = util::makeIotaArray< size_t, n_fields >();
 
-    auto system_manager   = makeAlgebraicSystem(comm, my_partition, problemdef_ctwrpr);
+    auto system_manager = makeAlgebraicSystem(comm, my_partition, problemdef_ctwrpr);
+    system_manager.endAssembly();
     auto solution_manager = SolutionManager{*my_partition, n_fields};
-    auto solution         = system_manager.initSolution();
 
     constexpr auto ker_params   = KernelParams{.dimension = 3, .n_equations = 3};
     const auto     dom_kernel   = wrapDomainResidualKernel< ker_params >([&](const auto& in, auto& out) {
@@ -113,15 +112,15 @@ void test3D(const MpiComm& comm)
     constexpr auto boundary_ids = util::makeIotaArray< d_id_t, 6 >(1);
     const auto     bnd_kernel =
         wrapBoundaryResidualKernel< ker_params >([](const auto& in, auto& out) { out = in.normal; });
-    system_manager.setValues(solution, bnd_kernel, boundary_ids, boundary_field_inds);
-    system_manager.setValues(solution, dom_kernel, std::views::single(domain_id), domain_field_inds);
-    system_manager.updateSolution(solution, field_inds, solution_manager, field_inds);
+    system_manager.setValues(system_manager.getSolution(), bnd_kernel, boundary_ids, boundary_field_inds);
+    system_manager.setValues(
+        system_manager.getSolution(), dom_kernel, std::views::single(domain_id), domain_field_inds);
+    system_manager.updateSolution(field_inds, solution_manager, field_inds);
 
-    auto       exporter    = PvtuExporter{*my_partition};
+    auto       exporter    = PvtuExporter{comm, *my_partition};
     const auto field_names = std::array{"vec3D"sv, "normal"sv};
-    comm.barrier();
+    comm->barrier();
     exporter.exportSolution("3D/results.nonsense_extension",
-                            comm,
                             solution_manager,
                             field_names,
                             std::array{domain_field_inds, boundary_field_inds});
@@ -131,7 +130,7 @@ int main(int argc, char* argv[])
 {
     const auto max_par_guard = util::MaxParallelismGuard{4};
     const auto scope_guard   = L3sterScopeGuard{argc, argv};
-    const auto comm          = MpiComm{MPI_COMM_WORLD};
+    const auto comm          = std::make_shared< MpiComm >(MPI_COMM_WORLD);
     test2D(comm);
     test3D(comm);
     // TODO: Programatically check whether the data was exported correctly. For the time being, check manually...

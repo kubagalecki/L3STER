@@ -16,13 +16,15 @@ struct ElementData< T, O >
     static constexpr auto n_verts = ElementTraits< Element< T, 1 > >::nodes_per_element;
     using vertex_array_t          = std::array< Point< 3 >, n_verts >;
 
-    ElementData() = default;
-    ElementData(const vertex_array_t& vertices_) : vertices{vertices_} {} // NOLINT implicit conversion intended
-    template < el_o_t O_ >                                                // NOLINTNEXTLINE implicit conversion intended
-    ElementData(const ElementData< T, O_ >& d)
+    constexpr ElementData() = default;
+    constexpr ElementData(const vertex_array_t& vertices_) : vertices{vertices_} {}
+    template < el_o_t O_ >
+    constexpr ElementData(const ElementData< T, O_ >& d)
         requires(O != O_)
         : vertices{d.vertices}
     {}
+
+    friend constexpr bool operator==(const ElementData&, const ElementData&) = default;
 
     vertex_array_t vertices;
 };

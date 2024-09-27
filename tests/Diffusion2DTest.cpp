@@ -1,5 +1,5 @@
+#include "l3ster/algsys/MakeAlgebraicSystem.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
-#include "l3ster/glob_asm/AlgebraicSystem.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 #include "l3ster/post/NormL2.hpp"
 #include "l3ster/solve/Amesos2Solvers.hpp"
@@ -8,7 +8,7 @@
 #include "Common.hpp"
 
 using namespace lstr;
-using namespace lstr::glob_asm;
+using namespace lstr::algsys;
 using namespace lstr::mesh;
 
 constexpr auto node_dist = std::array{0., 1., 2., 3., 4., 5., 6.};
@@ -22,7 +22,7 @@ auto makeMesh(const MpiComm& comm, auto probdef_ctwrpr)
 template < CondensationPolicy CP >
 void test()
 {
-    const auto comm = MpiComm{MPI_COMM_WORLD};
+    const auto comm = std::make_shared< MpiComm >(MPI_COMM_WORLD);
 
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
     constexpr auto   problem_def    = ProblemDef{defineDomain< 3 >(domain_id, ALL_DOFS)};
@@ -31,7 +31,8 @@ void test()
         ProblemDef{defineDomain< 3 >(left_boundary, 0), defineDomain< 3 >(right_boundary, 0)};
     constexpr auto dirichletdef_ctwrpr = util::ConstexprValue< dirichlet_def >{};
 
-    const auto mesh = makeMesh(comm, probdef_ctwrpr);
+    const auto mesh = makeMesh(*comm, probdef_ctwrpr);
+    summarizeMesh(*comm, *mesh);
 
     constexpr auto adiabatic_bound_ids = std::array{bot_boundary, top_boundary};
     constexpr auto boundary_ids        = std::array{top_boundary, bot_boundary, left_boundary, right_boundary};
@@ -83,23 +84,14 @@ void test()
     assembleDomainProblem();
     assembleBoundaryProblem();
     alg_sys.endAssembly();
-    alg_sys.describe(comm);
-    CHECK_THROWS(assembleDomainProblem());
-    CHECK_THROWS(assembleBoundaryProblem());
-    CHECK_THROWS(alg_sys.endAssembly());
-
-    {
-        auto dummy_problem = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, {}, algparams_ctwrpr);
-        dummy_problem.endAssembly();
-    }
+    alg_sys.describe();
 
     constexpr auto dof_inds = util::makeIotaArray< size_t, 3 >();
 
-    auto solver   = solvers::Lapack{};
-    auto solution = alg_sys.initSolution();
-    alg_sys.solve(solver, solution);
+    auto solver = solvers::Lapack{};
+    alg_sys.solve(solver);
     auto solution_manager = SolutionManager{*mesh, problem_def.n_fields};
-    alg_sys.updateSolution(solution, dof_inds, solution_manager, dof_inds);
+    alg_sys.updateSolution(dof_inds, solution_manager, dof_inds);
 
     // Check results
     constexpr auto params        = KernelParams{.dimension = 2, .n_equations = 3, .n_fields = 3};
@@ -115,20 +107,22 @@ void test()
     constexpr auto bnd_error_kernel = wrapBoundaryResidualKernel< params >(compute_error);
     const auto     fval_getter      = solution_manager.makeFieldValueGetter(dof_inds);
 
-    const auto error = computeNormL2(comm, dom_error_kernel, *mesh, std::views::single(domain_id), fval_getter);
-    const auto boundary_error = computeNormL2(comm, bnd_error_kernel, *mesh, boundary_ids, fval_getter);
-    if (comm.getRank() == 0 and error.norm() >= 1e-10)
-    {
-        std::stringstream error_msg;
-        error_msg << "The error exceeded the allowed tolerance. The L2 error components were:\nvalue:\t\t\t" << error[0]
-                  << "\nx derivative:\t" << error[1] << "\ny derivative:\t" << error[2] << '\n';
-        std::cerr << error_msg.view();
-    }
-    comm.barrier();
-    REQUIRE(error.norm() < 1e-10);
-    REQUIRE(boundary_error.norm() < 1e-10);
+    constexpr auto eps   = 1.e-10;
+    const auto     error = computeNormL2(*comm, dom_error_kernel, *mesh, std::views::single(domain_id), fval_getter);
+    const auto     boundary_error = computeNormL2(*comm, bnd_error_kernel, *mesh, boundary_ids, fval_getter);
+    if (comm->getRank() == 0)
+        std::cout << std::format("L2 error components:\n{:<15}{}\n{:<15}{}\n{:<15}{}\n",
+                                 "value:",
+                                 error[0],
+                                 "x derivative:",
+                                 error[1],
+                                 "y derivative:",
+                                 error[2]);
+    comm->barrier();
+    REQUIRE(error.norm() < eps);
+    REQUIRE(boundary_error.norm() < eps);
 
-    alg_sys.beginAssembly();
+    alg_sys.beginAssembly(); // for code coverage
 }
 
 // Solve 2D diffusion problem

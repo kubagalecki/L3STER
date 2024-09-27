@@ -20,10 +20,15 @@ public:
     explicit CrsGraph(R&& adj_sizes)
         requires std::convertible_to< std::ranges::range_value_t< R >, std::size_t >;
 
-    auto operator()(std::size_t vertex_ind) noexcept -> std::span< VertexType >;
-    auto operator()(std::size_t vertex_ind) const noexcept -> std::span< const VertexType >;
-    auto getNRows() const noexcept -> std::size_t { return m_adj_offsets.size() - 1; }
-    auto getNEntries() const noexcept -> std::size_t { return m_adjacent.size(); }
+    auto operator()(std::size_t vertex_ind) -> std::span< VertexType >;
+    auto operator()(std::size_t vertex_ind) const -> std::span< const VertexType >;
+    auto operator()(std::size_t begin, std::size_t end) -> std::span< VertexType >;
+    auto operator()(std::size_t begin, std::size_t end) const -> std::span< const VertexType >;
+    auto getNRows() const -> std::size_t { return m_adj_offsets.size() - 1; }
+    auto getNEntries() const -> std::size_t { return m_adjacent.size(); }
+    auto getRawEntries() const -> std::span< const VertexType > { return {m_adjacent}; }
+    auto data() -> VertexType* { return m_adjacent.data(); }
+    auto data() const -> const VertexType* { return m_adjacent.data(); }
 
 private:
     template < typename R >
@@ -34,17 +39,31 @@ private:
 };
 
 template < std::integral VertexType >
-auto CrsGraph< VertexType >::operator()(std::size_t vertex_ind) noexcept -> std::span< VertexType >
+auto CrsGraph< VertexType >::operator()(std::size_t vertex_ind) -> std::span< VertexType >
 {
-    return {std::next(m_adjacent.begin(), m_adj_offsets[vertex_ind]),
-            std::next(m_adjacent.begin(), m_adj_offsets[vertex_ind + 1u])};
+    return {std::next(m_adjacent.begin(), m_adj_offsets.at(vertex_ind)),
+            std::next(m_adjacent.begin(), m_adj_offsets.at(vertex_ind + 1u))};
 }
 
 template < std::integral VertexType >
-auto CrsGraph< VertexType >::operator()(std::size_t vertex_ind) const noexcept -> std::span< const VertexType >
+auto CrsGraph< VertexType >::operator()(std::size_t vertex_ind) const -> std::span< const VertexType >
 {
-    return {std::next(m_adjacent.begin(), m_adj_offsets[vertex_ind]),
-            std::next(m_adjacent.begin(), m_adj_offsets[vertex_ind + 1u])};
+    return {std::next(m_adjacent.begin(), m_adj_offsets.at(vertex_ind)),
+            std::next(m_adjacent.begin(), m_adj_offsets.at(vertex_ind + 1u))};
+}
+
+template < std::integral VertexType >
+auto CrsGraph< VertexType >::operator()(std::size_t begin, std::size_t end) -> std::span< VertexType >
+{
+    return {std::next(m_adjacent.begin(), m_adj_offsets.at(begin)),
+            std::next(m_adjacent.begin(), m_adj_offsets.at(end))};
+}
+
+template < std::integral VertexType >
+auto CrsGraph< VertexType >::operator()(std::size_t begin, std::size_t end) const -> std::span< const VertexType >
+{
+    return {std::next(m_adjacent.begin(), m_adj_offsets.at(begin)),
+            std::next(m_adjacent.begin(), m_adj_offsets.at(end))};
 }
 
 template < std::integral VertexType >
@@ -52,12 +71,9 @@ template < typename R >
 auto CrsGraph< VertexType >::initAdjOffsets(R&& adj_sizes) -> ArrayOwner< std::size_t >
 {
     auto retval           = ArrayOwner< std::size_t >(std::ranges::distance(adj_sizes) + 1);
-    retval[0]             = 0;
+    retval.front()        = 0;
     auto adj_sizes_common = std::forward< R >(adj_sizes) | std::views::common;
-    std::inclusive_scan(std::execution::par,
-                        std::ranges::cbegin(adj_sizes_common),
-                        std::ranges::cend(adj_sizes_common),
-                        std::next(retval.begin()));
+    std::inclusive_scan(adj_sizes_common.begin(), adj_sizes_common.end(), std::next(retval.begin()));
     return retval;
 }
 

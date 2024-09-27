@@ -1,8 +1,10 @@
 #include "l3ster/mesh/BoundaryView.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
+#include "l3ster/mesh/LocalMeshView.hpp"
 #include "l3ster/mesh/PartitionMesh.hpp"
 #include "l3ster/mesh/ReadMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
+#include "l3ster/mesh/primitives/SquareMesh.hpp"
 
 #include "TestDataPath.h"
 #include "catch2/catch.hpp"
@@ -34,7 +36,7 @@ TEST_CASE("2D mesh import", "[mesh]")
 
     // BoundaryView
     for (auto bnd_id : boundary_ids)
-        CHECK(mesh.getBoundary(bnd_id).size() == 10);
+        CHECK(mesh.getBoundary(bnd_id).element_views.size() == 10);
     CHECK_THROWS(mesh.getBoundary(boundary_ids.back() + 1));
     CHECK(static_cast< size_t >(std::ranges::distance(mesh.getBoundaryIdsView())) == boundary_ids.size());
 }
@@ -70,10 +72,10 @@ TEST_CASE("Incorrect domain dim handling", "[mesh]")
     const auto     data  = ElementData< ElementType::Line, 1 >{{Point{0., 0., 0.}, Point{0., 0., 0.}}};
     constexpr auto nodes = std::array< n_id_t, 2 >{1, 2};
     el_id_t        id    = 1;
-    domain.getElementVector< ElementType::Line, 1 >().reserve(1);
-    domain.getElementVector< ElementType::Line, 1 >().emplace_back(nodes, data, id++);
-    domain.getElementVector< ElementType::Line, 1 >().reserve(1);
-    CHECK_THROWS(domain.getElementVector< ElementType::Quad, 1 >());
+    domain.elements.getVector< Element< ElementType::Line, 1 > >().reserve(1);
+    domain.elements.getVector< Element< ElementType::Line, 1 > >().emplace_back(nodes, data, id++);
+    domain.elements.getVector< Element< ElementType::Line, 1 > >().reserve(1);
+    CHECK(domain.elements.getVector< Element< ElementType::Quad, 1 > >().size() == 0);
 }
 
 TEMPLATE_TEST_CASE("Iteration over elements",
@@ -123,64 +125,65 @@ TEMPLATE_TEST_CASE("Iteration over elements",
     count = 0;
 }
 
-TEMPLATE_TEST_CASE("Element lookup", "[mesh]", std::execution::sequenced_policy, std::execution::parallel_policy)
+TEST_CASE("Element lookup", "[mesh]")
 {
-    const auto policy = TestType{};
-    auto       mesh   = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), {}, gmsh_tag);
+    auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), {}, gmsh_tag);
 
     constexpr auto existing_nodes = std::array{54, 55, 63, 64};
     constexpr auto fake_nodes     = std::array{153, 213, 372, 821};
 
-    CHECK(mesh.find(
-        [&](const auto& element) {
-            auto element_nodes = element.getNodes();
-            std::ranges::sort(element_nodes);
-            return std::ranges::equal(element_nodes, existing_nodes);
-        },
-        policy));
-    CHECK_FALSE(mesh.find(
-        [&](const auto& element) {
-            auto element_nodes = element.getNodes();
-            std::ranges::sort(element_nodes);
-            return std::ranges::equal(element_nodes, fake_nodes);
-        },
-        policy));
-    CHECK_FALSE(MeshPartition< 1 >{}.find([](const auto&) { return true; }, policy));
+    CHECK(mesh.find([&](const auto& element) {
+        auto element_nodes = element.getNodes();
+        std::ranges::sort(element_nodes);
+        return std::ranges::equal(element_nodes, existing_nodes);
+    }));
+    CHECK_FALSE(mesh.find([&](const auto& element) {
+        auto element_nodes = element.getNodes();
+        std::ranges::sort(element_nodes);
+        return std::ranges::equal(element_nodes, fake_nodes);
+    }));
+    CHECK_FALSE(MeshPartition< 1 >{}.find([](const auto&) { return true; }));
     CHECK_FALSE(MeshPartition< 1 >{}.find(0));
 }
 
 TEST_CASE("Element lookup by ID", "[mesh]")
 {
-    auto domain = Domain< 1 >{};
-    CHECK_FALSE(domain.find(1));
-    CHECK_FALSE(std::as_const(domain).find(1));
-
-    const auto data  = ElementData< ElementType::Line, 1 >{{Point{0., 0., 0.}, Point{0., 0., 0.}}};
-    auto       nodes = std::array< n_id_t, 2 >{1, 2};
-    el_id_t    id    = 1;
-    domain.getElementVector< ElementType::Line, 1 >().reserve(1);
-    CHECK_FALSE(domain.find(1));
-    domain.getElementVector< ElementType::Line, 1 >().emplace_back(nodes, data, id++);
-    CHECK(domain.find(1));
-    CHECK_FALSE(domain.find(0));
-
-    const auto next = [&]() -> std::array< n_id_t, 2 >& {
-        std::ranges::for_each(nodes, [](auto& n) { ++n; });
-        return nodes;
+    auto       domain       = Domain< 1 >{};
+    const auto push_elem_id = [&](el_id_t id) {
+        constexpr auto data  = ElementData< ElementType::Line, 1 >{};
+        constexpr auto nodes = std::array< n_id_t, 2 >{};
+        emplaceInDomain< ElementType::Line, 1 >(domain, nodes, data, id);
+    };
+    const auto check_contains = [&](el_id_t id) {
+        auto part = MeshPartition< 1 >{MeshPartition< 1 >::domain_map_t{{0, domain}}, {}};
+        CHECK(part.find(id));
+        CHECK(std::as_const(part).find(id));
+    };
+    const auto check_doesnt_contain = [&](el_id_t id) {
+        auto part = MeshPartition< 1 >{MeshPartition< 1 >::domain_map_t{{0, domain}}, {}};
+        CHECK_FALSE(part.find(id));
+        CHECK_FALSE(std::as_const(part).find(id));
     };
 
+    check_doesnt_contain(0);
+
+    el_id_t id = 1;
+    push_elem_id(id++);
+    check_contains(1);
+    check_doesnt_contain(0);
+
     for (size_t i = 0; i < 10; ++i)
-        domain.getElementVector< ElementType::Line, 1 >().emplace_back(next(), data, id++);
-    CHECK(domain.find(10));
+        push_elem_id(id++);
+    check_contains(10);
+    check_doesnt_contain(0);
 
-    domain.getElementVector< ElementType::Line, 1 >().emplace_back(next(), data, 0);
-    CHECK_FALSE(domain.find(0));
-    domain.sort();
-    CHECK(domain.find(0));
+    push_elem_id(0);
+    domain.elements.visitVectors([](auto& v) { std::ranges::sort(v, {}, [](const auto& el) { return el.getId(); }); });
+    check_contains(0);
 
-    domain.getElementVector< ElementType::Line, 1 >().emplace_back(next(), data, id *= 2);
-    CHECK(domain.find(id));
-    CHECK_FALSE(domain.find(id + 1));
+    push_elem_id(id *= 2);
+    check_contains(id);
+    check_doesnt_contain(id + 1);
 }
 
 TEST_CASE("Serial mesh partitioning", "[mesh]")
@@ -217,7 +220,7 @@ TEST_CASE("Serial mesh partitioning", "[mesh]")
     constexpr auto get_bnd_size = [](const MeshPartition< 1 >& part, d_id_t bnd_id) -> size_t {
         try
         {
-            return part.getBoundary(bnd_id).size();
+            return part.getBoundary(bnd_id).element_views.size();
         }
         catch (const std::out_of_range&)
         {
@@ -269,5 +272,82 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
         CHECK(mesh.getOwnedNodes().size() == expected_n_nodes);
         for (size_t i = 0; i < mesh.getOwnedNodes().size() - 1; ++i)
             CHECK(mesh.getOwnedNodes()[i] + 1 == mesh.getOwnedNodes()[i + 1]);
+    }
+}
+
+template < el_o_t O >
+using Order = std::integral_constant< el_o_t, O >;
+TEMPLATE_TEST_CASE("Local mesh view", "[mesh]", Order< 1 >, Order< 2 >, Order< 4 >)
+{
+    constexpr auto order     = TestType::value;
+    constexpr auto node_dist = std::array{0., 1., 2., 3., 4.};
+
+    constexpr auto check_local_view = [](const auto& global_mesh) {
+        auto             nodes_reordered = computeNodeOrder(global_mesh);
+        const auto       node_map        = NodeMap{std::move(nodes_reordered)};
+        const auto       local_view      = LocalMeshView{global_mesh, node_map};
+        constexpr d_id_t domain_id       = 0;
+        const auto       global_domain   = global_mesh.getDomain(domain_id);
+        const auto       local_domain    = local_view.getDomains().at(domain_id);
+
+        const auto find_local_element = [&](const auto& global_element) {
+            const auto found_el = local_domain.elements.find([&](const auto& local_element) {
+                using local_t  = std::remove_cvref_t< decltype(local_element) >;
+                using global_t = std::remove_cvref_t< decltype(global_element) >;
+                if constexpr (local_t::type == global_t::type and local_t::order == global_t::order)
+                {
+                    const auto nodes = local_element.getGlobalNodes(node_map);
+                    return nodes == global_element.getNodes() and local_element.getData() == global_element.getData();
+                }
+                return false;
+            });
+            return found_el.has_value();
+        };
+        const auto check_element = [&](const auto& global_element) {
+            CHECK(find_local_element(global_element));
+        };
+        global_domain.elements.visit(check_element, std::execution::seq);
+
+        const auto find_local_boundary_view = [&](const auto& global_boundary_view, d_id_t boundary_id) {
+            const auto found_el = local_domain.elements.find([&](const auto& local_element) {
+                using local_t  = std::remove_cvref_t< decltype(local_element) >;
+                using global_t = std::remove_cvref_t< decltype(global_boundary_view) >;
+                if constexpr (local_t::type == global_t::type and local_t::order == global_t::order)
+                {
+                    for (const auto& [side, boundary] : local_element.getBoundaries())
+                        if (boundary == boundary_id)
+                        {
+                            const auto nodes = local_element.getGlobalNodes(node_map);
+                            if (nodes == global_boundary_view->getNodes() and
+                                local_element.getData() == global_boundary_view->getData() and
+                                side == global_boundary_view.getSide())
+                                return true;
+                        }
+                }
+                return false;
+            });
+            return found_el.has_value();
+        };
+        for (d_id_t boundary_id : global_mesh.getBoundaryIdsView())
+        {
+            const auto& boundary_view       = global_mesh.getBoundary(boundary_id);
+            const auto  check_boundary_view = [&](const auto& global_element_boundary_view) {
+                CHECK(find_local_boundary_view(global_element_boundary_view, boundary_id));
+            };
+            boundary_view.element_views.visit(check_boundary_view, std::execution::seq);
+        }
+    };
+
+    SECTION("2D")
+    {
+        const auto mesh_o1 = makeSquareMesh(node_dist);
+        const auto mesh    = convertMeshToOrder< order >(mesh_o1);
+        check_local_view(mesh);
+    }
+    SECTION("3D")
+    {
+        const auto mesh_o1 = makeCubeMesh(node_dist);
+        const auto mesh    = convertMeshToOrder< order >(mesh_o1);
+        check_local_view(mesh);
     }
 }

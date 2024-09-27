@@ -51,8 +51,8 @@ struct NodeInfo
 };
 
 template < ElementType ET >
-auto makeElementFromNodeData(const std::array< NodeInfo, Element< ET, 1 >::n_nodes >& node_data, el_id_t id)
-    -> Element< ET, 1 >
+auto makeElementFromNodeData(const std::array< NodeInfo, Element< ET, 1 >::n_nodes >& node_data,
+                             el_id_t                                                  id) -> Element< ET, 1 >
 {
     using node_array_t   = std::array< n_id_t, Element< ET, 1 >::n_nodes >;
     using coords_array_t = ElementData< ET, 1 >::vertex_array_t;
@@ -109,7 +109,7 @@ inline auto readMesh(std::string_view                  file_path,
 {
     L3STER_PROFILE_FUNCTION;
 
-    auto file_map       = util::MmappedFile{std::string{file_path}};
+    auto file_map       = util::MmappedFile{file_path};
     auto file_streambuf = util::MmappedStreambuf{std::move(file_map)};
     auto file           = std::istream{&file_streambuf};
 
@@ -302,9 +302,16 @@ inline auto readMesh(std::string_view                  file_path,
                 auto& block_domain = domain_map[entity_data.first[entity_dim].at(entity_tag)];
 
                 const auto push_elements = [&]< size_t I >(std::integral_constant< size_t, I >) {
-                    constexpr auto el_type       = detail::lookupElt< I >();
-                    const auto     back_inserter = std::back_inserter(block_domain.getElementVector< el_type, 1 >());
-                    const auto     read_element  = [&] {
+                    constexpr auto el_type = detail::lookupElt< I >();
+                    constexpr auto el_dim  = ElementTraits< Element< el_type, 1 > >::native_dim;
+                    if (block_domain.dim == Domain< 1 >::uninitialized_dim)
+                        block_domain.dim = el_dim;
+                    util::throwingAssert(block_domain.dim == el_dim,
+                                         "Domain contains elements of different dimensions");
+
+                    auto&      el_vec        = block_domain.elements.getVector< Element< el_type, 1 > >();
+                    const auto back_inserter = std::back_inserter(el_vec);
+                    const auto read_element  = [&] {
                         size_t element_tag;
                         file >> element_tag; // discard tag
 
@@ -336,8 +343,10 @@ inline auto readMesh(std::string_view                  file_path,
             }
             skip_until_section("$EndElements");
 
+            // Sort elements by ID
             for (auto& domain : domain_map | std::views::values)
-                domain.sort();
+                domain.elements.visitVectors(
+                    [](auto& vec) { std::ranges::sort(vec, {}, [](const auto& el) { return el.getId(); }); });
 
             return {std::move(domain_map), boundary_ids};
         };

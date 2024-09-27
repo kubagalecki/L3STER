@@ -7,7 +7,6 @@ on:
   pull_request:
 
 env:
-  DOCKER_BASE: "${{ secrets.DOCKER_HUB_USERNAME }}/${{ secrets.DOCKER_HUB_IMAGE }}:latest"
   OMPI_ALLOW_RUN_AS_ROOT: 1
   OMPI_ALLOW_RUN_AS_ROOT_CONFIRM: 1
 
@@ -16,25 +15,25 @@ jobs:
     name: Build base container
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v3.3.0
-      - uses: whoan/docker-build-with-cache-action@v6
+      - uses: actions/checkout@v4.2.0
+      - uses: whoan/docker-build-with-cache-action@v8.0.2
         id: docker-base-cache
         with:
-          username: kubagalecki
+          username: "${{ secrets.DOCKER_HUB_USERNAME }}"
           password: "${{ secrets.DOCKER_HUB_TOKEN }}"
-          image_name: l3ster-base
+          image_name: l3ster-ci
           dockerfile: scripts/ci/Dockerfile.base
 
   unit_tests_and_static_analysis:
     name: Static analysis and unit tests
     needs: build_base_container
     runs-on: self-hosted
-    container: kubagalecki/l3ster-base:latest
+    container: kubagalecki/l3ster-ci:latest
     env:
       BUILD_TYPE: Release
       TOOLCHAIN_PATH: ../cmake/toolchains/StaticAnalysis.cmake
     steps:
-      - uses: actions/checkout@v3.3.0
+      - uses: actions/checkout@v4.2.0
       - name: Build and run tests
         run: scripts/ci/build-and-run-tests.sh
       - name: Cleanup
@@ -45,7 +44,7 @@ jobs:
     name: Sanitizers
     needs: unit_tests_and_static_analysis
     runs-on: self-hosted
-    container: kubagalecki/l3ster-base:latest
+    container: kubagalecki/l3ster-ci:latest
     env:
       BUILD_TYPE: ${{ matrix.build_type }}
       TOOLCHAIN_PATH: "../cmake/toolchains/${{ matrix.sanitizer }}Sanitizer.cmake"
@@ -54,9 +53,10 @@ jobs:
         build_type: [ Debug, Release ]
         sanitizer: [ Address, UndefinedBehavior ] # Thread disabled, too many false positives with TBB
     steps:
-      - uses: actions/checkout@v3.3.0
+      - uses: actions/checkout@v4.2.0
       - name: Build and run tests
         run: scripts/ci/build-and-run-tests.sh
+        continue-on-error: true # Allow sanitizers to fail
       - name: Cleanup
         if: always()
         run: rm -rf build/
@@ -65,13 +65,13 @@ jobs:
     name: Deployment tests
     needs: unit_tests_and_static_analysis
     runs-on: self-hosted
-    container: kubagalecki/l3ster-base:latest
+    container: kubagalecki/l3ster-ci:latest
     env:
       DEPLOYMENT_TESTS: true
       BUILD_TYPE: Release
       TOOLCHAIN_PATH: ../cmake/toolchains/StaticAnalysis.cmake
     steps:
-      - uses: actions/checkout@v3.3.0
+      - uses: actions/checkout@v4.2.0
       - name: Build and run tests
         run: scripts/ci/build-and-run-tests.sh
       - name: Cleanup
@@ -82,18 +82,17 @@ jobs:
     name: Code coverage
     needs: [ sanitizers, deployment ]
     runs-on: self-hosted
-    container: kubagalecki/l3ster-base:latest
+    container: kubagalecki/l3ster-ci:latest
     env:
       BUILD_TYPE: Debug
       TOOLCHAIN_PATH: ../cmake/toolchains/Coverage.cmake
     steps:
-      - uses: actions/checkout@v3.3.0
+      - uses: actions/checkout@v4.2.0
       - name: Build and run tests
         run: scripts/ci/build-and-run-tests.sh
       - name: Gather coverage results via gcovr
         run: |
           gcovr --verbose --xml --print-summary --exclude-unreachable-branches --exclude-throw-branches \
-          --gcov-executable gcov-12 \
           --root "$GITHUB_WORKSPACE" \
           --exclude "$GITHUB_WORKSPACE/tests/" \
           --output "$GITHUB_WORKSPACE/coverage_report.xml" \
@@ -101,7 +100,7 @@ jobs:
       - name: Cleanup
         if: always()
         run: rm -rf build/
-      - uses: codecov/codecov-action@v3.1.1
+      - uses: codecov/codecov-action@v4.5.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true

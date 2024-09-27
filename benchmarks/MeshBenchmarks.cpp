@@ -21,8 +21,8 @@ static void BM_BoundaryViewGeneration(benchmark::State& state)
     const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {}, mesh::gmsh_tag);
     for (auto _ : state)
     {
-        const auto bnd_view = mesh::MeshPartition< 1 >::makeBoundaryElementViews(mesh, std::views::single(2));
-        benchmark::DoNotOptimize(bnd_view.data());
+        auto bnd_view = mesh::MeshPartition< 1 >::makeBoundaryElementViews(mesh, std::views::single(2));
+        benchmark::DoNotOptimize(bnd_view);
         benchmark::ClobberMemory();
     }
 }
@@ -30,17 +30,25 @@ BENCHMARK(BM_BoundaryViewGeneration)->Unit(benchmark::kMillisecond)->Name("Gener
 
 static void BM_MeshOrderConversion(benchmark::State& state)
 {
-    auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {}, mesh::gmsh_tag);
+    const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {}, mesh::gmsh_tag);
     for (auto _ : state)
-        benchmark::DoNotOptimize(mesh::convertMeshToOrder< 2 >(mesh));
+    {
+        auto converted = mesh::convertMeshToOrder< 2 >(mesh);
+        benchmark::DoNotOptimize(converted);
+        benchmark::ClobberMemory();
+    }
 }
 BENCHMARK(BM_MeshOrderConversion)->Unit(benchmark::kSecond)->Name("Convert mesh to 2nd order");
 
 static void BM_MeshPartitioning(benchmark::State& state)
 {
-    auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {}, mesh::gmsh_tag);
+    const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {}, mesh::gmsh_tag);
     for (auto _ : state)
-        benchmark::DoNotOptimize(partitionMesh(mesh, static_cast< idx_t >(state.range(0))));
+    {
+        auto partd = partitionMesh(mesh, static_cast< idx_t >(state.range(0)));
+        benchmark::DoNotOptimize(partd);
+        benchmark::ClobberMemory();
+    }
 }
 BENCHMARK(BM_MeshPartitioning)
     ->Unit(benchmark::kMillisecond)
@@ -48,23 +56,6 @@ BENCHMARK(BM_MeshPartitioning)
     ->Unit(benchmark::kSecond)
     ->RangeMultiplier(2)
     ->Range(1, 1 << 6);
-
-static void BM_MeshSerialization(benchmark::State& state)
-{
-    const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {}, mesh::gmsh_tag);
-    for (auto _ : state)
-        benchmark::DoNotOptimize(mesh::SerializedPartition{mesh});
-}
-BENCHMARK(BM_MeshSerialization)->Unit(benchmark::kMillisecond)->Name("Serialize mesh");
-
-static void BM_MeshDeserialization(benchmark::State& state)
-{
-    const auto mesh       = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {}, mesh::gmsh_tag);
-    const auto serialized = mesh::SerializedPartition{mesh};
-    for (auto _ : state)
-        benchmark::DoNotOptimize(mesh::deserializePartition< 1 >(serialized));
-}
-BENCHMARK(BM_MeshDeserialization)->Unit(benchmark::kMillisecond)->Name("Deserialize mesh");
 
 template < typename ExecutionPolicy >
 static void BM_CopyElementNodes(benchmark::State& state)
@@ -79,7 +70,7 @@ static void BM_CopyElementNodes(benchmark::State& state)
 
     const auto read_element = [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >& el) {
         const auto nodes = std::span{el.getNodes()};
-        const auto hash  = robin_hood::hash_bytes(nodes.data(), nodes.size_bytes());
+        auto       hash  = robin_hood::hash_bytes(nodes.data(), nodes.size_bytes());
         benchmark::DoNotOptimize(hash);
     };
 
@@ -99,3 +90,22 @@ BENCHMARK_TEMPLATE(BM_CopyElementNodes, std::execution::parallel_policy)
     ->Unit(benchmark::kMicrosecond)
     ->UseRealTime()
     ->Name("Hash nodes [parallel]");
+
+static void BM_MakeLocalMeshView(benchmark::State& state)
+{
+    const d_id_t boundary_id = 2;
+    const auto   mesh        = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {boundary_id}, mesh::gmsh_tag);
+
+    for (auto _ : state)
+    {
+        const auto node_map   = mesh::NodeMap{mesh::computeNodeOrder(mesh)};
+        auto       local_view = mesh::LocalMeshView{mesh, node_map};
+        benchmark::DoNotOptimize(local_view);
+    }
+
+    state.counters["Element processing rate"] =
+        benchmark::Counter{static_cast< double >(mesh.getNElements() * state.iterations()),
+                           benchmark::Counter::kIsRate,
+                           benchmark::Counter::kIs1000};
+}
+BENCHMARK(BM_MakeLocalMeshView)->Unit(benchmark::kMillisecond)->Name("Generate local mesh view");

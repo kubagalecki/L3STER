@@ -5,7 +5,7 @@ int main(int argc, char* argv[])
     using namespace lstr;
 
     const auto scope_guard = L3sterScopeGuard{argc, argv};
-    const auto comm        = MpiComm{MPI_COMM_WORLD};
+    const auto comm        = std::make_shared< MpiComm >(MPI_COMM_WORLD);
 
     // Physical region IDs - these were set in Gmsh
     constexpr int domain = 44, inlet = 45, wall = 46, outlet = 47;
@@ -28,14 +28,14 @@ int main(int argc, char* argv[])
     // Read mesh
     const std::string mesh_file  = argc > 1 ? argv[1] : "../karman.msh";
     constexpr int     mesh_order = 4;
-    const auto        mesh =
-        readAndDistributeMesh< mesh_order >(comm, mesh_file, mesh::gmsh_tag, {inlet, wall, outlet}, {}, probdef_ctwrpr);
+    const auto        mesh       = readAndDistributeMesh< mesh_order >(
+        *comm, mesh_file, mesh::gmsh_tag, {inlet, wall, outlet}, {}, probdef_ctwrpr);
 
     // Algebraic system used for both the steady and transient problems
     constexpr auto sys_opts         = AlgebraicSystemParams{.cond_policy = CondensationPolicy::ElementBoundary};
     constexpr auto sysopts_ctval    = L3STER_WRAP_CTVAL(sys_opts);
     auto           algebraic_system = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, dirdef_ctwrpr, sysopts_ctval);
-    algebraic_system.describe(comm);
+    algebraic_system.describe();
 
     // Time step
     constexpr double dt = .1;
@@ -196,37 +196,17 @@ int main(int argc, char* argv[])
     const auto vort_inds = std::array{4};    // Vorticity
     const auto p_inds    = std::array{5};    // Pressure
 
-    // Solution vector for the algebraic system
-    auto solution = algebraic_system.initSolution();
-
     // L3STER interface to KLU2 direct solver
     auto solver = solvers::KLU2{};
 
-    // Utilities for printing the table of results
-    constexpr auto print_padded =
-        [](const std::string& a, const std::string& b, const std::string& c, const std::string& d) {
-            // Column widths for results table
-            constexpr int w1 = 11, w2 = 8, w3 = 9, w4 = 16;
-            std::cout << std::left << std::setw(w1) << a << std::setw(w2) << b << std::setw(w3) << c << std::setw(w4)
-                      << d << '\n';
-        };
-    const auto print_row = [&](int step, double inflow, double outflow) {
-        constexpr auto ts = [](double value, int precision = 3) {
-            // Convert double to string with given precision (don't do this in performance-sensitive code)
-            std::ostringstream stream;
-            stream << std::fixed << std::setprecision(precision) << value;
-            return stream.str();
-        };
-        print_padded(std::to_string(step), ts(inflow), ts(outflow), ts((inflow - outflow) / inflow * 100., 2) + "%");
+    // Utility for printing the table of results
+    const auto report_flowrate = [&](int iter, double in, double out) {
+        const double err = (in - out) / in * 100.;
+        std::cout << std::format("{:^10}|{:^8.4f}|{:^9.4f}|{:^21.3f}\n", iter, in, out, err);
     };
 
-    // Table header
-    print_padded("Time step", "Inflow", "Outflow", "Flow rate error");
-
-    // Header separator
-    std::cout << std::setfill('-');
-    print_padded("", "", "", "");
-    std::cout << std::setfill(' ');
+    // Print table header
+    std::cout << std::format("{:^10}|{:^8}|{:^9}|{:^21}\n", "Time step", "Inflow", "Outflow", "Flow rate error [%]");
 
     // Newton iterations for the steady state solution
     const int steady_iters = 10;
@@ -246,22 +226,21 @@ int main(int argc, char* argv[])
         algebraic_system.endAssembly();
 
         // Solve
-        algebraic_system.solve(solver, solution);
+        algebraic_system.solve(solver);
 
         // Place the computed values in the solution manager
-        algebraic_system.updateSolution(solution, vel_inds1, solution_manager, vel_inds1);
+        algebraic_system.updateSolution(vel_inds1, solution_manager, vel_inds1);
     }
 
     // Set the remaining solution components to the steady state solution
     algebraic_system.updateSolution(
-        solution, std::views::iota(0, 4), solution_manager, util::concatRanges(vel_inds2, vort_inds, p_inds));
+        std::views::iota(0, 4), solution_manager, util::concatRanges(vel_inds2, vort_inds, p_inds));
 
     // Paraview exporter object
-    auto exporter = PvtuExporter{*mesh};
+    auto exporter = PvtuExporter{comm, *mesh};
 
     // Export initial snapshot
-    exporter.exportSolution("results/karman_0.pvtu",
-                            comm,
+    exporter.exportSolution("results/karman_000.pvtu",
                             solution_manager,
                             {"Velocity", "Vorticity", "Pressure"},
                             util::gatherAsCommon(vel_inds2, vort_inds, p_inds));
@@ -269,9 +248,9 @@ int main(int argc, char* argv[])
     // Print flow rate info, note that the computed integrals are vectors of length 1, hence the "[0]"
     {
         const auto vel_getter   = solution_manager.makeFieldValueGetter(vel_inds1);
-        const auto inflow_rate  = -computeIntegral(comm, kernel_flowrate, *mesh, {inlet}, vel_getter)[0];
-        const auto outflow_rate = computeIntegral(comm, kernel_flowrate, *mesh, {outlet}, vel_getter)[0];
-        print_row(0, inflow_rate, outflow_rate);
+        const auto inflow_rate  = -computeIntegral(*comm, kernel_flowrate, *mesh, {inlet}, vel_getter)[0];
+        const auto outflow_rate = computeIntegral(*comm, kernel_flowrate, *mesh, {outlet}, vel_getter)[0];
+        report_flowrate(0, inflow_rate, outflow_rate);
     }
 
     constexpr int time_steps = 200;
@@ -291,22 +270,21 @@ int main(int argc, char* argv[])
         algebraic_system.endAssembly();
 
         // Solve
-        algebraic_system.solve(solver, solution);
+        algebraic_system.solve(solver);
 
         // Place the computed values in the solution manager
-        algebraic_system.updateSolution(
-            solution, std::views::iota(0, 4), solution_manager, util::concatRanges(vel_inds2, vort_inds, p_inds));
+        const auto solution_manager_inds = util::concatRanges(vel_inds2, vort_inds, p_inds);
+        algebraic_system.updateSolution(std::views::iota(0, 4), solution_manager, solution_manager_inds);
 
         // Print flow rate info
         const auto current_vel_getter = solution_manager.makeFieldValueGetter(vel_inds2);
-        const auto inflow_rate        = -computeIntegral(comm, kernel_flowrate, *mesh, {inlet}, current_vel_getter)[0];
-        const auto outflow_rate       = computeIntegral(comm, kernel_flowrate, *mesh, {outlet}, current_vel_getter)[0];
-        print_row(time_step, inflow_rate, outflow_rate);
+        const auto inflow_rate        = -computeIntegral(*comm, kernel_flowrate, *mesh, {inlet}, current_vel_getter)[0];
+        const auto outflow_rate       = computeIntegral(*comm, kernel_flowrate, *mesh, {outlet}, current_vel_getter)[0];
+        report_flowrate(time_step, inflow_rate, outflow_rate);
 
         // Export snapshot
-        const auto file_name = "results/karman_" + std::to_string(time_step) + ".pvtu";
+        const auto file_name = std::format("results/karman_{:03}.pvtu", time_step);
         exporter.exportSolution(file_name,
-                                comm,
                                 solution_manager,
                                 {"Velocity", "Vorticity", "Pressure"},
                                 util::gatherAsCommon(vel_inds2, vort_inds, p_inds));

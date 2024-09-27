@@ -79,14 +79,13 @@ auto parallelTransformReduce(Range&& range, Zero identity, Reduction reduction =
         iter_space,
         identity,
         [&](const auto& iter_range, const auto& value) {
-            return std::transform_reduce(std::execution::unseq,
-                                         std::next(range.begin(), iter_range.begin()),
+            return std::transform_reduce(std::next(range.begin(), iter_range.begin()),
                                          std::next(range.begin(), iter_range.end()),
                                          value,
                                          reduction,
                                          transform);
         },
         reduction);
-} // namespace lstr::util::tbb
+}
 } // namespace lstr::util::tbb
 #endif // L3STER_UTIL_TBBUTILS_HPP

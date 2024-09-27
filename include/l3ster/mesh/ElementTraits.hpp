@@ -4,9 +4,10 @@
 #include "l3ster/common/Structs.hpp"
 #include "l3ster/mesh/ElementType.hpp"
 #include "l3ster/util/Algorithm.hpp"
+#include "l3ster/util/Concepts.hpp"
 #include "l3ster/util/ConstexprVector.hpp"
 
-#include <vector>
+#include <span>
 
 namespace lstr::mesh
 {
@@ -117,10 +118,10 @@ private:
     {
         static consteval auto compute()
         {
-            std::array< std::array< el_locind_t, O + 1 >, n_sides > retval{};
-            constexpr el_locind_t                                   nodes_per_side = O + 1;
-            constexpr auto                                          top_shift   = nodes_per_side * (nodes_per_side - 1);
-            constexpr auto                                          right_shift = nodes_per_side - 1;
+            auto                  retval         = std::array< std::array< el_locind_t, O + 1 >, n_sides >{};
+            constexpr el_locind_t nodes_per_side = O + 1;
+            constexpr auto        top_shift      = nodes_per_side * (nodes_per_side - 1);
+            constexpr auto        right_shift    = nodes_per_side - 1;
 
             for (size_t i = 0; i < nodes_per_side; ++i)
             {
@@ -159,5 +160,14 @@ public:
     static constexpr auto boundary_node_inds = detail::elem::makeBoundaryNodeInds< BoundaryTable >();
     static constexpr auto internal_node_inds = detail::elem::makeInternalNodeInds< BoundaryTable, nodes_per_element >();
 };
+
+template < ElementType ET, el_o_t EO >
+constexpr auto getSideNodeIndices(el_side_t side) -> std::span< const el_locind_t >
+{
+    if constexpr (Array_c< decltype(ElementTraits< Element< ET, EO > >::boundary_table) >)
+        return {ElementTraits< Element< ET, EO > >::boundary_table.at(side)};
+    else
+        static_assert(util::always_false< ET >, "Unimplemented");
+}
 } // namespace lstr::mesh
 #endif // L3STER_MESH_ELEMENTTRAITS_HPP

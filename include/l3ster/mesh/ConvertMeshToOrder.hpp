@@ -18,8 +18,8 @@ struct NeighborInfo
     d_id_t                      domain;
 };
 
-inline auto makeNeighborInfoMap(const MeshPartition< 1 >& mesh)
-    -> robin_hood::unordered_flat_map< el_id_t, NeighborInfo >
+inline auto
+makeNeighborInfoMap(const MeshPartition< 1 >& mesh) -> robin_hood::unordered_flat_map< el_id_t, NeighborInfo >
 {
     auto retval = robin_hood::unordered_flat_map< el_id_t, NeighborInfo >(mesh.getNElements());
     for (d_id_t domain_id : mesh.getDomainIds())
@@ -32,18 +32,33 @@ inline auto makeNeighborInfoMap(const MeshPartition< 1 >& mesh)
     }
     return retval;
 }
+
+template < el_o_t converted_order >
+auto initNewDomains(const MeshPartition< 1 >& mesh_old) -> MeshPartition< converted_order >::domain_map_t
+{
+    auto retval = typename MeshPartition< converted_order >::domain_map_t{};
+    for (d_id_t domain_id : mesh_old.getDomainIds())
+    {
+        const auto& old_domain = mesh_old.getDomain(domain_id);
+        auto&       new_domain = retval[domain_id];
+        new_domain.dim         = old_domain.dim;
+        new_domain.elements.reserve(old_domain.elements.sizes());
+    }
+    return retval;
+}
 } // namespace detail
 
 template < el_o_t OC >
-auto convertMeshToOrder(const MeshPartition< 1 >& mesh, std::integral_constant< el_o_t, OC > = {})
-    -> MeshPartition< OC >
+auto convertMeshToOrder(const MeshPartition< 1 >& mesh,
+                        std::integral_constant< el_o_t, OC > = {}) -> MeshPartition< OC >
 {
     L3STER_PROFILE_FUNCTION;
     const auto nbr_info_map = detail::makeNeighborInfoMap(mesh);
     const auto dual_graph   = computeMeshDual(mesh);
-    auto       new_domains  = mesh.getConversionAlloc< OC >();
-    n_id_t     max_node     = mesh.getOwnedNodes().size();
-    auto       converted    = util::DynamicBitset{mesh.getNElements()};
+    auto       new_domains  = detail::initNewDomains< OC >(mesh);
+
+    n_id_t max_node  = mesh.getOwnedNodes().size();
+    auto   converted = util::DynamicBitset{mesh.getNElements()};
 
     const auto convert_domain = [&](const Domain< 1 >& old_domain, Domain< OC >& new_domain) {
         const auto convert_element = [&]< ElementType T, el_o_t O >(const Element< T, O >& el) {
@@ -58,7 +73,8 @@ auto convertMeshToOrder(const MeshPartition< 1 >& mesh, std::integral_constant< 
 
                 const auto [nbr_ptr_var, nbr_dom_id] = nbr_info_map.at(nbr_id);
                 const auto update_from_nbr           = [&]< ElementType T_Nbr >(const Element< T_Nbr, 1 >* nbr_ptr) {
-                    const auto& nbr_vec       = new_domains.at(nbr_dom_id).template getElementVector< T_Nbr, OC >();
+                    const auto& univec        = new_domains.at(nbr_dom_id).elements;
+                    const auto& nbr_vec       = univec.template getVector< Element< T_Nbr, OC > >();
                     const auto  get_id        = &Element< T_Nbr, OC >::getId;
                     const auto& converted_nbr = *std::ranges::lower_bound(nbr_vec, nbr_id, {}, get_id);
                     updateMatchMask(*nbr_ptr, converted_nbr, el, mask, new_nodes);
@@ -67,16 +83,18 @@ auto convertMeshToOrder(const MeshPartition< 1 >& mesh, std::integral_constant< 
             };
             std::ranges::for_each(dual_graph.getElementAdjacent(el.getId()), match_nbr_nodes);
 
-            for (size_t i = 0; i != mask.size(); ++i)
+            for (auto i : ElementTraits< Element< T, OC > >::boundary_node_inds)
+                if (not mask[i])
+                    new_nodes[i] = max_node++;
+            for (auto i : ElementTraits< Element< T, OC > >::internal_node_inds)
                 if (not mask[i])
                     new_nodes[i] = max_node++;
 
             // This relies on the fact that we're iterating over domain elements of a given type in ascending ID order
-            auto& new_elvec = new_domain.template getElementVector< T, OC >();
-            new_elvec.emplace_back(new_nodes, ElementData< T, OC >{el.getData()}, el.getId());
+            emplaceInDomain< T, OC >(new_domain, new_nodes, ElementData< T, OC >{el.getData()}, el.getId());
             converted.set(el.getId());
         };
-        old_domain.visit(convert_element, std::execution::seq);
+        old_domain.elements.visit(convert_element, std::execution::seq);
     };
 
     for (auto domain_id : mesh.getDomainIds())

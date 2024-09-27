@@ -5,14 +5,13 @@
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/util/Assertion.hpp"
 
+#include <format>
 #include <iostream>
 
 inline void logErrorAndTerminate(std::string_view     err_msg,
                                  std::source_location src_loc = std::source_location::current())
 {
-    auto printed_error = lstr::util::detail::parseSourceLocation(src_loc);
-    std::ranges::copy(err_msg, std::back_inserter(printed_error));
-    std::cerr << printed_error << '\n';
+    std::cerr << lstr::util::detail::makeErrMsg(err_msg, src_loc) << '\n';
     std::terminate();
 }
 
@@ -38,33 +37,61 @@ inline void logErrorAndTerminate(std::string_view     err_msg,
     })
 
 template < lstr::el_o_t... orders >
-void describeMesh(const lstr::MpiComm& comm, const lstr::mesh::MeshPartition< orders... >& mesh)
+void summarizeMesh(const lstr::MpiComm& comm, const lstr::mesh::MeshPartition< orders... >& mesh)
 {
     for (int rank = 0; rank < comm.getSize(); ++rank)
     {
         if (comm.getRank() == rank)
         {
-            std::cout << "Rank: " << comm.getRank() << "\nOwned nodes: ";
+            std::cout << std::format("*** Rank {} ***\nOwned nodes: {}, ghost nodes: {}\n",
+                                     comm.getRank(),
+                                     mesh.getOwnedNodes().size(),
+                                     mesh.getGhostNodes().size(),
+                                     mesh.getNDomains());
+            constexpr auto fmt_str = "{:^12}|{:^12}|{:^12}\n";
+            std::cout << std::format(fmt_str, "Domain ID", "Dimension", "#Elements");
+            for (auto dom : mesh.getDomainIds())
+                std::cout << std::format(fmt_str, dom, mesh.getDomain(dom).dim, mesh.getDomain(dom).numElements());
+            std::cout << std::endl;
+            if (comm.getRank() == comm.getSize() - 1)
+                std::cout << "---\n" << std::endl;
+        }
+        comm.barrier();
+    }
+}
+
+template < lstr::el_o_t... orders >
+void printMesh(const lstr::MpiComm& comm, const lstr::mesh::MeshPartition< orders... >& mesh)
+{
+    for (int rank = 0; rank < comm.getSize(); ++rank)
+    {
+        if (comm.getRank() == rank)
+        {
+            std::cout << std::format("Rank: {}\nOwned nodes: ", comm.getRank());
             for (auto n : mesh.getOwnedNodes())
-                std::cout << n << ' ';
+                std::cout << std::format("{} ", n);
             std::cout << "\nGhost nodes: ";
             for (auto n : mesh.getGhostNodes())
-                std::cout << n << ' ';
+                std::cout << std::format("{} ", n);
             std::cout << '\n';
             for (auto dom : mesh.getDomainIds())
             {
-                std::cout << "Domain: " << dom << '\n';
+                std::cout << std::format("Domain: {}\n", dom);
                 mesh.visit(
                     []< lstr::mesh::ElementType ET, lstr::el_o_t EO >(const lstr::mesh::Element< ET, EO >& element) {
-                        std::cout << "Element ID: " << element.getId() << ", type: " << static_cast< int >(ET)
-                                  << ", order: " << static_cast< int >(EO) << ", nodes: ";
+                        std::cout << std::format("Element ID: {}, type: {}, order: {:d}, nodes: ",
+                                                 element.getId(),
+                                                 std::to_underlying(ET),
+                                                 EO);
                         for (auto n : element.getNodes())
-                            std::cout << n << ' ';
+                            std::cout << std::format("{} ", n);
                         std::cout << '\n';
                     },
                     dom);
             }
             std::cout << std::endl;
+            if (comm.getRank() == comm.getSize() - 1)
+                std::cout << "---\n" << std::endl;
         }
         comm.barrier();
     }

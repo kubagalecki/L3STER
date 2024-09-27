@@ -1,8 +1,9 @@
-#ifndef L3STER_GLOB_ASM_SPARSITYGRAPH_HPP
-#define L3STER_GLOB_ASM_SPARSITYGRAPH_HPP
+#ifndef L3STER_ALGSYS_SPARSITYGRAPH_HPP
+#define L3STER_ALGSYS_SPARSITYGRAPH_HPP
 
 #include "l3ster/dofs/DofsFromNodes.hpp"
 #include "l3ster/dofs/MakeTpetraMap.hpp"
+#include "l3ster/dofs/NeighborManager.hpp"
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/CrsGraph.hpp"
@@ -10,7 +11,7 @@
 #include "l3ster/util/IndexMap.hpp"
 #include "l3ster/util/StaticVector.hpp"
 
-namespace lstr::glob_asm
+namespace lstr::algsys
 {
 namespace detail
 {
@@ -22,8 +23,8 @@ using rank_to_rank_to_dofs_map_t = robin_hood::unordered_flat_map< int, rank_to_
 
 // Establish in-neighbors and which of their ghost nodes I own
 template < el_o_t... orders >
-auto computeInNeighborGhostNodes(const MpiComm& comm, const mesh::MeshPartition< orders... >& mesh)
-    -> rank_to_nodes_map_t
+auto computeInNeighborGhostNodes(const MpiComm&                          comm,
+                                 const mesh::MeshPartition< orders... >& mesh) -> rank_to_nodes_map_t
 {
     const int  my_rank            = comm.getRank();
     auto       retval             = rank_to_nodes_map_t{};
@@ -51,8 +52,7 @@ inline auto computeInNeighbors(const rank_to_nodes_map_t& in_nbr_to_nodes) -> st
 inline auto computeOutNeighbors(const MpiComm& comm, const rank_to_nodes_map_t& in_nbr_to_nodes) -> std::vector< int >
 {
     const int                comm_size = comm.getSize();
-    util::ArrayOwner< char > out_nbr_bmap(comm_size), in_nbr_bmap(comm_size);
-    std::ranges::fill(out_nbr_bmap, 0);
+    util::ArrayOwner< char > out_nbr_bmap(comm_size, 0), in_nbr_bmap(comm_size);
     for (int out_nbr_rank : in_nbr_to_nodes | std::views::transform([](const auto& rh_pair) { return rh_pair.first; }))
         out_nbr_bmap[out_nbr_rank] = 1;
     comm.allToAllAsync(out_nbr_bmap, in_nbr_bmap).wait();
@@ -188,7 +188,7 @@ inline auto exchangeNeighborDofInfo(const MpiComm&                    comm,
             constexpr auto get_set_size = [](const auto& map_elem) {
                 return map_elem.second.size();
             };
-            const size_t n_entries = std::transform_reduce(mos.begin(), mos.end(), size_t{}, std::plus{}, get_set_size);
+            const size_t n_entries = std::transform_reduce(mos.begin(), mos.end(), 0uz, std::plus{}, get_set_size);
             auto         retval    = FlatInfo{};
             auto& [flat_owners, flat_dofs] = retval;
             flat_owners.reserve(n_entries);
@@ -284,8 +284,8 @@ inline auto exchangeNeighborDofInfo(const MpiComm&                    comm,
 }
 
 // Combine DOF info (DOF + owner) which I computed with that which was sent to me
-inline auto combineDofInfo(rank_to_dofs_map_t dof_info, const rank_to_rank_to_dofs_map_t& out_dof_info)
-    -> rank_to_dofs_map_t
+inline auto combineDofInfo(rank_to_dofs_map_t                dof_info,
+                           const rank_to_rank_to_dofs_map_t& out_dof_info) -> rank_to_dofs_map_t
 {
     for (const auto& [_, info_map] : out_dof_info)
         for (const auto& [owner, dofs] : info_map)
@@ -383,7 +383,7 @@ auto computeMaxCrsGraphRowSizes(const mesh::MeshPartition< orders... >&         
     auto       retval_host_view  = retval.view_host();
     const auto crs_max_row_sizes = util::asSpan(retval_host_view);
     retval.modify_host();
-    std::ranges::fill(crs_max_row_sizes, size_t{});
+    std::ranges::fill(crs_max_row_sizes, 0uz);
     const auto update_domain_counts = [&]< auto dom_def >(util::ConstexprValue< dom_def >) {
         const auto update_element_counts =
             [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
@@ -478,10 +478,8 @@ inline void convertToTpetraFECrsGraph(const util::CrsGraph< local_dof_t >& nativ
         const auto row_entries    = row_allocation.subspan(0, row_size);
         tpetra_graph.insertLocalIndices(static_cast< int >(local_row), util::asTeuchosView(row_entries));
     };
-#ifdef L3STER_SERIALIZE_TPETRA_GRAPH_INSERTION
-    const auto par_guard = util::MaxParallelismGuard{1};
-#endif
-    util::tbb::parallelFor(std::views::iota(0u, native_graph.getNRows()), insert_into_row);
+    for (size_t row = 0; row != native_graph.getNRows(); ++row)
+        insert_into_row(row);
 }
 
 inline auto makeTpetraCrsGraph(const MpiComm&                  comm,
@@ -541,5 +539,5 @@ auto makeSparsityGraph(const MpiComm&                                          c
     return detail::makeTpetraCrsGraph(
         comm, owned_row_dofs, owned_plus_shared_row_dofs, col_dofs, std::move(crs_graph), row_sizes);
 }
-} // namespace lstr::glob_asm
-#endif // L3STER_GLOB_ASM_SPARSITYGRAPH_HPP
+} // namespace lstr::algsys
+#endif // L3STER_ALGSYS_SPARSITYGRAPH_HPP
