@@ -1,4 +1,4 @@
-cmake_minimum_required( VERSION 3.20 )
+cmake_minimum_required( VERSION 3.24 )
 
 #######################################################################################################################
 
@@ -21,9 +21,6 @@ endif ()
 
 ### L3STER options ###
 
-# Verbosity (mainly relating to finding dependencies)
-option( L3STER_ENABLE_VERBOSITY "enable verbose config" ON )
-
 # Build tests
 option( L3STER_ENABLE_TESTS "enable tests" )
 
@@ -45,18 +42,20 @@ include( "cmake/ImportLibrary.cmake" )
 # Trilinos
 set( L3STER_REQUIRED_Trilinos_PACKAGES "Kokkos;Tpetra" )
 set( L3STER_OPTIONAL_Trilinos_PACKAGES "Belos;Ifpack2;Amesos2;MueLu" )
-define_trilinos_target( ${L3STER_ENABLE_VERBOSITY} 14.0 "${L3STER_REQUIRED_Trilinos_PACKAGES}" "${L3STER_OPTIONAL_Trilinos_PACKAGES}" )
-list( APPEND L3STER_INTERFACE_DEPENDENCIES Trilinos )
+find_trilinos( 14.0 "${L3STER_REQUIRED_Trilinos_PACKAGES}" "${L3STER_OPTIONAL_Trilinos_PACKAGES}" )
+list( APPEND L3STER_CMAKE_DEPENDENCIES Trilinos::all_libs )
 
 # Eigen
 find_package( Eigen3 3.4 REQUIRED )
 list( APPEND L3STER_CMAKE_DEPENDENCIES Eigen3::Eigen )
 
 # Hwloc
-importlibrary( hwloc.h "${L3STER_ENABLE_VERBOSITY}" )
+importlibrary( hwloc REQUIRED )
+list( APPEND L3STER_CMAKE_DEPENDENCIES hwloc::hwloc )
 
 # Metis
-importlibrary( metis.h "${L3STER_ENABLE_VERBOSITY}" )
+importlibrary( metis REQUIRED )
+list( APPEND L3STER_CMAKE_DEPENDENCIES metis::metis )
 
 # TBB
 find_package( TBB REQUIRED )
@@ -81,7 +80,6 @@ target_include_directories( L3STER INTERFACE
                             )
 set_target_properties( L3STER PROPERTIES INTERFACE_COMPILE_FEATURES cxx_std_23 )
 target_link_libraries( L3STER INTERFACE ${L3STER_CMAKE_DEPENDENCIES} )
-target_link_libraries( L3STER INTERFACE ${L3STER_INTERFACE_DEPENDENCIES} )
 foreach ( pkg IN LISTS L3STER_OPTIONAL_Trilinos_PACKAGES )
     string( TOUPPER "${pkg}" PKG )
     target_compile_definitions( L3STER INTERFACE "L3STER_TRILINOS_HAS_${PKG}" )
@@ -121,12 +119,11 @@ endif ()
 include( GNUInstallDirs )
 include( CMakePackageConfigHelpers )
 
-# Mark L3STER and interface targets for export
-set( L3STER_EXPORT_TARGETS L3STER ${L3STER_INTERFACE_DEPENDENCIES} )
-install( TARGETS ${L3STER_EXPORT_TARGETS} EXPORT L3STERTargets )
+# Mark L3STER for export
+install( TARGETS L3STER EXPORT L3STER )
 
 # Export L3STER
-install( EXPORT L3STERTargets
+install( EXPORT L3STER
          DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/L3STER"
          NAMESPACE L3STER::
          )

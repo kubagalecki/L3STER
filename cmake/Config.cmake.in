@@ -6,6 +6,6 @@ find_dependency( Eigen3 3.4 REQUIRED )
 find_dependency( TBB REQUIRED )
 
 #
-include( "${CMAKE_CURRENT_LIST_DIR}/L3STERTargets.cmake" )
+include( "${CMAKE_CURRENT_LIST_DIR}/L3STER.cmake" )
 
 check_required_components( L3STER )
