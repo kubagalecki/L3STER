@@ -5,7 +5,7 @@
 #   lib_name          (string)    -  name of the library
 #   REQUIRED          (optional)  -  whether to signal an error if library isn't found
 # Effects:
-#   Creates an imported target named `lib_name::lib_name`, which can be consumed as a dependency using target_link_libraries.
+#   Creates an interface target named `lib_name-imported`, which can be consumed as a dependency using target_link_libraries.
 #
 function( importLibrary lib_name )
     message( STATUS "Detecting ${lib_name}" )
@@ -30,12 +30,12 @@ function( importLibrary lib_name )
     endif ()
     cmake_path( GET ${lib_name}_LIB PARENT_PATH ${lib_name}_LIBDIR )
 
-    add_library( ${lib_name}::${lib_name} IMPORTED UNKNOWN GLOBAL )
-    set_target_properties( ${lib_name}::${lib_name} PROPERTIES IMPORTED_LOCATION "${${lib_name}_LIB}" )
+    add_library( ${lib_name}-import INTERFACE )
+    target_link_libraries( ${lib_name}-import INTERFACE "${${lib_name}_LIB}" )
 
     cmake_path( SET ${lib_name}_INCLUDEDIR NORMALIZE "${${lib_name}_LIBDIR}/../include" )
     cmake_path( ABSOLUTE_PATH ${lib_name}_INCLUDEDIR )
     if ( EXISTS "${${lib_name}_INCLUDEDIR}" AND IS_DIRECTORY "${${lib_name}_INCLUDEDIR}" )
-        target_include_directories( ${lib_name}::${lib_name} INTERFACE "${${lib_name}_INCLUDEDIR}" )
+        target_include_directories( ${lib_name}-import INTERFACE "${${lib_name}_INCLUDEDIR}" )
     endif ()
 endfunction()

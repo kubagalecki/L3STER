@@ -43,23 +43,25 @@ include( "cmake/ImportLibrary.cmake" )
 set( L3STER_REQUIRED_Trilinos_PACKAGES "Kokkos;Tpetra" )
 set( L3STER_OPTIONAL_Trilinos_PACKAGES "Belos;Ifpack2;Amesos2;MueLu" )
 find_trilinos( 14.0 "${L3STER_REQUIRED_Trilinos_PACKAGES}" "${L3STER_OPTIONAL_Trilinos_PACKAGES}" )
-list( APPEND L3STER_CMAKE_DEPENDENCIES Trilinos::all_libs )
+list( APPEND L3STER_DEPENDENCIES Trilinos::all_libs )
 
 # Eigen
 find_package( Eigen3 3.4 REQUIRED )
-list( APPEND L3STER_CMAKE_DEPENDENCIES Eigen3::Eigen )
-
-# Hwloc
-importlibrary( hwloc REQUIRED )
-list( APPEND L3STER_CMAKE_DEPENDENCIES hwloc::hwloc )
-
-# Metis
-importlibrary( metis REQUIRED )
-list( APPEND L3STER_CMAKE_DEPENDENCIES metis::metis )
+list( APPEND L3STER_DEPENDENCIES Eigen3::Eigen )
 
 # TBB
 find_package( TBB REQUIRED )
-list( APPEND L3STER_CMAKE_DEPENDENCIES TBB::tbb )
+list( APPEND L3STER_DEPENDENCIES TBB::tbb )
+
+# Hwloc
+importlibrary( hwloc REQUIRED )
+list( APPEND L3STER_IMPORTED_DEPENDENCIES hwloc-import )
+list( APPEND L3STER_DEPENDENCIES hwloc-import )
+
+# Metis
+importlibrary( metis REQUIRED )
+list( APPEND L3STER_IMPORTED_DEPENDENCIES metis-import )
+list( APPEND L3STER_DEPENDENCIES metis-import )
 
 #######################################################################################################################
 
@@ -79,7 +81,7 @@ target_include_directories( L3STER INTERFACE
                             $<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>
                             )
 set_target_properties( L3STER PROPERTIES INTERFACE_COMPILE_FEATURES cxx_std_23 )
-target_link_libraries( L3STER INTERFACE ${L3STER_CMAKE_DEPENDENCIES} )
+target_link_libraries( L3STER INTERFACE ${L3STER_DEPENDENCIES} )
 foreach ( pkg IN LISTS L3STER_OPTIONAL_Trilinos_PACKAGES )
     string( TOUPPER "${pkg}" PKG )
     target_compile_definitions( L3STER INTERFACE "L3STER_TRILINOS_HAS_${PKG}" )
@@ -120,10 +122,10 @@ include( GNUInstallDirs )
 include( CMakePackageConfigHelpers )
 
 # Mark L3STER for export
-install( TARGETS L3STER EXPORT L3STER )
+install( TARGETS L3STER ${L3STER_IMPORTED_DEPENDENCIES} EXPORT L3STERTargets )
 
 # Export L3STER
-install( EXPORT L3STER
+install( EXPORT L3STERTargets
          DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/L3STER"
          NAMESPACE L3STER::
          )

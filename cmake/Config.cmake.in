@@ -4,8 +4,8 @@
 include( CMakeFindDependencyMacro )
 find_dependency( Eigen3 3.4 REQUIRED )
 find_dependency( TBB REQUIRED )
+find_dependency( Trilinos REQUIRED )
 
-#
-include( "${CMAKE_CURRENT_LIST_DIR}/L3STER.cmake" )
+include( "${CMAKE_CURRENT_LIST_DIR}/L3STERTargets.cmake" )
 
 check_required_components( L3STER )
