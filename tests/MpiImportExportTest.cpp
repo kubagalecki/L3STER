@@ -70,6 +70,7 @@ void runTest(const MpiComm&                    comm,
 
 int main(int argc, char* argv[])
 {
+    const auto          max_par_guard = util::MaxParallelismGuard{4};
     util::MpiScopeGuard mpi_scope_guard{argc, argv};
     MpiComm             comm{MPI_COMM_WORLD};
 
