@@ -478,10 +478,8 @@ inline void convertToTpetraFECrsGraph(const util::CrsGraph< local_dof_t >& nativ
         const auto row_entries    = row_allocation.subspan(0, row_size);
         tpetra_graph.insertLocalIndices(static_cast< int >(local_row), util::asTeuchosView(row_entries));
     };
-#ifdef L3STER_SERIALIZE_TPETRA_GRAPH_INSERTION
-    const auto par_guard = util::MaxParallelismGuard{1};
-#endif
-    util::tbb::parallelFor(std::views::iota(0u, native_graph.getNRows()), insert_into_row);
+    for (size_t row = 0; row != native_graph.getNRows(); ++row)
+        insert_into_row(row);
 }
 
 inline auto makeTpetraCrsGraph(const MpiComm&                  comm,
