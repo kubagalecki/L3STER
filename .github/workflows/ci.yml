@@ -85,7 +85,6 @@ jobs:
     container: kubagalecki/l3ster-ci:latest
     env:
       BUILD_TYPE: Release
-      TOOLCHAIN_PATH: ../../cmake/toolchains/StaticAnalysis.cmake
     steps:
       - uses: actions/checkout@v4.2.0
       - name: Build examples
