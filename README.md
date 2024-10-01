@@ -8,9 +8,9 @@ L3STER (pronounced like the delicious English cheese) stands for "**L**east-**S*
 L3STER provides a scalable, flexible framework for the solution of systems of partial differential equations.
 Thanks to the employment of the least-squares finite element method, no weak formulation is needed - you can directly implement any first-order PDE:
 
-$$ \mathcal{A}(u) = f \; \mathrm{in}\: \Omega $$
+$$ \mathcal{A}(u) = f \mathrm{in} \Omega $$
 
-$$ \mathcal{B}(u) = g \; \mathrm{on}\: \partial\Omega $$
+$$ \mathcal{B}(u) = g \mathrm{on} \partial\Omega $$
 
 The guiding philosophy of the project is: *"From a set of PDEs and a mesh to a working simulation within an afternoon!"*
 
@@ -29,7 +29,7 @@ Features of the library include:
 If your equation is of a higher order, you'll first need to recast it by introducing auxiliary unknowns (e.g. gradients).
 At the end of the day, each equation takes the form of:
 
-$$ \mathbf{A}_0 \mathbf{u} + \sum_{i=1}^D \left( \mathbf{A}_i \frac{\partial}{\partial x_i} \right) \mathbf{u} = \mathbf{f} $$
+$$ \mathbf{A}_0 \mathbf{u} + \sum_{i=1}^{D} \left( \mathbf{A}_i \frac{\partial}{\partial x_i} \right) \mathbf{u} = \mathbf{f} $$
 
 where $D \in \{ 2,3 \}$ is the spatial dimension of the problem,
 $\mathbf{u} : \Omega \rightarrow \mathbb{R}^U$ is the vector of unknowns,
