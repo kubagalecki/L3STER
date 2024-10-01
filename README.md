@@ -29,7 +29,7 @@ If you'd like to use L3STER, but you need a different I/O format, please drop us
 If your equation is of a higher order, you'll first need to recast it by introducing auxiliary unknowns (e.g. gradients).
 At the end of the day, each equation takes the form of:
 
-$$ \mathbf{A}_{0} \mathbf{u} + \sum_{i=1}^{D} \mathbf{A}_{i} \frac{\partial \mathbf{u}}{\partial x_{i}} = \mathbf{f} $$
+$$ A_{0} u + \sum_{i=1}^{D} A_{i} \frac{\partial u}{\partial x_{i}} = f $$
 
 where $D \in \{ 2,3 \}$ is the spatial dimension of the problem,
 $\mathbf{u} : \Omega \rightarrow \mathbb{R}^U$ is the vector of unknowns,
