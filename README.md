@@ -122,7 +122,11 @@ spack clean -a
 ```
 
 When using L3STER, all you need to do is call `spacktivate l3ster` before invoking CMake.
-> Your cluster administrators may provide a global spack instance. You can take advantage of it using spack chaining. If not, you should use the MPI installation provided for you by the admins, not build your own. Please consult Spack documentation on how to use external packages.
+
+> Your cluster administrators may provide a global spack instance.
+> You can take advantage of it using spack chaining.
+> If not, you should use the MPI installation provided for you by the admins, not build your own.
+> Please consult the spack documentation on how to use external packages.
 
 ## Running L3STER applications
 
