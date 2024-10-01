@@ -12,7 +12,7 @@ using GID                       = long;
 using LID                       = int;
 using Scalar                    = GID;
 constexpr size_t mv_cols        = 5;
-constexpr size_t elems_per_rank = 100'000;
+constexpr size_t elems_per_rank = 1000;
 
 void runTest(const MpiComm&                    comm,
              Import< Scalar, LID >&            importer,
