@@ -22,14 +22,14 @@ Features of the library include:
 - Results export to VTK, simple postprocessing (flux integrals etc.) available natively
 - Easy setup (all dependencies available in Spack)
 
-> If you'd like to use L3STER, but you need a different I/O format, please drop us an issue!
+If you'd like to use L3STER, but you need a different I/O format, please drop us an issue!
 
 ## Formulating the system of PDEs
 
 If your equation is of a higher order, you'll first need to recast it by introducing auxiliary unknowns (e.g. gradients).
 At the end of the day, each equation takes the form of:
 
-$$ \mathbf{A}_0 \mathbf{u} + \sum_{i=1}^{D} \left( \mathbf{A}_i \frac{\partial}{\partial x_i} \right) \mathbf{u} = \mathbf{f} $$
+$$ \mathbf{A}_{0} \mathbf{u} + \sum_{i=1}^{D} \mathbf{A}_{i} \frac{\partial \mathbf{u}}{\partial x_{i}} = \mathbf{f} $$
 
 where $D \in \{ 2,3 \}$ is the spatial dimension of the problem,
 $\mathbf{u} : \Omega \rightarrow \mathbb{R}^U$ is the vector of unknowns,
