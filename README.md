@@ -8,9 +8,9 @@ L3STER (pronounced like the delicious English cheese) stands for "**L**east-**S*
 L3STER provides a scalable, flexible framework for the solution of systems of partial differential equations.
 Thanks to the employment of the least-squares finite element method, no weak formulation is needed - you can directly implement any first-order PDE:
 
-$$ \mathcal{A}(u) = f \mathrm{in} \Omega $$
+$$ \mathcal{A}(u) = f \hspace{.1cm} \mathrm{in} \hspace{.1cm} \Omega $$
 
-$$ \mathcal{B}(u) = g \mathrm{on} \partial\Omega $$
+$$ \mathcal{B}(u) = g \hspace{.1cm} \mathrm{on} \hspace{.1cm} \partial\Omega $$
 
 The guiding philosophy of the project is: *"From a set of PDEs and a mesh to a working simulation within an afternoon!"*
 
@@ -29,13 +29,13 @@ If you'd like to use L3STER, but you need a different I/O format, please drop us
 If your equation is of a higher order, you'll first need to recast it by introducing auxiliary unknowns (e.g. gradients).
 At the end of the day, each equation takes the form of:
 
-$$ A_{0} u + \sum_{i=1}^{D} A_{i} \frac{\partial u}{\partial x_{i}} = f $$
+$$ A_0 u + \left( \sum_{i=1}^{D} A_i \frac{\partial}{\partial x_i} \right) u = f $$
 
 where $D \in \{ 2,3 \}$ is the spatial dimension of the problem,
-$\mathbf{u} : \Omega \rightarrow \mathbb{R}^U$ is the vector of unknowns,
-$\mathbf{A}_i : \Omega \rightarrow \mathbb{R}^{E \times U}$ describe the first-order differential operator,
-$\mathbf{f} : \Omega \rightarrow \mathbb{R}^E$ is the source term,
-$E$ is the number of equations and $U$ the number of unknowns ($E$ and $U$ may not be equal).
+$u : \Omega \rightarrow \mathbb{R}^U$ is the unknown vector field,
+$A_i : \Omega \rightarrow \mathbb{R}^{E \times U}$ describe the first-order differential operator,
+$f : \Omega \rightarrow \mathbb{R}^E$ is the source term,
+$E$ is the number of equations, and $U$ the number of unknowns ($E$ and $U$ may not be equal).
 
 ### Boundary conditions
 
@@ -44,7 +44,7 @@ In L3STER, the only difference between domain equations and boundary conditions 
 
 Only Dirichlet BCs are treated in a special fashion.
 This is because they are strongly imposed on the resulting algebraic system.
-You could define them in the equation sense, but this is not recommended.
+It is possible to define them in the equation sense, but this is not recommended.
 
 ### Time-dependent problems
 
@@ -52,16 +52,16 @@ Note that this formulation does not contain a time derivative.
 If you are solving an unsteady problem, you'll first need to discretize your problem in time.
 For example, you can use the backward Euler scheme:
 
-$$\frac{\partial \mathbf{u}}{\partial t} \approx \frac{\mathbf{u}_{n+1} - \mathbf{u}_n}{\Delta t}$$
+$$ \frac{\partial u}{\partial t} \approx \frac{u_{n+1} - u_n}{\Delta t} $$
 
-You can then add $\mathbf{I}\Delta t$ to $\mathbf{A}_0$ and add $\mathbf{u}_n / \Delta t$ to the source term to obtain a PDE for $\mathbf{u}$ at the next time step.
+You can then add $I \Delta t$ to $A_0$ and add $u_n / \Delta t$ to the source term to obtain a PDE for $u$ at the next time step.
 
 ### Non-linear problems
 
 If your problem is non-linear, you'll first need to linearize it, e.g., using Newton's method.
 You can then iterate to obtain your solution.
 L3STER provides a convenient way of accessing previously computed fields (and their derivatives) when defining your equations.
-This mechanism can also be used for time-stepping (where the previous value(s) of $\mathbf{u}$ are needed) or dependencies between different systems, e.g., solving an advection-diffusion equation on a previously computed flow field.
+This mechanism can also be used for time-stepping (where the previous value(s) of $u$ are needed) or dependencies between different systems, e.g., solving an advection-diffusion equation on a previously computed flow field.
 
 ## Installation
 
@@ -122,7 +122,7 @@ spack clean -a
 ```
 
 When using L3STER, all you need to do is call `spacktivate l3ster` before invoking CMake.
-> Note on Spack usage on a cluster: your cluster administrators may provide a global spack instance. You can take advantage of it using spack chaining. If not, you should use the MPI installation provided for you by the admins, not build your own. Please consult Spack documentation on how to use external packages.*
+> Your cluster administrators may provide a global spack instance. You can take advantage of it using spack chaining. If not, you should use the MPI installation provided for you by the admins, not build your own. Please consult Spack documentation on how to use external packages.
 
 ## Running L3STER applications
 
