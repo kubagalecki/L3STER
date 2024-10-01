@@ -7,8 +7,11 @@
 L3STER (pronounced like the delicious English cheese) stands for "**L**east-**S**quares **S**calable **S**pec**T**ral/*hp* **E**lement f**R**amework".
 L3STER provides a scalable, flexible framework for the solution of systems of partial differential equations.
 Thanks to the employment of the least-squares finite element method, no weak formulation is needed - you can directly implement any first-order PDE:
+
 $$ \mathcal{A}(u) = f \; \mathrm{in}\: \Omega $$
+
 $$ \mathcal{B}(u) = g \; \mathrm{on}\: \partial\Omega $$
+
 The guiding philosophy of the project is: *"From a set of PDEs and a mesh to a working simulation within an afternoon!"*
 
 Features of the library include:
@@ -25,7 +28,9 @@ Features of the library include:
 
 If your equation is of a higher order, you'll first need to recast it by introducing auxiliary unknowns (e.g. gradients).
 At the end of the day, each equation takes the form of:
+
 $$ \mathbf{A}_0 \mathbf{u} + \sum_{i=1}^D \left( \mathbf{A}_i \frac{\partial}{\partial x_i} \right) \mathbf{u} = \mathbf{f} $$
+
 where $D \in \{ 2,3 \}$ is the spatial dimension of the problem,
 $\mathbf{u} : \Omega \rightarrow \mathbb{R}^U$ is the vector of unknowns,
 $\mathbf{A}_i : \Omega \rightarrow \mathbb{R}^{E \times U}$ describe the first-order differential operator,
@@ -46,7 +51,9 @@ You could define them in the equation sense, but this is not recommended.
 Note that this formulation does not contain a time derivative.
 If you are solving an unsteady problem, you'll first need to discretize your problem in time.
 For example, you can use the backward Euler scheme:
+
 $$\frac{\partial \mathbf{u}}{\partial t} \approx \frac{\mathbf{u}_{n+1} - \mathbf{u}_n}{\Delta t}$$
+
 You can then add $\mathbf{I}\Delta t$ to $\mathbf{A}_0$ and add $\mathbf{u}_n / \Delta t$ to the source term to obtain a PDE for $\mathbf{u}$ at the next time step.
 
 ### Non-linear problems
