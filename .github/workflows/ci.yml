@@ -78,9 +78,25 @@ jobs:
         if: always()
         run: rm -rf build/
 
+  examples:
+    name: Build examples
+    needs: unit_tests_and_static_analysis
+    runs-on: self-hosted
+    container: kubagalecki/l3ster-ci:latest
+    env:
+      BUILD_TYPE: Release
+      TOOLCHAIN_PATH: ../../cmake/toolchains/StaticAnalysis.cmake
+    steps:
+      - uses: actions/checkout@v4.2.0
+      - name: Build examples
+        run: scripts/ci/build-examples.sh
+      - name: Cleanup
+        if: always()
+        run: rm -rf examples/build/
+
   coverage:
     name: Code coverage
-    needs: [ sanitizers, deployment ]
+    needs: [ sanitizers, deployment, examples ]
     runs-on: self-hosted
     container: kubagalecki/l3ster-ci:latest
     env:
