@@ -15,11 +15,6 @@
 // Note on naming: the uninformative names such as eptr, nparts, etc. are inherited from the METIS documentation
 namespace lstr::mesh
 {
-struct PartitioningOpts
-{
-    bool renumber = true;
-};
-
 namespace detail
 {
 inline auto convertPartWeights(util::ArrayOwner< real_t > wgts) -> util::ArrayOwner< real_t >
@@ -446,8 +441,7 @@ auto partitionMeshImpl(const MeshPartition< orders... >& mesh,
                        idx_t                             n_parts,
                        const util::ArrayOwner< d_id_t >& boundary_ids,
                        util::ArrayOwner< real_t >        part_weights,
-                       util::ArrayOwner< idx_t >         node_weights,
-                       PartitioningOpts                  opts) -> util::ArrayOwner< MeshPartition< orders... > >
+                       util::ArrayOwner< idx_t >         node_weights) -> util::ArrayOwner< MeshPartition< orders... > >
 {
     const auto domain_ids  = getDomainIds(mesh, boundary_ids);
     const auto domain_data = getDomainData(mesh, domain_ids);
@@ -456,8 +450,7 @@ auto partitionMeshImpl(const MeshPartition< orders... >& mesh,
     auto new_domain_maps = makeDomainMaps(mesh, n_parts, epart, domain_ids);
     assignBoundaryElements(mesh, epart, new_domain_maps, domain_ids, boundary_ids, domain_data.n_elements);
     auto node_vecs = assignNodes(n_parts, npart, new_domain_maps);
-    if (opts.renumber)
-        renumberNodes(new_domain_maps, node_vecs);
+    renumberNodes(new_domain_maps, node_vecs);
     return makeMeshFromPartitionComponents(std::move(new_domain_maps), std::move(node_vecs), boundary_ids);
 }
 } // namespace detail
@@ -466,8 +459,8 @@ template < el_o_t... orders, ProblemDef problem_def = EmptyProblemDef{} >
 auto partitionMesh(const MeshPartition< orders... >&   mesh,
                    idx_t                               n_parts,
                    util::ArrayOwner< real_t >          part_weights   = {},
-                   util::ConstexprValue< problem_def > probdef_ctwrpr = {},
-                   PartitioningOpts                    opts = {}) -> util::ArrayOwner< MeshPartition< orders... > >
+                   util::ConstexprValue< problem_def > probdef_ctwrpr = {})
+    -> util::ArrayOwner< MeshPartition< orders... > >
 {
     L3STER_PROFILE_FUNCTION;
     util::throwingAssert(mesh.getGhostNodes().empty() and
@@ -484,7 +477,7 @@ auto partitionMesh(const MeshPartition< orders... >&   mesh,
 
     const auto boundary_ids = mesh.getBoundaryIdsCopy();
     auto       node_wgts    = detail::computeNodeWeights(mesh, probdef_ctwrpr);
-    return detail::partitionMeshImpl(mesh, n_parts, boundary_ids, std::move(part_weights), std::move(node_wgts), opts);
+    return detail::partitionMeshImpl(mesh, n_parts, boundary_ids, std::move(part_weights), std::move(node_wgts));
 }
 } // namespace lstr::mesh
 #endif // L3STER_MESH_PARTITIONMESH_HPP

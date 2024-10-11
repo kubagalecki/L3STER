@@ -34,8 +34,7 @@ void test(CondensationPolicyTag< CP > = {})
     })
                                                                  : mesh::MeshPartition< mesh_order >{};
     auto                    mesh_full_copy = copy(mesh_full);
-    const auto              mesh_parted =
-        comm::distributeMesh(comm, std::move(mesh_full_copy), problemdef_ctwrpr, {.renumber = false});
+    const auto              mesh_parted    = comm::distributeMesh(comm, std::move(mesh_full_copy), problemdef_ctwrpr);
 
     const auto cond_map                = makeCondensationMap< CP >(comm, *mesh_parted, problemdef_ctwrpr);
     const auto global_intervals        = computeDofIntervals(comm, *mesh_parted, cond_map, problemdef_ctwrpr);

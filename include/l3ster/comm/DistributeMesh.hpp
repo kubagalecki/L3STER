@@ -174,16 +174,16 @@ auto receiveMesh(const MpiComm& comm, int src_rank) -> mesh::MeshPartition< orde
 template < el_o_t... orders, ProblemDef problem_def = EmptyProblemDef{} >
 auto distributeMesh(const MpiComm&                      comm,
                     mesh::MeshPartition< orders... >&&  mesh,
-                    util::ConstexprValue< problem_def > probdef_ctwrpr = {},
-                    mesh::PartitioningOpts opts = {}) -> std::shared_ptr< mesh::MeshPartition< orders... > >
+                    util::ConstexprValue< problem_def > probdef_ctwrpr = {})
+    -> std::shared_ptr< mesh::MeshPartition< orders... > >
 {
     L3STER_PROFILE_FUNCTION;
     if (comm.getSize() == 1)
         return std::make_shared< mesh::MeshPartition< orders... > >(std::move(mesh));
 
     const auto node_throughputs = comm::gatherNodeThroughputs(comm);
-    auto mesh_parted = comm.getRank() == 0 ? partitionMesh(mesh, comm.getSize(), node_throughputs, probdef_ctwrpr, opts)
-                                           : util::ArrayOwner< mesh::MeshPartition< orders... > >{};
+    auto       mesh_parted = comm.getRank() == 0 ? partitionMesh(mesh, comm.getSize(), node_throughputs, probdef_ctwrpr)
+                                                 : util::ArrayOwner< mesh::MeshPartition< orders... > >{};
     const auto permutation = comm::computeDefaultRankPermutation(comm);
     // const auto permutation = detail::dist_mesh::computeOptimalRankPermutation(comm, mesh_parted, probdef_ctwrpr);
     if (comm.getRank() == 0)
