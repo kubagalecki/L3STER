@@ -85,8 +85,7 @@ void test(const MpiComm& comm)
         auto       mesh           = mesh::makeCubeMesh(node_dist);
         return convertMeshToOrder< 2 >(mesh);
     });
-    auto       full_mesh_copy = copy(full_mesh);
-    const auto my_partition   = comm::distributeMesh(comm, std::move(full_mesh_copy));
+    const auto my_partition = comm::distributeMesh(comm, [&] { return copy(full_mesh); });
 
     constexpr auto problem_def =
         ProblemDef{defineDomain< 2 >(0, 1), defineDomain< 2 >(1, 0), defineDomain< 2 >(3, 0, 1)};

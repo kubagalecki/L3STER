@@ -1,8 +1,8 @@
 #include "l3ster/bcs/DirichletBC.hpp"
-#include "l3ster/bcs/GetDirichletDofs.hpp"
-#include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/algsys/ScatterLocalSystem.hpp"
 #include "l3ster/algsys/SparsityGraph.hpp"
+#include "l3ster/bcs/GetDirichletDofs.hpp"
+#include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/solve/Amesos2Solvers.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
@@ -28,7 +28,7 @@ void test()
     constexpr auto   dirdef_ctwrpr  = util::ConstexprValue< dirichlet_def >{};
 
     constexpr auto node_dist    = std::array{0., 1., 2., 3., 4., 5.};
-    auto           my_partition = comm::distributeMesh(comm, makeCubeMesh(node_dist));
+    auto           my_partition = comm::distributeMesh(comm, [&] { return makeCubeMesh(node_dist); });
 
     const auto cond_map            = makeCondensationMap< CP >(comm, *my_partition, probdef_ctwrpr);
     const auto dof_intervals       = computeDofIntervals(comm, *my_partition, cond_map, probdef_ctwrpr);

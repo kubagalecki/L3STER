@@ -26,15 +26,14 @@ void test(CondensationPolicyTag< CP > = {})
                                             L3STER_DEFINE_DOMAIN(6, 0, 1, 2)};
     constexpr auto problemdef_ctwrpr = util::ConstexprValue< problem_def >{};
 
-    static constexpr el_o_t mesh_order     = 2;
-    const auto              mesh_full      = comm.getRank() == 0 ? std::invoke([] {
+    static constexpr el_o_t mesh_order = 2;
+    const auto              mesh_full  = comm.getRank() == 0 ? std::invoke([] {
         constexpr std::array dist{0., 1., 2.};
         auto                 retval = mesh::makeCubeMesh(dist);
         return mesh::convertMeshToOrder< mesh_order >(retval);
     })
-                                                                 : mesh::MeshPartition< mesh_order >{};
-    auto                    mesh_full_copy = copy(mesh_full);
-    const auto              mesh_parted    = comm::distributeMesh(comm, std::move(mesh_full_copy), problemdef_ctwrpr);
+                                                             : mesh::MeshPartition< mesh_order >{};
+    const auto mesh_parted             = comm::distributeMesh(comm, [&] { return copy(mesh_full); }, problemdef_ctwrpr);
 
     const auto cond_map                = makeCondensationMap< CP >(comm, *mesh_parted, problemdef_ctwrpr);
     const auto global_intervals        = computeDofIntervals(comm, *mesh_parted, cond_map, problemdef_ctwrpr);

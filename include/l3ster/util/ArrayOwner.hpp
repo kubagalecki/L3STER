@@ -18,7 +18,7 @@ inline constexpr CacheAlign cache_align{};
 template < std::default_initializable T >
 class ArrayOwner
 {
-    static constexpr std::size_t cacheline_size = 64;
+    static constexpr std::size_t cacheline_size = std::hardware_destructive_interference_size;
 
 public:
     using size_type = std::size_t;

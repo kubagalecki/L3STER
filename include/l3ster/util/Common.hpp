@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bitset>
 #include <concepts>
 #include <cstdint>
 #include <functional>
@@ -159,6 +160,16 @@ T& getThreadLocal()
 {
     thread_local T value;
     return value;
+}
+
+template < std::size_t N >
+auto toStdBitset(const std::array< bool, N >& a) -> std::bitset< N >
+{
+    auto retval = std::bitset< N >{};
+    for (auto&& [i, value] : a | std::views::enumerate)
+        if (value)
+            retval.set(i);
+    return retval;
 }
 
 template < size_t N, std::floating_point T >
