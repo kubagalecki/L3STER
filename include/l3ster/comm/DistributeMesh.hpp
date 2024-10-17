@@ -5,6 +5,7 @@
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/PartitionMesh.hpp"
 #include "l3ster/mesh/ReadMesh.hpp"
+#include "l3ster/util/IndexMap.hpp"
 
 #include <iterator>
 
@@ -121,15 +122,41 @@ auto computeOptimizedRankPermutation(const MpiComm&                             
     L3STER_INVOKE_MPI(MPI_Comm_rank, new_comm, &new_rank);
     L3STER_INVOKE_MPI(MPI_Comm_free, &new_comm);
     util::throwingAssert(new_rank >= 0 and new_rank < comm.getSize());
-    auto retval = util::ArrayOwner< int >(static_cast< size_t >(comm.getSize()));
+    auto retval = util::ArrayOwner< int >(mesh_parts.size());
     comm.gather(std::views::single(new_rank), retval.begin(), 0);
     return retval;
 }
 
-inline auto computeDefaultRankPermutation(const MpiComm& comm) -> util::ArrayOwner< int >
+template < el_o_t... orders, ProblemDef problem_def >
+auto permuteMesh(const MpiComm&                                       comm,
+                 util::ArrayOwner< mesh::MeshPartition< orders... > > mesh_parts,
+                 util::ConstexprValue< problem_def >                  probdef_ctwrapper,
+                 const MeshDistOpts& opts) -> util::ArrayOwner< mesh::MeshPartition< orders... > >
 {
-    auto retval = util::ArrayOwner< int >(static_cast< size_t >(comm.getSize()));
-    std::iota(retval.begin(), retval.end(), 0);
+    if (opts.optimize == false)
+        return mesh_parts;
+    const auto opt_permutation = computeOptimizedRankPermutation(comm, mesh_parts, probdef_ctwrapper);
+    if (mesh_parts.empty())
+        return {}; // All ranks need to participate in computing the permutation, but only rank 0 actually performs it
+    auto retval = util::ArrayOwner< mesh::MeshPartition< orders... > >(mesh_parts.size());
+    for (auto&& [old_ind, new_ind] : opt_permutation | std::views::enumerate)
+        retval[new_ind] = std::move(mesh_parts[old_ind]);
+    const auto node_reorder_map = util::IndexMap< n_id_t, n_id_t >{
+        retval | std::views::transform(&mesh::MeshPartition< orders... >::getOwnedNodes) | std::views::join};
+    const auto reindex_nodes = [&]< size_t extent >(std::span< n_id_t, extent > nodes) {
+        std::ranges::transform(nodes, nodes.begin(), node_reorder_map);
+    };
+    const auto reindex_el_nodes = [&]< mesh::ElementType ET, el_o_t EO >(mesh::Element< ET, EO >& element) {
+        auto& nodes = element.getNodes();
+        reindex_nodes(std::span{nodes});
+    };
+    for (auto& part : retval)
+    {
+        part.visit(reindex_el_nodes, std::execution::par);
+        reindex_nodes(part.getMutableOwnedNodes());
+        reindex_nodes(part.getMutableGhostNodes());
+        std::ranges::sort(part.getMutableGhostNodes()); // Original relative order preserved -> owned nodes are sorted
+    }
     return retval;
 }
 } // namespace detail
@@ -220,23 +247,15 @@ auto distributeMesh(const MpiComm&                       comm,
     const auto mesh             = comm.getRank() == 0 ? std::invoke(mesh_generator) : partition_t{};
     auto       mesh_parted = comm.getRank() == 0 ? partitionMesh(mesh, comm.getSize(), node_throughputs, probdef_ctwrpr)
                                                  : util::ArrayOwner< partition_t >{};
-    const auto permutation = opts.optimize ? detail::computeOptimizedRankPermutation(comm, mesh_parted, probdef_ctwrpr)
-                                           : detail::computeDefaultRankPermutation(comm);
+    mesh_parted            = detail::permuteMesh(comm, std::move(mesh_parted), probdef_ctwrpr, opts);
     if (comm.getRank() == 0)
     {
         auto reqs = std::vector< MpiComm::Request >{};
         reqs.reserve(mesh_parted.size() * 4);
-        auto my_partition = partition_t{};
-        for (auto&& [unpermuted_rank, part] : mesh_parted | std::views::enumerate)
-        {
-            const auto dest_rank = permutation.at(unpermuted_rank);
-            if (dest_rank == 0)
-                my_partition = std::move(part);
-            else
-                comm::sendMesh(comm, part, dest_rank, std::back_inserter(reqs));
-        }
+        for (auto&& [rank, part] : mesh_parted | std::views::enumerate | std::views::drop(1))
+            comm::sendMesh(comm, part, static_cast< int >(rank), std::back_inserter(reqs));
         MpiComm::Request::waitAll(reqs);
-        return std::make_shared< partition_t >(std::move(my_partition));
+        return std::make_shared< partition_t >(std::move(mesh_parted.front()));
     }
     else
         return std::make_shared< partition_t >(comm::receiveMesh(comm, 0, util::TypePack< partition_t >{}));

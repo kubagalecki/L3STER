@@ -99,7 +99,7 @@ public:
                          ExecPolicy&&                      policy    = {}) const -> Zero
         requires TransformReducible_c< Zero, Transform, Reduction, orders... >;
 
-    // find
+    // Find
     // Note: if the predicate returns true for multiple elements, it is undefined which one is returned
     template < ElementPredicate_c< orders... > F >
     auto find(F&& predicate) -> find_result_t;
@@ -112,7 +112,7 @@ public:
     inline find_result_t       find(el_id_t id);
     inline const_find_result_t find(el_id_t id) const;
 
-    // boundaries
+    // Boundaries
     auto getBoundary(d_id_t id) const -> const BoundaryView< orders... >& { return m_boundary_manager.getBoundary(id); }
     auto getBoundaryIdsView() const { return m_boundary_manager.getBoundaryIdsView(); }
     auto getBoundaryIdsCopy() const -> util::ArrayOwner< d_id_t > { return {getBoundaryIdsView()}; }
@@ -131,13 +131,15 @@ public:
                                    ExecPolicy&&                      policy) const -> Zero
         requires BoundaryTransformReducible_c< Zero, Transform, Reduction, orders... >;
 
-    // observers
+    // Observers
     inline auto getNElements() const -> size_t;
     auto        getNDomains() const { return m_domains.size(); }
     auto        getDomainIds() const { return m_domains | std::views::keys; }
     auto        getDomain(d_id_t id) const -> const Domain< orders... >& { return m_domains.at(id); }
     auto        getOwnedNodes() const -> node_span_t { return m_nodes | std::views::take(m_n_owned_nodes); }
     auto        getGhostNodes() const -> node_span_t { return m_nodes | std::views::drop(m_n_owned_nodes); }
+    auto        getMutableOwnedNodes() -> std::span< n_id_t > { return m_nodes | std::views::take(m_n_owned_nodes); }
+    auto        getMutableGhostNodes() -> std::span< n_id_t > { return m_nodes | std::views::drop(m_n_owned_nodes); }
     auto        getAllNodes() const -> node_span_t { return m_nodes; }
     inline auto getMaxDim() const -> dim_t;
 
@@ -171,6 +173,7 @@ private:
     template < typename DomainMap >
     static auto findImpl(el_id_t id, DomainMap&& domain_map);
 
+private:
     domain_map_t               m_domains;
     util::ArrayOwner< n_id_t > m_nodes;
     size_t                     m_n_owned_nodes;
