@@ -751,8 +751,7 @@ MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::MatrixFreeSystem(
     m_border_mesh                 = mesh::LocalMeshView{border, node_map};
 
     const auto cond_map = dofs::makeCondensationMap< CondensationPolicy::None >(*m_comm, *m_mesh, problemdef_ctwrpr);
-    const auto dof_intervals            = computeDofIntervals(*m_comm, *m_mesh, cond_map, problemdef_ctwrpr);
-    const auto node2dof                 = dofs::NodeToGlobalDofMap{dof_intervals, cond_map};
+    const auto node2dof = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, cond_map, problemdef_ctwrpr};
     const auto [all_dofs, n_owned_dofs] = detail::computeNodeDofs(*m_mesh, node2dof, cond_map);
     const auto owned_dofs               = std::span{all_dofs}.subspan(0, n_owned_dofs);
     const auto shared_dofs              = std::span{all_dofs}.subspan(n_owned_dofs);

@@ -169,39 +169,6 @@ constexpr bool contains(std::initializer_list< T > list, T value)
     return std::ranges::any_of(list, [value = value](T t) { return t == value; });
 }
 
-template <
-    std::ranges::forward_range                                                                   R,
-    std::indirect_binary_predicate< std::ranges::iterator_t< R >, std::ranges::iterator_t< R > > Cmp =
-        std::ranges::equal_to,
-    std::regular_invocable< std::ranges::range_value_t< R >, std::ranges::range_value_t< R > > Red = std::plus<> >
-constexpr std::ranges::borrowed_subrange_t< R >
-reduceConsecutive(R&& range, Cmp&& comparator = {}, Red&& reduction = {})
-    requires std::permutable< std::ranges::iterator_t< R > > and
-             std::assignable_from<
-                 std::ranges::range_reference_t< R >,
-                 std::invoke_result_t< Red, std::ranges::range_value_t< R >, std::ranges::range_value_t< R > > >
-{
-    auto it        = std::ranges::begin(range);
-    auto write_pos = it;
-    while (it != std::ranges::end(range))
-    {
-        const auto adj_range_begin = std::adjacent_find(it, std::ranges::end(range), comparator);
-        if (it != write_pos)
-            std::copy(it, adj_range_begin, write_pos);
-        std::advance(write_pos, std::distance(it, adj_range_begin));
-        if (adj_range_begin == std::ranges::end(range))
-            break;
-        auto next_adjacent = std::next(adj_range_begin);
-        *write_pos         = std::invoke(reduction, std::as_const(*adj_range_begin), std::as_const(*next_adjacent));
-        while (std::next(next_adjacent) != std::ranges::end(range) and
-               std::invoke(comparator, std::as_const(*next_adjacent), std::as_const(*std::next(next_adjacent))))
-            *write_pos = reduction(*write_pos, *++next_adjacent);
-        ++write_pos;
-        it = ++next_adjacent;
-    }
-    return std::ranges::borrowed_subrange_t< R >(write_pos, std::ranges::end(range));
-}
-
 template < typename T, size_t size >
 constexpr auto makeIotaArray(const T& first = T{})
 {

@@ -3,8 +3,8 @@
 
 #include "l3ster/comm/ImportExport.hpp"
 #include "l3ster/common/KernelInterface.hpp"
+#include "l3ster/common/ProblemDefinition.hpp"
 #include "l3ster/dofs/NodeToDofMap.hpp"
-#include "l3ster/dofs/ProblemDefinition.hpp"
 #include "l3ster/mesh/LocalMeshView.hpp"
 #include "l3ster/post/SolutionManager.hpp"
 

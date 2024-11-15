@@ -40,6 +40,13 @@ auto asSpan(const Kokkos::View< T*, Layout, Params... >& view) -> std::span< T >
 template < typename... Params >
 auto flatten(const Kokkos::View< Params... >& view) -> std::span< typename Kokkos::View< Params... >::value_type >
 {
+    util::throwingAssert(view.span_is_contiguous(), "Cannot flatten non-contiguous view");
+    return {view.data(), view.size()};
+}
+
+template < typename... Params >
+auto getMemorySpan(const Kokkos::View< Params... >& view) -> std::span< typename Kokkos::View< Params... >::value_type >
+{
     return {view.data(), view.span()};
 }
 

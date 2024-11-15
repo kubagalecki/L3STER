@@ -1,6 +1,5 @@
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/Base64.hpp"
-#include "l3ster/util/BitsetManip.hpp"
 #include "l3ster/util/Common.hpp"
 #include "l3ster/util/ConstexprRefStableCollection.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
@@ -146,32 +145,6 @@ TEST_CASE("Stack size manipulation", "[util]")
     }
 }
 
-TEMPLATE_TEST_CASE("Bitset (de-)serialization",
-                   "[util]",
-                   util::ConstexprValue< 10u >,
-                   util::ConstexprValue< 64u >,
-                   util::ConstexprValue< 100u >,
-                   util::ConstexprValue< 128u >,
-                   util::ConstexprValue< 257u >)
-{
-    constexpr static auto size               = TestType::value;
-    constexpr auto        n_runs             = 1 << 8;
-    constexpr auto        make_random_bitset = [] {
-        std::bitset< size >                    retval;
-        std::uniform_int_distribution< short > dist{0, 1};
-        std::mt19937                           prng{std::random_device{}()};
-        for (unsigned i = 0; i < size; ++i)
-            retval[i] = dist(prng);
-        return retval;
-    };
-    for (int i = 0; i < n_runs; ++i)
-    {
-        const auto test_data = make_random_bitset();
-        const auto result    = util::trimBitset< size >(util::deserializeBitset(util::serializeBitset(test_data)));
-        CHECK(test_data == result);
-    }
-}
-
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpragmas"
@@ -216,93 +189,6 @@ TEST_CASE("MetisGraphWrapper", "[util]")
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic pop
 #endif
-
-TEST_CASE("Consecutive reduce algo", "[util]")
-{
-    SECTION("Default args")
-    {
-        std::vector v{1, 1, 1, 2, 3, 3, 4, 5, 5, 5};
-        v.erase(util::reduceConsecutive(v).begin(), v.end());
-        REQUIRE(v.size() == 5);
-        CHECK(v[0] == 3);
-        CHECK(v[1] == 2);
-        CHECK(v[2] == 6);
-        CHECK(v[3] == 4);
-        CHECK(v[4] == 15);
-    }
-
-    SECTION("Custom comp & reduce")
-    {
-        std::vector v{std::pair{1, 2},
-                      std::pair{4, -1},
-                      std::pair{11, -8},
-                      std::pair{2, 1},
-                      std::pair{2, 0},
-                      std::pair{0, 1},
-                      std::pair{42, 13},
-                      std::pair{54, 1}};
-        const auto  cmp = [](const auto& p1, const auto& p2) {
-            return p1.first + p1.second == p2.first + p2.second;
-        };
-        v.erase(util::reduceConsecutive(v,
-                                        cmp,
-                                        [](const auto& p1, const auto& p2) {
-                                            return std::make_pair(std::abs(p1.first) + std::abs(p2.first),
-                                                                  std::abs(p1.second) + std::abs(p2.second));
-                                        })
-                    .begin(),
-                v.end());
-        REQUIRE(v.size() == 4);
-        CHECK(v[0].first == 18);
-        CHECK(v[0].second == 12);
-        CHECK(v[1].first == 2);
-        CHECK(v[1].second == 0);
-        CHECK(v[2].first == 0);
-        CHECK(v[2].second == 1);
-        CHECK(v[3].first == 96);
-        CHECK(v[3].second == 14);
-    }
-
-    SECTION("Algebraic sequence")
-    {
-        std::vector v{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 42};
-        v.erase(util::reduceConsecutive(
-                    v, [](int e1, int e2) { return e1 + 1 == e2; }, [](int e1, int e2) { return std::max(e1, e2); })
-                    .begin(),
-                v.end());
-        REQUIRE(v.size() == 2);
-        CHECK(v[0] == 10);
-        CHECK(v[1] == 42);
-    }
-
-    SECTION("Interval reduction")
-    {
-        std::vector v{std::pair{1, 2},
-                      std::pair{2, 3},
-                      std::pair{3, 4},
-                      std::pair{4, 5},
-                      std::pair{5, 6},
-                      std::pair{6, 7},
-                      std::pair{7, 8},
-                      std::pair{8, 9}};
-        v.erase(util::reduceConsecutive(
-                    v,
-                    [](const auto& p1, const auto& p2) { return p1.second == p2.first; },
-                    [](const auto& p1, const auto& p2) { return std::make_pair(p1.first, p2.second); })
-                    .begin(),
-                v.end());
-        REQUIRE(v.size() == 1);
-        CHECK(v[0].first == 1);
-        CHECK(v[0].second == 9);
-    }
-
-    SECTION("Empty")
-    {
-        std::vector< int > v;
-        v.erase(util::reduceConsecutive(v).begin(), v.end());
-        REQUIRE(v.size() == 0);
-    }
-}
 
 TEST_CASE("Dynamic bitset", "[util]")
 {
@@ -785,8 +671,8 @@ TEST_CASE("Type-erased overload set tests", "[util]")
 
     SECTION("Target fits in buffer")
     {
-        constexpr int  int_val = 0, str_val = 1;
-        const auto process_int = [&](int) {
+        constexpr int int_val = 0, str_val = 1;
+        const auto    process_int = [&](int) {
             return int_val;
         };
         const auto process_string = [&](const std::string&) {

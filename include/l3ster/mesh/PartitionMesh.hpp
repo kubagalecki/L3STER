@@ -2,7 +2,7 @@
 #define L3STER_MESH_PARTITIONMESH_HPP
 
 #include "ElementTraits.hpp"
-#include "l3ster/dofs/ProblemDefinition.hpp"
+#include "l3ster/common/ProblemDefinition.hpp"
 #include "l3ster/mesh/MeshUtils.hpp"
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/Caliper.hpp"

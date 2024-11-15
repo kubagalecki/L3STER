@@ -31,8 +31,7 @@ void test()
     auto           my_partition = comm::distributeMesh(comm, [&] { return makeCubeMesh(node_dist); });
 
     const auto cond_map            = makeCondensationMap< CP >(comm, *my_partition, probdef_ctwrpr);
-    const auto dof_intervals       = computeDofIntervals(comm, *my_partition, cond_map, probdef_ctwrpr);
-    const auto global_node_dof_map = NodeToGlobalDofMap{dof_intervals, cond_map};
+    const auto global_node_dof_map = NodeToGlobalDofMap{comm, *my_partition, cond_map, probdef_ctwrpr};
     const auto sparsity_graph = makeSparsityGraph(comm, *my_partition, global_node_dof_map, cond_map, probdef_ctwrpr);
 
     const auto [owned_bcdofs, shared_bcdofs] =

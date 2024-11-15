@@ -2,7 +2,6 @@
 #define L3STER_ALGSYS_SPARSITYGRAPH_HPP
 
 #include "l3ster/dofs/DofsFromNodes.hpp"
-#include "l3ster/dofs/MakeTpetraMap.hpp"
 #include "l3ster/dofs/NeighborManager.hpp"
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/Caliper.hpp"
@@ -482,6 +481,14 @@ inline void convertToTpetraFECrsGraph(const util::CrsGraph< local_dof_t >& nativ
         insert_into_row(row);
 }
 
+inline auto makeTpetraMap(std::span< const global_dof_t >               dofs,
+                          Teuchos::RCP< const Teuchos::MpiComm< int > > comm) -> Teuchos::RCP< const tpetra_map_t >
+{
+    const auto force_compute_size = Teuchos::OrdinalTraits< Tpetra::global_size_t >::invalid();
+    const auto dofs_teuchos_view  = util::asTeuchosView(dofs);
+    return util::makeTeuchosRCP< const tpetra_map_t >(force_compute_size, dofs_teuchos_view, 0, std::move(comm));
+}
+
 inline auto makeTpetraCrsGraph(const MpiComm&                  comm,
                                std::span< const global_dof_t > owned_row_dofs,
                                std::span< const global_dof_t > owned_plus_shared_row_dofs,
@@ -491,9 +498,9 @@ inline auto makeTpetraCrsGraph(const MpiComm&                  comm,
 {
     L3STER_PROFILE_FUNCTION;
     const auto teuchos_comm          = util::makeTeuchosRCP< const Teuchos::MpiComm< int > >(comm.get());
-    const auto owned_map             = dofs::makeTpetraMap(owned_row_dofs, teuchos_comm);
-    const auto owned_plus_shared_map = dofs::makeTpetraMap(owned_plus_shared_row_dofs, teuchos_comm);
-    const auto col_map               = dofs::makeTpetraMap(col_dofs, teuchos_comm);
+    const auto owned_map             = makeTpetraMap(owned_row_dofs, teuchos_comm);
+    const auto owned_plus_shared_map = makeTpetraMap(owned_plus_shared_row_dofs, teuchos_comm);
+    const auto col_map               = makeTpetraMap(col_dofs, teuchos_comm);
     auto retval = util::makeTeuchosRCP< tpetra_fecrsgraph_t >(owned_map, owned_plus_shared_map, col_map, row_sizes);
     retval->beginAssembly();
 

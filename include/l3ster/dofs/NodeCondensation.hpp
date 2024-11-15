@@ -1,11 +1,10 @@
 #ifndef L3STER_DOFS_NODECONDENSATION_HPP
 #define L3STER_DOFS_NODECONDENSATION_HPP
 
-#include "l3ster/comm/MpiComm.hpp"
+#include "l3ster/comm/ImportExport.hpp"
 #include "l3ster/common/Enums.hpp"
-#include "l3ster/dofs/ProblemDefinition.hpp"
+#include "l3ster/common/ProblemDefinition.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
-#include "l3ster/util/ArrayOwner.hpp"
 #include "l3ster/util/RobinHoodHashTables.hpp"
 
 namespace lstr

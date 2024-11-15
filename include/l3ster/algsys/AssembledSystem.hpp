@@ -342,8 +342,7 @@ AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::AssembledSystem(
     : m_comm{std::move(comm)}, m_mesh{std::move(mesh)}, m_state{State::OpenForAssembly}
 {
     const auto cond_map            = dofs::makeCondensationMap< CP >(*m_comm, *m_mesh, problemdef_ctwrpr);
-    const auto dof_intervals       = computeDofIntervals(*m_comm, *m_mesh, cond_map, problemdef_ctwrpr);
-    const auto node_global_dof_map = dofs::NodeToGlobalDofMap{dof_intervals, cond_map};
+    const auto node_global_dof_map = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, cond_map, problemdef_ctwrpr};
     m_sparsity_graph = makeSparsityGraph(*m_comm, *m_mesh, node_global_dof_map, cond_map, problemdef_ctwrpr);
 
     L3STER_PROFILE_REGION_BEGIN("Create Tpetra objects");

@@ -415,8 +415,6 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSo
         return retval;
     });
     auto&&     sol_inds_vec   = util::toVector(std::forward< SolInds >(sol_inds));
-
-    const auto pg = util::MaxParallelismGuard{1};
     util::tbb::parallelFor(m_element_ids, [&](el_id_t id) {
         // Thread local variables to minimize contention on the global allocator in a parallel context
         thread_local Eigen::Matrix< val_t, Eigen::Dynamic, int{n_rhs} > primary_vals, internal_vals;

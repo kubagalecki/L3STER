@@ -3,6 +3,7 @@
 
 #include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/util/Algorithm.hpp"
+#include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/CrsGraph.hpp"
 #include "l3ster/util/IndexMap.hpp"
 #include "l3ster/util/RobinHoodHashTables.hpp"
@@ -134,18 +135,13 @@ public:
         wait();
     }
 
-    template < util::KokkosView_c View >
-    void setOwned(View&& view)
-        requires(std::remove_cvref_t< View >::rank() == 2)
+    void setOwned(const Kokkos::View< const Scalar**, Kokkos::LayoutLeft >& view)
     {
-        setOwned(util::flatten(view), view.stride(0));
+        setOwned(util::getMemorySpan(view), view.stride(1));
     }
-    template < util::KokkosView_c View >
-    void setShared(View&& view)
-        requires(std::remove_cvref_t< View >::rank() == 2 and
-                 not std::is_const_v< typename std::remove_cvref_t< View >::value_type >)
+    void setShared(const Kokkos::View< Scalar**, Kokkos::LayoutLeft >& view)
     {
-        setShared(util::flatten(view), view.stride(0));
+        setShared(util::getMemorySpan(view), view.stride(1));
     }
 
 private:
@@ -177,19 +173,21 @@ public:
     inline void postRecvs(const MpiComm& comm);
     template < std::invocable< Scalar&, Scalar > Combine >
     void wait(Combine&& combine);
-
-    template < util::KokkosView_c View >
-    void setOwned(View&& view)
-        requires(std::remove_cvref_t< View >::rank() == 2 and
-                 not std::is_const_v< typename std::remove_cvref_t< View >::value_type >)
+    template < std::invocable< Scalar&, Scalar > Combine >
+    void doBlockingExport(const MpiComm& comm, Combine&& combine)
     {
-        setOwned(util::flatten(view), view.stride(0));
+        postRecvs(comm);
+        postSends(comm);
+        wait(std::forward< Combine >(combine));
     }
-    template < util::KokkosView_c View >
-    void setShared(View&& view)
-        requires(std::remove_cvref_t< View >::rank() == 2)
+
+    void setOwned(const Kokkos::View< Scalar**, Kokkos::LayoutLeft >& view)
     {
-        setShared(util::flatten(view), view.stride(0));
+        setOwned(util::getMemorySpan(view), view.stride(1));
+    }
+    void setShared(const Kokkos::View< const Scalar**, Kokkos::LayoutLeft >& view)
+    {
+        setShared(util::getMemorySpan(view), view.stride(1));
     }
 
 private:
@@ -325,6 +323,7 @@ ImportExportContext< LocalIndex >::ImportExportContext(const MpiComm&           
                                                        std::span< const GlobalIndex > owned_inds,
                                                        std::span< const GlobalIndex > shared_inds)
 {
+    L3STER_PROFILE_FUNCTION;
     util::throwingAssert(std::ranges::is_sorted(owned_inds), "Owned GIDs must be sorted");
     const auto owned_map  = detail::makeOwnedMap(comm, owned_inds, shared_inds);
     const auto shared_map = detail::makeSharedMap(comm, owned_map);
@@ -342,13 +341,17 @@ ImportExportContext< LocalIndex >::ImportExportContext(const MpiComm&           
 template < Arithmetic_c Scalar, std::signed_integral LocalIndex >
 bool ImportExportBase< Scalar, LocalIndex >::isOwnedSizeSufficient(size_t size) const
 {
-    return size >= (m_num_vecs - 1) * m_owned_stride + m_max_owned + 1;
+    const size_t num_owned     = m_max_owned + 1;
+    const auto   required_size = (m_num_vecs - 1) * m_owned_stride + num_owned;
+    return num_owned > 0 ? size >= required_size : true;
 }
 
 template < Arithmetic_c Scalar, std::signed_integral LocalIndex >
 bool ImportExportBase< Scalar, LocalIndex >::isSharedSizeSufficient(size_t size) const
 {
-    return size >= (m_num_vecs - 1) * m_shared_stride + m_context->getNumSharedInds();
+    const auto num_shared    = m_context->getNumSharedInds();
+    const auto required_size = (m_num_vecs - 1) * m_shared_stride + num_shared;
+    return num_shared > 0 ? size >= required_size : true;
 }
 
 template < Arithmetic_c Scalar, std::signed_integral LocalIndex >

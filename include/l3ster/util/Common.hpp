@@ -217,5 +217,15 @@ struct AtomicSumInto
         std::atomic_ref{value}.fetch_add(update, std::memory_order_relaxed);
     }
 };
+
+struct AtomicOrInto
+{
+    template < Arithmetic_c T >
+    void operator()(T& value, T update)
+    {
+        static_assert(std::atomic< T >::is_always_lock_free);
+        std::atomic_ref{value}.fetch_or(update, std::memory_order_relaxed);
+    }
+};
 } // namespace lstr::util
 #endif // L3STER_UTIL_COMMON_HPP
