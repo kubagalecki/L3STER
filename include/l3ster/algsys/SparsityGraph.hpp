@@ -360,10 +360,12 @@ auto computeNodeDofs(const mesh::MeshPartition< orders... >&              mesh,
                });
     };
     std::vector< global_dof_t > dofs;
-    dofs.reserve(cond_map.getCondensedIds().size() * max_dofs_per_node);
+    dofs.reserve(std::ranges::size(cond_map.getCondensedIds()) * max_dofs_per_node);
     std::ranges::copy(get_node_dofs(cond_map.getCondensedOwnedNodesView(mesh)), std::back_inserter(dofs));
+    std::ranges::sort(dofs);
     const auto n_owned_dofs = dofs.size();
     std::ranges::copy(get_node_dofs(cond_map.getCondensedGhostNodesView(mesh)), std::back_inserter(dofs));
+    std::ranges::sort(dofs | std::views::drop(n_owned_dofs));
     dofs.shrink_to_fit();
     return {std::move(dofs), n_owned_dofs};
 }

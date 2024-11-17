@@ -129,7 +129,7 @@ NodeToLocalDofMap< dofs_per_node, num_maps >::NodeToLocalDofMap(
     const NodeToGlobalDofMap< dofs_per_node >& global_map,
     const std::same_as< tpetra_map_t > auto&... local_global_maps)
     requires(sizeof...(local_global_maps) == num_maps)
-    : m_map(cond_map.getCondensedIds().size())
+    : m_map(std::ranges::size(cond_map.getCondensedIds()))
 {
     L3STER_PROFILE_FUNCTION;
     const auto get_node_dofs = [&](n_id_t node, const tpetra_map_t& map) {
@@ -149,7 +149,7 @@ LocalDofMap< max_dofs_per_node >::LocalDofMap(const NodeCondensationMap< Condens
                                               const mesh::NodeMap&                                   node_map,
                                               std::span< const global_dof_t >                        all_dofs,
                                               size_t                                                 num_owned_dofs)
-    : m_map(cond_map.getCondensedIds().size()),
+    : m_map(std::ranges::size(cond_map.getCondensedIds())),
       m_num_owned{static_cast< dof_t >(num_owned_dofs)},
       m_num_total{static_cast< dof_t >(all_dofs.size())}
 {

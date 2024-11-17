@@ -20,9 +20,10 @@ public:
                util::ConstexprValue< problem_def >     probdef_ctwrpr,
                const NodeCondensationMap< CP >&        cond_map)
     {
+        using namespace std::views;
         const auto node_to_dof_map = NodeToGlobalDofMap{comm, mesh, cond_map, probdef_ctwrpr};
-        const auto max_dof         = std::ranges::max(node_to_dof_map(cond_map.getCondensedIds().back()) |
-                                              std::views::filter(NodeToGlobalDofMap< problem_def.n_fields >::isValid));
+        const auto max_dof         = std::ranges::max(cond_map.getCondensedIds() | transform(node_to_dof_map) | join |
+                                              filter(NodeToGlobalDofMap< problem_def.n_fields >::isValid));
         m_dim                      = static_cast< size_t >(max_dof + 1);
         m_entries                  = util::DynamicBitset{m_dim * m_dim};
 

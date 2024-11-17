@@ -20,15 +20,6 @@ inline constexpr auto element_boundary_tag = CondensationPolicyTag< Condensation
 
 namespace dofs
 {
-template < typename T >
-struct IsCondensationPolicyTag : std::false_type
-{};
-template < CondensationPolicy CP >
-struct IsCondensationPolicyTag< CondensationPolicyTag< CP > > : std::true_type
-{};
-template < typename T >
-concept CondensationPolicyTag_c = IsCondensationPolicyTag< T >::value;
-
 template < CondensationPolicy CP, mesh::ElementType ET, el_o_t EO >
 constexpr decltype(auto) getPrimaryNodesView(const mesh::Element< ET, EO >& element, CondensationPolicyTag< CP > = {})
 {
@@ -37,6 +28,7 @@ constexpr decltype(auto) getPrimaryNodesView(const mesh::Element< ET, EO >& elem
     else if constexpr (CP == CondensationPolicy::ElementBoundary)
         return getBoundaryNodes(element);
 }
+
 template < CondensationPolicy CP, mesh::ElementType ET, el_o_t EO >
 constexpr decltype(auto) getPrimaryNodesArray(const mesh::Element< ET, EO >& element, CondensationPolicyTag< CP > = {})
 {
@@ -49,6 +41,7 @@ constexpr decltype(auto) getPrimaryNodesArray(const mesh::Element< ET, EO >& ele
         return retval;
     }
 }
+
 template < CondensationPolicy CP, mesh::ElementType ET, el_o_t EO >
 consteval auto getNumPrimaryNodes(util::ValuePack< CP, ET, EO > = {}) -> size_t
 {
@@ -75,105 +68,136 @@ auto getActiveNodes(const mesh::MeshPartition< orders... >& mesh,
     return retval;
 }
 
-template < el_o_t... orders >
-auto computeCondensedActiveNodeIds(const MpiComm&                          comm,
-                                   const mesh::MeshPartition< orders... >& mesh,
-                                   const std::vector< n_id_t >& uncondensed_active_nodes) -> std::vector< n_id_t >
-{
-    // The condensation algorithm requires that each uncondensed active node be owned by exactly one partition. A node
-    // may be inactive on the partition which owns it. Such nodes must therefore first be claimed by a different
-    // partition.
-    const auto owned_active_nodes = std::invoke([&] {
-        auto retval = std::vector< n_id_t >{};
-        retval.reserve(uncondensed_active_nodes.size());
-        std::ranges::copy_if(uncondensed_active_nodes, std::back_inserter(retval), mesh.getOwnedNodePredicate());
-        retval.shrink_to_fit();
-        return retval;
-    });
-
-    std::vector< n_id_t > retval(uncondensed_active_nodes.size());
-    if (comm.getSize() == 1)
-    {
-        std::iota(retval.begin(), retval.end(), 0ul);
-        return retval;
-    }
-    const auto process_received_active_ids = [&](std::span< const n_id_t > off_rank_nodes, int) {
-        for (size_t i = 0; i != retval.size(); ++i)
-        {
-            const auto iter = std::ranges::lower_bound(off_rank_nodes, uncondensed_active_nodes[i]);
-            retval[i] += std::distance(off_rank_nodes.begin(), iter);
-        }
-    };
-    util::staggeredAllGather(comm, std::span{owned_active_nodes}, process_received_active_ids);
-    return retval;
-}
-
-template < el_o_t... orders >
-void activateOwned(const MpiComm&                          comm,
-                   const mesh::MeshPartition< orders... >& mesh,
-                   std::vector< n_id_t >&                  my_active_nodes)
-{
-    const int  my_rank                      = comm.getRank();
-    const auto my_active_ghost_nodes        = std::invoke([&] {
-        auto retval = std::vector< n_id_t >{};
-        retval.reserve(my_active_nodes.size());
-        std::ranges::copy_if(my_active_nodes, std::back_inserter(retval), mesh.getGhostNodePredicate());
-        return retval;
-    });
-    const auto process_offrank_active_nodes = [&](std::span< const n_id_t > active_nodes, int send_rank) {
-        if (send_rank != my_rank)
-            for (auto active : active_nodes)
-                if (mesh.isOwnedNode(active) and not std::ranges::binary_search(my_active_nodes, active))
-                    my_active_nodes.insert(std::ranges::lower_bound(my_active_nodes, active), active);
-    };
-    util::staggeredAllGather(comm, std::span{my_active_ghost_nodes}, process_offrank_active_nodes);
-    my_active_nodes.shrink_to_fit();
-}
-
 template < CondensationPolicy >
 class NodeCondensationMap
 {
+    using map_t = robin_hood::unordered_flat_map< n_id_t, n_id_t >;
+
 public:
-    template < RangeOfConvertibleTo_c< n_id_t > NodeRange >
-    NodeCondensationMap(NodeRange&& nodes_to_condense, std::vector< n_id_t > condensed_ids)
-        : m_condensed_ids{std::move(condensed_ids)}
+    template < RangeOfConvertibleTo_c< n_id_t > Uncond, RangeOfConvertibleTo_c< n_id_t > Cond >
+    NodeCondensationMap(Uncond&& uncond, Cond&& cond)
     {
-        m_forward_map.reserve(m_condensed_ids.size());
-        m_inverse_map.reserve(m_condensed_ids.size());
-        for (size_t i = 0; n_id_t uncond_node : std::forward< NodeRange >(nodes_to_condense))
-        {
-            const auto condensed_id = m_condensed_ids[i++];
-            m_forward_map.emplace(uncond_node, condensed_id);
-            m_inverse_map.emplace(condensed_id, uncond_node);
-        }
+        util::throwingAssert(std::ranges::distance(uncond) == std::ranges::distance(cond));
+        auto zipped   = std::views::zip(std::forward< Uncond >(uncond), std::forward< Cond >(cond));
+        m_forward_map = map_t(zipped.begin(), zipped.end());
+        for (auto&& [u, c] : zipped)
+            m_inverse_map.emplace(c, u);
     }
 
     [[nodiscard]] auto getCondensedId(n_id_t id) const -> n_id_t { return m_forward_map.at(id); }
     [[nodiscard]] auto getUncondensedId(n_id_t id) const -> n_id_t { return m_inverse_map.at(id); }
-    [[nodiscard]] auto getCondensedIds() const -> std::span< const n_id_t > { return m_condensed_ids; }
-
-    [[nodiscard]] auto getLocalCondensedId(n_id_t node) const -> n_id_t
+    [[nodiscard]] auto getCondensedIds() const
     {
-        return static_cast< n_id_t >(std::distance(getCondensedIds().begin(),
-                                                   std::ranges::lower_bound(getCondensedIds(), getCondensedId(node))));
+        return m_inverse_map | std::views::transform([](const auto& p) { return p.first; });
     }
+
     template < el_o_t... orders >
     [[nodiscard]] auto getCondensedOwnedNodesView(const mesh::MeshPartition< orders... >& mesh) const
     {
-        return getCondensedIds() |
-               std::views::filter([&](n_id_t node) { return mesh.isOwnedNode(getUncondensedId(node)); });
+        const auto owned_pred = [&](n_id_t node) {
+            return mesh.isOwnedNode(getUncondensedId(node));
+        };
+        return getCondensedIds() | std::views::filter(owned_pred);
     }
     template < el_o_t... orders >
     [[nodiscard]] auto getCondensedGhostNodesView(const mesh::MeshPartition< orders... >& mesh) const
     {
-        return getCondensedIds() |
-               std::views::filter([&](n_id_t node) { return mesh.isGhostNode(getUncondensedId(node)); });
+        const auto ghost_pred = [&](n_id_t node) {
+            return mesh.isGhostNode(getUncondensedId(node));
+        };
+        return getCondensedIds() | std::views::filter(ghost_pred);
     }
 
 private:
-    std::vector< n_id_t >                            m_condensed_ids;
-    robin_hood::unordered_flat_map< n_id_t, n_id_t > m_forward_map, m_inverse_map;
+    map_t m_forward_map, m_inverse_map;
 };
+
+namespace detail
+{
+template < CondensationPolicy CP, ProblemDef problem_def, el_o_t... orders >
+auto markActiveNodes(const mesh::MeshPartition< orders... >& mesh,
+                     CondensationPolicyTag< CP >             cp_tag,
+                     util::ConstexprValue< problem_def >) -> util::ArrayOwner< char >
+{
+    const auto g2l       = util::IndexMap{mesh.getAllNodes()};
+    auto       retval    = util::ArrayOwner< char >(g2l.size(), false);
+    const auto mark_node = [&](n_id_t node) {
+        const auto lid = g2l(node);
+        std::atomic_ref{retval[lid]}.store(true, std::memory_order_relaxed);
+    };
+    const auto mark_el_nodes = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& el) {
+        for (auto n : getPrimaryNodesView(el, cp_tag))
+            mark_node(n);
+    };
+    for (const auto& [domain, _] : problem_def)
+        mesh.visit(mark_el_nodes, domain, std::execution::par);
+    return retval;
+}
+
+inline void communicateActiveNodes(const MpiComm&                                       comm,
+                                   std::shared_ptr< const comm::ImportExportContext<> > context,
+                                   size_t                                               num_owned_nodes,
+                                   util::ArrayOwner< char >&                            is_active)
+{
+    auto importer = comm::Import< char, local_dof_t >{context, 1};
+    auto exporter = comm::Export< char, local_dof_t >{context, 1};
+    exporter.setOwned(is_active | std::views::take(num_owned_nodes), is_active.size());
+    exporter.setShared(is_active | std::views::drop(num_owned_nodes), is_active.size());
+    importer.setOwned(is_active | std::views::take(num_owned_nodes), is_active.size());
+    importer.setShared(is_active | std::views::drop(num_owned_nodes), is_active.size());
+    exporter.doBlockingExport(comm, util::AtomicOrInto{});
+    importer.doBlockingImport(comm);
+}
+
+struct OwnedCondensedNodes
+{
+    std::vector< n_id_t > uncondensed, condensed;
+};
+template < el_o_t... orders >
+auto computeOwnedCondensedNodes(const MpiComm&                          comm,
+                                const mesh::MeshPartition< orders... >& mesh,
+                                const util::ArrayOwner< char >&         is_active) -> OwnedCondensedNodes
+{
+    auto retval            = OwnedCondensedNodes{};
+    auto& [uncond, cond]   = retval;
+    const auto owned_nodes = mesh.getOwnedNodes();
+    for (auto&& [i, active] : is_active | std::views::enumerate | std::views::take(owned_nodes.size()))
+        if (active)
+            uncond.push_back(owned_nodes[i]);
+    auto scan_val = std::views::single(uncond.size());
+    comm.exclusiveScanInPlace(scan_val, MPI_SUM);
+    const auto base_ind = comm.getRank() == 0 ? n_id_t{0} : static_cast< n_id_t >(scan_val.front());
+    cond.resize(uncond.size());
+    std::ranges::iota(cond, base_ind);
+    return retval;
+}
+
+template < el_o_t... orders >
+void appendGhosts(const MpiComm&                                       comm,
+                  std::shared_ptr< const comm::ImportExportContext<> > context,
+                  const mesh::MeshPartition< orders... >&              mesh,
+                  const util::ArrayOwner< char >&                      is_active,
+                  std::vector< n_id_t >&                               uncondensed,
+                  std::vector< n_id_t >&                               condensed)
+{
+    using namespace std::views;
+    const auto owned_nodes      = mesh.getOwnedNodes();
+    const auto num_owned        = owned_nodes.size();
+    auto       condensed_lookup = util::ArrayOwner< n_id_t >(is_active.size(), 0);
+    for (auto&& [u, c] : zip(uncondensed, condensed))
+        condensed_lookup.at(u - owned_nodes.front()) = c; // if this is executing then !owned_nodes.empty()
+    auto importer = comm::Import< n_id_t, local_dof_t >{std::move(context), 1};
+    importer.setOwned(condensed_lookup | take(num_owned), condensed_lookup.size());
+    importer.setShared(condensed_lookup | drop(num_owned), condensed_lookup.size());
+    importer.doBlockingImport(comm);
+    for (auto&& [active, uncond, cond] : zip(is_active, mesh.getAllNodes(), condensed_lookup) | drop(num_owned))
+        if (active)
+        {
+            uncondensed.push_back(uncond);
+            condensed.push_back(cond);
+        }
+}
+} // namespace detail
 
 template < CondensationPolicy CP, ProblemDef problem_def, el_o_t... orders >
 auto makeCondensationMap(const MpiComm&                          comm,
@@ -181,10 +205,15 @@ auto makeCondensationMap(const MpiComm&                          comm,
                          util::ConstexprValue< problem_def >     probdef_ctwrpr,
                          CondensationPolicyTag< CP >             cp_tag = {}) -> NodeCondensationMap< CP >
 {
-    auto active_nodes = dofs::getActiveNodes(mesh, probdef_ctwrpr, cp_tag);
-    activateOwned(comm, mesh, active_nodes);
-    auto condensed_active_nodes = computeCondensedActiveNodeIds(comm, mesh, active_nodes);
-    return {std::move(active_nodes), std::move(condensed_active_nodes)};
+    const auto owned_nodes  = util::ArrayOwner< global_dof_t >{mesh.getOwnedNodes()};
+    const auto shared_nodes = util::ArrayOwner< global_dof_t >{mesh.getGhostNodes()};
+    auto       is_active    = detail::markActiveNodes(mesh, cp_tag, probdef_ctwrpr);
+    using context_t         = const comm::ImportExportContext<>;
+    const auto node_context = std::make_shared< context_t >(comm, std::span{owned_nodes}, std::span{shared_nodes});
+    detail::communicateActiveNodes(comm, node_context, owned_nodes.size(), is_active);
+    auto [active_uncond, active_cond] = detail::computeOwnedCondensedNodes(comm, mesh, is_active);
+    detail::appendGhosts(comm, node_context, mesh, is_active, active_uncond, active_cond);
+    return {std::move(active_uncond), std::move(active_cond)};
 }
 } // namespace dofs
 } // namespace lstr
