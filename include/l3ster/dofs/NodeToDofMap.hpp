@@ -254,7 +254,7 @@ inline auto doCommsAndCountOwnedDofs(const MpiComm&                             
     auto       owned_view_flat = dofs_flat | chunk(num_all) | transform(take_owned) | join;
     const auto retval          = std::ranges::count(owned_view_flat, true);
     importer.wait();
-    return retval;
+    return static_cast< size_t >(retval);
 }
 
 inline auto computeBaseDof(const MpiComm& comm, size_t num_owned_dofs) -> global_dof_t

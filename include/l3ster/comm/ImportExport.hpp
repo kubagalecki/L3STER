@@ -52,7 +52,7 @@ public:
                std::views::transform([this](size_t i) { return std::make_pair(m_nbrs.at(i), m_owned_inds(i)); });
     }
     auto getSharedNbrs() const -> NbrSpan { return {m_nbrs | std::views::drop(m_num_owned_nbrs)}; }
-    auto getNumSharedInds() const -> size_t { return m_shared_ind_offsets.back(); }
+    auto getNumSharedInds() const -> size_t { return static_cast< size_t >(m_shared_ind_offsets.back()); }
     auto getSharedRange() const
     {
         return std::views::zip_transform(
@@ -341,8 +341,8 @@ ImportExportContext< LocalIndex >::ImportExportContext(const MpiComm&           
 template < Arithmetic_c Scalar, std::signed_integral LocalIndex >
 bool ImportExportBase< Scalar, LocalIndex >::isOwnedSizeSufficient(size_t size) const
 {
-    const size_t num_owned     = m_max_owned + 1;
-    const auto   required_size = (m_num_vecs - 1) * m_owned_stride + num_owned;
+    const auto num_owned     = static_cast< size_t >(m_max_owned + 1);
+    const auto required_size = (m_num_vecs - 1) * m_owned_stride + num_owned;
     return num_owned > 0 ? size >= required_size : true;
 }
 
