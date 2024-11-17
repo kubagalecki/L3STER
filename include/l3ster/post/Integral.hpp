@@ -42,9 +42,8 @@ auto evalElementBoundaryIntegral(
         const auto& ref_ders                     = basis_at_qps.basis.derivatives[qp_ind];
         const auto  side                         = el_view.getSide();
         const auto [phys_ders, jacobian, normal] = map::mapBoundary< ET, EO >(jacobi_gen, ref_coords, ref_ders, side);
-        const auto kernel_result                 =
-            algsys::evalKernel(
-            kernel, ref_coords, basis_vals, phys_ders, node_vals, el_view->getData(), time, normal);
+        const auto kernel_result =
+            algsys::evalKernel(kernel, ref_coords, basis_vals, phys_ders, node_vals, el_view->getData(), time, normal);
         return jacobian * kernel_result;
     };
     return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, detail::initResidualKernelResult< params >());

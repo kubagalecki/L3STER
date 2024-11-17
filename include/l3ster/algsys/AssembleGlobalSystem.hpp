@@ -1,8 +1,8 @@
 #ifndef L3STER_ALGSYS_ASSEMBLEGLOBALSYSTEM_HPP
 #define L3STER_ALGSYS_ASSEMBLEGLOBALSYSTEM_HPP
 
-#include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 #include "l3ster/algsys/StaticCondensationManager.hpp"
+#include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 #include "l3ster/mesh/BoundaryView.hpp"
 #include "l3ster/mesh/LocalMeshView.hpp"
 #include "l3ster/post/SolutionManager.hpp"

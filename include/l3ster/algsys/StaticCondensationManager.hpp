@@ -1,8 +1,8 @@
 #ifndef L3STER_ALGSYS_STATICCONDENSATIONMANAGER_HPP
 #define L3STER_ALGSYS_STATICCONDENSATIONMANAGER_HPP
 
-#include "l3ster/dofs/DofsFromNodes.hpp"
 #include "l3ster/algsys/ScatterLocalSystem.hpp"
+#include "l3ster/dofs/DofsFromNodes.hpp"
 #include "l3ster/post/SolutionManager.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 #include "l3ster/util/TbbUtils.hpp"

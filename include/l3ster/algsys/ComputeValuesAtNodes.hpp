@@ -1,9 +1,9 @@
 #ifndef L3STER_ALGSYS_COMPUTEVALUESATNODES_HPP
 #define L3STER_ALGSYS_COMPUTEVALUESATNODES_HPP
 
+#include "l3ster/algsys/AssembleGlobalSystem.hpp"
 #include "l3ster/basisfun/ReferenceBasisAtNodes.hpp"
 #include "l3ster/comm/ImportExport.hpp"
-#include "l3ster/algsys/AssembleGlobalSystem.hpp"
 #include "l3ster/mesh/LocalMeshView.hpp"
 #include "l3ster/mesh/NodePhysicalLocation.hpp"
 #include "l3ster/util/Ranges.hpp"
