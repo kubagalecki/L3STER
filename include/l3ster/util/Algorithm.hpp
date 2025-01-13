@@ -2,7 +2,10 @@
 #define L3STER_UTIL_ALGORITHM_HPP
 
 #include "l3ster/comm/MpiComm.hpp"
+#include "l3ster/util/CrsGraph.hpp"
+#include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/Meta.hpp"
+#include "l3ster/util/RobinHoodHashTables.hpp"
 
 #include "oneapi/tbb/parallel_invoke.h"
 
@@ -209,8 +212,8 @@ Iter copyValuesAtInds(const std::array< T, N >& array, Iter out_iter, ConstexprV
 }
 
 template < IndexRange_c auto inds, typename T, size_t N >
-auto getValuesAtInds(const std::array< T, N >& array,
-                     ConstexprValue< inds >    inds_ctwrpr = {}) -> std::array< T, std::ranges::size(inds) >
+auto getValuesAtInds(const std::array< T, N >& array, ConstexprValue< inds > inds_ctwrpr = {})
+    -> std::array< T, std::ranges::size(inds) >
     requires(std::ranges::all_of(inds, [](size_t i) { return i < N; }))
 {
     std::array< T, std::ranges::size(inds) > retval;
@@ -259,6 +262,96 @@ void staggeredAllGather(const MpiComm& comm, std::span< const T > my_data, Proce
     }
     finish_broadcasting();
     do_processing(comm_size - 1);
+}
+
+// CRS graph algorithms
+template < typename VertexType, typename Fun >
+auto depthFirstSearch(const CrsGraph< VertexType >& graph, Fun&& op, VertexType start = 0)
+    -> robin_hood::unordered_flat_set< VertexType >
+    requires std::invocable< Fun, VertexType >
+{
+    auto visited  = robin_hood::unordered_flat_set< VertexType >{};
+    auto to_visit = std::vector< VertexType >{start};
+    while (not to_visit.empty())
+    {
+        const auto current = to_visit.back();
+        to_visit.pop_back();
+        if (not visited.contains(current))
+        {
+            std::invoke(op, current);
+            visited.insert(current);
+            std::ranges::remove_copy_if(graph(current) | std::views::reverse,
+                                        std::back_inserter(to_visit),
+                                        [&](VertexType vertex) { return visited.contains(vertex); });
+        }
+    }
+    return visited;
+}
+
+/// Get components of an undirected graph. Assumes $v_1 \in graph(v_2) <=> v_2 \in graph(v_1)$.
+/// Each element of the returned vector is the sorted set of vertices constituting a component of the input graph
+template < typename VertexType, typename Fun >
+auto getComponentsUndirected(const CrsGraph< VertexType >& graph) -> std::vector< ArrayOwner< VertexType > >
+{
+    constexpr auto ignore = [](VertexType) {
+    };
+    auto visited_lu = DynamicBitset{graph.getNRows()};
+    auto retval     = std::vector< ArrayOwner< VertexType > >{};
+    for (VertexType v = 0; v != graph.getNRows(); ++v)
+    {
+        if (visited_lu.test(v))
+            continue;
+        retval.emplace_back(depthFirstSearch(graph, ignore, v));
+        std::ranges::sort(retval.back());
+        for (auto i : retval.back())
+            visited_lu.set(i);
+    }
+    return retval;
+}
+
+enum struct GraphType
+{
+    Undirected,
+    Directed
+};
+
+/// Creates CRS graph from edges, defined by pairs of corresponding elements of the 2 input ranges
+/// If graph_type == GraphType::Undirected, both (from[i], to[i]) and (to[i], from[i]) will be included in the result
+template < std::ranges::range From, std::ranges::range To >
+auto makeCrsGraph(From&& from, To&& to, GraphType graph_type = GraphType::Directed)
+    requires std::integral< std::remove_cvref_t< std::ranges::range_value_t< From > > > and
+             std::integral< std::remove_cvref_t< std::ranges::range_value_t< To > > > and
+             std::common_with< std::remove_cvref_t< std::ranges::range_value_t< From > >,
+                               std::remove_cvref_t< std::ranges::range_value_t< To > > >
+{
+    using VertexType = std::common_type_t< std::remove_cvref_t< std::ranges::range_value_t< From > >,
+                                           std::remove_cvref_t< std::ranges::range_value_t< To > > >;
+    if (std::ranges::empty(from))
+        return CrsGraph< VertexType >{};
+    auto vert_map = robin_hood::unordered_flat_map< VertexType, robin_hood::unordered_flat_set< VertexType > >{};
+    auto max_vert = std::numeric_limits< VertexType >::min();
+    for (const auto& [f, t] : std::views::zip(std::forward< From >(from), std::forward< To >(to)))
+    {
+        const auto v_from = static_cast< VertexType >(f);
+        const auto v_to   = static_cast< VertexType >(t);
+        max_vert          = std::max(max_vert, v_from);
+        max_vert          = std::max(max_vert, v_to);
+        vert_map[v_from].insert(v_to);
+        if (graph_type == GraphType::Undirected)
+            vert_map[v_to].insert(v_from);
+    }
+    auto degrees = std::views::iota(VertexType{0}, max_vert + 1) | std::views::transform([&](auto v) {
+                       const auto iter = vert_map.find(v);
+                       return iter == vert_map.end() ? size_t{0} : iter->second.size();
+                   });
+    auto retval  = CrsGraph< VertexType >{degrees};
+    for (const auto& [v, dests] : vert_map)
+    {
+        const auto row = retval(v);
+        std::ranges::copy(dests, row.begin());
+        std::ranges::sort(row);
+    }
+    return retval;
 }
 } // namespace lstr::util
 #endif // L3STER_UTIL_ALGORITHM_HPP

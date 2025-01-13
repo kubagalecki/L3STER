@@ -34,8 +34,8 @@ private:
     template < typename R >
     static auto initAdjOffsets(R&& adj_sizes) -> ArrayOwner< std::size_t >;
 
-    ArrayOwner< std::size_t > m_adj_offsets;
-    ArrayOwner< VertexType >  m_adjacent;
+    ArrayOwner< std::size_t > m_adj_offsets{0};
+    ArrayOwner< VertexType >  m_adjacent{};
 };
 
 template < std::integral VertexType >
@@ -70,7 +70,7 @@ template < std::integral VertexType >
 template < typename R >
 auto CrsGraph< VertexType >::initAdjOffsets(R&& adj_sizes) -> ArrayOwner< std::size_t >
 {
-    auto retval           = ArrayOwner< std::size_t >(std::ranges::distance(adj_sizes) + 1);
+    auto retval           = ArrayOwner< std::size_t >(static_cast< size_t >(std::ranges::distance(adj_sizes) + 1));
     retval.front()        = 0;
     auto adj_sizes_common = std::forward< R >(adj_sizes) | std::views::common;
     std::inclusive_scan(adj_sizes_common.begin(), adj_sizes_common.end(), std::next(retval.begin()));

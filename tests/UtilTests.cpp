@@ -2,6 +2,7 @@
 #include "l3ster/util/Base64.hpp"
 #include "l3ster/util/Common.hpp"
 #include "l3ster/util/ConstexprRefStableCollection.hpp"
+#include "l3ster/util/CrsGraph.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/HwlocWrapper.hpp"
 #include "l3ster/util/IO.hpp"
@@ -805,5 +806,67 @@ TEST_CASE("UniVector", "[util]")
         find_val = 44;
         REQUIRE_FALSE(vec.find(pred).has_value());
         REQUIRE_FALSE(std::as_const(vec).find(pred).has_value());
+    }
+}
+
+TEST_CASE("CrsGraph", "[util]")
+{
+    using VertexType                        = size_t;
+    constexpr size_t size                   = 1uz << 7;
+    const auto       check_dfs_returns_iota = [&](const util::CrsGraph< VertexType >& graph) {
+        auto visited = std::vector< VertexType >{};
+        visited.reserve(size);
+        util::depthFirstSearch(graph, [&](VertexType v) { visited.push_back(v); });
+        CHECK(std::ranges::equal(visited, std::views::iota(VertexType{0}, size)));
+    };
+
+    SECTION("Unary tree")
+    {
+        const auto graph = util::makeCrsGraph(std::views::iota(0uz, size - 1), std::views::iota(1uz, size));
+        for (VertexType v = 0; v != size - 1; ++v)
+            REQUIRE(graph(v).size() == 1);
+        REQUIRE(graph(size - 1).size() == 0);
+        check_dfs_returns_iota(graph);
+    }
+    SECTION("Chain")
+    {
+        auto from = std::views::iota(0uz, size);
+        auto to   = util::ArrayOwner< VertexType >(from);
+        std::ranges::rotate(to, std::next(to.begin()));
+        const auto graph = util::makeCrsGraph(from, to, util::GraphType::Undirected);
+        for (VertexType v = 0; v != size; ++v)
+            REQUIRE(graph(v).size() == 2);
+        check_dfs_returns_iota(graph);
+    }
+    SECTION("Complete")
+    {
+        auto       verts     = std::views::iota(0uz, size);
+        auto       all_combs = std::views::cartesian_product(verts, verts);
+        const auto graph     = util::makeCrsGraph(all_combs | std::views::keys, all_combs | std::views::values);
+        for (VertexType v = 0; v != size; ++v)
+            REQUIRE(graph(v).size() == size);
+        check_dfs_returns_iota(graph);
+    }
+    SECTION("Cluster")
+    {
+        auto from = std::array{std::views::iota(0uz, size / 2), std::views::iota(size / 2, size)};
+        auto to   = std::array{util::ArrayOwner(from.front()), util::ArrayOwner(from.back())};
+        for (auto& t : to)
+            std::ranges::rotate(t, std::next(t.begin()));
+        const auto graph = util::makeCrsGraph(from | std::views::join, to | std::views::join);
+        for (VertexType v = 0; v != size; ++v)
+            REQUIRE(graph(v).size() == 1);
+        auto visited = std::vector< VertexType >{};
+        visited.reserve(size / 2);
+        util::depthFirstSearch(graph, [&](VertexType v) { visited.push_back(v); });
+        CHECK(std::ranges::equal(visited, std::views::iota(VertexType{0}, size / 2)));
+        visited.clear();
+        util::depthFirstSearch(graph, [&](VertexType v) { visited.push_back(v); }, size / 2);
+        CHECK(std::ranges::equal(visited, std::views::iota(VertexType{size / 2}, VertexType{size})));
+    }
+    SECTION("Empty")
+    {
+        const auto graph = util::makeCrsGraph(std::views::empty< VertexType >, std::views::empty< VertexType >);
+        REQUIRE(graph.getNRows() == 0);
     }
 }
