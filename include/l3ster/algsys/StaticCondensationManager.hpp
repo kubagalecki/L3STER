@@ -261,8 +261,8 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
         auto dof_bmp_range = getBoundaryNodes(element) | std::views::transform(dof_map) | std::views::keys |
                              std::views::transform([&](const std::array< local_dof_t, max_dofs_per_node >& dofs) {
                                  auto retval = dof_bmp_t{};
-                                 for (size_t i = 0; auto dof : dofs)
-                                     retval[i++] = dof == dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >::invalid_dof;
+                                 for (auto&& [i, dof] : dofs | std::views::enumerate)
+                                     retval[i] = not dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >::isValid(dof);
                                  return retval;
                              }) |
                              std::views::common;

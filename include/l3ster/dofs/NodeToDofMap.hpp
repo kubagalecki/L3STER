@@ -1,6 +1,7 @@
 #ifndef L3STER_DOFS_NODETODOFMAP_HPP
 #define L3STER_DOFS_NODETODOFMAP_HPP
 
+#include "l3ster/bcs/PeriodicBC.hpp"
 #include "l3ster/comm/ImportExport.hpp"
 #include "l3ster/common/TrilinosTypedefs.h"
 #include "l3ster/dofs/NodeCondensation.hpp"
@@ -13,12 +14,10 @@ namespace lstr::dofs
 template < size_t dofs_per_node >
 class NodeToGlobalDofMap
 {
-
 public:
-    using dof_t                               = global_dof_t;
-    using payload_t                           = std::array< global_dof_t, dofs_per_node >;
-    static constexpr global_dof_t invalid_dof = -1;
-    static constexpr bool         isValid(dof_t dof) { return dof != invalid_dof; }
+    using dof_t     = global_dof_t;
+    using payload_t = std::array< global_dof_t, dofs_per_node >;
+    static constexpr bool isValid(dof_t dof) { return dof != invalid_global_dof; }
 
     NodeToGlobalDofMap() = default;
     template < el_o_t... orders, CondensationPolicy CP, ProblemDef problem_def >
@@ -54,9 +53,8 @@ class NodeToLocalDofMap
     using map_t     = robin_hood::unordered_flat_map< n_id_t, payload_t >;
 
 public:
-    using dof_t                        = local_dof_t;
-    static constexpr dof_t invalid_dof = -1;
-    static constexpr bool  isValid(dof_t dof) { return dof != invalid_dof; }
+    using dof_t = local_dof_t;
+    static constexpr bool isValid(dof_t dof) { return dof != invalid_local_dof; }
 
     NodeToLocalDofMap() = default;
     template < CondensationPolicy CP >
@@ -84,9 +82,8 @@ template < size_t max_dofs_per_node >
 class LocalDofMap
 {
 public:
-    using dof_t                        = local_dof_t;
-    static constexpr dof_t invalid_dof = -1;
-    static constexpr bool  isValid(dof_t dof) { return dof != invalid_dof; }
+    using dof_t = local_dof_t;
+    static constexpr bool isValid(dof_t dof) { return dof != invalid_local_dof; }
 
     LocalDofMap() = default;
     LocalDofMap(const NodeCondensationMap< CondensationPolicy::None >& cond_map,
@@ -135,7 +132,7 @@ NodeToLocalDofMap< dofs_per_node, num_maps >::NodeToLocalDofMap(
     const auto get_node_dofs = [&](n_id_t node, const tpetra_map_t& map) {
         auto retval = std::array< local_dof_t, dofs_per_node >{};
         std::ranges::transform(global_map(node), retval.begin(), [&](global_dof_t dof) {
-            return NodeToGlobalDofMap< dofs_per_node >::isValid(dof) ? map.getLocalElement(dof) : invalid_dof;
+            return NodeToGlobalDofMap< dofs_per_node >::isValid(dof) ? map.getLocalElement(dof) : invalid_local_dof;
         });
         return retval;
     };
@@ -156,7 +153,7 @@ LocalDofMap< max_dofs_per_node >::LocalDofMap(const NodeCondensationMap< Condens
     L3STER_PROFILE_FUNCTION;
     auto       g2l           = util::IndexMap< global_dof_t, local_dof_t >{all_dofs};
     const auto translate_dof = [&g2l](global_dof_t gid) {
-        return NodeToGlobalDofMap< max_dofs_per_node >::isValid(gid) ? g2l(gid) : invalid_dof;
+        return NodeToGlobalDofMap< max_dofs_per_node >::isValid(gid) ? g2l(gid) : invalid_local_dof;
     };
     for (auto cond_node : cond_map.getCondensedIds())
     {
@@ -176,8 +173,8 @@ struct CondensedNodes
     size_t                num_owned;
 };
 template < el_o_t... orders, CondensationPolicy CP >
-auto getCondensedNodes(const mesh::MeshPartition< orders... >& mesh,
-                       const NodeCondensationMap< CP >&        cond_map) -> CondensedNodes
+auto getCondensedNodes(const mesh::MeshPartition< orders... >& mesh, const NodeCondensationMap< CP >& cond_map)
+    -> CondensedNodes
 {
     auto retval              = CondensedNodes{};
     auto& [nodes, num_owned] = retval;
@@ -218,8 +215,8 @@ auto makeLocalDofBmp(const mesh::MeshPartition< orders... >& mesh,
     return retval;
 }
 
-inline auto makeCondensedCommContext(const MpiComm&        comm,
-                                     const CondensedNodes& cond) -> std::shared_ptr< const comm::ImportExportContext<> >
+inline auto makeCondensedCommContext(const MpiComm& comm, const CondensedNodes& cond)
+    -> std::shared_ptr< const comm::ImportExportContext<> >
 {
     const auto& [nodes, num_owned] = cond;
     const auto nodes_signed        = util::ArrayOwner< global_dof_t >{nodes};
@@ -272,7 +269,7 @@ inline auto computeOwnedDofs(const Kokkos::View< char**, Kokkos::LayoutLeft >& d
     auto       retval        = Kokkos::View< global_dof_t**, Kokkos::LayoutLeft >{"DOFs", dof_bmp.layout()};
     for (size_t i = 0; i != num_owned_nodes; ++i)
         for (size_t j = 0; j != dofs_per_node; ++j)
-            retval(i, j) = dof_bmp(i, j) ? base_dof++ : NodeToGlobalDofMap< 1 >::invalid_dof;
+            retval(i, j) = dof_bmp(i, j) ? base_dof++ : invalid_global_dof;
     return retval;
 }
 

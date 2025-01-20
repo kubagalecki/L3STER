@@ -15,12 +15,9 @@ auto getNodeActiveDofs(n_id_t                                               node
         return util::getValuesAtInds(node_dof_map(cond_map.getCondensedId(node)), dofinds_ctwrpr);
     else if constexpr (CP == CondensationPolicy::ElementBoundary)
     {
-        auto           retval    = util::StaticVector< global_dof_t, max_dofs_per_node >{};
-        const auto&    node_dofs = node_dof_map(cond_map.getCondensedId(node));
-        constexpr auto is_valid  = [](global_dof_t dof) {
-            return dof != dofs::NodeToGlobalDofMap< max_dofs_per_node >::invalid_dof;
-        };
-        std::ranges::copy_if(node_dofs, std::back_inserter(retval), is_valid);
+        auto        retval    = util::StaticVector< global_dof_t, max_dofs_per_node >{};
+        const auto& node_dofs = node_dof_map(cond_map.getCondensedId(node));
+        std::ranges::remove_copy(node_dofs, std::back_inserter(retval), invalid_global_dof);
         return retval;
     }
     else
@@ -49,12 +46,11 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                      
     -> util::StaticVector< global_dof_t, dofs_per_node * n_nodes >
 {
     util::StaticVector< global_dof_t, dofs_per_node * n_nodes > retval;
-    std::ranges::copy(
-        nodes | std::views::transform([&](n_id_t node) { return node_dof_map(cond_map.getCondensedId(node)); }) |
-            std::views::join | std::views::filter([](auto node) {
-                return node != dofs::NodeToGlobalDofMap< dofs_per_node >::invalid_dof;
-            }),
-        std::back_inserter(retval));
+    std::ranges::remove_copy(nodes | std::views::transform([&](n_id_t node) {
+                                 return node_dof_map(cond_map.getCondensedId(node));
+                             }) | std::views::join,
+                             std::back_inserter(retval),
+                             invalid_global_dof);
     return retval;
 }
 
@@ -71,11 +67,8 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                      
     for (auto node : nodes)
     {
         const auto& all_dof_arrays = node_dof_map(node);
-        for (size_t i = 0; const auto& all_dofs : all_dof_arrays)
-        {
+        for (auto&& [i, all_dofs] : all_dof_arrays | std::views::enumerate)
             iters[i] = util::copyValuesAtInds(all_dofs, iters[i], dofinds_ctwrpr);
-            ++i;
-        }
     }
     return retval;
 }
@@ -89,13 +82,8 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                      
     for (auto node : nodes)
     {
         const auto& all_dof_arrays = node_dof_map(node);
-        for (size_t i = 0; const auto& all_dofs : all_dof_arrays)
-        {
-            std::ranges::copy_if(all_dofs, std::back_inserter(retval[i]), [](local_dof_t dof) {
-                return dof != dofs::NodeToLocalDofMap< dofs_per_node, num_maps >::invalid_dof;
-            });
-            ++i;
-        }
+        for (auto&& [i, all_dofs] : all_dof_arrays | std::views::enumerate)
+            std::ranges::remove_copy(all_dofs, std::back_inserter(retval[i]), invalid_global_dof);
     }
     return retval;
 }

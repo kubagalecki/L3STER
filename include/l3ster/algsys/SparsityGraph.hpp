@@ -22,8 +22,8 @@ using rank_to_rank_to_dofs_map_t = robin_hood::unordered_flat_map< int, rank_to_
 
 // Establish in-neighbors and which of their ghost nodes I own
 template < el_o_t... orders >
-auto computeInNeighborGhostNodes(const MpiComm&                          comm,
-                                 const mesh::MeshPartition< orders... >& mesh) -> rank_to_nodes_map_t
+auto computeInNeighborGhostNodes(const MpiComm& comm, const mesh::MeshPartition< orders... >& mesh)
+    -> rank_to_nodes_map_t
 {
     const int  my_rank            = comm.getRank();
     auto       retval             = rank_to_nodes_map_t{};
@@ -283,8 +283,8 @@ inline auto exchangeNeighborDofInfo(const MpiComm&                    comm,
 }
 
 // Combine DOF info (DOF + owner) which I computed with that which was sent to me
-inline auto combineDofInfo(rank_to_dofs_map_t                dof_info,
-                           const rank_to_rank_to_dofs_map_t& out_dof_info) -> rank_to_dofs_map_t
+inline auto combineDofInfo(rank_to_dofs_map_t dof_info, const rank_to_rank_to_dofs_map_t& out_dof_info)
+    -> rank_to_dofs_map_t
 {
     for (const auto& [_, info_map] : out_dof_info)
         for (const auto& [owner, dofs] : info_map)
@@ -353,18 +353,17 @@ auto computeNodeDofs(const mesh::MeshPartition< orders... >&              mesh,
                      const dofs::NodeToGlobalDofMap< max_dofs_per_node >& node_to_dof_map,
                      const dofs::NodeCondensationMap< CP >&               cond_map) -> NodeDofs
 {
-    const auto get_node_dofs = [&node_to_dof_map](auto&& node_range) {
+    const auto get_dofs = [&node_to_dof_map](auto&& node_range) {
         return std::forward< decltype(node_range) >(node_range) | std::views::transform(node_to_dof_map) |
-               std::views::join | std::views::filter([](auto dof) {
-                   return dof != dofs::NodeToGlobalDofMap< max_dofs_per_node >::invalid_dof;
-               });
+               std::views::join;
     };
     std::vector< global_dof_t > dofs;
     dofs.reserve(std::ranges::size(cond_map.getCondensedIds()) * max_dofs_per_node);
-    std::ranges::copy(get_node_dofs(cond_map.getCondensedOwnedNodesView(mesh)), std::back_inserter(dofs));
+    constexpr auto ign = invalid_global_dof;
+    std::ranges::remove_copy(get_dofs(cond_map.getCondensedOwnedNodesView(mesh)), std::back_inserter(dofs), ign);
     std::ranges::sort(dofs);
     const auto n_owned_dofs = dofs.size();
-    std::ranges::copy(get_node_dofs(cond_map.getCondensedGhostNodesView(mesh)), std::back_inserter(dofs));
+    std::ranges::remove_copy(get_dofs(cond_map.getCondensedGhostNodesView(mesh)), std::back_inserter(dofs), ign);
     std::ranges::sort(dofs | std::views::drop(n_owned_dofs));
     dofs.shrink_to_fit();
     return {std::move(dofs), n_owned_dofs};
@@ -483,8 +482,8 @@ inline void convertToTpetraFECrsGraph(const util::CrsGraph< local_dof_t >& nativ
         insert_into_row(row);
 }
 
-inline auto makeTpetraMap(std::span< const global_dof_t >               dofs,
-                          Teuchos::RCP< const Teuchos::MpiComm< int > > comm) -> Teuchos::RCP< const tpetra_map_t >
+inline auto makeTpetraMap(std::span< const global_dof_t > dofs, Teuchos::RCP< const Teuchos::MpiComm< int > > comm)
+    -> Teuchos::RCP< const tpetra_map_t >
 {
     const auto force_compute_size = Teuchos::OrdinalTraits< Tpetra::global_size_t >::invalid();
     const auto dofs_teuchos_view  = util::asTeuchosView(dofs);
