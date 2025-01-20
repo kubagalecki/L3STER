@@ -45,12 +45,12 @@ public:
     const T& operator[](size_type i) const { return m_data[i]; }
     T&       at(size_type i, std::source_location sl = std::source_location::current())
     {
-        util::throwingAssert(i < m_size, {}, sl);
+        util::throwingAssert(i < m_size, "ArrayOwner: out of bounds access", sl);
         return m_data[i];
     }
     const T& at(size_type i, std::source_location sl = std::source_location::current()) const
     {
-        util::throwingAssert(i < m_size, {}, sl);
+        util::throwingAssert(i < m_size, "ArrayOwner: out of bounds access", sl);
         return m_data[i];
     }
     T&        front() { return m_data[0]; }

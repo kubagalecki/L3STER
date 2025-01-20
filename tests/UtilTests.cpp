@@ -11,6 +11,7 @@
 #include "l3ster/util/MetisUtils.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 #include "l3ster/util/SetStackSize.hpp"
+#include "l3ster/util/SpatialHashTable.hpp"
 #include "l3ster/util/StaticVector.hpp"
 #include "l3ster/util/TbbUtils.hpp"
 #include "l3ster/util/TypeErasedOverload.hpp"
@@ -868,5 +869,67 @@ TEST_CASE("CrsGraph", "[util]")
     {
         const auto graph = util::makeCrsGraph(std::views::empty< VertexType >, std::views::empty< VertexType >);
         REQUIRE(graph.getNRows() == 0);
+    }
+}
+
+TEST_CASE("Spatial hash table", "[util]")
+{
+    constexpr auto format_point = []< Arithmetic_c T, size_t dim >(const std::array< T, dim >& point) {
+        auto retval = std::string{"("};
+        std::ranges::copy(point | std::views::transform([](auto v) { return std::to_string(v); }) |
+                              std::views::join_with(std::string_view{", "}),
+                          std::back_inserter(retval));
+        retval.push_back(')');
+        return retval;
+    };
+    constexpr int num_ticks = 6;
+    auto ticks = std::views::iota(0, num_ticks) | std::views::transform([](int i) { return static_cast< double >(i); });
+    auto xyz   = std::views::cartesian_product(ticks, ticks, ticks);
+
+    SECTION("Coarse grid")
+    {
+        constexpr auto dx_coarse  = 1.;
+        auto           space_hash = util::SpatialHashTable< std::string, 3 >{dx_coarse};
+        for (const auto& [x, y, z] : xyz)
+        {
+            const auto point = std::array{x, y, z};
+            space_hash.insert(point, format_point(point));
+        }
+        REQUIRE(space_hash.size() == std::ranges::size(xyz));
+        CHECK(static_cast< size_t >(std::ranges::distance(space_hash.all())) == space_hash.size());
+        for (const auto& [x, y, z] : xyz)
+        {
+            const auto point = std::array{x, y, z};
+            auto       prox  = space_hash.proximate(point);
+            CHECK(std::ranges::contains(prox | std::views::keys, point));
+        }
+        auto ticks_inner = ticks | std::views::drop(1) | std::views::take(num_ticks - 2);
+        auto xyz_inner   = std::views::cartesian_product(ticks_inner, ticks_inner, ticks_inner);
+        for (const auto& [x, y, z] : xyz_inner)
+        {
+            const auto point = std::array{x, y, z};
+            auto       prox  = space_hash.proximate(point);
+            CHECK(std::ranges::distance(prox) == 27);
+        }
+    }
+
+    SECTION("Fine grid")
+    {
+        constexpr auto dx_fine    = .01;
+        auto           space_hash = util::SpatialHashTable< std::string, 3 >{dx_fine};
+        for (const auto& [x, y, z] : xyz)
+        {
+            const auto point = std::array{x, y, z};
+            space_hash.insert(point, format_point(point));
+        }
+        REQUIRE(space_hash.size() == std::ranges::size(xyz));
+        CHECK(static_cast< size_t >(std::ranges::distance(space_hash.all())) == space_hash.size());
+        for (const auto& [x, y, z] : xyz)
+        {
+            const auto point = std::array{x, y, z};
+            auto       prox  = space_hash.proximate(point);
+            CHECK(std::ranges::contains(prox | std::views::keys, point));
+            CHECK(std::ranges::distance(prox) == 1);
+        }
     }
 }

@@ -290,7 +290,7 @@ auto depthFirstSearch(const CrsGraph< VertexType >& graph, Fun&& op, VertexType 
 
 /// Get components of an undirected graph. Assumes $v_1 \in graph(v_2) <=> v_2 \in graph(v_1)$.
 /// Each element of the returned vector is the sorted set of vertices constituting a component of the input graph
-template < typename VertexType, typename Fun >
+template < typename VertexType >
 auto getComponentsUndirected(const CrsGraph< VertexType >& graph) -> std::vector< ArrayOwner< VertexType > >
 {
     constexpr auto ignore = [](VertexType) {
