@@ -143,20 +143,8 @@ auto permuteMesh(const MpiComm&                                       comm,
         retval[new_ind] = std::move(mesh_parts[old_ind]);
     const auto node_reorder_map = util::IndexMap< n_id_t, n_id_t >{
         retval | std::views::transform(&mesh::MeshPartition< orders... >::getOwnedNodes) | std::views::join};
-    const auto reindex_nodes = [&]< size_t extent >(std::span< n_id_t, extent > nodes) {
-        std::ranges::transform(nodes, nodes.begin(), node_reorder_map);
-    };
-    const auto reindex_el_nodes = [&]< mesh::ElementType ET, el_o_t EO >(mesh::Element< ET, EO >& element) {
-        auto& nodes = element.getNodes();
-        reindex_nodes(std::span{nodes});
-    };
     for (auto& part : retval)
-    {
-        part.visit(reindex_el_nodes, std::execution::par);
-        reindex_nodes(part.getMutableOwnedNodes());
-        reindex_nodes(part.getMutableGhostNodes());
-        std::ranges::sort(part.getMutableGhostNodes()); // Original relative order preserved -> owned nodes are sorted
-    }
+        part.reindexNodes(node_reorder_map);
     return retval;
 }
 } // namespace detail
@@ -167,16 +155,17 @@ void sendMesh(const MpiComm&                                comm,
               int                                           dest_rank,
               std::output_iterator< MpiComm::Request > auto reqs_out)
 {
-    const auto num_domains  = mesh.getNDomains();
-    const auto boundary_ids = mesh.getBoundaryIdsCopy();
-    auto       descr_ints   = util::ArrayOwner< size_t >(num_domains + boundary_ids.size() + 2);
-    descr_ints[0]           = mesh.getOwnedNodes().size();
-    descr_ints[1]           = num_domains;
-    const auto write_iter   = std::ranges::copy(mesh.getDomainIds(), std::next(descr_ints.begin(), 2)).out;
+    constexpr size_t glob_params  = 3;
+    const auto       num_domains  = mesh.getNDomains();
+    const auto       boundary_ids = mesh.getBoundaryIdsCopy();
+    auto             descr_ints   = util::ArrayOwner< size_t >(num_domains + boundary_ids.size() + glob_params);
+    descr_ints[0]                 = mesh.getOwnedNodes().size();
+    descr_ints[1]                 = descr_ints[0] ? mesh.getOwnedNodes().front() : 0uz;
+    descr_ints[2]                 = num_domains;
+    const auto write_iter = std::ranges::copy(mesh.getDomainIds(), std::next(descr_ints.begin(), glob_params)).out;
     std::ranges::copy(boundary_ids, write_iter);
     int        tag         = 0;
     const auto local_req   = comm.sendAsync(descr_ints, dest_rank, tag++); // wait via dtor
-    *reqs_out++            = comm.sendAsync(mesh.getAllNodes(), dest_rank, tag++);
     const auto send_domain = [&](const mesh::Domain< orders... >& domain) {
         const auto send_elvec = [&](const auto& el_vec) {
             *reqs_out++ = comm.sendAsync(el_vec, dest_rank, tag++);
@@ -191,25 +180,22 @@ void sendMesh(const MpiComm&                                comm,
 template < el_o_t... orders >
 auto receiveMesh(const MpiComm& comm, int src_rank) -> mesh::MeshPartition< orders... >
 {
-    constexpr size_t num_elem_types    = mesh::Domain< orders... >::el_univec_t::num_types;
-    const auto       descr_ints_status = comm.probe(src_rank, 0);
-    const auto       descr_sz          = descr_ints_status.numElems< size_t >();
-    util::throwingAssert(descr_sz > 1, "Invalid mesh description integer vector");
+    constexpr size_t glob_params    = 3;
+    constexpr size_t num_elem_types = mesh::Domain< orders... >::el_univec_t::num_types;
+    const auto       descr_sz       = static_cast< size_t >(comm.probe(src_rank, 0).numElems< size_t >());
+    util::throwingAssert(descr_sz >= 3, "Invalid mesh description integer vector");
     auto descr_ints = util::ArrayOwner< size_t >(descr_sz);
     comm.receive(descr_ints, src_rank, 0);
-    const auto num_owned_nodes = descr_ints[0];
-    const auto num_domains     = descr_ints[1];
+    const auto num_owned_nodes   = descr_ints[0];
+    const auto owned_nodes_begin = descr_ints[1];
+    const auto num_domains       = descr_ints[2];
 
     int  tag  = 1;
     auto reqs = std::vector< MpiComm::Request >{};
-    reqs.reserve(num_domains * (num_elem_types + 1) + 1);
+    reqs.reserve(num_domains * (num_elem_types + 1));
 
-    const size_t num_nodes = comm.probe(src_rank, tag).numElems< n_id_t >();
-    auto         nodes     = util::ArrayOwner< n_id_t >(num_nodes);
-    reqs.push_back(comm.receiveAsync(nodes, src_rank, tag++));
     auto domain_map = typename mesh::MeshPartition< orders... >::domain_map_t{};
-
-    for (auto domain_id : descr_ints | std::views::drop(2) | std::views::take(num_domains))
+    for (auto domain_id : descr_ints | std::views::drop(glob_params) | std::views::take(num_domains))
     {
         auto& domain = domain_map[static_cast< d_id_t >(domain_id)];
         domain.elements.visitVectors([&]< typename Element >(std::vector< Element >& el_vec) {
@@ -219,15 +205,14 @@ auto receiveMesh(const MpiComm& comm, int src_rank) -> mesh::MeshPartition< orde
         });
         reqs.push_back(comm.receiveAsync(std::span{&domain.dim, 1}, src_rank, tag++));
     }
-    const auto boundary_ids = util::ArrayOwner< d_id_t >{descr_ints | std::views::drop(num_domains + 2)};
+    const auto boundary_ids = util::ArrayOwner< d_id_t >{descr_ints | std::views::drop(num_domains + glob_params)};
     MpiComm::Request::waitAll(reqs);
-    return {std::move(domain_map), std::move(nodes), num_owned_nodes, boundary_ids};
+    return {std::move(domain_map), owned_nodes_begin, num_owned_nodes, boundary_ids};
 }
 
 template < el_o_t... orders >
-auto receiveMesh(const MpiComm& comm,
-                 int            src_rank,
-                 util::TypePack< mesh::MeshPartition< orders... > >) -> mesh::MeshPartition< orders... >
+auto receiveMesh(const MpiComm& comm, int src_rank, util::TypePack< mesh::MeshPartition< orders... > >)
+    -> mesh::MeshPartition< orders... >
 {
     return receiveMesh< orders... >(comm, src_rank);
 }
@@ -251,7 +236,7 @@ auto distributeMesh(const MpiComm&                       comm,
     if (comm.getRank() == 0)
     {
         auto reqs = std::vector< MpiComm::Request >{};
-        reqs.reserve(mesh_parted.size() * 4);
+        reqs.reserve(mesh_parted.size() * 3);
         for (auto&& [rank, part] : mesh_parted | std::views::enumerate | std::views::drop(1))
             comm::sendMesh(comm, part, static_cast< int >(rank), std::back_inserter(reqs));
         MpiComm::Request::waitAll(reqs);

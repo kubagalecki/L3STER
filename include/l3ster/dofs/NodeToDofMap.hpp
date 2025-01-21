@@ -26,6 +26,13 @@ public:
                        const NodeCondensationMap< CP >&        cond_map,
                        util::ConstexprValue< problem_def >     problemdef_ctwrpr)
         requires(problem_def.n_fields == dofs_per_node);
+    template < el_o_t... orders, CondensationPolicy CP, ProblemDef problem_def >
+    NodeToGlobalDofMap(const MpiComm&                          comm,
+                       const mesh::MeshPartition< orders... >& m_mesh,
+                       const NodeCondensationMap< CP >&        cond_map,
+                       util::ConstexprValue< problem_def >     problemdef_ctwrpr,
+                       const bcs::PeriodicBC< dofs_per_node >& periodic_bc)
+        requires(problem_def.n_fields == dofs_per_node);
 
     [[nodiscard]] auto operator()(n_id_t node) const -> const payload_t& { return m_map.at(node); }
     [[nodiscard]] auto getNumOwnedDofs() const { return m_num_owned; }
@@ -39,12 +46,17 @@ private:
     map_t  m_map;
     size_t m_num_owned = 0;
 };
-
 template < el_o_t... orders, CondensationPolicy CP, ProblemDef problem_def >
 NodeToGlobalDofMap(const MpiComm&,
                    const mesh::MeshPartition< orders... >&,
                    const NodeCondensationMap< CP >&,
                    util::ConstexprValue< problem_def >) -> NodeToGlobalDofMap< problem_def.n_fields >;
+template < el_o_t... orders, CondensationPolicy CP, ProblemDef problem_def >
+NodeToGlobalDofMap(const MpiComm&,
+                   const mesh::MeshPartition< orders... >&,
+                   const NodeCondensationMap< CP >&,
+                   util::ConstexprValue< problem_def >,
+                   const bcs::PeriodicBC< problem_def.n_fields >&) -> NodeToGlobalDofMap< problem_def.n_fields >;
 
 template < size_t dofs_per_node, size_t num_maps >
 class NodeToLocalDofMap
@@ -86,9 +98,10 @@ public:
     static constexpr bool isValid(dof_t dof) { return dof != invalid_local_dof; }
 
     LocalDofMap() = default;
+    template < el_o_t... orders >
     LocalDofMap(const NodeCondensationMap< CondensationPolicy::None >& cond_map,
                 const NodeToGlobalDofMap< max_dofs_per_node >&         global_map,
-                const mesh::NodeMap&                                   node_map,
+                const mesh::MeshPartition< orders... >&                mesh,
                 std::span< const global_dof_t >                        all_dofs,
                 size_t                                                 num_owned_dofs);
 
@@ -141,9 +154,10 @@ NodeToLocalDofMap< dofs_per_node, num_maps >::NodeToLocalDofMap(
 }
 
 template < size_t max_dofs_per_node >
+template < el_o_t... orders >
 LocalDofMap< max_dofs_per_node >::LocalDofMap(const NodeCondensationMap< CondensationPolicy::None >& cond_map,
                                               const NodeToGlobalDofMap< max_dofs_per_node >&         global_map,
-                                              const mesh::NodeMap&                                   node_map,
+                                              const mesh::MeshPartition< orders... >&                mesh,
                                               std::span< const global_dof_t >                        all_dofs,
                                               size_t                                                 num_owned_dofs)
     : m_map(std::ranges::size(cond_map.getCondensedIds())),
@@ -159,7 +173,7 @@ LocalDofMap< max_dofs_per_node >::LocalDofMap(const NodeCondensationMap< Condens
     {
         const auto& src_gids    = global_map(cond_node);
         const auto  uncond_node = cond_map.getUncondensedId(cond_node);
-        const auto  local_node  = node_map.toLocal(uncond_node);
+        const auto  local_node  = mesh.getLocalNodeIndex(uncond_node);
         auto&       dest_lids   = m_map.at(local_node);
         std::ranges::transform(src_gids, dest_lids.begin(), translate_dof);
     }
@@ -313,6 +327,27 @@ NodeToGlobalDofMap< dofs_per_node >::NodeToGlobalDofMap(const MpiComm&          
                                                         const mesh::MeshPartition< orders... >& mesh,
                                                         const NodeCondensationMap< CP >&        cond_map,
                                                         util::ConstexprValue< problem_def >     problemdef_ctwrpr)
+    requires(problem_def.n_fields == dofs_per_node)
+{
+    L3STER_PROFILE_FUNCTION;
+    const auto cond_node_info     = detail::getCondensedNodes(mesh, cond_map);
+    const auto [nodes, num_owned] = cond_node_info;
+    const auto dof_bmp            = detail::makeLocalDofBmp(mesh, cond_map, cond_node_info, problemdef_ctwrpr);
+    const auto context            = detail::makeCondensedCommContext(comm, cond_node_info);
+    const auto num_owned_dofs     = detail::doCommsAndCountOwnedDofs(comm, context, dof_bmp, num_owned);
+    const auto base_dof           = detail::computeBaseDof(comm, num_owned_dofs);
+    const auto dofs               = detail::computeOwnedDofs(dof_bmp, num_owned, base_dof);
+    detail::communicateSharedDofs(comm, context, dofs, num_owned);
+    initFromDofs(nodes, num_owned, dofs);
+}
+
+template < size_t dofs_per_node >
+template < el_o_t... orders, CondensationPolicy CP, ProblemDef problem_def >
+NodeToGlobalDofMap< dofs_per_node >::NodeToGlobalDofMap(const MpiComm&                          comm,
+                                                        const mesh::MeshPartition< orders... >& mesh,
+                                                        const NodeCondensationMap< CP >&        cond_map,
+                                                        util::ConstexprValue< problem_def >     problemdef_ctwrpr,
+                                                        const bcs::PeriodicBC< dofs_per_node >& periodic_bc)
     requires(problem_def.n_fields == dofs_per_node)
 {
     L3STER_PROFILE_FUNCTION;

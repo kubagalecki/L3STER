@@ -21,7 +21,7 @@ TEST_CASE("Solution Manager", "[sol_man]")
 
     REQUIRE(std::ranges::all_of(sol_mans, [&](const SolutionManager& sm) { return sm.nFields() == n_fields; }));
     for (size_t i = 0; const auto& sm : sol_mans)
-        REQUIRE(sm.nNodes() == partitions.at(i++).getAllNodes().size());
+        REQUIRE(sm.nNodes() == partitions.at(i++).getNNodes());
 
     for (auto& sm : sol_mans)
         for (size_t i = 0; i != n_fields; ++i)

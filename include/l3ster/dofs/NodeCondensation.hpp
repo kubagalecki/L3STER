@@ -119,10 +119,10 @@ auto markActiveNodes(const mesh::MeshPartition< orders... >& mesh,
                      CondensationPolicyTag< CP >             cp_tag,
                      util::ConstexprValue< problem_def >) -> util::ArrayOwner< char >
 {
-    const auto g2l       = util::IndexMap{mesh.getAllNodes()};
-    auto       retval    = util::ArrayOwner< char >(g2l.size(), false);
+    auto       retval    = util::ArrayOwner< char >(mesh.getNNodes(), false);
     const auto mark_node = [&](n_id_t node) {
-        const auto lid = g2l(node);
+        const auto lid = mesh.getLocalNodeIndex(node);
+        util::throwingAssert(lid < mesh.getNNodes());
         std::atomic_ref{retval[lid]}.store(true, std::memory_order_relaxed);
     };
     const auto mark_el_nodes = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& el) {
@@ -190,7 +190,8 @@ void appendGhosts(const MpiComm&                                       comm,
     importer.setOwned(condensed_lookup | take(num_owned), condensed_lookup.size());
     importer.setShared(condensed_lookup | drop(num_owned), condensed_lookup.size());
     importer.doBlockingImport(comm);
-    for (auto&& [active, uncond, cond] : zip(is_active, mesh.getAllNodes(), condensed_lookup) | drop(num_owned))
+    for (auto&& [active, uncond, cond] :
+         zip(is_active | drop(num_owned), mesh.getGhostNodes(), condensed_lookup | drop(num_owned)))
         if (active)
         {
             uncondensed.push_back(uncond);

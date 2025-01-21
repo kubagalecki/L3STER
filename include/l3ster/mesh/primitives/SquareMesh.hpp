@@ -69,9 +69,7 @@ auto makeSquareMesh(Rx&& distx, Ry&& disty) -> MeshPartition< 1 >
         emplaceInDomain< ElementType::Line, 1 >(domains[4], nodes2, verts2, el_ind++);
     }
 
-    std::vector< n_id_t > nodes(n_dx * n_dy);
-    std::iota(begin(nodes), end(nodes), 0u);
-    return {std::move(domains), std::move(nodes), std::vector< n_id_t >{}, {1, 2, 3, 4}};
+    return {std::move(domains), 0, n_dx * n_dy, {1, 2, 3, 4}};
 }
 
 template < std::ranges::random_access_range R >

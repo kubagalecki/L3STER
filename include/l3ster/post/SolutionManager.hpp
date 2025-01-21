@@ -70,8 +70,8 @@ class SolutionManager::FieldValueGetter< 0 >
 {
 public:
     template < size_t n_nodes >
-    auto
-    getGloballyIndexed(const std::array< n_id_t, n_nodes >&) const -> util::eigen::RowMajorMatrix< val_t, n_nodes, 0 >
+    auto getGloballyIndexed(const std::array< n_id_t, n_nodes >&) const
+        -> util::eigen::RowMajorMatrix< val_t, n_nodes, 0 >
     {
         return {};
     }
@@ -112,19 +112,22 @@ auto SolutionManager::FieldValueGetter< n_fields >::getLocallyIndexed(
 
 template < el_o_t... orders >
 SolutionManager::SolutionManager(const mesh::MeshPartition< orders... >& mesh, size_t n_fields, val_t initial)
-    : m_n_nodes{mesh.getAllNodes().size()},
+    : m_n_nodes{mesh.getNNodes()},
       m_n_fields{n_fields},
       m_nodal_values{std::make_unique_for_overwrite< val_t[] >(m_n_nodes * m_n_fields)},
       m_node_to_dof_map(m_n_nodes)
 {
     std::fill_n(m_nodal_values.get(), m_n_nodes * m_n_fields, initial);
-    for (auto&& [i, node] : mesh.getAllNodes() | std::views::enumerate)
-        m_node_to_dof_map.emplace(node, i);
+    ptrdiff_t i = 0;
+    for (auto node : mesh.getOwnedNodes())
+        m_node_to_dof_map.emplace(node, i++);
+    for (auto node : mesh.getGhostNodes())
+        m_node_to_dof_map.emplace(node, i++);
 }
 
 template < size_t N >
-auto SolutionManager::getNodeValuesGlobal(n_id_t                         node,
-                                          const std::array< size_t, N >& field_inds) const -> std::array< val_t, N >
+auto SolutionManager::getNodeValuesGlobal(n_id_t node, const std::array< size_t, N >& field_inds) const
+    -> std::array< val_t, N >
 {
     const auto local_node_ind = m_node_to_dof_map.at(node);
     auto       retval         = std::array< val_t, N >{};
@@ -133,8 +136,8 @@ auto SolutionManager::getNodeValuesGlobal(n_id_t                         node,
 }
 
 template < size_t N >
-auto SolutionManager::getNodeValuesLocal(n_loc_id_t                     node,
-                                         const std::array< size_t, N >& field_inds) const -> std::array< val_t, N >
+auto SolutionManager::getNodeValuesLocal(n_loc_id_t node, const std::array< size_t, N >& field_inds) const
+    -> std::array< val_t, N >
 {
     auto retval = std::array< val_t, N >{};
     std::ranges::transform(field_inds, retval.begin(), [&](auto i) { return getFieldView(i)[node]; });

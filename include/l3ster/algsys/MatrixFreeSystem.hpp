@@ -746,16 +746,15 @@ MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::MatrixFreeSystem(
     : m_comm{std::move(comm)}, m_mesh{std::move(mesh)}, m_state{State::OpenForAssembly}
 {
     const auto [interior, border] = detail::splitBorderAndInterior(*m_mesh);
-    const auto node_map           = mesh::NodeMap{m_mesh->getAllNodes()};
-    m_interior_mesh               = mesh::LocalMeshView{interior, node_map};
-    m_border_mesh                 = mesh::LocalMeshView{border, node_map};
+    m_interior_mesh               = mesh::LocalMeshView{interior, *m_mesh};
+    m_border_mesh                 = mesh::LocalMeshView{border, *m_mesh};
 
     const auto cond_map = dofs::makeCondensationMap< CondensationPolicy::None >(*m_comm, *m_mesh, problemdef_ctwrpr);
     const auto node2dof = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, cond_map, problemdef_ctwrpr};
     const auto [all_dofs, n_owned_dofs] = detail::computeNodeDofs(*m_mesh, node2dof, cond_map);
     const auto owned_dofs               = std::span{all_dofs}.subspan(0, n_owned_dofs);
     const auto shared_dofs              = std::span{all_dofs}.subspan(n_owned_dofs);
-    m_node_dof_map                      = dofs::LocalDofMap{cond_map, node2dof, node_map, all_dofs, n_owned_dofs};
+    m_node_dof_map                      = dofs::LocalDofMap{cond_map, node2dof, *m_mesh, all_dofs, n_owned_dofs};
     m_operator_map                      = detail::makeOperatorMap(*m_comm, owned_dofs);
     m_rhs                               = util::makeTeuchosRCP< tpetra_multivector_t >(m_operator_map, n_rhs);
     m_solution                          = util::makeTeuchosRCP< tpetra_multivector_t >(m_operator_map, n_rhs);

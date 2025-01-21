@@ -36,7 +36,8 @@ void testSendRecv(const MpiComm& comm)
     else
     {
         const auto recv_mesh = receiveMesh< 1 >(comm, 0);
-        REQUIRE(std::ranges::equal(read_mesh.getAllNodes(), recv_mesh.getAllNodes()));
+        REQUIRE(std::ranges::equal(read_mesh.getOwnedNodes(), recv_mesh.getOwnedNodes()));
+        REQUIRE(std::ranges::equal(read_mesh.getGhostNodes(), recv_mesh.getGhostNodes()));
         REQUIRE(std::ranges::equal(read_mesh.getDomainIds(), recv_mesh.getDomainIds()));
         for (d_id_t domain_id : read_mesh.getDomainIds())
         {
