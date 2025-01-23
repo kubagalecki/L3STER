@@ -2,6 +2,7 @@
 #define L3STER_UTIL_ALGORITHM_HPP
 
 #include "l3ster/comm/MpiComm.hpp"
+#include "l3ster/util/ArrayOwner.hpp"
 #include "l3ster/util/CrsGraph.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/Meta.hpp"
@@ -187,6 +188,21 @@ void sortRemoveDup(std::vector< T >& vec)
     const auto erase_range = std::ranges::unique(vec);
     vec.erase(erase_range.begin(), erase_range.end());
     vec.shrink_to_fit();
+}
+
+template < typename T >
+auto sortRemoveDup(util::ArrayOwner< T >& vec) -> size_t
+{
+    std::ranges::sort(vec);
+    const auto erase_range = std::ranges::unique(vec);
+    return static_cast< size_t >(std::distance(vec.begin(), erase_range.begin()));
+}
+
+template < typename T >
+auto getUniqueCopy(util::ArrayOwner< T > vec) -> util::ArrayOwner< T >
+{
+    const auto unique_sz = sortRemoveDup(vec);
+    return unique_sz == vec.size() ? vec : util::ArrayOwner< T >{vec | std::views::take(unique_sz)};
 }
 
 template < std::array array >

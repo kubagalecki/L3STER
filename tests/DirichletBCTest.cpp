@@ -23,9 +23,9 @@ void test()
     constexpr auto   boundary       = 3;
     constexpr d_id_t domain_id      = 0;
     constexpr auto   problem_def    = ProblemDef{defineDomain< 1 >(domain_id, 0)};
-    constexpr auto   dirichlet_def  = ProblemDef{defineDomain< 1 >(boundary, 0)};
     constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
-    constexpr auto   dirdef_ctwrpr  = util::ConstexprValue< dirichlet_def >{};
+    auto             dirichlet_def  = DirichletBCDefinition< 1 >{};
+    dirichlet_def.defineDirichletBoundary({boundary}, {0});
 
     constexpr auto node_dist    = std::array{0., 1., 2., 3., 4., 5.};
     auto           my_partition = comm::distributeMesh(comm, [&] { return makeCubeMesh(node_dist); });
@@ -35,7 +35,7 @@ void test()
     const auto sparsity_graph = makeSparsityGraph(comm, *my_partition, global_node_dof_map, cond_map, probdef_ctwrpr);
 
     const auto [owned_bcdofs, shared_bcdofs] =
-        getDirichletDofs(*my_partition, sparsity_graph, global_node_dof_map, cond_map, probdef_ctwrpr, dirdef_ctwrpr);
+        getDirichletDofs(*my_partition, sparsity_graph, global_node_dof_map, cond_map, probdef_ctwrpr, dirichlet_def);
     const auto dirichlet_bc = DirichletBCAlgebraic{sparsity_graph, owned_bcdofs, shared_bcdofs};
 
     auto matrix         = util::makeTeuchosRCP< tpetra_fecrsmatrix_t >(sparsity_graph);

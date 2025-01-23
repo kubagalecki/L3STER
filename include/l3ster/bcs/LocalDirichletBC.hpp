@@ -1,6 +1,7 @@
 #ifndef L3STER_BCS_LOCALDIRICHLETBC_HPP
 #define L3STER_BCS_LOCALDIRICHLETBC_HPP
 
+#include "l3ster/bcs/BCDefinition.hpp"
 #include "l3ster/comm/ImportExport.hpp"
 #include "l3ster/common/KernelInterface.hpp"
 #include "l3ster/common/ProblemDefinition.hpp"
@@ -14,13 +15,13 @@ class LocalDirichletBC
 {
 public:
     LocalDirichletBC() = default;
-    template < size_t max_dofs_per_node, el_o_t... orders, ProblemDef dirichlet_def >
+    template < size_t max_dofs_per_node, el_o_t... orders >
     LocalDirichletBC(const dofs::LocalDofMap< max_dofs_per_node >&                            node_dof_map,
                      const mesh::LocalMeshView< orders... >&                                  interior_mesh,
                      const mesh::LocalMeshView< orders... >&                                  border_mesh,
                      const MpiComm&                                                           comm,
                      const std::shared_ptr< const comm::ImportExportContext< local_dof_t > >& comm_context,
-                     util::ConstexprValue< dirichlet_def >);
+                     const bcs::DirichletBCDefinition< max_dofs_per_node >&                   bc_def);
 
     bool isEmpty() const { return m_dofs_set.empty(); }
     bool isDirichletDof(local_dof_t dof) const { return m_dofs_set.contains(dof); }
@@ -31,16 +32,16 @@ private:
     util::ArrayOwner< local_dof_t >               m_dofs_sorted;
 };
 
-template < size_t max_dofs_per_node, el_o_t... orders, ProblemDef dirichlet_def >
+template < size_t max_dofs_per_node, el_o_t... orders >
 LocalDirichletBC::LocalDirichletBC(
     const dofs::LocalDofMap< max_dofs_per_node >&                            node_dof_map,
     const mesh::LocalMeshView< orders... >&                                  interior_mesh,
     const mesh::LocalMeshView< orders... >&                                  border_mesh,
     const MpiComm&                                                           comm,
     const std::shared_ptr< const comm::ImportExportContext< local_dof_t > >& comm_context,
-    util::ConstexprValue< dirichlet_def >)
+    const bcs::DirichletBCDefinition< max_dofs_per_node >&                   bc_def)
 {
-    if constexpr (dirichlet_def.n_domains == 0)
+    if (bc_def.empty())
         return;
 
     const auto num_dofs_owned     = node_dof_map.getNumOwnedDofs();
@@ -50,10 +51,11 @@ LocalDirichletBC::LocalDirichletBC(
         const auto& el_nodes = el.getLocalNodes();
         for (const auto& [side, domain] : el.getBoundaries())
         {
-            const auto match_it = std::ranges::find_if(dirichlet_def, [&](auto def) { return def.domain == domain; });
-            if (match_it == dirichlet_def.end())
-                continue;
-            const auto& [_, dof_bmp] = *match_it;
+            auto dof_bmp = std::bitset< max_dofs_per_node >{};
+            for (const auto& [domains, dof_inds] : bc_def)
+                if (std::ranges::binary_search(domains, domain))
+                    for (auto i : dof_inds)
+                        dof_bmp.set(i);
             const auto dof_inds      = util::getTrueInds(dof_bmp);
             for (auto node_ind : mesh::getSideNodeIndices< ET, EO >(side))
             {

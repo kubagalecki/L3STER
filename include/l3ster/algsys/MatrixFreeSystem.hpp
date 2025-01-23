@@ -42,11 +42,11 @@ public:
         const MatrixFreeSystem* m_system;
     };
 
-    template < ProblemDef problem_def, ProblemDef dirichlet_def >
+    template < ProblemDef problem_def >
     MatrixFreeSystem(std::shared_ptr< const MpiComm >                          comm,
                      std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
                      util::ConstexprValue< problem_def >                       problemdef_ctwrpr,
-                     util::ConstexprValue< dirichlet_def >                     dbcdef_ctwrpr);
+                     const BCDefinition< problem_def.n_fields >&               bc_def);
 
     [[nodiscard]] inline auto getOperator() const -> Teuchos::RCP< const tpetra_operator_t >;
     [[nodiscard]] inline auto getRhs() const -> Teuchos::RCP< const tpetra_multivector_t >;
@@ -737,12 +737,12 @@ inline auto makeOperatorMap(Teuchos::RCP< const Teuchos::Comm< int > > teuchos_c
 } // namespace detail
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
-template < ProblemDef problem_def, ProblemDef dirichlet_def >
+template < ProblemDef problem_def >
 MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::MatrixFreeSystem(
     std::shared_ptr< const MpiComm >                          comm,
     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
     util::ConstexprValue< problem_def >                       problemdef_ctwrpr,
-    util::ConstexprValue< dirichlet_def >                     dbcdef_ctwrpr)
+    const BCDefinition< problem_def.n_fields >&               bc_def)
     : m_comm{std::move(comm)}, m_mesh{std::move(mesh)}, m_state{State::OpenForAssembly}
 {
     const auto [interior, border] = detail::splitBorderAndInterior(*m_mesh);
@@ -766,9 +766,10 @@ MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::MatrixFreeSystem(
     m_import_shared_buf = view_t("import buf", shared_dofs.size(), n_rhs);
     m_export_shared_buf = view_t("export buf", shared_dofs.size(), n_rhs);
     initKernelMaps();
-    if constexpr (not dirichlet_def.domain_defs.empty())
+    const auto& dirichlet = bc_def.getDirichlet();
+    if (not dirichlet.empty())
     {
-        m_dirichlet_bc.emplace(m_node_dof_map, m_interior_mesh, m_border_mesh, *m_comm, context, dbcdef_ctwrpr);
+        m_dirichlet_bc.emplace(m_node_dof_map, m_interior_mesh, m_border_mesh, *m_comm, context, dirichlet);
         if (not m_dirichlet_bc->isEmpty()) // Skip allocation if no BC DOFs present in partition
             m_dirichlet_values = view_t("Dirichlet values", all_dofs.size(), n_rhs);
     }

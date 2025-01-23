@@ -4,6 +4,7 @@
 #include "l3ster/algsys/ComputeValuesAtNodes.hpp"
 #include "l3ster/algsys/SparsityGraph.hpp"
 #include "l3ster/algsys/StaticCondensationManager.hpp"
+#include "l3ster/bcs/BCDefinition.hpp"
 #include "l3ster/bcs/DirichletBC.hpp"
 #include "l3ster/bcs/GetDirichletDofs.hpp"
 #include "l3ster/post/SolutionManager.hpp"
@@ -18,11 +19,11 @@ template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t
 class AssembledSystem
 {
 public:
-    template < ProblemDef problem_def, ProblemDef dirichlet_def >
+    template < ProblemDef problem_def >
     AssembledSystem(std::shared_ptr< const MpiComm >                          comm,
                     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
                     util::ConstexprValue< problem_def >,
-                    util::ConstexprValue< dirichlet_def >);
+                    const BCDefinition< problem_def.n_fields >& bc_def);
 
     inline auto getMatrix() const -> Teuchos::RCP< const tpetra_crsmatrix_t >;
     inline auto getRhs() const -> Teuchos::RCP< const tpetra_multivector_t >;
@@ -333,12 +334,12 @@ auto AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::initMultiVector
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-template < ProblemDef problem_def, ProblemDef dirichlet_def >
+template < ProblemDef problem_def >
 AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::AssembledSystem(
     std::shared_ptr< const MpiComm >                          comm,
     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
     util::ConstexprValue< problem_def >                       problemdef_ctwrpr,
-    util::ConstexprValue< dirichlet_def >                     dbcdef_ctwrpr)
+    const BCDefinition< problem_def.n_fields >&               bc_def)
     : m_comm{std::move(comm)}, m_mesh{std::move(mesh)}, m_state{State::OpenForAssembly}
 {
     const auto cond_map            = dofs::makeCondensationMap< CP >(*m_comm, *m_mesh, problemdef_ctwrpr);
@@ -358,11 +359,12 @@ AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::AssembledSystem(
     m_condensation_manager = StaticCondensationManager< CP >{*m_mesh, m_node_dof_map, problemdef_ctwrpr, n_rhs};
     m_condensation_manager.beginAssembly();
 
-    if constexpr (dirichlet_def.n_domains != 0)
+    const auto& dirichlet = bc_def.getDirichlet();
+    if (not dirichlet.empty())
     {
         L3STER_PROFILE_REGION_BEGIN("Dirichlet BCs");
         auto [owned_bcdofs, shared_bcdofs] = bcs::getDirichletDofs(
-            *m_mesh, m_sparsity_graph, node_global_dof_map, cond_map, problemdef_ctwrpr, dbcdef_ctwrpr);
+            *m_mesh, m_sparsity_graph, node_global_dof_map, cond_map, problemdef_ctwrpr, dirichlet);
         m_dirichlet_bcs.emplace(m_sparsity_graph, std::move(owned_bcdofs), std::move(shared_bcdofs));
         L3STER_PROFILE_REGION_END("Dirichlet BCs");
     }

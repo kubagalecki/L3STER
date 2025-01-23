@@ -31,7 +31,8 @@ void test()
 
     constexpr auto alg_params       = AlgebraicSystemParams{.cond_policy = CP, .n_rhs = 2};
     constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
-    auto           alg_sys          = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, {}, algparams_ctwrpr);
+    auto           alg_sys =
+        makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, BCDefinition< problem_def.n_fields >{}, algparams_ctwrpr);
 
     constexpr auto   ker_params = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1, .n_rhs = 2};
     constexpr double inc        = 1000.;

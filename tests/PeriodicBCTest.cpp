@@ -1,4 +1,5 @@
 #include "l3ster/bcs/PeriodicBC.hpp"
+#include "l3ster/algsys/MakeAlgebraicSystem.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
@@ -10,19 +11,19 @@ using namespace lstr;
 using namespace lstr::mesh;
 using namespace lstr::bcs;
 
-constexpr auto node_dist = std::array{0., 1., 2., 3., 4.};
+constexpr auto node_dist = util::linspaceArray< 5 >(0., 1.);
 constexpr auto N         = node_dist.size();
 constexpr auto dx        = N - 1;
 constexpr auto dy        = dx * N;
 constexpr auto dz        = dy * N;
 
-constexpr auto mesh_order = 1;
-
+template < el_o_t mesh_order = 1 >
 auto makeMesh2D(const MpiComm& comm, auto probdef_ctwrpr)
 {
     return generateAndDistributeMesh< mesh_order >(comm, [&] { return makeSquareMesh(node_dist); }, {}, probdef_ctwrpr);
 }
 
+template < el_o_t mesh_order = 1 >
 auto makeMesh3D(const MpiComm& comm, auto probdef_ctwrpr)
 {
     return generateAndDistributeMesh< mesh_order >(comm, [&] { return makeCubeMesh(node_dist); }, {}, probdef_ctwrpr);
@@ -49,7 +50,7 @@ void testBoundaryMatching2D()
     constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
     const auto       comm           = std::make_shared< MpiComm >(MPI_COMM_WORLD);
     const auto       mesh           = makeMesh2D(*comm, probdef_ctwrpr);
-    auto             period_def     = PeriodicBCDefinition{probdef_ctwrpr};
+    auto             period_def     = PeriodicBCDefinition< 2 >{};
     period_def.definePeriodicBoundary({bot_bound}, {top_bound}, {0., node_dist.back() - node_dist.front(), 0.}, {0});
     period_def.definePeriodicBoundary({left_bound}, {right_bound}, {node_dist.back() - node_dist.front(), 0., 0.}, {1});
     const auto bc = PeriodicBC{period_def, *mesh, *comm};
@@ -71,7 +72,7 @@ void testBoundaryMatching3D()
     constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
     const auto       comm           = std::make_shared< MpiComm >(MPI_COMM_WORLD);
     const auto       mesh           = makeMesh3D(*comm, probdef_ctwrpr);
-    auto             period_def     = PeriodicBCDefinition{probdef_ctwrpr};
+    auto             period_def     = PeriodicBCDefinition< 3 >{};
     period_def.definePeriodicBoundary({bot_bound}, {top_bound}, {0., 0., node_dist.back() - node_dist.front()}, {0});
     period_def.definePeriodicBoundary({left_bound}, {right_bound}, {0., node_dist.back() - node_dist.front(), 0.}, {1});
     period_def.definePeriodicBoundary({back_bound}, {front_bound}, {node_dist.back() - node_dist.front(), 0., 0.}, {2});
@@ -101,6 +102,45 @@ void testBoundaryMatching3D()
                 REQUIRE(bc.lookup(n1)[2] == n2 or bc.lookup(n2)[2] == n1);
             }
     }
+}
+
+template < OperatorEvaluationStrategy S, CondensationPolicy CP >
+void solveAdvection2D()
+{
+    constexpr d_id_t domain_id = 0, bot_bound = 1, top_bound = 2, left_bound = 3, right_bound = 4;
+    const auto       comm           = std::make_shared< MpiComm >(MPI_COMM_WORLD);
+    constexpr auto   problem_def    = ProblemDef{defineDomain< 1 >(domain_id, ALL_DOFS)};
+    constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
+    auto             period_def     = PeriodicBCDefinition< 1 >{};
+    period_def.definePeriodicBoundary({left_bound}, {right_bound}, {node_dist.back() - node_dist.front(), 0., 0.}, {0});
+    const auto mesh = makeMesh2D(*comm, probdef_ctwrpr);
+    summarizeMesh(*comm, *mesh);
+
+    constexpr auto alg_params         = AlgebraicSystemParams{.eval_strategy = S, .cond_policy = CP};
+    constexpr auto algparams_ctwrpr   = util::ConstexprValue< alg_params >{};
+    auto           alg_sys            = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, {}, algparams_ctwrpr);
+    constexpr auto adv_params         = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1, .n_fields = 1};
+    constexpr auto advection_kernel2d = wrapDomainEquationKernel< adv_params >([](const auto& in, auto& out) {
+        constexpr double u = 1., v = 0.; // advection velocity
+        constexpr double dt                         = .1;
+        const auto& [field_vals, field_ders, point] = in;
+        const auto phi_p                            = field_vals[0];
+        const auto phi_pp                           = field_vals[1];
+
+        auto& [operators, rhs] = out;
+        auto& [A0, A1, A2]     = operators;
+        A0(0, 0)               = 1. / dt;
+        A1(0, 0)               = u;
+        A2(0, 0)               = u;
+    });
+    constexpr auto neubc_params       = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1};
+    constexpr auto neumann_bc_kernel  = wrapBoundaryEquationKernel< neubc_params >([](const auto& in, auto& out) {
+        const auto& [vals, ders, point, normal] = in;
+        auto& [operators, rhs]                  = out;
+        auto& [A0, A1, A2]                      = operators;
+        A0(0, 1)                                = normal[0];
+        A0(0, 2)                                = normal[1];
+    });
 }
 
 // Solve 2D diffusion problem

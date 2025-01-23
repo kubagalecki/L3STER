@@ -27,9 +27,8 @@ void test()
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
     constexpr auto   problem_def    = ProblemDef{defineDomain< 3 >(domain_id, ALL_DOFS)};
     constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
-    constexpr auto   dirichlet_def =
-        ProblemDef{defineDomain< 3 >(left_boundary, 0), defineDomain< 3 >(right_boundary, 0)};
-    constexpr auto dirichletdef_ctwrpr = util::ConstexprValue< dirichlet_def >{};
+    auto             bc_def         = BCDefinition< problem_def.n_fields >{};
+    bc_def.defineDirichlet({left_boundary, right_boundary}, {0});
 
     const auto mesh = makeMesh(*comm, probdef_ctwrpr);
     summarizeMesh(*comm, *mesh);
@@ -39,7 +38,7 @@ void test()
 
     constexpr auto alg_params       = AlgebraicSystemParams{.cond_policy = CP};
     constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
-    auto           alg_sys = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, dirichletdef_ctwrpr, algparams_ctwrpr);
+    auto           alg_sys          = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, bc_def, algparams_ctwrpr);
 
     constexpr auto diff_params = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3};
     constexpr auto diffusion_kernel2d =

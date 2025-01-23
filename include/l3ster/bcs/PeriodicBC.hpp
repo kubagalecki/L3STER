@@ -1,8 +1,8 @@
 #ifndef L3STER_BCS_PERIODICBC_HPP
 #define L3STER_BCS_PERIODICBC_HPP
 
+#include "l3ster/bcs/BCDefinition.hpp"
 #include "l3ster/comm/MpiComm.hpp"
-#include "l3ster/common/ProblemDefinition.hpp"
 #include "l3ster/mapping/MapReferenceToPhysical.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/mesh/NodeReferenceLocation.hpp"
@@ -13,50 +13,7 @@
 #include <array>
 #include <bitset>
 
-namespace lstr
-{
-template < size_t max_dofs_per_node >
-class PeriodicBCDefinition
-{
-    struct Def
-    {
-        util::ArrayOwner< d_id_t >       boundary_ids_src, boundary_ids_dest;
-        std::array< val_t, 3 >           translation;
-        std::bitset< max_dofs_per_node > dofs;
-    };
-
-public:
-    PeriodicBCDefinition() = default;
-    template < ProblemDef problem_def >
-    explicit PeriodicBCDefinition(util::ConstexprValue< problem_def >)
-        requires(problem_def.n_fields == max_dofs_per_node)
-    {}
-
-    val_t tolerance = 1.e-12; /// Condition for matching nodes: tolerance > |src + translation - dest|
-
-    /// Each node at X belonging to source must have a corresponding node at X + translation belonging to destination
-    void definePeriodicBoundary(const util::ArrayOwner< d_id_t >& boundaries_src,
-                                const util::ArrayOwner< d_id_t >& boundaries_dest,
-                                std::array< val_t, 3 >            translation,
-                                const util::ArrayOwner< size_t >& dof_inds = std::views::iota(0uz, max_dofs_per_node))
-    {
-        auto dof_bitset = std::bitset< max_dofs_per_node >{};
-        for (auto d : dof_inds)
-            dof_bitset.set(d);
-        m_defs.push_back(Def{copy(boundaries_src), copy(boundaries_dest), translation, dof_bitset});
-    }
-
-    auto begin() const { return m_defs.begin(); }
-    auto end() const { return m_defs.end(); }
-    auto size() const { return m_defs.size(); }
-
-private:
-    std::vector< Def > m_defs;
-};
-template < ProblemDef problem_def >
-PeriodicBCDefinition(util::ConstexprValue< problem_def >) -> PeriodicBCDefinition< problem_def.n_fields >;
-
-namespace bcs
+namespace lstr::bcs
 {
 template < size_t max_dofs_per_node >
 class PeriodicBC
@@ -384,6 +341,5 @@ PeriodicBC< max_dofs_per_node >::PeriodicBC(const PeriodicBCDefinition< max_dofs
         }
     }
 }
-} // namespace bcs
-} // namespace lstr
+} // namespace lstr::bcs
 #endif // L3STER_BCS_PERIODICBC_HPP

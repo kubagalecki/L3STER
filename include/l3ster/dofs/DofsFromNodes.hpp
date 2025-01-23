@@ -39,6 +39,19 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&             nodes,
     return retval;
 }
 
+template < size_t n_nodes, size_t dofs_per_node, CondensationPolicy CP, SizedRangeOfConvertibleTo_c< size_t > Inds >
+auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&             nodes,
+                      const dofs::NodeToGlobalDofMap< dofs_per_node >& node_dof_map,
+                      const dofs::NodeCondensationMap< CP >&           cond_map,
+                      Inds&&                                           dof_inds)
+{
+    return nodes | std::views::transform([&](n_id_t node) {
+               const auto& all_dofs = node_dof_map(cond_map.getCondensedId(node));
+               return dof_inds | std::views::transform([&](size_t i) { return all_dofs[i]; });
+           }) |
+           std::views::join;
+}
+
 template < size_t n_nodes, size_t dofs_per_node >
 auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                                    nodes,
                       const dofs::NodeToGlobalDofMap< dofs_per_node >&                        node_dof_map,

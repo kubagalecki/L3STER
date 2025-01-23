@@ -1,7 +1,6 @@
 #ifndef L3STER_DOFS_NODETODOFMAP_HPP
 #define L3STER_DOFS_NODETODOFMAP_HPP
 
-#include "l3ster/bcs/PeriodicBC.hpp"
 #include "l3ster/comm/ImportExport.hpp"
 #include "l3ster/common/TrilinosTypedefs.h"
 #include "l3ster/dofs/NodeCondensation.hpp"

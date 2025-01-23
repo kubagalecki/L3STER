@@ -42,7 +42,8 @@ void test2D(const std::shared_ptr< MpiComm >& comm)
     constexpr auto   vec_inds          = std::array< size_t, 2 >{1, 3};
     constexpr auto   all_field_inds    = util::makeIotaArray< size_t, problem_def.n_fields >();
 
-    auto system_manager = makeAlgebraicSystem(comm, my_partition, problemdef_ctwrpr);
+    auto system_manager =
+        makeAlgebraicSystem(comm, my_partition, problemdef_ctwrpr, BCDefinition< problem_def.n_fields >{});
     system_manager.endAssembly();
     auto solution_manager = SolutionManager{*my_partition, problem_def.n_fields};
 
@@ -97,7 +98,8 @@ void test3D(const std::shared_ptr< MpiComm >& comm)
     constexpr auto   boundary_field_inds = std::array< size_t, 3 >{3, 4, 5};
     constexpr auto   field_inds          = util::makeIotaArray< size_t, n_fields >();
 
-    auto system_manager = makeAlgebraicSystem(comm, my_partition, problemdef_ctwrpr);
+    auto system_manager =
+        makeAlgebraicSystem(comm, my_partition, problemdef_ctwrpr, BCDefinition< problem_def.n_fields >{});
     system_manager.endAssembly();
     auto solution_manager = SolutionManager{*my_partition, n_fields};
 
