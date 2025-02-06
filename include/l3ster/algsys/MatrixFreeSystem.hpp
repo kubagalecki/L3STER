@@ -45,7 +45,7 @@ public:
     template < ProblemDef problem_def >
     MatrixFreeSystem(std::shared_ptr< const MpiComm >                          comm,
                      std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-                     util::ConstexprValue< problem_def >                       problemdef_ctwrpr,
+                     util::ConstexprValue< problem_def >                       probdef_ctwrpr,
                      const BCDefinition< problem_def.n_fields >&               bc_def);
 
     [[nodiscard]] inline auto getOperator() const -> Teuchos::RCP< const tpetra_operator_t >;
@@ -212,7 +212,7 @@ private:
     view_t                                                    m_dirichlet_values;
     dofs::LocalDofMap< max_dofs_per_node >                    m_node_dof_map;
     KernelMaps                                                m_kernel_maps;
-    Teuchos::RCP< tpetra_map_t >                              m_operator_map;
+    Teuchos::RCP< const tpetra_map_t >                        m_operator_map;
     State                                                     m_state;
     bool                                                      m_bcs_need_import = false;
 };
@@ -710,11 +710,20 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::getSolution() cons
 
 namespace detail
 {
-template < el_o_t... orders >
-auto splitBorderAndInterior(const mesh::MeshPartition< orders... >& mesh)
+template < el_o_t... orders, CondensationPolicy CP, size_t max_dofs_per_node >
+auto splitBorderAndInterior(const mesh::MeshPartition< orders... >&              mesh,
+                            const dofs::NodeCondensationMap< CP >&               cond_map,
+                            const dofs::NodeToGlobalDofMap< max_dofs_per_node >& node2dofs)
 {
-    const auto is_interior = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
-        return std::ranges::none_of(element.getNodes(), mesh.getGhostNodePredicate());
+    const auto& ownership   = node2dofs.ownership();
+    const auto  is_interior = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
+        auto valid_dofs =
+            dofs::getPrimaryNodesView< CP >(element) |
+            std::views::transform([&](auto node) { return cond_map.getCondensedIdOpt(node).value_or(invalid_node); }) |
+            std::views::filter([](auto node) { return node != invalid_node; }) |
+            std::views::transform(std::cref(node2dofs)) | std::views::join |
+            std::views::filter([](auto dof) { return dof != invalid_global_dof; });
+        return std::ranges::none_of(valid_dofs, [&](auto dof) { return ownership.isOwned(dof); });
     };
     return mesh::splitMeshPartition(mesh, is_interior);
 }
@@ -741,37 +750,38 @@ template < ProblemDef problem_def >
 MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::MatrixFreeSystem(
     std::shared_ptr< const MpiComm >                          comm,
     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-    util::ConstexprValue< problem_def >                       problemdef_ctwrpr,
+    util::ConstexprValue< problem_def >                       probdef_ctwrpr,
     const BCDefinition< problem_def.n_fields >&               bc_def)
     : m_comm{std::move(comm)}, m_mesh{std::move(mesh)}, m_state{State::OpenForAssembly}
 {
-    const auto [interior, border] = detail::splitBorderAndInterior(*m_mesh);
+    const auto periodic_bc = bcs::PeriodicBC{bc_def.getPeriodic(), *m_mesh, *m_comm};
+    const auto cond_map = dofs::makeCondensationMap(*m_comm, *m_mesh, probdef_ctwrpr, periodic_bc, no_condensation_tag);
+    const auto node2dof = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, cond_map, probdef_ctwrpr, periodic_bc};
+    const auto [interior, border] = detail::splitBorderAndInterior(*m_mesh, cond_map, node2dof);
     m_interior_mesh               = mesh::LocalMeshView{interior, *m_mesh};
     m_border_mesh                 = mesh::LocalMeshView{border, *m_mesh};
-
-    const auto cond_map = dofs::makeCondensationMap< CondensationPolicy::None >(*m_comm, *m_mesh, problemdef_ctwrpr);
-    const auto node2dof = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, cond_map, problemdef_ctwrpr};
-    const auto [all_dofs, n_owned_dofs] = detail::computeNodeDofs(*m_mesh, node2dof, cond_map);
-    const auto owned_dofs               = std::span{all_dofs}.subspan(0, n_owned_dofs);
-    const auto shared_dofs              = std::span{all_dofs}.subspan(n_owned_dofs);
-    m_node_dof_map                      = dofs::LocalDofMap{cond_map, node2dof, *m_mesh, all_dofs, n_owned_dofs};
-    m_operator_map                      = detail::makeOperatorMap(*m_comm, owned_dofs);
-    m_rhs                               = util::makeTeuchosRCP< tpetra_multivector_t >(m_operator_map, n_rhs);
-    m_solution                          = util::makeTeuchosRCP< tpetra_multivector_t >(m_operator_map, n_rhs);
-    m_rhs_view                          = m_rhs->getLocalViewHost(Tpetra::Access::ReadWrite);
-    m_diagonal                          = util::ArrayOwner< val_t >(all_dofs.size()); // Alloc shared inds for export
-    const auto context = std::make_shared< comm::ImportExportContext< local_dof_t > >(*m_comm, owned_dofs, shared_dofs);
-    m_import           = std::make_unique< comm::Import< val_t, local_dof_t > >(context, n_rhs);
-    m_export           = std::make_unique< comm::Export< val_t, local_dof_t > >(context, n_rhs);
-    m_import_shared_buf = view_t("import buf", shared_dofs.size(), n_rhs);
-    m_export_shared_buf = view_t("export buf", shared_dofs.size(), n_rhs);
+    const auto& dof_ownership     = node2dof.ownership();
+    m_node_dof_map                = dofs::LocalDofMap{cond_map, node2dof, *m_mesh};
+    const auto teuchos_comm       = util::makeTeuchosRCP< Teuchos::MpiComm< int > >(m_comm->get());
+    const auto num_all_dofs       = dof_ownership.getOwnershipDist(*m_comm).back();
+    m_operator_map                = detail::makeTpetraMapOwned(dof_ownership, teuchos_comm, num_all_dofs);
+    m_rhs                         = util::makeTeuchosRCP< tpetra_multivector_t >(m_operator_map, n_rhs);
+    m_solution                    = util::makeTeuchosRCP< tpetra_multivector_t >(m_operator_map, n_rhs);
+    m_rhs_view                    = m_rhs->getLocalViewHost(Tpetra::Access::ReadWrite);
+    m_diagonal                    = util::ArrayOwner< val_t >(dof_ownership.localSize());
+    auto       context            = dof_ownership.makeCommContext(*m_comm);
+    const auto context_sp         = std::make_shared< comm::ImportExportContext< local_dof_t > >(std::move(context));
+    m_import                      = std::make_unique< comm::Import< val_t, local_dof_t > >(context_sp, n_rhs);
+    m_export                      = std::make_unique< comm::Export< val_t, local_dof_t > >(context_sp, n_rhs);
+    m_import_shared_buf           = view_t("import buf", dof_ownership.shared().size(), n_rhs);
+    m_export_shared_buf           = view_t("export buf", dof_ownership.shared().size(), n_rhs);
     initKernelMaps();
     const auto& dirichlet = bc_def.getDirichlet();
     if (not dirichlet.empty())
     {
-        m_dirichlet_bc.emplace(m_node_dof_map, m_interior_mesh, m_border_mesh, *m_comm, context, dirichlet);
+        m_dirichlet_bc.emplace(m_node_dof_map, m_interior_mesh, m_border_mesh, *m_comm, context_sp, dirichlet);
         if (not m_dirichlet_bc->isEmpty()) // Skip allocation if no BC DOFs present in partition
-            m_dirichlet_values = view_t("Dirichlet values", all_dofs.size(), n_rhs);
+            m_dirichlet_values = view_t("Dirichlet values", dof_ownership.localSize(), n_rhs);
     }
 }
 

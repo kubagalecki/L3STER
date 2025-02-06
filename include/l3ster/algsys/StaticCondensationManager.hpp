@@ -258,7 +258,7 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
                                            const mesh::Element< ET, EO >& element) {
         // Bitmap is initially inverted, i.e., 0 implies that the dof is active (avoids awkward all-true construction)
         using dof_bmp_t    = std::bitset< max_dofs_per_node >;
-        auto dof_bmp_range = getBoundaryNodes(element) | std::views::transform(dof_map) | std::views::keys |
+        auto dof_bmp_range = getBoundaryNodes(element) | std::views::transform(std::cref(dof_map)) | std::views::keys |
                              std::views::transform([&](const std::array< local_dof_t, max_dofs_per_node >& dofs) {
                                  auto retval = dof_bmp_t{};
                                  for (auto&& [i, dof] : dofs | std::views::enumerate)

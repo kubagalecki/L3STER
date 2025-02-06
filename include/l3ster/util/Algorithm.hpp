@@ -255,10 +255,9 @@ void staggeredAllGather(const MpiComm& comm, std::span< const T > my_data, Proce
 
     auto       request            = MpiComm::Request{};
     const auto begin_broadcasting = [&](int send_rank) {
-        const auto comm_buf = my_rank == send_rank
-                                ? my_data_mut
-                                : std::span{recv_buf}.subspan(0, msg_sizes[static_cast< size_t >(send_rank)]);
-        request             = comm.broadcastAsync(comm_buf, send_rank);
+        const auto comm_buf =
+            my_rank == send_rank ? my_data_mut : std::span{recv_buf}.first(msg_sizes[static_cast< size_t >(send_rank)]);
+        request = comm.broadcastAsync(comm_buf, send_rank);
     };
     const auto finish_broadcasting = [&]() {
         request.wait();

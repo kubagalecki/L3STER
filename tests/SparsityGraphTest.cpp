@@ -14,6 +14,9 @@ using namespace lstr::algsys;
 class DenseGraph
 {
 public:
+    [[nodiscard]] auto getRow(size_t row) { return m_entries.getSubView(row * m_dim, (row + 1) * m_dim); }
+    [[nodiscard]] auto getRow(size_t row) const { return m_entries.getSubView(row * m_dim, (row + 1) * m_dim); }
+
     template < el_o_t... orders, ProblemDef problem_def, CondensationPolicy CP >
     DenseGraph(const MpiComm&                          comm,
                const mesh::MeshPartition< orders... >& mesh,
@@ -22,23 +25,15 @@ public:
     {
         using namespace std::views;
         const auto node_to_dof_map = NodeToGlobalDofMap{comm, mesh, cond_map, probdef_ctwrpr};
-        const auto max_dof         = std::ranges::max(cond_map.getCondensedIds() | transform(node_to_dof_map) | join |
-                                              filter(NodeToGlobalDofMap< problem_def.n_fields >::isValid));
-        m_dim                      = static_cast< size_t >(max_dof + 1);
+        m_dim                      = node_to_dof_map.ownership().owned().size();
         m_entries                  = util::DynamicBitset{m_dim * m_dim};
 
         constexpr auto n_fields     = problem_def.n_fields;
         const auto     visit_domain = [&]< DomainDef< n_fields > dom_def >(util::ConstexprValue< dom_def >) {
+            const auto dof_inds      = util::getTrueInds(dom_def.active_fields);
+            const auto dof_inds_span = std::span{dof_inds};
             const auto visit_element = [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >& element) {
-                const auto element_dofs = std::invoke([&] {
-                    if constexpr (CP == CondensationPolicy::None)
-                    {
-                        constexpr auto covered_dof_inds = util::getTrueInds< dom_def.active_fields >();
-                        return getUnsortedPrimaryDofs< covered_dof_inds >(element, node_to_dof_map, cond_map);
-                    }
-                    else if constexpr ((CP == CondensationPolicy::ElementBoundary))
-                        return getUnsortedPrimaryDofs(element, node_to_dof_map, cond_map);
-                });
+                const auto element_dofs = getDofsCopy(cond_map, node_to_dof_map, element, dof_inds_span);
                 for (auto row : element_dofs)
                     for (auto col : element_dofs)
                         getRow(static_cast< size_t >(row)).set(static_cast< size_t >(col));
@@ -47,9 +42,6 @@ public:
         };
         util::forConstexpr(visit_domain, probdef_ctwrpr);
     }
-
-    [[nodiscard]] auto getRow(size_t row) { return m_entries.getSubView(row * m_dim, (row + 1) * m_dim); }
-    [[nodiscard]] auto getRow(size_t row) const { return m_entries.getSubView(row * m_dim, (row + 1) * m_dim); }
 
 private:
     size_t              m_dim; // assume square
@@ -75,8 +67,8 @@ auto combineParts(std::span< const mesh::MeshPartition< orders... > > parts) -> 
 }
 
 template < el_o_t... orders >
-auto allGatherMesh(const MpiComm&                          comm,
-                   const mesh::MeshPartition< orders... >& mesh) -> mesh::MeshPartition< orders... >
+auto allGatherMesh(const MpiComm& comm, const mesh::MeshPartition< orders... >& mesh)
+    -> mesh::MeshPartition< orders... >
 {
     using mesh_t = mesh::MeshPartition< orders... >;
     if (comm.getSize() == 1)
@@ -125,9 +117,9 @@ void test(const MpiComm& comm)
     const auto node_dof_map   = NodeToGlobalDofMap{comm, *my_partition, cond_map_local, probdef_ctwrpr};
     const auto sparsity_graph = makeSparsityGraph(comm, *my_partition, node_dof_map, cond_map_local, probdef_ctwrpr);
 
-    const auto num_dofs_local    = node_dof_map.getNumOwnedDofs();
-    auto       num_dofs_local_sv = std::views::single(num_dofs_local);
-    size_t     num_dofs_global{};
+    const size_t num_dofs_local    = node_dof_map.ownership().owned().size();
+    auto         num_dofs_local_sv = std::views::single(num_dofs_local);
+    size_t       num_dofs_global{};
     comm.allReduce(num_dofs_local_sv, &num_dofs_global, MPI_SUM);
 
     const auto dense_graph = DenseGraph{comm_self, full_mesh, probdef_ctwrpr, cond_map_full};
@@ -141,7 +133,7 @@ void test(const MpiComm& comm)
     size_t     row_size              = 0;
     const auto check_row_global_cols = [&](const auto& dense_row) {
         REQUIRE(row_size == dense_row.count());
-        REQUIRE(std::ranges::all_of(util::asSpan(view).subspan(0, row_size),
+        REQUIRE(std::ranges::all_of(util::asSpan(view).first(row_size),
                                     [&](global_dof_t col_ind) { return dense_row.test(col_ind); }));
     };
     for (local_dof_t local_row = 0; static_cast< size_t >(local_row) != sparsity_graph->getLocalNumRows(); ++local_row)

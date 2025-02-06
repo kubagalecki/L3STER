@@ -5,23 +5,34 @@
 
 namespace lstr::dofs
 {
-template < IndexRange_c auto dof_inds, size_t max_dofs_per_node, CondensationPolicy CP >
-auto getNodeActiveDofs(n_id_t                                               node,
-                       const dofs::NodeToGlobalDofMap< max_dofs_per_node >& node_dof_map,
-                       const dofs::NodeCondensationMap< CP >&               cond_map,
-                       util::ConstexprValue< dof_inds >                     dofinds_ctwrpr = {})
+template < CondensationPolicy CP, size_t max_dofs_per_node, mesh::ElementType ET, el_o_t EO, std::integral I >
+auto getDofsView(const NodeCondensationMap< CP >&               cond_map,
+                 const NodeToGlobalDofMap< max_dofs_per_node >& node2dof,
+                 const mesh::Element< ET, EO >&                 element,
+                 std::span< const I >                           dof_inds)
 {
-    if constexpr (CP == CondensationPolicy::None)
-        return util::getValuesAtInds(node_dof_map(cond_map.getCondensedId(node)), dofinds_ctwrpr);
-    else if constexpr (CP == CondensationPolicy::ElementBoundary)
-    {
-        auto        retval    = util::StaticVector< global_dof_t, max_dofs_per_node >{};
-        const auto& node_dofs = node_dof_map(cond_map.getCondensedId(node));
-        std::ranges::remove_copy(node_dofs, std::back_inserter(retval), invalid_global_dof);
-        return retval;
-    }
-    else
-        static_assert(util::always_false< CP >, "Unimplemented");
+    return getPrimaryNodesView< CP >(element) | std::views::transform([&, dof_inds](auto node) {
+               const auto& node_dofs = node2dof(cond_map.getCondensedId(node));
+               auto        retval    = util::StaticVector< global_dof_t, max_dofs_per_node >{};
+               std::ranges::transform(dof_inds, std::back_inserter(retval), [&](auto i) { return node_dofs.at(i); });
+               return retval;
+           }) |
+           std::views::join | std::views::filter(&NodeToGlobalDofMap< max_dofs_per_node >::isValid);
+}
+
+template < CondensationPolicy CP, size_t max_dofs_per_node, mesh::ElementType ET, el_o_t EO, std::integral I >
+auto getDofsCopy(const NodeCondensationMap< CP >&               cond_map,
+                 const NodeToGlobalDofMap< max_dofs_per_node >& node2dof,
+                 const mesh::Element< ET, EO >&                 element,
+                 std::span< const I >                           dof_inds)
+{
+    constexpr auto num_nodes = dofs::getNumPrimaryNodes< CP, ET, EO >();
+    auto           retval    = util::StaticVector< global_dof_t, num_nodes * max_dofs_per_node >{};
+    std::ranges::copy(dofs::getDofsView(cond_map, node2dof, element, dof_inds), std::back_inserter(retval));
+    std::ranges::sort(retval);
+    const auto erase_begin = std::ranges::unique(retval).begin();
+    retval.erase(erase_begin, retval.end());
+    return retval;
 }
 
 template < IndexRange_c auto dof_inds, size_t n_nodes, size_t dofs_per_node, CondensationPolicy CP >
@@ -99,17 +110,6 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                      
             std::ranges::remove_copy(all_dofs, std::back_inserter(retval[i]), invalid_global_dof);
     }
     return retval;
-}
-
-template < IndexRange_c auto dof_inds, mesh::ElementType ET, el_o_t EO >
-auto getSortedPrimaryDofs(const mesh::Element< ET, EO >&                               element,
-                          const dofs::NodeToDofMap_c auto&                             node_dof_map,
-                          const dofs::NodeCondensationMap< CondensationPolicy::None >& cond_map,
-                          util::ConstexprValue< dof_inds >                             dofinds_ctwrpr = {})
-{
-    auto primary_nodes = getPrimaryNodesArray< CondensationPolicy::None >(element);
-    std::ranges::sort(primary_nodes);
-    return getDofsFromNodes(primary_nodes, node_dof_map, cond_map, dofinds_ctwrpr);
 }
 
 template < IndexRange_c auto  dof_inds,

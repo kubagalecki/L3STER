@@ -35,9 +35,11 @@ public:
         const auto iter = m_periodic_info.find(node);
         return iter == m_periodic_info.end() ? util::makeFilledArray< max_dofs_per_node >(invalid_node) : iter->second;
     }
+    auto getPeriodicGhosts() const -> std::span< const n_id_t > { return m_periodic_ghosts; }
 
 private:
     robin_hood::unordered_flat_map< n_id_t, description_t > m_periodic_info;
+    util::ArrayOwner< n_id_t >                              m_periodic_ghosts;
 };
 template < el_o_t... orders, size_t max_dofs_per_node >
 PeriodicBC(const PeriodicBCDefinition< max_dofs_per_node >&, const mesh::MeshPartition< orders... >&, const MpiComm&)
@@ -246,10 +248,11 @@ inline auto getComponents(std::span< const n_id_t > src, std::span< const n_id_t
     std::ranges::copy(src, std::back_inserter(nodes));
     std::ranges::copy(dest, std::back_inserter(nodes));
     util::sortRemoveDup(nodes);
-    const auto g2l_map = util::IndexMap< n_id_t, n_id_t >{nodes};
-    const auto graph   = util::makeCrsGraph(
-        src | std::views::transform(g2l_map), dest | std::views::transform(g2l_map), util::GraphType::Undirected);
-    auto components = util::getComponentsUndirected(graph);
+    const auto g2l_map    = util::IndexMap< n_id_t, n_id_t >{nodes};
+    const auto graph      = util::makeCrsGraph(src | std::views::transform(std::cref(g2l_map)),
+                                          dest | std::views::transform(g2l_map),
+                                          util::GraphType::Undirected);
+    auto       components = util::getComponentsUndirected(graph);
     for (auto& n : components | std::views::join)
         n = nodes.at(n);
     return components;
@@ -322,6 +325,7 @@ PeriodicBC< max_dofs_per_node >::PeriodicBC(const PeriodicBCDefinition< max_dofs
     L3STER_PROFILE_FUNCTION;
     constexpr auto map_init_element = util::makeFilledArray< max_dofs_per_node >(invalid_node);
     const auto     processed_def    = detail::processPeriodicDef(definition);
+    auto           periodic_ghosts  = std::set< n_id_t >{};
     for (const auto& [dof_bitset, boundary_groups] : processed_def)
     {
         const auto src_data  = detail::getSourceNodeData(mesh, boundary_groups);
@@ -338,8 +342,11 @@ PeriodicBC< max_dofs_per_node >::PeriodicBC(const PeriodicBCDefinition< max_dofs
             auto& value = m_periodic_info.try_emplace(my_node, map_init_element).first->second;
             for (auto i : dof_inds)
                 value[i] = dof_owner;
+            if (not mesh.isOwnedNode(dof_owner) and not mesh.isGhostNode(dof_owner))
+                periodic_ghosts.insert(dof_owner);
         }
     }
+    m_periodic_ghosts = periodic_ghosts;
 }
 } // namespace lstr::bcs
 #endif // L3STER_BCS_PERIODICBC_HPP

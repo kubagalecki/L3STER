@@ -203,7 +203,7 @@ void MeshPartition< orders... >::reindexNodes(const Map& old_to_new)
     };
     visit(reindex_element, std::execution::par);
     if (m_n_owned_nodes != 0)
-        m_n_owned_nodes = std::ranges::min(getOwnedNodes() | std::views::transform(old_to_new));
+        m_n_owned_nodes = std::ranges::min(getOwnedNodes() | std::views::transform(std::cref(old_to_new)));
     util::tbb::parallelFor(m_ghost_nodes, [&](auto& node) { node = std::invoke(old_to_new, node); });
     std::ranges::sort(m_ghost_nodes);
 }

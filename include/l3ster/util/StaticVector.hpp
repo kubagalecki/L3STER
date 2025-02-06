@@ -63,7 +63,11 @@ public:
             m_size = size;
         }
     }
-    constexpr void push_back(T t) { m_data[m_size++] = std::move(t); }
+    constexpr void push_back(T t)
+    {
+        util::throwingAssert< std::bad_alloc >(m_size < capacity);
+        m_data[m_size++] = std::move(t);
+    }
     constexpr void pop_back() { std::destroy_at(begin() + --m_size); }
     constexpr T*   erase(const T* first, const T* last)
     {

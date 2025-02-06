@@ -91,6 +91,16 @@ public:
     {
         return m_inverse_map | std::views::transform([](const auto& p) { return p.first; });
     }
+    [[nodiscard]] auto getCondensedIdOpt(n_id_t id) const -> std::optional< n_id_t >
+    {
+        const auto iter = m_forward_map.find(id);
+        return iter == m_forward_map.end() ? std::nullopt : std::optional{iter->second};
+    }
+    [[nodiscard]] auto getUncondensedIdOpt(n_id_t id) const -> std::optional< n_id_t >
+    {
+        const auto iter = m_inverse_map.find(id);
+        return iter == m_inverse_map.end() ? std::nullopt : std::optional{iter->second};
+    }
 
     template < el_o_t... orders >
     [[nodiscard]] auto getCondensedOwnedNodesView(const mesh::MeshPartition< orders... >& mesh) const
@@ -119,12 +129,9 @@ template < el_o_t... orders, size_t max_dofs_per_node >
 auto getGhostsAndPeriodic(const mesh::MeshPartition< orders... >& mesh, const bcs::PeriodicBC< max_dofs_per_node >& bc)
     -> util::ArrayOwner< n_id_t >
 {
-    const auto ghost_nodes = mesh.getGhostNodes();
-    auto       non_owned   = std::set(ghost_nodes.begin(), ghost_nodes.end());
-    for (n_id_t node : bc | std::views::transform([](const auto& p) { return p.second; }) | std::views::join |
-                           std::views::filter([&](n_id_t n) { return n != invalid_node and not mesh.isOwnedNode(n); }))
-        non_owned.insert(node);
-    return {non_owned};
+    auto retval = util::ArrayOwner< n_id_t >(mesh.getGhostNodes().size() + bc.getPeriodicGhosts().size());
+    std::ranges::merge(mesh.getGhostNodes(), bc.getPeriodicGhosts(), retval.begin());
+    return retval;
 }
 
 template < CondensationPolicy CP, ProblemDef problem_def, el_o_t... orders >

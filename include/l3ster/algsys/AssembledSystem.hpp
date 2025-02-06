@@ -22,8 +22,8 @@ public:
     template < ProblemDef problem_def >
     AssembledSystem(std::shared_ptr< const MpiComm >                          comm,
                     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-                    util::ConstexprValue< problem_def >,
-                    const BCDefinition< problem_def.n_fields >& bc_def);
+                    util::ConstexprValue< problem_def >                       probdef_ctwrpr,
+                    const BCDefinition< problem_def.n_fields >&               bc_def);
 
     inline auto getMatrix() const -> Teuchos::RCP< const tpetra_crsmatrix_t >;
     inline auto getRhs() const -> Teuchos::RCP< const tpetra_multivector_t >;
@@ -338,13 +338,14 @@ template < ProblemDef problem_def >
 AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::AssembledSystem(
     std::shared_ptr< const MpiComm >                          comm,
     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-    util::ConstexprValue< problem_def >                       problemdef_ctwrpr,
+    util::ConstexprValue< problem_def >                       probdef_ctwrpr,
     const BCDefinition< problem_def.n_fields >&               bc_def)
     : m_comm{std::move(comm)}, m_mesh{std::move(mesh)}, m_state{State::OpenForAssembly}
 {
-    const auto cond_map            = dofs::makeCondensationMap< CP >(*m_comm, *m_mesh, problemdef_ctwrpr);
-    const auto node_global_dof_map = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, cond_map, problemdef_ctwrpr};
-    m_sparsity_graph = makeSparsityGraph(*m_comm, *m_mesh, node_global_dof_map, cond_map, problemdef_ctwrpr);
+    const auto periodic_bc         = bcs::PeriodicBC{bc_def.getPeriodic(), *m_mesh, *m_comm};
+    const auto cond_map            = dofs::makeCondensationMap< CP >(*m_comm, *m_mesh, probdef_ctwrpr, periodic_bc);
+    const auto node_global_dof_map = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, cond_map, probdef_ctwrpr, periodic_bc};
+    m_sparsity_graph               = makeSparsityGraph(*m_comm, *m_mesh, node_global_dof_map, cond_map, probdef_ctwrpr);
 
     L3STER_PROFILE_REGION_BEGIN("Create Tpetra objects");
     m_matrix   = util::makeTeuchosRCP< tpetra_fecrsmatrix_t >(m_sparsity_graph);
@@ -356,15 +357,15 @@ AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::AssembledSystem(
 
     m_node_dof_map = dofs::NodeToLocalDofMap{
         cond_map, node_global_dof_map, *m_matrix->getRowMap(), *m_matrix->getColMap(), *m_rhs->getMap()};
-    m_condensation_manager = StaticCondensationManager< CP >{*m_mesh, m_node_dof_map, problemdef_ctwrpr, n_rhs};
+    m_condensation_manager = StaticCondensationManager< CP >{*m_mesh, m_node_dof_map, probdef_ctwrpr, n_rhs};
     m_condensation_manager.beginAssembly();
 
     const auto& dirichlet = bc_def.getDirichlet();
     if (not dirichlet.empty())
     {
         L3STER_PROFILE_REGION_BEGIN("Dirichlet BCs");
-        auto [owned_bcdofs, shared_bcdofs] = bcs::getDirichletDofs(
-            *m_mesh, m_sparsity_graph, node_global_dof_map, cond_map, problemdef_ctwrpr, dirichlet);
+        auto [owned_bcdofs, shared_bcdofs] =
+            bcs::getDirichletDofs(*m_mesh, m_sparsity_graph, node_global_dof_map, cond_map, probdef_ctwrpr, dirichlet);
         m_dirichlet_bcs.emplace(m_sparsity_graph, std::move(owned_bcdofs), std::move(shared_bcdofs));
         L3STER_PROFILE_REGION_END("Dirichlet BCs");
     }

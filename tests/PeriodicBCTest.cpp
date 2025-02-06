@@ -3,6 +3,8 @@
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
+#include "l3ster/post/VtkExport.hpp"
+#include "l3ster/solve/Amesos2Solvers.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
 #include "Common.hpp"
@@ -11,7 +13,7 @@ using namespace lstr;
 using namespace lstr::mesh;
 using namespace lstr::bcs;
 
-constexpr auto node_dist = util::linspaceArray< 5 >(0., 1.);
+constexpr auto node_dist = util::linspaceArray< 5 >(-1., 1.);
 constexpr auto N         = node_dist.size();
 constexpr auto dx        = N - 1;
 constexpr auto dy        = dx * N;
@@ -107,40 +109,70 @@ void testBoundaryMatching3D()
 template < OperatorEvaluationStrategy S, CondensationPolicy CP >
 void solveAdvection2D()
 {
-    constexpr d_id_t domain_id = 0, bot_bound = 1, top_bound = 2, left_bound = 3, right_bound = 4;
-    const auto       comm           = std::make_shared< MpiComm >(MPI_COMM_WORLD);
-    constexpr auto   problem_def    = ProblemDef{defineDomain< 1 >(domain_id, ALL_DOFS)};
-    constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
-    auto             period_def     = PeriodicBCDefinition< 1 >{};
-    period_def.definePeriodicBoundary({left_bound}, {right_bound}, {node_dist.back() - node_dist.front(), 0., 0.}, {0});
-    const auto mesh = makeMesh2D(*comm, probdef_ctwrpr);
+    [[maybe_unused]] constexpr d_id_t domain_id = 0, bot_bound = 1, top_bound = 2, left_bound = 3, right_bound = 4;
+    constexpr auto                    problem_def    = ProblemDef{defineDomain< 1 >(domain_id, ALL_DOFS)};
+    constexpr auto                    probdef_ctwrpr = util::ConstexprValue< problem_def >{};
+    auto                              bc_def         = BCDefinition< problem_def.n_fields >{};
+    // bc_def.definePeriodic({left_bound}, {right_bound}, {node_dist.back() - node_dist.front(), 0., 0.});
+    bc_def.defineDirichlet({top_bound, bot_bound});
+
+    const auto comm = std::make_shared< MpiComm >(MPI_COMM_WORLD);
+    const auto mesh = makeMesh2D< 4 >(*comm, probdef_ctwrpr);
     summarizeMesh(*comm, *mesh);
 
-    constexpr auto alg_params         = AlgebraicSystemParams{.eval_strategy = S, .cond_policy = CP};
-    constexpr auto algparams_ctwrpr   = util::ConstexprValue< alg_params >{};
-    auto           alg_sys            = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, {}, algparams_ctwrpr);
-    constexpr auto adv_params         = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1, .n_fields = 1};
-    constexpr auto advection_kernel2d = wrapDomainEquationKernel< adv_params >([](const auto& in, auto& out) {
-        constexpr double u = 1., v = 0.; // advection velocity
-        constexpr double dt                         = .1;
-        const auto& [field_vals, field_ders, point] = in;
-        const auto phi_p                            = field_vals[0];
-        const auto phi_pp                           = field_vals[1];
+    constexpr auto alg_params       = AlgebraicSystemParams{.eval_strategy = S, .cond_policy = CP};
+    constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
+    auto           alg_sys          = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, bc_def, algparams_ctwrpr);
 
-        auto& [operators, rhs] = out;
-        auto& [A0, A1, A2]     = operators;
-        A0(0, 0)               = 1. / dt;
-        A1(0, 0)               = u;
-        A2(0, 0)               = u;
+    constexpr double u = 1., v = 0.;
+    constexpr double dt         = .1;
+    constexpr auto   adv_params = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1, .n_fields = 1};
+    constexpr auto   advection_kernel2d = wrapDomainEquationKernel< adv_params >([](const auto& in, auto& out) {
+        const auto& [field_vals, field_ders, point] = in;
+        const auto phi_prev                         = field_vals[0];
+        auto& [operators, rhs]                      = out;
+        auto& [A0, A1, A2]                          = operators;
+        A0(0, 0)                                    = 1.;
+        A1(0, 0)                                    = u * dt;
+        A2(0, 0)                                    = v * dt;
+        rhs(0, 0)                                   = phi_prev;
     });
-    constexpr auto neubc_params       = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1};
-    constexpr auto neumann_bc_kernel  = wrapBoundaryEquationKernel< neubc_params >([](const auto& in, auto& out) {
-        const auto& [vals, ders, point, normal] = in;
-        auto& [operators, rhs]                  = out;
-        auto& [A0, A1, A2]                      = operators;
-        A0(0, 1)                                = normal[0];
-        A0(0, 2)                                = normal[1];
-    });
+
+    constexpr auto anal_sol = [](const auto& in, auto& out) {
+        const auto t    = in.point.time;
+        const auto x    = in.point.space.x();
+        const auto dv   = t * u;
+        auto       x_dv = x - dv;
+        while (x_dv < node_dist.front())
+            x_dv += node_dist.back() - node_dist.front();
+
+        out[0] = std::exp(-16. * x_dv * x_dv);
+    };
+    constexpr auto solution_params    = KernelParams{.dimension = 2, .n_equations = 1};
+    constexpr auto solution_kernel    = wrapDomainResidualKernel< solution_params >(anal_sol);
+    constexpr auto solution_kernel_bc = wrapBoundaryResidualKernel< solution_params >(anal_sol);
+
+    auto solution_manager = SolutionManager{*mesh, 1};
+    alg_sys.endAssembly();
+    alg_sys.setValues(alg_sys.getSolution(), solution_kernel, {domain_id}, {0}, {}, 0.);
+    constexpr auto inds = std::array{0};
+    alg_sys.updateSolution(inds, solution_manager, inds);
+    auto exporter = PvtuExporter{comm, *mesh};
+    exporter.exportSolution("results/phi_00.pvtu", solution_manager, {"phi"}, std::views::single(inds));
+
+    auto solver = solvers::KLU2{};
+    for (int time_step = 1; time_step <= 20; ++time_step)
+    {
+        const auto time = time_step * dt;
+        alg_sys.setDirichletBCValues(solution_kernel_bc, {bot_bound, top_bound}, inds, {}, time);
+        alg_sys.beginAssembly();
+        alg_sys.assembleProblem(advection_kernel2d, {domain_id}, solution_manager.makeFieldValueGetter(inds));
+        alg_sys.endAssembly();
+        alg_sys.solve(solver);
+        alg_sys.updateSolution(inds, solution_manager, inds);
+        const auto file_name = std::format("results/phi_{:02}.pvtu", time_step);
+        exporter.exportSolution(file_name, solution_manager, {"phi"}, std::views::single(inds));
+    }
 }
 
 // Solve 2D diffusion problem
@@ -150,4 +182,5 @@ int main(int argc, char* argv[])
     const auto scope_guard   = L3sterScopeGuard{argc, argv};
     testBoundaryMatching2D();
     testBoundaryMatching3D();
+    solveAdvection2D< OperatorEvaluationStrategy::GlobalAssembly, CondensationPolicy::None >();
 }

@@ -71,9 +71,8 @@ private:
     util::ArrayOwner< LocalIndex > m_shared_ind_offsets;
 };
 template < std::ranges::contiguous_range R1, std::ranges::contiguous_range R2 >
-ImportExportContext(const MpiComm& comm,
-                    R1&&,
-                    R2&&) -> ImportExportContext< std::remove_const_t< std::ranges::range_value_t< R1 > > >;
+ImportExportContext(const MpiComm& comm, R1&&, R2&&)
+    -> ImportExportContext< std::remove_const_t< std::ranges::range_value_t< R1 > > >;
 
 template < Arithmetic_c Scalar, std::signed_integral LocalIndex >
 class ImportExportBase
@@ -259,7 +258,7 @@ template < std::signed_integral GlobalIndex >
 bool checkSharedIndexing(const rank_ind_map_t< GlobalIndex >& shared_map, std::span< const GlobalIndex > shared_inds)
 {
     const auto g2l         = util::IndexMap< GlobalIndex >{shared_inds};
-    auto       shared_lids = shared_map | std::views::join | std::views::transform(g2l);
+    auto       shared_lids = shared_map | std::views::join | std::views::transform(std::cref(g2l));
     const auto num_shared  = std::transform_reduce(
         shared_map.begin(), shared_map.end(), 0uz, std::plus{}, [](const auto& vec) { return vec.size(); });
     return std::ranges::equal(shared_lids, std::views::iota(0uz, num_shared));
@@ -283,8 +282,8 @@ struct FlattenMapResult
 };
 
 template < std::signed_integral LocalIndex, std::signed_integral GlobalIndex >
-auto flattenOwnedMap(const rank_ind_map_t< GlobalIndex >& owned_map,
-                     std::span< const GlobalIndex >       owned_inds) -> FlattenMapResult< LocalIndex >
+auto flattenOwnedMap(const rank_ind_map_t< GlobalIndex >& owned_map, std::span< const GlobalIndex > owned_inds)
+    -> FlattenMapResult< LocalIndex >
 {
     constexpr auto not_empty          = util::negatePredicate(&std::vector< GlobalIndex >::empty);
     constexpr auto get_size           = &std::vector< GlobalIndex >::size;
