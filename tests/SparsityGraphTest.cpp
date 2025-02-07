@@ -17,14 +17,14 @@ public:
     [[nodiscard]] auto getRow(size_t row) { return m_entries.getSubView(row * m_dim, (row + 1) * m_dim); }
     [[nodiscard]] auto getRow(size_t row) const { return m_entries.getSubView(row * m_dim, (row + 1) * m_dim); }
 
-    template < el_o_t... orders, ProblemDef problem_def, CondensationPolicy CP >
+    template < CondensationPolicy CP, el_o_t... orders, ProblemDef problem_def >
     DenseGraph(const MpiComm&                          comm,
                const mesh::MeshPartition< orders... >& mesh,
                util::ConstexprValue< problem_def >     probdef_ctwrpr,
-               const NodeCondensationMap< CP >&        cond_map)
+               CondensationPolicyTag< CP >             cp = {})
     {
         using namespace std::views;
-        const auto node_to_dof_map = NodeToGlobalDofMap{comm, mesh, cond_map, probdef_ctwrpr};
+        const auto node_to_dof_map = NodeToGlobalDofMap{comm, mesh, probdef_ctwrpr, {}, cp};
         m_dim                      = node_to_dof_map.ownership().owned().size();
         m_entries                  = util::DynamicBitset{m_dim * m_dim};
 
@@ -33,7 +33,7 @@ public:
             const auto dof_inds      = util::getTrueInds(dom_def.active_fields);
             const auto dof_inds_span = std::span{dof_inds};
             const auto visit_element = [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >& element) {
-                const auto element_dofs = getDofsCopy(cond_map, node_to_dof_map, element, dof_inds_span);
+                const auto element_dofs = getDofsCopy(node_to_dof_map, element, dof_inds_span, cp);
                 for (auto row : element_dofs)
                     for (auto col : element_dofs)
                         getRow(static_cast< size_t >(row)).set(static_cast< size_t >(col));
@@ -112,17 +112,16 @@ void test(const MpiComm& comm)
         ProblemDef{defineDomain< 2 >(0, 1), defineDomain< 2 >(1, 0), defineDomain< 2 >(3, 0, 1)};
     constexpr auto probdef_ctwrpr = util::ConstexprValue< problem_def >{};
 
-    const auto cond_map_local = makeCondensationMap< CP >(comm, *my_partition, probdef_ctwrpr);
-    const auto cond_map_full  = makeCondensationMap< CP >(comm_self, full_mesh, probdef_ctwrpr);
-    const auto node_dof_map   = NodeToGlobalDofMap{comm, *my_partition, cond_map_local, probdef_ctwrpr};
-    const auto sparsity_graph = makeSparsityGraph(comm, *my_partition, node_dof_map, cond_map_local, probdef_ctwrpr);
+    constexpr auto cp_tag         = CondensationPolicyTag< CP >{};
+    const auto     node_dof_map   = NodeToGlobalDofMap{comm, *my_partition, probdef_ctwrpr, {}, cp_tag};
+    const auto     sparsity_graph = makeSparsityGraph(comm, *my_partition, node_dof_map, probdef_ctwrpr, cp_tag);
 
     const size_t num_dofs_local    = node_dof_map.ownership().owned().size();
     auto         num_dofs_local_sv = std::views::single(num_dofs_local);
     size_t       num_dofs_global{};
     comm.allReduce(num_dofs_local_sv, &num_dofs_global, MPI_SUM);
 
-    const auto dense_graph = DenseGraph{comm_self, full_mesh, probdef_ctwrpr, cond_map_full};
+    const auto dense_graph = DenseGraph{comm_self, full_mesh, probdef_ctwrpr, cp_tag};
 
     REQUIRE(sparsity_graph->getLocalNumRows() == num_dofs_local);
     REQUIRE(sparsity_graph->getGlobalNumRows() == num_dofs_global);

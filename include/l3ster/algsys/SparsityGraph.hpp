@@ -2,7 +2,6 @@
 #define L3STER_ALGSYS_SPARSITYGRAPH_HPP
 
 #include "l3ster/dofs/DofsFromNodes.hpp"
-#include "l3ster/dofs/NeighborManager.hpp"
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/CrsGraph.hpp"
@@ -23,11 +22,11 @@ struct LocalGraphGID
 
     auto operator()(size_t row) const { return graph(row).first(row_sizes.at(row)); }
 };
-template < el_o_t... orders, size_t max_dofs_per_node, CondensationPolicy CP, size_t n_domains >
+template < CondensationPolicy CP, el_o_t... orders, size_t max_dofs_per_node, size_t n_domains >
 auto computeLocalGraph(const mesh::MeshPartition< orders... >&              mesh,
                        const dofs::NodeToGlobalDofMap< max_dofs_per_node >& node_to_dof_map,
-                       const dofs::NodeCondensationMap< CP >&               cond_map,
-                       const ProblemDef< n_domains, max_dofs_per_node >&    problem_def) -> LocalGraphGID
+                       const ProblemDef< n_domains, max_dofs_per_node >&    problem_def,
+                       CondensationPolicyTag< CP >                          cp = {}) -> LocalGraphGID
 {
     L3STER_PROFILE_FUNCTION;
     const auto& ownership                 = node_to_dof_map.ownership();
@@ -38,7 +37,7 @@ auto computeLocalGraph(const mesh::MeshPartition< orders... >&              mesh
         const auto dof_inds           = util::getTrueInds(dof_bmp);
         const auto inds_span          = std::span{dof_inds};
         const auto visit_el           = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& el) {
-            const auto el_dofs     = dofs::getDofsCopy(cond_map, node_to_dof_map, el, inds_span);
+            const auto el_dofs     = dofs::getDofsCopy(node_to_dof_map, el, inds_span, cp);
             const auto num_el_dofs = static_cast< std::uint32_t >(el_dofs.size());
             for (auto dof : el_dofs)
             {
@@ -55,7 +54,7 @@ auto computeLocalGraph(const mesh::MeshPartition< orders... >&              mesh
         const auto dof_inds           = util::getTrueInds(dof_bmp);
         const auto inds_span          = std::span{dof_inds};
         const auto visit_el           = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& el) {
-            const auto el_dofs     = dofs::getDofsCopy(cond_map, node_to_dof_map, el, inds_span);
+            const auto el_dofs     = dofs::getDofsCopy(node_to_dof_map, el, inds_span, cp);
             const auto num_el_dofs = static_cast< std::uint32_t >(el_dofs.size());
             for (auto dof : el_dofs)
             {
@@ -296,15 +295,15 @@ auto makeRowSizes(const LocalGraphGID&                            local_graph,
 }
 } // namespace detail
 
-template < el_o_t... orders, ProblemDef problem_def, CondensationPolicy CP >
+template < CondensationPolicy CP, el_o_t... orders, ProblemDef problem_def >
 auto makeSparsityGraph(const MpiComm&                                          comm,
                        const mesh::MeshPartition< orders... >&                 mesh,
                        const dofs::NodeToGlobalDofMap< problem_def.n_fields >& node_to_dof_map,
-                       const dofs::NodeCondensationMap< CP >&                  cond_map,
-                       util::ConstexprValue< problem_def >) -> Teuchos::RCP< const tpetra_fecrsgraph_t >
+                       util::ConstexprValue< problem_def >,
+                       CondensationPolicyTag< CP > cp = {}) -> Teuchos::RCP< const tpetra_fecrsgraph_t >
 {
     L3STER_PROFILE_FUNCTION;
-    const auto local_graph     = detail::computeLocalGraph(mesh, node_to_dof_map, cond_map, problem_def);
+    const auto local_graph     = detail::computeLocalGraph(mesh, node_to_dof_map, problem_def, cp);
     const auto ownership_dist  = node_to_dof_map.ownership().getOwnershipDist(comm);
     const auto num_dofs_global = static_cast< size_t >(ownership_dist.back());
     const auto dof2owner       = detail::makeDofToOwnerMap(ownership_dist);

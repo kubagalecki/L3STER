@@ -12,17 +12,13 @@ struct DirichletDofs
     std::vector< global_dof_t > owned, shared;
 };
 
-template < el_o_t... orders, CondensationPolicy CP, ProblemDef problem_def >
+template < el_o_t... orders, ProblemDef problem_def >
 auto getDirichletDofs(const mesh::MeshPartition< orders... >&                 mesh,
                       const Teuchos::RCP< const tpetra_fecrsgraph_t >&        sparsity_graph,
                       const dofs::NodeToGlobalDofMap< problem_def.n_fields >& node_to_dof_map,
-                      const dofs::NodeCondensationMap< CP >&                  cond_map,
                       util::ConstexprValue< problem_def >,
                       const DirichletBCDefinition< problem_def.n_fields >& bc_def) -> DirichletDofs
 {
-    static_assert(CP == CondensationPolicy::None or CP == CondensationPolicy::ElementBoundary,
-                  "The current implementation may not work for future condensation policies");
-
     const auto mark_owned_dirichlet_dofs = [&] {
         const auto dirichlet_dofs = util::makeTeuchosRCP< tpetra_femultivector_t >(
             sparsity_graph->getColMap(), sparsity_graph->getImporter(), 1u);
@@ -30,7 +26,7 @@ auto getDirichletDofs(const mesh::MeshPartition< orders... >&                 me
         for (const auto& [domains, dof_inds] : bc_def)
         {
             const auto process_element = [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >& element) {
-                for (auto dof : dofs::getDofsFromNodes(element.getNodes(), node_to_dof_map, cond_map, dof_inds))
+                for (auto dof : dofs::getDofsFromNodes(element.getNodes(), node_to_dof_map, dof_inds))
                     dirichlet_dofs->replaceGlobalValue(dof, 0, 1.);
             };
             mesh.visit(process_element, domains);

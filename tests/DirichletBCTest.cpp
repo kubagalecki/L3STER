@@ -30,12 +30,12 @@ void test()
     constexpr auto node_dist    = std::array{0., 1., 2., 3., 4., 5.};
     auto           my_partition = comm::distributeMesh(comm, [&] { return makeCubeMesh(node_dist); });
 
-    const auto cond_map            = makeCondensationMap< CP >(comm, *my_partition, probdef_ctwrpr);
-    const auto global_node_dof_map = NodeToGlobalDofMap{comm, *my_partition, cond_map, probdef_ctwrpr};
-    const auto sparsity_graph = makeSparsityGraph(comm, *my_partition, global_node_dof_map, cond_map, probdef_ctwrpr);
+    constexpr auto cp_tag              = CondensationPolicyTag< CP >{};
+    const auto     global_node_dof_map = NodeToGlobalDofMap{comm, *my_partition, probdef_ctwrpr, {}, cp_tag};
+    const auto     sparsity_graph = makeSparsityGraph(comm, *my_partition, global_node_dof_map, probdef_ctwrpr, cp_tag);
 
     const auto [owned_bcdofs, shared_bcdofs] =
-        getDirichletDofs(*my_partition, sparsity_graph, global_node_dof_map, cond_map, probdef_ctwrpr, dirichlet_def);
+        getDirichletDofs(*my_partition, sparsity_graph, global_node_dof_map, probdef_ctwrpr, dirichlet_def);
     const auto dirichlet_bc = DirichletBCAlgebraic{sparsity_graph, owned_bcdofs, shared_bcdofs};
 
     auto matrix         = util::makeTeuchosRCP< tpetra_fecrsmatrix_t >(sparsity_graph);
@@ -45,8 +45,8 @@ void test()
     matrix->beginAssembly();
     input_vectors.beginAssembly();
 
-    const auto dof_map = NodeToLocalDofMap{
-        cond_map, global_node_dof_map, *matrix->getRowMap(), *matrix->getColMap(), *input_vectors.getMap()};
+    const auto dof_map =
+        NodeToLocalDofMap{global_node_dof_map, *matrix->getRowMap(), *matrix->getColMap(), *input_vectors.getMap()};
 
     {
         auto rhs      = input_vectors.getVectorNonConst(0)->getDataNonConst();
@@ -64,7 +64,7 @@ void test()
 
                     constexpr auto dof_inds_wrpr = util::ConstexprValue< std::array{size_t{0}} >{};
                     const auto [row_dofs, col_dofs, rhs_dofs] =
-                        getUnsortedPrimaryDofs(element, dof_map, CondensationPolicyTag< CP >{}, dof_inds_wrpr);
+                        getDofsFromNodes(getPrimaryNodesArray< CP >(element), dof_map, dof_inds_wrpr);
                     scatterLocalSystem(
                         local_mat, local_vec, *matrix, std::array{rhs_view}, row_dofs, col_dofs, rhs_dofs);
                 }

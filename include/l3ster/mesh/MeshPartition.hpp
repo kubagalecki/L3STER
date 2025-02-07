@@ -4,9 +4,9 @@
 #include "l3ster/mesh/BoundaryView.hpp"
 #include "l3ster/mesh/Domain.hpp"
 #include "l3ster/util/Algorithm.hpp"
-#include "l3ster/util/ArrayOwner.hpp"
 #include "l3ster/util/MetisUtils.hpp"
 #include "l3ster/util/Ranges.hpp"
+#include "l3ster/util/SegmentedOwnership.hpp"
 
 #include "l3ster/util/RobinHoodHashTables.hpp"
 
@@ -128,14 +128,18 @@ public:
     auto        getNDomains() const { return m_domains.size(); }
     auto        getDomainIds() const { return m_domains | std::views::keys; }
     auto        getDomain(d_id_t id) const -> const Domain< orders... >& { return m_domains.at(id); }
-    auto        getOwnedNodes() const { return std::views::iota(m_owned_nodes_begin, ownedBound()); }
-    auto        getGhostNodes() const -> node_span_t { return m_ghost_nodes; }
-    inline auto getLocalNodeIndex(n_id_t node) const -> n_loc_id_t;
-    inline auto getGlobalNodeIndex(n_loc_id_t node) const -> n_id_t;
     inline auto getMaxDim() const -> dim_t;
+    auto        getOwnedNodes() const { return m_node_ownership.owned(); }
+    auto        getGhostNodes() const -> node_span_t { return m_node_ownership.shared(); }
+    auto        getNodeOwnership() const -> const auto& { return m_node_ownership; }
+    auto        getGlobalNodeIndex(n_loc_id_t node) const { return m_node_ownership.getGlobalIndex(node); }
+    auto        getLocalNodeIndex(n_id_t node) const
+    {
+        return static_cast< n_loc_id_t >(m_node_ownership.getLocalIndex(node));
+    }
 
-    bool isGhostNode(n_id_t node) const { return std::ranges::binary_search(getGhostNodes(), node); }
-    bool isOwnedNode(n_id_t node) const { return node >= m_owned_nodes_begin and node < ownedBound(); }
+    bool isGhostNode(n_id_t node) const { return m_node_ownership.isShared(node); }
+    bool isOwnedNode(n_id_t node) const { return m_node_ownership.isOwned(node); }
     auto getGhostNodePredicate() const
     {
         return [this](n_id_t node) {
@@ -167,45 +171,28 @@ private:
     template < typename DomainMap >
     static auto findImpl(el_id_t id, DomainMap&& domain_map);
 
-    auto ownedBound() const { return m_owned_nodes_begin + m_n_owned_nodes; }
+    auto ownedBound() const { return m_node_ownership.localSize(); }
 
 private:
-    domain_map_t               m_domains;
-    n_id_t                     m_owned_nodes_begin{}, m_n_owned_nodes{};
-    util::ArrayOwner< n_id_t > m_ghost_nodes;
-    BoundaryManager            m_boundary_manager;
+    domain_map_t                       m_domains;
+    util::SegmentedOwnership< n_id_t > m_node_ownership;
+    BoundaryManager                    m_boundary_manager;
 };
-
-template < el_o_t... orders >
-auto MeshPartition< orders... >::getLocalNodeIndex(n_id_t node) const -> n_loc_id_t
-{
-    if (isOwnedNode(node))
-        return static_cast< n_loc_id_t >(node - getOwnedNodes().front());
-    const auto ghost_ind = std::distance(getGhostNodes().begin(), std::ranges::lower_bound(getGhostNodes(), node));
-    return static_cast< n_loc_id_t >(ghost_ind + m_n_owned_nodes);
-}
-
-template < el_o_t... orders >
-auto MeshPartition< orders... >::getGlobalNodeIndex(n_loc_id_t node) const -> n_id_t
-{
-    if (node < m_n_owned_nodes)
-        return node + m_owned_nodes_begin;
-    return getGhostNodes()[node - m_n_owned_nodes];
-}
 
 template < el_o_t... orders >
 template < Mapping_c< n_id_t, n_id_t > Map >
 void MeshPartition< orders... >::reindexNodes(const Map& old_to_new)
 {
+    const auto o2n             = std::cref(old_to_new);
+    const auto old_owned       = m_node_ownership.owned();
+    const auto num_owned       = old_owned.size();
+    const auto new_begin       = old_owned.empty() ? 0uz : std::ranges::min(old_owned | std::views::transform(o2n));
+    m_node_ownership           = {new_begin, num_owned, m_node_ownership.shared() | std::views::transform(o2n)};
     const auto reindex_element = [&]< ElementType ET, el_o_t EO >(Element< ET, EO >& element) {
         for (auto& node : element.getNodes())
             node = std::invoke(old_to_new, node);
     };
     visit(reindex_element, std::execution::par);
-    if (m_n_owned_nodes != 0)
-        m_n_owned_nodes = std::ranges::min(getOwnedNodes() | std::views::transform(std::cref(old_to_new)));
-    util::tbb::parallelFor(m_ghost_nodes, [&](auto& node) { node = std::invoke(old_to_new, node); });
-    std::ranges::sort(m_ghost_nodes);
 }
 
 template < el_o_t... orders >
@@ -288,7 +275,10 @@ auto MeshPartition< orders... >::findImpl(el_id_t id, DomainMap&& domain_map)
 template < el_o_t... orders >
 auto copy(const MeshPartition< orders... >& mesh) -> MeshPartition< orders... >
 {
-    return {mesh.m_domains, mesh.m_owned_nodes_begin, mesh.m_n_owned_nodes, mesh.getBoundaryIdsCopy()};
+    return {mesh.m_domains,
+            mesh.getNodeOwnership().owned().size() == 0 ? 0uz : mesh.getNodeOwnership().owned().front(),
+            mesh.getNodeOwnership().owned().size(),
+            mesh.getBoundaryIdsCopy()};
 }
 
 template < el_o_t... orders >
@@ -302,8 +292,9 @@ MeshPartition< orders... >::MeshPartition(MeshPartition< orders... >::domain_map
             nodes.insert(node);
     };
     visit(insert_nodes);
-    m_n_owned_nodes     = nodes.size();
-    m_owned_nodes_begin = nodes.empty() ? 0uz : std::ranges::min(nodes);
+    const auto num_owned   = nodes.size();
+    const auto owned_begin = nodes.empty() ? 0uz : std::ranges::min(nodes);
+    m_node_ownership       = {owned_begin, num_owned, std::views::empty< n_id_t >};
     m_boundary_manager.initBoundaryViews(*this, boundary_ids);
 }
 
@@ -312,18 +303,16 @@ MeshPartition< orders... >::MeshPartition(MeshPartition::domain_map_t       doma
                                           n_id_t                            owned_nodes_begin,
                                           n_id_t                            n_owned_nodes,
                                           const util::ArrayOwner< d_id_t >& boundary_ids)
-    : m_domains{std::move(domains)},
-      m_owned_nodes_begin{owned_nodes_begin},
-      m_n_owned_nodes{n_owned_nodes},
-      m_boundary_manager{*this, boundary_ids}
+    : m_domains{std::move(domains)}, m_boundary_manager{*this, boundary_ids}
 {
-    auto ghost_set = std::set< n_id_t >{};
+    const auto owned_bound = owned_nodes_begin + n_owned_nodes;
+    auto       ghost_set   = robin_hood::unordered_flat_set< n_id_t >{};
     visit([&](const auto& el) {
         for (auto n : el.getNodes())
-            if (n < m_owned_nodes_begin or n >= m_owned_nodes_begin + m_n_owned_nodes)
+            if (n < owned_nodes_begin or n >= owned_bound)
                 ghost_set.insert(n);
     });
-    m_ghost_nodes = ghost_set;
+    m_node_ownership = {owned_nodes_begin, n_owned_nodes, ghost_set};
 }
 
 // Implementation note: It should be possible to sequentially traverse elements in a deterministic order (e.g. the mesh

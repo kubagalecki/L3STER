@@ -30,6 +30,7 @@ public:
     auto begin() const { return m_periodic_info.begin(); }
     auto end() const { return m_periodic_info.end(); }
     auto size() const { return m_periodic_info.size(); }
+    bool empty() const { return size() == 0; }
     auto lookup(n_id_t node) const -> description_t
     {
         const auto iter = m_periodic_info.find(node);

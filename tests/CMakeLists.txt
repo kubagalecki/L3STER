@@ -88,7 +88,6 @@ function( add_mpi_test source name nprocs )
 endfunction()
 
 # Define individual tests
-add_mpi_test( NodeCondensationTest.cpp Condense_Element_Boundary_Nodes "1;2;4" )
 add_mpi_test( MpiBlockingCommunicationTest.cpp MPI_Blocking_Communication "1;2;4" )
 add_mpi_test( MpiAsyncCommunicationTest.cpp MPI_Async_Communication "1;2;4" )
 add_mpi_test( MpiImportExportTest.cpp Import_Export_Tests "1;2;4" )

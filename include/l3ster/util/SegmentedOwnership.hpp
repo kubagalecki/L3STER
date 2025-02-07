@@ -39,15 +39,17 @@ public:
         return lid < owned().size() ? owned()[lid] : shared()[lid - owned().size()];
     }
 
-    [[nodiscard]] auto makeCommContext(const MpiComm& comm) const -> comm::ImportExportContext< local_dof_t >
+    [[nodiscard]] auto makeCommContext(const MpiComm& comm) const
+        -> std::shared_ptr< comm::ImportExportContext< local_dof_t > >
     {
-        const auto o = util::ArrayOwner< global_dof_t >{owned()};
+        using context_t = comm::ImportExportContext< local_dof_t >;
+        const auto o    = util::ArrayOwner< global_dof_t >{owned()};
         if constexpr (std::same_as< T, global_dof_t >)
-            return {comm, std::span{o}, std::span{m_shared}};
+            return std::make_shared< context_t >(comm, std::span{o}, std::span{m_shared});
         else
         {
             const auto s = util::ArrayOwner< global_dof_t >{shared()};
-            return {comm, std::span{o}, std::span{s}};
+            return std::make_shared< context_t >(comm, std::span{o}, std::span{s});
         }
     }
     [[nodiscard]] auto getOwnershipDist(const MpiComm& comm) const -> util::ArrayOwner< T >
