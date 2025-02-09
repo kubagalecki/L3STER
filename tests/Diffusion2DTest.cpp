@@ -11,7 +11,7 @@ using namespace lstr;
 using namespace lstr::algsys;
 using namespace lstr::mesh;
 
-constexpr auto node_dist = std::array{0., 1., 2., 3., 4., 5., 6.};
+constexpr auto node_dist = util::linspaceArray< 5 >(0., 1.);
 
 auto makeMesh(const MpiComm& comm, auto probdef_ctwrpr)
 {

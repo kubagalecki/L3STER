@@ -13,8 +13,6 @@ namespace lstr
 class SolutionManager
 {
 public:
-    using node_map_t = robin_hood::unordered_flat_map< n_id_t, ptrdiff_t >;
-
     template < el_o_t... orders >
     inline SolutionManager(const mesh::MeshPartition< orders... >& mesh, size_t n_fields, val_t initial = 0.);
 
@@ -22,7 +20,6 @@ public:
     auto        nNodes() const -> size_t { return m_n_nodes; }
     inline auto getFieldView(size_t field_ind) -> std::span< val_t >;
     inline auto getFieldView(size_t field_ind) const -> std::span< const val_t >;
-    auto        getNodeMap() const -> const node_map_t& { return m_node_to_dof_map; }
     inline auto getRawView() -> Kokkos::View< val_t**, Kokkos::LayoutLeft >;
     inline auto getRawView() const -> Kokkos::View< const val_t**, Kokkos::LayoutLeft >;
     template < size_t N >
@@ -60,9 +57,9 @@ public:
     [[nodiscard]] auto makeFieldValueGetter(Indices&& indices) const -> FieldValueGetter< n_fields >;
 
 private:
-    size_t                     m_n_nodes, m_n_fields;
-    std::unique_ptr< val_t[] > m_nodal_values;
-    node_map_t                 m_node_to_dof_map;
+    size_t                                                      m_n_nodes, m_n_fields;
+    std::unique_ptr< val_t[] >                                  m_nodal_values;
+    std::shared_ptr< const util::SegmentedOwnership< n_id_t > > m_node_ownership;
 };
 
 template <>
@@ -115,21 +112,16 @@ SolutionManager::SolutionManager(const mesh::MeshPartition< orders... >& mesh, s
     : m_n_nodes{mesh.getNNodes()},
       m_n_fields{n_fields},
       m_nodal_values{std::make_unique_for_overwrite< val_t[] >(m_n_nodes * m_n_fields)},
-      m_node_to_dof_map(m_n_nodes)
+      m_node_ownership{mesh.getNodeOwnershipSharedPtr()}
 {
     std::fill_n(m_nodal_values.get(), m_n_nodes * m_n_fields, initial);
-    ptrdiff_t i = 0;
-    for (auto node : mesh.getOwnedNodes())
-        m_node_to_dof_map.emplace(node, i++);
-    for (auto node : mesh.getGhostNodes())
-        m_node_to_dof_map.emplace(node, i++);
 }
 
 template < size_t N >
 auto SolutionManager::getNodeValuesGlobal(n_id_t node, const std::array< size_t, N >& field_inds) const
     -> std::array< val_t, N >
 {
-    const auto local_node_ind = m_node_to_dof_map.at(node);
+    const auto local_node_ind = m_node_ownership->getLocalIndex(node);
     auto       retval         = std::array< val_t, N >{};
     std::ranges::transform(field_inds, retval.begin(), [&](auto i) { return getFieldView(i)[local_node_ind]; });
     return retval;

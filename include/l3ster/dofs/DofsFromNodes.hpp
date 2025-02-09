@@ -5,35 +5,38 @@
 
 namespace lstr::dofs
 {
-template < CondensationPolicy CP, size_t max_dofs_per_node, mesh::ElementType ET, el_o_t EO, std::integral I >
-auto getDofsView(const NodeToGlobalDofMap< max_dofs_per_node >& node2dof,
-                 const mesh::Element< ET, EO >&                 element,
-                 std::span< const I >                           dof_inds,
-                 CondensationPolicyTag< CP > = {})
-{
-    return getPrimaryNodesView< CP >(element) | std::views::transform([&, dof_inds](auto node) {
-               const auto& node_dofs = node2dof(node);
-               auto        retval    = util::StaticVector< global_dof_t, max_dofs_per_node >{};
-               std::ranges::transform(dof_inds, std::back_inserter(retval), [&](auto i) { return node_dofs.at(i); });
-               return retval;
-           }) |
-           std::views::join | std::views::filter(&NodeToGlobalDofMap< max_dofs_per_node >::isValid);
-}
-
+// Don't trigger false positive Warray-bounds
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
 template < CondensationPolicy CP, size_t max_dofs_per_node, mesh::ElementType ET, el_o_t EO, std::integral I >
 auto getDofsCopy(const NodeToGlobalDofMap< max_dofs_per_node >& node2dof,
                  const mesh::Element< ET, EO >&                 element,
                  std::span< const I >                           dof_inds,
-                 CondensationPolicyTag< CP >                    cp = {})
+                 CondensationPolicyTag< CP > = {})
 {
     constexpr auto num_nodes = dofs::getNumPrimaryNodes< CP, ET, EO >();
     auto           retval    = util::StaticVector< global_dof_t, num_nodes * max_dofs_per_node >{};
-    std::ranges::copy(dofs::getDofsView(node2dof, element, dof_inds, cp), std::back_inserter(retval));
+    for (auto node : getPrimaryNodesView< CP >(element))
+    {
+        const auto& node_dofs = node2dof(node);
+        for (auto i : dof_inds)
+        {
+            const auto dof = node_dofs[i];
+            if (dof != invalid_global_dof)
+                retval.push_back(dof);
+        }
+    }
     std::ranges::sort(retval);
     const auto erase_begin = std::ranges::unique(retval).begin();
     retval.erase(erase_begin, retval.end());
     return retval;
 }
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
 
 template < IndexRange_c auto dof_inds, size_t n_nodes, size_t dofs_per_node >
 auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&             nodes,

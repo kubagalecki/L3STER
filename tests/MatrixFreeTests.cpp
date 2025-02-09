@@ -13,7 +13,7 @@ using namespace lstr;
 using namespace lstr::algsys;
 using namespace lstr::mesh;
 
-constexpr auto node_dist = std::array{0., 1., 2., 3., 4.};
+constexpr auto node_dist = util::linspaceArray< 5 >(0., 1.);
 
 auto makeMesh(const MpiComm& comm, auto probdef_ctwrpr)
 {
@@ -23,7 +23,7 @@ auto makeMesh(const MpiComm& comm, auto probdef_ctwrpr)
 
 int main(int argc, char* argv[])
 {
-    const auto max_par_guard = util::MaxParallelismGuard{4};
+    const auto max_par_guard = util::MaxParallelismGuard{3};
     const auto scope_guard   = L3sterScopeGuard{argc, argv};
     const auto comm          = std::make_shared< MpiComm >(MPI_COMM_WORLD);
 

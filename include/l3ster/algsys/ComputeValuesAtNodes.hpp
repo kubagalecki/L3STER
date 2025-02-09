@@ -346,7 +346,7 @@ void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&        k
             for (auto node : el_nodes)
                 for (auto dof : detail::getNodeDofsAtInds(dof_map, dof_inds, node))
                 {
-                    for (size_t rhs_ind = 0; rhs_ind != n_rhs; ++rhs_ind)
+                    for (local_dof_t rhs_ind = 0; rhs_ind != n_rhs; ++rhs_ind)
                         std::atomic_ref{border_accessor(dof, rhs_ind)}.store(0., std::memory_order_relaxed);
                     std::atomic_ref{num_contribs.at(dof)}.fetch_add(1, std::memory_order_relaxed);
                 }
@@ -371,7 +371,7 @@ void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&        k
                     for (size_t rhs_ind = 0; rhs_ind != n_rhs; ++rhs_ind)
                     {
                         const val_t increment = ker_res(dof_ind, rhs_ind);
-                        val_t&      dest      = border_accessor(dof, rhs_ind);
+                        val_t&      dest      = border_accessor(dof, static_cast< local_dof_t >(rhs_ind));
                         std::atomic_ref{dest}.fetch_add(increment, std::memory_order_relaxed);
                     }
             }

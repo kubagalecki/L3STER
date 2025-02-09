@@ -56,14 +56,25 @@ public:
     }
 
 protected:
+    StaticCondensationManagerInterface() = default;
+    template < el_o_t... orders >
+    StaticCondensationManagerInterface(const mesh::MeshPartition< orders... >& mesh)
+        : m_node_ownership{mesh.getNodeOwnershipSharedPtr()}
+    {}
+
     template < size_t max_dofs_per_node, size_t n_rhs, IndexRange_c SolInds, IndexRange_c SolManInds >
     static void validateSolutionUpdateInds(SolInds&& sol_inds, SolutionManager& sol_man, SolManInds&& sol_man_inds);
     template < size_t max_dofs_per_node, size_t n_rhs, IndexRange_c SolInds, IndexRange_c SolManInds >
-    static void updateSolutionPrimaryDofs(const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
-                                          const std::array< std::span< const val_t >, n_rhs >&   condensed_solutions,
-                                          SolInds&&                                              sol_inds,
-                                          SolutionManager&                                       sol_man,
-                                          SolManInds&&                                           sol_man_inds);
+    void updateSolutionPrimaryDofs(const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
+                                   const std::array< std::span< const val_t >, n_rhs >&   condensed_solutions,
+                                   SolInds&&                                              sol_inds,
+                                   SolutionManager&                                       sol_man,
+                                   SolManInds&&                                           sol_man_inds) const;
+
+    auto getNodeLid(n_id_t node) const { return static_cast< n_loc_id_t >(m_node_ownership->getLocalIndex(node)); }
+
+private:
+    std::shared_ptr< const util::SegmentedOwnership< n_id_t > > m_node_ownership;
 };
 
 template < CondensationPolicy CP >
@@ -73,13 +84,16 @@ template <>
 class StaticCondensationManager< CondensationPolicy::None > :
     public StaticCondensationManagerInterface< StaticCondensationManager< CondensationPolicy::None > >
 {
+    using Base = StaticCondensationManagerInterface< StaticCondensationManager< CondensationPolicy::None > >;
+
 public:
     StaticCondensationManager() = default;
     template < el_o_t... orders, size_t max_dofs_per_node, ProblemDef problem_def >
-    StaticCondensationManager(const mesh::MeshPartition< orders... >&,
+    StaticCondensationManager(const mesh::MeshPartition< orders... >& mesh,
                               const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >&,
                               util::ConstexprValue< problem_def >,
                               size_t)
+        : Base{mesh}
     {}
 
     void beginAssemblyImpl() {}
@@ -128,6 +142,7 @@ template <>
 class StaticCondensationManager< CondensationPolicy::ElementBoundary > :
     public StaticCondensationManagerInterface< StaticCondensationManager< CondensationPolicy::ElementBoundary > >
 {
+    using Base = StaticCondensationManagerInterface< StaticCondensationManager< CondensationPolicy::ElementBoundary > >;
     template < mesh::ElementType ET, el_o_t EO, size_t dofs_per_node >
     struct LocalDofInds
     {
@@ -220,7 +235,7 @@ void StaticCondensationManagerInterface< Derived >::updateSolutionPrimaryDofs(
     const std::array< std::span< const val_t >, n_rhs >&   condensed_solutions,
     SolInds&&                                              sol_inds,
     SolutionManager&                                       sol_man,
-    SolManInds&&                                           sol_man_inds)
+    SolManInds&&                                           sol_man_inds) const
 {
     const auto dest_col_views      = std::invoke([&] {
         std::vector< std::span< val_t > > retval(std::ranges::distance(sol_man_inds));
@@ -231,7 +246,7 @@ void StaticCondensationManagerInterface< Derived >::updateSolutionPrimaryDofs(
     const auto update_node_entries = [&](const auto& map_entry) {
         const auto& [node, dof_triplet] = map_entry;
         const auto& dofs                = dof_triplet.back();
-        const auto  local_node_ind      = sol_man.getNodeMap().at(node);
+        const auto  local_node_ind      = getNodeLid(node);
         for (size_t target_ind = 0; size_t src_ind : sol_inds_vec)
         {
             const auto local_dof = dofs[src_ind];
@@ -253,6 +268,7 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
     const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map,
     util::ConstexprValue< problem_def >,
     size_t n_rhs)
+    : Base{mesh}
 {
     const auto compute_elem_dof_info = [&dof_map]< mesh::ElementType ET, el_o_t EO >(
                                            const mesh::Element< ET, EO >& element) {
@@ -444,7 +460,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSo
 
             for (size_t internal_ind = 0; auto node : getInternalNodes(*element_ptr))
             {
-                const auto   local_node_ind = sol_man.getNodeMap().at(node);
+                const auto   local_node_ind = getNodeLid(node);
                 const size_t node_base      = internal_ind * n_internal_dofs;
                 for (size_t dest_ind = 0; size_t sol_ind : sol_inds_vec)
                     for (size_t rhs_ind = 0; rhs_ind != n_rhs; ++rhs_ind)
