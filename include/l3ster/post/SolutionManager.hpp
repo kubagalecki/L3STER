@@ -22,10 +22,6 @@ public:
     inline auto getFieldView(size_t field_ind) const -> std::span< const val_t >;
     inline auto getRawView() -> Kokkos::View< val_t**, Kokkos::LayoutLeft >;
     inline auto getRawView() const -> Kokkos::View< const val_t**, Kokkos::LayoutLeft >;
-    template < size_t N >
-    auto getNodeValuesGlobal(n_id_t node, const std::array< size_t, N >& field_inds) const -> std::array< val_t, N >;
-    template < size_t N >
-    auto getNodeValuesLocal(n_loc_id_t node, const std::array< size_t, N >& field_inds) const -> std::array< val_t, N >;
 
     void setField(size_t field_ind, val_t value) { std::ranges::fill(getFieldView(field_ind), value); }
 
@@ -57,6 +53,11 @@ public:
     [[nodiscard]] auto makeFieldValueGetter(Indices&& indices) const -> FieldValueGetter< n_fields >;
 
 private:
+    template < size_t N >
+    auto getNodeValuesGlobal(n_id_t node, const std::array< size_t, N >& field_inds) const -> std::array< val_t, N >;
+    template < size_t N >
+    auto getNodeValuesLocal(n_loc_id_t node, const std::array< size_t, N >& field_inds) const -> std::array< val_t, N >;
+
     size_t                                                      m_n_nodes, m_n_fields;
     std::unique_ptr< val_t[] >                                  m_nodal_values;
     std::shared_ptr< const util::SegmentedOwnership< n_id_t > > m_node_ownership;
