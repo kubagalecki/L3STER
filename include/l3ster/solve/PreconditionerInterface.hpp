@@ -48,8 +48,8 @@ struct NullPreconditioner
     {
         using Preconditioner = NullPreconditioner;
     };
-    static auto create(const Options&,
-                       const Teuchos::RCP< const tpetra_operator_t >&) -> Teuchos::RCP< tpetra_operator_t >
+    static auto create(const Options&, const Teuchos::RCP< const tpetra_operator_t >&)
+        -> Teuchos::RCP< tpetra_operator_t >
     {
         return {};
     }
@@ -58,8 +58,8 @@ struct NullPreconditioner
 namespace detail
 {
 template < PreconditionerOptions_c Options >
-auto initPreconditioner(const Options&                                 opts,
-                        const Teuchos::RCP< const tpetra_operator_t >& op) -> Teuchos::RCP< tpetra_operator_t >
+auto initPreconditioner(const Options& opts, const Teuchos::RCP< const tpetra_operator_t >& op)
+    -> Teuchos::RCP< tpetra_operator_t >
 {
     using Preconditioner = Options::Preconditioner;
     if constexpr (MatrixBasedPreconditioner_c< Preconditioner >)

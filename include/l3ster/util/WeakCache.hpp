@@ -33,8 +33,9 @@ auto WeakCache< Key, Value, Hash, Equal >::get(const Key& key) const -> std::sha
 
 template < typename Key, typename Value, typename Hash, typename Equal >
     requires Mapping_c< Hash, Key, size_t > and std::predicate< Equal, Key, Key >
-             template < DecaysTo_c< Key > K, typename... Args >
-             auto WeakCache< Key, Value, Hash, Equal >::emplace(K&& key, Args&&... args) -> std::shared_ptr< Value >
+                                            template < DecaysTo_c< Key > K, typename... Args >
+                                            auto WeakCache< Key, Value, Hash, Equal >::emplace(K&& key, Args&&... args)
+                                                -> std::shared_ptr< Value >
                  requires std::constructible_from< Value, Args... >
 {
     auto shared_ptr = std::make_shared< Value >(std::forward< Args >(args)...);

@@ -56,7 +56,7 @@ LocalDirichletBC::LocalDirichletBC(
                 if (std::ranges::binary_search(domains, domain))
                     for (auto i : dof_inds)
                         dof_bmp.set(i);
-            const auto dof_inds      = util::getTrueInds(dof_bmp);
+            const auto dof_inds = util::getTrueInds(dof_bmp);
             for (auto node_ind : mesh::getSideNodeIndices< ET, EO >(side))
             {
                 const auto  node_lid  = el_nodes[node_ind];
