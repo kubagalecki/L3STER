@@ -33,10 +33,10 @@ TEST_CASE("Solution Manager", "[sol_man]")
     constexpr auto field_inds = util::makeIotaArray< size_t, n_fields >();
     for (const auto& [i, sm] : sol_mans | std::views::enumerate)
     {
-        const auto  fval_getter = sm.makeFieldValueGetter(field_inds);
-        const auto& part        = partitions.at(static_cast< size_t >(i));
-        const auto  check_el    = [&](const auto& element) {
-            const auto vals = fval_getter.getGloballyIndexed(element.getNodes());
+        const auto  field_access = sm.makeFieldValueGetter(field_inds);
+        const auto& part         = partitions.at(static_cast< size_t >(i));
+        const auto  check_el     = [&](const auto& element) {
+            const auto vals = field_access.getGloballyIndexed(element.getNodes());
             for (int r = 0; r != vals.rows(); ++r)
                 for (int c = 0; c != vals.cols(); ++c)
                     CHECK(vals(r, c) == static_cast< val_t >(i));
@@ -49,10 +49,10 @@ TEST_CASE("Solution Manager", "[sol_man]")
             sm.setField(i, 42.);
     for (const auto& [i, sm] : sol_mans | std::views::enumerate)
     {
-        const auto  fval_getter = sm.makeFieldValueGetter(field_inds);
-        const auto& part        = partitions.at(static_cast< size_t >(i));
-        const auto  check_el    = [&](const auto& element) {
-            const auto vals = fval_getter.getGloballyIndexed(element.getNodes());
+        const auto  field_access = sm.makeFieldValueGetter(field_inds);
+        const auto& part         = partitions.at(static_cast< size_t >(i));
+        const auto  check_el     = [&](const auto& element) {
+            const auto vals = field_access.getGloballyIndexed(element.getNodes());
             for (int r = 0; r != vals.rows(); ++r)
                 for (int c = 0; c != vals.cols(); ++c)
                     CHECK(vals(r, c) == 42.);

@@ -37,7 +37,7 @@ public:
                AssemblyOptions          asm_opts   = AssemblyOptions{} >
     void assembleProblem(const Kernel&                        kernel,
                          const util::ArrayOwner< d_id_t >&    domain_ids,
-                         const post::FieldAccess< n_fields >& fval_getter       = {},
+                         const post::FieldAccess< n_fields >& field_access      = {},
                          util::ConstexprValue< field_inds >   field_inds_ctwrpr = {},
                          util::ConstexprValue< asm_opts >     assembly_options  = {},
                          val_t                                time              = 0.)
@@ -47,8 +47,8 @@ public:
     void setDirichletBCValues(const Kernel&                                                 kernel,
                               const util::ArrayOwner< d_id_t >&                             domain_ids,
                               const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                              const post::FieldAccess< n_fields >&                          field_val_getter = {},
-                              val_t                                                         time             = 0.);
+                              const post::FieldAccess< n_fields >&                          field_access = {},
+                              val_t                                                         time         = 0.);
     template < size_t n_vals, std::integral dofind_t = size_t >
     void setDirichletBCValues(const std::array< val_t, n_vals >&    values,
                               const util::ArrayOwner< d_id_t >&     domain_ids,
@@ -70,15 +70,15 @@ public:
                    const Kernel&                                                 kernel,
                    const util::ArrayOwner< d_id_t >&                             domain_ids,
                    const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                   const post::FieldAccess< n_fields >&                          field_val_getter = {},
-                   val_t                                                         time             = 0.) const;
+                   const post::FieldAccess< n_fields >&                          field_access = {},
+                   val_t                                                         time         = 0.) const;
     template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setValues(const Teuchos::RCP< tpetra_multivector_t >&                   vector,
                    const Kernel&                                                 kernel,
                    const util::ArrayOwner< d_id_t >&                             domain_ids,
                    const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                   const post::FieldAccess< n_fields >&                          field_val_getter = {},
-                   val_t                                                         time             = 0.) const;
+                   const post::FieldAccess< n_fields >&                          field_access = {},
+                   val_t                                                         time         = 0.) const;
 
 private:
     inline auto initMultiVector(size_t cols = n_rhs) const -> Teuchos::RCP< tpetra_femultivector_t >;
@@ -213,7 +213,7 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
     const Kernel&                                                 kernel,
     const util::ArrayOwner< d_id_t >&                             domain_ids,
     const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-    const post::FieldAccess< n_fields >&                          field_val_getter,
+    const post::FieldAccess< n_fields >&                          field_access,
     val_t                                                         time) const
 {
     util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
@@ -223,15 +223,8 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
     auto       num_contribs       = initMultiVector(1);
     const auto compute_local_vals = [&](const tpetra_femultivector_t::host_view_type& vals_view,
                                         const tpetra_femultivector_t::host_view_type& num_contribs_view) {
-        computeValuesAtNodes(kernel,
-                             *m_mesh,
-                             domain_ids,
-                             m_node_dof_map,
-                             dof_inds,
-                             field_val_getter,
-                             vals_view,
-                             num_contribs_view,
-                             time);
+        computeValuesAtNodes(
+            kernel, *m_mesh, domain_ids, m_node_dof_map, dof_inds, field_access, vals_view, num_contribs_view, time);
     };
     detail::averageNodeVals(*vector, *num_contribs, compute_local_vals);
 }
@@ -243,11 +236,11 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
     const Kernel&                                                 kernel,
     const util::ArrayOwner< d_id_t >&                             domain_ids,
     const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-    const post::FieldAccess< n_fields >&                          field_val_getter,
+    const post::FieldAccess< n_fields >&                          field_access,
     val_t                                                         time) const
 {
     const auto vector_downcast = Teuchos::rcp_dynamic_cast< tpetra_femultivector_t >(vector);
-    setValues(vector_downcast, kernel, domain_ids, dof_inds, field_val_getter, time);
+    setValues(vector_downcast, kernel, domain_ids, dof_inds, field_access, time);
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
@@ -256,7 +249,7 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCV
     const Kernel&                                                 kernel,
     const util::ArrayOwner< d_id_t >&                             domain_ids,
     const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-    const post::FieldAccess< n_fields >&                          field_val_getter,
+    const post::FieldAccess< n_fields >&                          field_access,
     val_t                                                         time)
 {
     util::throwingAssert(m_dirichlet_bcs.has_value(), "setDirichletBCValues called, but no Dirichlet BCs were defined");
@@ -266,15 +259,8 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCV
     auto       num_contribs       = initMultiVector(1);
     const auto compute_local_vals = [&](const tpetra_femultivector_t::host_view_type& vals_view,
                                         const tpetra_femultivector_t::host_view_type& num_contribs_view) {
-        computeValuesAtNodes(kernel,
-                             *m_mesh,
-                             domain_ids,
-                             m_node_dof_map,
-                             dof_inds,
-                             field_val_getter,
-                             vals_view,
-                             num_contribs_view,
-                             time);
+        computeValuesAtNodes(
+            kernel, *m_mesh, domain_ids, m_node_dof_map, dof_inds, field_access, vals_view, num_contribs_view, time);
     };
     detail::averageNodeVals(*m_dirichlet_values, *num_contribs, compute_local_vals);
 }
@@ -425,7 +411,7 @@ template < EquationKernel_c Kernel, ArrayOf_c< size_t > auto field_inds, size_t 
 void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::assembleProblem(
     const Kernel&                        kernel,
     const util::ArrayOwner< d_id_t >&    domain_ids,
-    const post::FieldAccess< n_fields >& fval_getter,
+    const post::FieldAccess< n_fields >& field_access,
     util::ConstexprValue< field_inds >   field_inds_ctwrpr,
     util::ConstexprValue< asm_opts >     assembly_options,
     val_t                                time)
@@ -438,7 +424,7 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::assembleProblem
     assembleGlobalSystem(kernel,
                          *m_mesh,
                          domain_ids,
-                         fval_getter,
+                         field_access,
                          *m_matrix,
                          rhs_views,
                          m_node_dof_map,

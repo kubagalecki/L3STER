@@ -79,7 +79,7 @@ template < typename Kernel,
 void assembleGlobalSystem(const DomainEquationKernel< Kernel, params >&         kernel,
                           const mesh::MeshPartition< orders... >&               mesh,
                           const util::ArrayOwner< d_id_t >&                     domain_ids,
-                          const post::FieldAccess< params.n_fields >&           fval_getter,
+                          const post::FieldAccess< params.n_fields >&           field_access,
                           tpetra_crsmatrix_t&                                   global_mat,
                           const std::array< std::span< val_t >, params.n_rhs >& global_rhs,
                           const dofs::NodeToLocalDofMap< dofs_per_node, 3 >&    dof_map,
@@ -99,7 +99,7 @@ void assembleGlobalSystem(const DomainEquationKernel< Kernel, params >&         
             constexpr auto  BT             = asm_opts.basis_type;
             constexpr auto  QT             = asm_opts.quad_type;
             constexpr q_o_t QO             = 2 * asm_opts.order(EO);
-            const auto      field_vals     = fval_getter.getGloballyIndexed(element.getNodes());
+            const auto      field_vals     = field_access.getGloballyIndexed(element.getNodes());
             const auto&     rbq            = basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
             const auto& [loc_mat, loc_rhs] = assembleLocalSystem(kernel, element, field_vals, rbq, time);
             condensation_manager.condenseSystem(
@@ -121,7 +121,7 @@ template < typename Kernel,
 void assembleGlobalSystem(const BoundaryEquationKernel< Kernel, params >&       kernel,
                           const mesh::MeshPartition< orders... >&               mesh,
                           const util::ArrayOwner< d_id_t >&                     boundary_ids,
-                          const post::FieldAccess< params.n_fields >&           fval_getter,
+                          const post::FieldAccess< params.n_fields >&           field_access,
                           tpetra_crsmatrix_t&                                   global_mat,
                           const std::array< std::span< val_t >, params.n_rhs >& global_rhs,
                           const dofs::NodeToLocalDofMap< dofs_per_node, 3 >&    dof_map,
@@ -142,7 +142,7 @@ void assembleGlobalSystem(const BoundaryEquationKernel< Kernel, params >&       
                 constexpr auto  BT         = asm_opts.basis_type;
                 constexpr auto  QT         = asm_opts.quad_type;
                 constexpr q_o_t QO         = 2 * asm_opts.order(EO);
-                const auto      field_vals = fval_getter.getGloballyIndexed(el_view->getNodes());
+                const auto      field_vals = field_access.getGloballyIndexed(el_view->getNodes());
                 const auto& qbv = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
                 const auto& [loc_mat, loc_rhs] = assembleLocalSystem(kernel, el_view, field_vals, qbv, time);
                 condensation_manager.condenseSystem(

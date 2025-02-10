@@ -53,7 +53,7 @@ template < typename Kernel, KernelParams params, el_o_t... orders, AssemblyOptio
 auto evalLocalIntegral(const ResidualDomainKernel< Kernel, params >& kernel,
                        const mesh::MeshPartition< orders... >&       mesh,
                        const util::ArrayOwner< d_id_t >&             domain_ids,
-                       const FieldAccess< params.n_fields >&         field_val_getter,
+                       const FieldAccess< params.n_fields >&         field_access,
                        util::ConstexprValue< options >,
                        val_t time) -> KernelInterface< params >::Rhs
 {
@@ -64,7 +64,7 @@ auto evalLocalIntegral(const ResidualDomainKernel< Kernel, params >& kernel,
             constexpr auto BT         = options.basis_type;
             constexpr auto QT         = options.quad_type;
             constexpr auto QO         = options.order(EO);
-            const auto     field_vals = field_val_getter.getGloballyIndexed(element.getNodes());
+            const auto     field_vals = field_access.getGloballyIndexed(element.getNodes());
             const auto&    qbv        = basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
             return evalElementIntegral(kernel, element, field_vals, qbv, time);
         }
@@ -79,7 +79,7 @@ template < typename Kernel, KernelParams params, el_o_t... orders, AssemblyOptio
 auto evalLocalIntegral(const ResidualBoundaryKernel< Kernel, params >& kernel,
                        const mesh::MeshPartition< orders... >&         mesh,
                        const util::ArrayOwner< d_id_t >&               boundary_ids,
-                       const FieldAccess< params.n_fields >&           field_val_getter,
+                       const FieldAccess< params.n_fields >&           field_access,
                        util::ConstexprValue< options >,
                        val_t time) -> KernelInterface< params >::Rhs
 {
@@ -91,7 +91,7 @@ auto evalLocalIntegral(const ResidualBoundaryKernel< Kernel, params >& kernel,
             constexpr auto BT         = options.basis_type;
             constexpr auto QT         = options.quad_type;
             constexpr auto QO         = options.order(EO);
-            const auto     field_vals = field_val_getter.getGloballyIndexed(el_view->getNodes());
+            const auto     field_vals = field_access.getGloballyIndexed(el_view->getNodes());
             const auto&    qbv = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
             return evalElementBoundaryIntegral(kernel, el_view, field_vals, qbv, time);
         }
@@ -108,11 +108,11 @@ auto computeIntegral(const MpiComm&                                          com
                      const Kernel&                                           kernel,
                      const mesh::MeshPartition< orders... >&                 mesh,
                      const util::ArrayOwner< d_id_t >&                       domain_ids,
-                     const post::FieldAccess< Kernel::parameters.n_fields >& field_val_getter = {},
-                     util::ConstexprValue< opts >                            opts_ctwrpr      = {},
-                     val_t                                                   time             = 0.)
+                     const post::FieldAccess< Kernel::parameters.n_fields >& field_access = {},
+                     util::ConstexprValue< opts >                            opts_ctwrpr  = {},
+                     val_t                                                   time         = 0.)
 {
-    const auto local_integral  = post::evalLocalIntegral(kernel, mesh, domain_ids, field_val_getter, opts_ctwrpr, time);
+    const auto local_integral  = post::evalLocalIntegral(kernel, mesh, domain_ids, field_access, opts_ctwrpr, time);
     auto       global_integral = detail::initResidualKernelResult< Kernel::parameters >();
     auto       comm_view       = std::views::counted(local_integral.data(), Kernel::parameters.n_equations);
     comm.allReduce(std::move(comm_view), global_integral.data(), MPI_SUM);

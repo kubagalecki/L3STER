@@ -7,7 +7,6 @@
 #include "l3ster/common/ProblemDefinition.hpp"
 #include "l3ster/dofs/NodeToDofMap.hpp"
 #include "l3ster/mesh/LocalMeshView.hpp"
-#include "l3ster/post/SolutionManager.hpp"
 
 namespace lstr::bcs
 {

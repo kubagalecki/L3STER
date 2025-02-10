@@ -268,7 +268,7 @@ void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&         
                           const util::ArrayOwner< d_id_t >&                             domain_ids,
                           const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& dof_map,
                           const std::array< dofind_t, params.n_equations >&             dof_inds,
-                          const post::FieldAccess< n_fields >&                          field_val_getter,
+                          const post::FieldAccess< n_fields >&                          field_access,
                           const tpetra_multivector_t::host_view_type&                   values,
                           const tpetra_multivector_t::host_view_type&                   num_contribs,
                           val_t                                                         time)
@@ -285,7 +285,7 @@ void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&         
             const auto& el_data        = element.getData();
             const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
             const auto& node_locations = mesh::getNodeLocations< ET, EO >();
-            const auto  node_vals      = field_val_getter.getGloballyIndexed(el_nodes);
+            const auto  node_vals      = field_access.getGloballyIndexed(el_nodes);
             const auto  jacobi_gen     = map::getNatJacobiMatGenerator(el_data);
             const auto  process_node   = [&](size_t node_ind) {
                 const auto& ref_coords    = node_locations[node_ind];
@@ -325,7 +325,7 @@ void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&     kern
                           const util::ArrayOwner< d_id_t >&                 domain_ids,
                           const dofs::LocalDofMap< max_dofs_per_node >&     dof_map,
                           const std::array< dofind_t, params.n_equations >& dof_inds,
-                          const post::FieldAccess< n_fields >&              field_val_getter,
+                          const post::FieldAccess< n_fields >&              field_access,
                           const tpetra_multivector_t::host_view_type&       owned_values,
                           val_t                                             time)
 {
@@ -358,7 +358,7 @@ void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&     kern
             const auto& el_nodes       = element.getLocalNodes();
             const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
             const auto& node_locations = mesh::getNodeLocations< ET, EO >();
-            const auto  node_vals      = field_val_getter.getLocallyIndexed(el_nodes);
+            const auto  node_vals      = field_access.getLocallyIndexed(el_nodes);
             const auto  jacobi_gen     = map::getNatJacobiMatGenerator(element.getData());
             for (auto&& [node_ind, node] : el_nodes | std::views::enumerate)
             {
@@ -402,7 +402,7 @@ void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&       
                           const util::ArrayOwner< d_id_t >&                             domain_ids,
                           const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& dof_map,
                           const std::array< dofind_t, params.n_equations >&             dof_inds,
-                          const post::FieldAccess< n_fields >&                          field_val_getter,
+                          const post::FieldAccess< n_fields >&                          field_access,
                           const tpetra_multivector_t::host_view_type&                   values,
                           const tpetra_multivector_t::host_view_type&                   num_contribs,
                           val_t                                                         time)
@@ -419,7 +419,7 @@ void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&       
             const auto& el_nodes       = el_view->getNodes();
             const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
             const auto& node_locations = mesh::getNodeLocations< ET, EO >();
-            const auto  node_vals      = field_val_getter.getGloballyIndexed(el_nodes);
+            const auto  node_vals      = field_access.getGloballyIndexed(el_nodes);
             const auto& el_data        = el_view->getData();
             const auto  jacobi_gen     = map::getNatJacobiMatGenerator(el_data);
             const auto  side           = el_view.getSide();
@@ -462,7 +462,7 @@ void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&   kern
                           const util::ArrayOwner< d_id_t >&                 boundary_ids,
                           const dofs::LocalDofMap< max_dofs_per_node >&     dof_map,
                           const std::array< dofind_t, params.n_equations >& dof_inds,
-                          const post::FieldAccess< n_fields >&              field_val_getter,
+                          const post::FieldAccess< n_fields >&              field_access,
                           const tpetra_multivector_t::host_view_type&       owned_values,
                           val_t                                             time)
 {
@@ -499,7 +499,7 @@ void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&   kern
             const auto& el_nodes       = el_view->getLocalNodes();
             const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
             const auto& node_locations = mesh::getNodeLocations< ET, EO >();
-            const auto  node_vals      = field_val_getter.getLocallyIndexed(el_nodes);
+            const auto  node_vals      = field_access.getLocallyIndexed(el_nodes);
             const auto& el_data        = el_view->getData();
             const auto  jacobi_gen     = map::getNatJacobiMatGenerator(el_data);
             const auto  side           = el_view.getSide();

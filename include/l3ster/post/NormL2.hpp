@@ -33,14 +33,14 @@ auto computeNormL2(const MpiComm&                                comm,
                    const ResidualDomainKernel< Kernel, params >& eval_residual,
                    const mesh::MeshPartition< orders... >&       mesh,
                    const util::ArrayOwner< d_id_t >&             domain_ids,
-                   const post::FieldAccess< params.n_fields >&   field_val_getter = {},
-                   util::ConstexprValue< opts >                  options_ctwrpr   = {},
-                   val_t                                         time = 0.) -> KernelInterface< params >::Rhs
+                   const post::FieldAccess< params.n_fields >&   field_access   = {},
+                   util::ConstexprValue< opts >                  options_ctwrpr = {},
+                   val_t                                         time           = 0.) -> KernelInterface< params >::Rhs
 {
     const auto compute_squared_norm = post::getNormSquareComputer(eval_residual);
     const auto wrapped_sqn          = wrapDomainResidualKernel(compute_squared_norm, util::ConstexprValue< params >{});
     const auto squared_norm         = computeIntegral(
-        comm, wrapped_sqn, mesh, domain_ids, field_val_getter, post::doubleQuadratureOrder(options_ctwrpr), time);
+        comm, wrapped_sqn, mesh, domain_ids, field_access, post::doubleQuadratureOrder(options_ctwrpr), time);
     return squared_norm.cwiseSqrt();
 }
 
@@ -49,14 +49,14 @@ auto computeNormL2(const MpiComm&                                  comm,
                    const ResidualBoundaryKernel< Kernel, params >& eval_residual,
                    const mesh::MeshPartition< orders... >&         mesh,
                    const util::ArrayOwner< d_id_t >&               boundary_ids,
-                   const post::FieldAccess< params.n_fields >&     field_val_getter = {},
-                   util::ConstexprValue< opts >                    options_ctwrpr   = {},
+                   const post::FieldAccess< params.n_fields >&     field_access   = {},
+                   util::ConstexprValue< opts >                    options_ctwrpr = {},
                    val_t                                           time = 0.) -> KernelInterface< params >::Rhs
 {
     const auto compute_squared_norm = post::getNormSquareComputer(eval_residual);
     const auto wrapped_sqn  = wrapBoundaryResidualKernel(compute_squared_norm, util::ConstexprValue< params >{});
     const auto squared_norm = computeIntegral(
-        comm, wrapped_sqn, mesh, boundary_ids, field_val_getter, post::doubleQuadratureOrder(options_ctwrpr), time);
+        comm, wrapped_sqn, mesh, boundary_ids, field_access, post::doubleQuadratureOrder(options_ctwrpr), time);
     return squared_norm.cwiseSqrt();
 }
 } // namespace lstr

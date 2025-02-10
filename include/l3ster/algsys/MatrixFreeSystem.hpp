@@ -60,7 +60,7 @@ public:
                AssemblyOptions          asm_opts   = AssemblyOptions{} >
     void assembleProblem(const Kernel&                        kernel,
                          const util::ArrayOwner< d_id_t >&    domain_ids,
-                         const post::FieldAccess< n_fields >& fval_getter       = {},
+                         const post::FieldAccess< n_fields >& field_access      = {},
                          util::ConstexprValue< field_inds >   field_inds_ctwrpr = {},
                          util::ConstexprValue< asm_opts >     asm_options       = {},
                          val_t                                time              = 0.)
@@ -70,8 +70,8 @@ public:
     void setDirichletBCValues(const Kernel&                                                 kernel,
                               const util::ArrayOwner< d_id_t >&                             domain_ids,
                               const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                              const post::FieldAccess< n_fields >&                          field_val_getter = {},
-                              val_t                                                         time             = 0.);
+                              const post::FieldAccess< n_fields >&                          field_access = {},
+                              val_t                                                         time         = 0.);
     template < size_t n_vals, std::integral dofind_t = size_t >
     void setDirichletBCValues(const std::array< val_t, n_vals >&    values,
                               const util::ArrayOwner< d_id_t >&     domain_ids,
@@ -92,8 +92,8 @@ public:
                    const Kernel&                                                 kernel,
                    const util::ArrayOwner< d_id_t >&                             domain_ids,
                    const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                   const post::FieldAccess< n_fields >&                          field_val_getter = {},
-                   val_t                                                         time             = 0.);
+                   const post::FieldAccess< n_fields >&                          field_access = {},
+                   val_t                                                         time         = 0.);
 
 private:
     using view_t       = decltype(std::declval< tpetra_multivector_t >().getLocalViewHost(Tpetra::Access::ReadWrite));
@@ -168,7 +168,7 @@ private:
     template < EquationKernel_c Kernel, auto field_inds, size_t n_fields, AssemblyOptions asm_opts >
     void pushKernel(const Kernel&                        kernel,
                     const util::ArrayOwner< d_id_t >&    domain_ids,
-                    const post::FieldAccess< n_fields >& fval_getter,
+                    const post::FieldAccess< n_fields >& field_access,
                     util::ConstexprValue< field_inds >   field_inds_ctwrpr,
                     util::ConstexprValue< asm_opts >,
                     val_t time);
@@ -179,7 +179,7 @@ private:
                AssemblyOptions  asm_opts >
     auto makeInitKernel(AccessGenerator&&                    rhs_access_generator,
                         const Kernel&                        kernel,
-                        const post::FieldAccess< n_fields >& fval_getter,
+                        const post::FieldAccess< n_fields >& field_access,
                         util::ConstexprValue< field_inds >   field_inds_ctwrpr,
                         util::ConstexprValue< asm_opts >     asm_options,
                         val_t                                time)
@@ -193,7 +193,7 @@ private:
     auto makeEvalKernel(XAccessGenerator&&                   x_access_generator,
                         YAccessGenerator&&                   y_access_generator,
                         const Kernel&                        kernel,
-                        const post::FieldAccess< n_fields >& fval_getter,
+                        const post::FieldAccess< n_fields >& field_access,
                         util::ConstexprValue< field_inds >   field_inds_ctwrpr,
                         util::ConstexprValue< asm_opts >     asm_options,
                         val_t                                time)
@@ -397,13 +397,13 @@ struct CommonElemData
     static constexpr auto n_dofs  = params.n_unknowns * n_nodes;
 
     CommonElemData(const mesh::LocalElementView< ET, EO >&       element,
-                   const post::FieldAccess< n_fields >&          fval_getter,
+                   const post::FieldAccess< n_fields >&          field_access,
                    const dofs::LocalDofMap< max_dofs_per_node >& dof_map,
                    const std::optional< bcs::LocalDirichletBC >& dirichlet_bc,
                    const tpetra_multivector_t::host_view_type&   dirichlet_vals)
     {
         const auto& el_nodes = element.getLocalNodes();
-        node_values          = fval_getter.getLocallyIndexed(el_nodes);
+        node_values          = field_access.getLocallyIndexed(el_nodes);
         dofs                 = detail::getDofs(el_nodes, dof_map, util::ConstexprValue< field_inds >{});
         dirichlet_dof_inds   = detail::getDirichletDofInds(dofs, dirichlet_bc);
         dirichlet_values     = detail::gatherDirichletVals< ET, EO, params >(dofs, dirichlet_dof_inds, dirichlet_vals);
@@ -425,7 +425,7 @@ template < typename AccessGenerator,
 auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeInitKernel(
     AccessGenerator&&                    rhs_access_generator,
     const Kernel&                        kernel,
-    const post::FieldAccess< n_fields >& fval_getter,
+    const post::FieldAccess< n_fields >& field_access,
     util::ConstexprValue< field_inds >,
     util::ConstexprValue< asm_opts >,
     val_t time)
@@ -451,9 +451,9 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeInitKernel(
             };
             const auto get_data = [&] -> CommonData {
                 if constexpr (is_domain)
-                    return {element, fval_getter, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
+                    return {element, field_access, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
                 else
-                    return {*element, fval_getter, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
+                    return {*element, field_access, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
             };
             const auto [node_vals, dofs, dir_dof_inds, dir_vals] = get_data();
             const auto& rbq                                      = get_reference_basis();
@@ -475,7 +475,7 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeEvalKernel(
     XAccessGenerator&&                   x_access_generator,
     YAccessGenerator&&                   y_access_generator,
     const Kernel&                        kernel,
-    const post::FieldAccess< n_fields >& fval_getter,
+    const post::FieldAccess< n_fields >& field_access,
     util::ConstexprValue< field_inds >,
     util::ConstexprValue< asm_opts >,
     val_t time) -> std::conditional_t< DomainKernel_c< Kernel >, DomainEvaluatorOverload, BoundaryEvaluatorOverload >
@@ -499,9 +499,9 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeEvalKernel(
             };
             const auto get_data = [&] -> CommonData {
                 if constexpr (is_domain)
-                    return {element, fval_getter, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
+                    return {element, field_access, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
                 else
-                    return {*element, fval_getter, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
+                    return {*element, field_access, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
             };
             const auto [node_vals, dofs, dir_dof_inds, dir_vals] = get_data();
             const auto& rbq                                      = get_reference_basis();
@@ -519,7 +519,7 @@ template < EquationKernel_c Kernel, auto field_inds, size_t n_fields, AssemblyOp
 void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::pushKernel(
     const Kernel&                        kernel,
     const util::ArrayOwner< d_id_t >&    domain_ids,
-    const post::FieldAccess< n_fields >& fval_getter,
+    const post::FieldAccess< n_fields >& field_access,
     util::ConstexprValue< field_inds >   field_inds_ctwrpr,
     util::ConstexprValue< asm_opts >     asm_options,
     val_t                                time)
@@ -536,10 +536,10 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::pushKernel(
 
     for (d_id_t domain : domain_ids)
     {
-        auto iinit = makeInitKernel(int_gen, kernel, fval_getter, field_inds_ctwrpr, asm_options, time);
-        auto binit = makeInitKernel(exp_gen, kernel, fval_getter, field_inds_ctwrpr, asm_options, time);
-        auto ieval = makeEvalKernel(int_gen, int_gen, kernel, fval_getter, field_inds_ctwrpr, asm_options, time);
-        auto beval = makeEvalKernel(imp_gen, exp_gen, kernel, fval_getter, field_inds_ctwrpr, asm_options, time);
+        auto iinit = makeInitKernel(int_gen, kernel, field_access, field_inds_ctwrpr, asm_options, time);
+        auto binit = makeInitKernel(exp_gen, kernel, field_access, field_inds_ctwrpr, asm_options, time);
+        auto ieval = makeEvalKernel(int_gen, int_gen, kernel, field_access, field_inds_ctwrpr, asm_options, time);
+        auto beval = makeEvalKernel(imp_gen, exp_gen, kernel, field_access, field_inds_ctwrpr, asm_options, time);
 
         if constexpr (BoundaryKernel_c< Kernel >)
         {
@@ -564,13 +564,13 @@ template < EquationKernel_c Kernel, ArrayOf_c< size_t > auto field_inds, size_t 
 void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::assembleProblem(
     const Kernel&                        kernel,
     const util::ArrayOwner< d_id_t >&    domain_ids,
-    const post::FieldAccess< n_fields >& fval_getter,
+    const post::FieldAccess< n_fields >& field_access,
     util::ConstexprValue< field_inds >   field_inds_ctwrpr,
     util::ConstexprValue< asm_opts >     asm_options,
     val_t                                time)
     requires(Kernel::parameters.n_rhs == n_rhs)
 {
-    pushKernel(kernel, domain_ids, fval_getter, field_inds_ctwrpr, asm_options, time);
+    pushKernel(kernel, domain_ids, field_access, field_inds_ctwrpr, asm_options, time);
 }
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
@@ -899,7 +899,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::setValues(
     const Kernel&                                                 kernel,
     const util::ArrayOwner< d_id_t >&                             domain_ids,
     const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-    const post::FieldAccess< n_fields >&                          field_val_getter,
+    const post::FieldAccess< n_fields >&                          field_access,
     val_t                                                         time)
 {
     util::throwingAssert(vector->getNumVectors() == n_rhs);
@@ -911,7 +911,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::setValues(
                          domain_ids,
                          m_node_dof_map,
                          dof_inds,
-                         field_val_getter,
+                         field_access,
                          vector->getLocalViewHost(Tpetra::Access::ReadWrite),
                          time);
 }
@@ -922,7 +922,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::setDirichletBCValu
     const Kernel&                                                 kernel,
     const util::ArrayOwner< d_id_t >&                             domain_ids,
     const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-    const post::FieldAccess< n_fields >&                          field_val_getter,
+    const post::FieldAccess< n_fields >&                          field_access,
     val_t                                                         time)
 {
     util::throwingAssert(m_dirichlet_bc.has_value(), "`setDirichletBCValues` called but no Dirichlet BCs were defined");
@@ -937,7 +937,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::setDirichletBCValu
                              domain_ids,
                              m_node_dof_map,
                              dof_inds,
-                             field_val_getter,
+                             field_access,
                              Kokkos::subview(m_dirichlet_values, owned_range, Kokkos::ALL),
                              time);
         m_bcs_need_import = true;
