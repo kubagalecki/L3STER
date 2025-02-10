@@ -5,7 +5,7 @@
 #include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 #include "l3ster/mesh/BoundaryView.hpp"
 #include "l3ster/mesh/LocalMeshView.hpp"
-#include "l3ster/post/SolutionManager.hpp"
+#include "l3ster/post/FieldAccess.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
 #include <iostream>
@@ -76,15 +76,15 @@ template < typename Kernel,
            size_t                   dofs_per_node,
            CondensationPolicy       CP,
            AssemblyOptions          asm_opts >
-void assembleGlobalSystem(const DomainEquationKernel< Kernel, params >&               kernel,
-                          const mesh::MeshPartition< orders... >&                     mesh,
-                          const util::ArrayOwner< d_id_t >&                           domain_ids,
-                          const SolutionManager::FieldValueGetter< params.n_fields >& fval_getter,
-                          tpetra_crsmatrix_t&                                         global_mat,
-                          const std::array< std::span< val_t >, params.n_rhs >&       global_rhs,
-                          const dofs::NodeToLocalDofMap< dofs_per_node, 3 >&          dof_map,
-                          StaticCondensationManager< CP >&                            condensation_manager,
-                          util::ConstexprValue< field_inds >                          field_inds_ctwrpr,
+void assembleGlobalSystem(const DomainEquationKernel< Kernel, params >&         kernel,
+                          const mesh::MeshPartition< orders... >&               mesh,
+                          const util::ArrayOwner< d_id_t >&                     domain_ids,
+                          const post::FieldAccess< params.n_fields >&           fval_getter,
+                          tpetra_crsmatrix_t&                                   global_mat,
+                          const std::array< std::span< val_t >, params.n_rhs >& global_rhs,
+                          const dofs::NodeToLocalDofMap< dofs_per_node, 3 >&    dof_map,
+                          StaticCondensationManager< CP >&                      condensation_manager,
+                          util::ConstexprValue< field_inds >                    field_inds_ctwrpr,
                           util::ConstexprValue< asm_opts >,
                           val_t time = 0.)
 {
@@ -118,15 +118,15 @@ template < typename Kernel,
            size_t                   dofs_per_node,
            CondensationPolicy       CP,
            AssemblyOptions          asm_opts >
-void assembleGlobalSystem(const BoundaryEquationKernel< Kernel, params >&             kernel,
-                          const mesh::MeshPartition< orders... >&                     mesh,
-                          const util::ArrayOwner< d_id_t >&                           boundary_ids,
-                          const SolutionManager::FieldValueGetter< params.n_fields >& fval_getter,
-                          tpetra_crsmatrix_t&                                         global_mat,
-                          const std::array< std::span< val_t >, params.n_rhs >&       global_rhs,
-                          const dofs::NodeToLocalDofMap< dofs_per_node, 3 >&          dof_map,
-                          StaticCondensationManager< CP >&                            condensation_manager,
-                          util::ConstexprValue< field_inds >                          field_inds_ctwrpr,
+void assembleGlobalSystem(const BoundaryEquationKernel< Kernel, params >&       kernel,
+                          const mesh::MeshPartition< orders... >&               mesh,
+                          const util::ArrayOwner< d_id_t >&                     boundary_ids,
+                          const post::FieldAccess< params.n_fields >&           fval_getter,
+                          tpetra_crsmatrix_t&                                   global_mat,
+                          const std::array< std::span< val_t >, params.n_rhs >& global_rhs,
+                          const dofs::NodeToLocalDofMap< dofs_per_node, 3 >&    dof_map,
+                          StaticCondensationManager< CP >&                      condensation_manager,
+                          util::ConstexprValue< field_inds >                    field_inds_ctwrpr,
                           util::ConstexprValue< asm_opts >,
                           val_t time = 0.)
 {

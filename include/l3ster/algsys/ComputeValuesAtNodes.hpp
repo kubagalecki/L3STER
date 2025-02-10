@@ -268,7 +268,7 @@ void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&         
                           const util::ArrayOwner< d_id_t >&                             domain_ids,
                           const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& dof_map,
                           const std::array< dofind_t, params.n_equations >&             dof_inds,
-                          const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
+                          const post::FieldAccess< n_fields >&                          field_val_getter,
                           const tpetra_multivector_t::host_view_type&                   values,
                           const tpetra_multivector_t::host_view_type&                   num_contribs,
                           val_t                                                         time)
@@ -317,17 +317,17 @@ template < typename Kernel,
            size_t        max_dofs_per_node,
            std::integral dofind_t,
            size_t        n_fields >
-void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&        kernel,
-                          const MpiComm&                                       comm,
-                          const mesh::LocalMeshView< orders... >&              mesh_interior,
-                          const mesh::LocalMeshView< orders... >&              mesh_border,
-                          comm::Export< val_t, local_dof_t >&                  exporter,
-                          const util::ArrayOwner< d_id_t >&                    domain_ids,
-                          const dofs::LocalDofMap< max_dofs_per_node >&        dof_map,
-                          const std::array< dofind_t, params.n_equations >&    dof_inds,
-                          const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
-                          const tpetra_multivector_t::host_view_type&          owned_values,
-                          val_t                                                time)
+void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&     kernel,
+                          const MpiComm&                                    comm,
+                          const mesh::LocalMeshView< orders... >&           mesh_interior,
+                          const mesh::LocalMeshView< orders... >&           mesh_border,
+                          comm::Export< val_t, local_dof_t >&               exporter,
+                          const util::ArrayOwner< d_id_t >&                 domain_ids,
+                          const dofs::LocalDofMap< max_dofs_per_node >&     dof_map,
+                          const std::array< dofind_t, params.n_equations >& dof_inds,
+                          const post::FieldAccess< n_fields >&              field_val_getter,
+                          const tpetra_multivector_t::host_view_type&       owned_values,
+                          val_t                                             time)
 {
     L3STER_PROFILE_FUNCTION;
     constexpr auto n_rhs = params.n_rhs;
@@ -402,7 +402,7 @@ void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&       
                           const util::ArrayOwner< d_id_t >&                             domain_ids,
                           const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& dof_map,
                           const std::array< dofind_t, params.n_equations >&             dof_inds,
-                          const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
+                          const post::FieldAccess< n_fields >&                          field_val_getter,
                           const tpetra_multivector_t::host_view_type&                   values,
                           const tpetra_multivector_t::host_view_type&                   num_contribs,
                           val_t                                                         time)
@@ -454,17 +454,17 @@ template < typename Kernel,
            size_t        max_dofs_per_node,
            std::integral dofind_t,
            size_t        n_fields >
-void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&      kernel,
-                          const MpiComm&                                       comm,
-                          const mesh::LocalMeshView< orders... >&              mesh_interior,
-                          const mesh::LocalMeshView< orders... >&              mesh_border,
-                          comm::Export< val_t, local_dof_t >&                  exporter,
-                          const util::ArrayOwner< d_id_t >&                    boundary_ids,
-                          const dofs::LocalDofMap< max_dofs_per_node >&        dof_map,
-                          const std::array< dofind_t, params.n_equations >&    dof_inds,
-                          const SolutionManager::FieldValueGetter< n_fields >& field_val_getter,
-                          const tpetra_multivector_t::host_view_type&          owned_values,
-                          val_t                                                time)
+void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&   kernel,
+                          const MpiComm&                                    comm,
+                          const mesh::LocalMeshView< orders... >&           mesh_interior,
+                          const mesh::LocalMeshView< orders... >&           mesh_border,
+                          comm::Export< val_t, local_dof_t >&               exporter,
+                          const util::ArrayOwner< d_id_t >&                 boundary_ids,
+                          const dofs::LocalDofMap< max_dofs_per_node >&     dof_map,
+                          const std::array< dofind_t, params.n_equations >& dof_inds,
+                          const post::FieldAccess< n_fields >&              field_val_getter,
+                          const tpetra_multivector_t::host_view_type&       owned_values,
+                          val_t                                             time)
 {
     L3STER_PROFILE_FUNCTION;
     constexpr auto n_rhs = params.n_rhs;

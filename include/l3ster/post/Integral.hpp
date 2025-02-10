@@ -50,10 +50,10 @@ auto evalElementBoundaryIntegral(
 }
 
 template < typename Kernel, KernelParams params, el_o_t... orders, AssemblyOptions options >
-auto evalLocalIntegral(const ResidualDomainKernel< Kernel, params >&               kernel,
-                       const mesh::MeshPartition< orders... >&                     mesh,
-                       const util::ArrayOwner< d_id_t >&                           domain_ids,
-                       const SolutionManager::FieldValueGetter< params.n_fields >& field_val_getter,
+auto evalLocalIntegral(const ResidualDomainKernel< Kernel, params >& kernel,
+                       const mesh::MeshPartition< orders... >&       mesh,
+                       const util::ArrayOwner< d_id_t >&             domain_ids,
+                       const FieldAccess< params.n_fields >&         field_val_getter,
                        util::ConstexprValue< options >,
                        val_t time) -> KernelInterface< params >::Rhs
 {
@@ -76,10 +76,10 @@ auto evalLocalIntegral(const ResidualDomainKernel< Kernel, params >&            
 }
 
 template < typename Kernel, KernelParams params, el_o_t... orders, AssemblyOptions options >
-auto evalLocalIntegral(const ResidualBoundaryKernel< Kernel, params >&             kernel,
-                       const mesh::MeshPartition< orders... >&                     mesh,
-                       const util::ArrayOwner< d_id_t >&                           boundary_ids,
-                       const SolutionManager::FieldValueGetter< params.n_fields >& field_val_getter,
+auto evalLocalIntegral(const ResidualBoundaryKernel< Kernel, params >& kernel,
+                       const mesh::MeshPartition< orders... >&         mesh,
+                       const util::ArrayOwner< d_id_t >&               boundary_ids,
+                       const FieldAccess< params.n_fields >&           field_val_getter,
                        util::ConstexprValue< options >,
                        val_t time) -> KernelInterface< params >::Rhs
 {
@@ -104,13 +104,13 @@ auto evalLocalIntegral(const ResidualBoundaryKernel< Kernel, params >&          
 } // namespace post
 
 template < ResidualKernel_c Kernel, el_o_t... orders, AssemblyOptions opts = {} >
-auto computeIntegral(const MpiComm&                                                          comm,
-                     const Kernel&                                                           kernel,
-                     const mesh::MeshPartition< orders... >&                                 mesh,
-                     const util::ArrayOwner< d_id_t >&                                       domain_ids,
-                     const SolutionManager::FieldValueGetter< Kernel::parameters.n_fields >& field_val_getter = {},
-                     util::ConstexprValue< opts >                                            opts_ctwrpr      = {},
-                     val_t                                                                   time             = 0.)
+auto computeIntegral(const MpiComm&                                          comm,
+                     const Kernel&                                           kernel,
+                     const mesh::MeshPartition< orders... >&                 mesh,
+                     const util::ArrayOwner< d_id_t >&                       domain_ids,
+                     const post::FieldAccess< Kernel::parameters.n_fields >& field_val_getter = {},
+                     util::ConstexprValue< opts >                            opts_ctwrpr      = {},
+                     val_t                                                   time             = 0.)
 {
     const auto local_integral  = post::evalLocalIntegral(kernel, mesh, domain_ids, field_val_getter, opts_ctwrpr, time);
     auto       global_integral = detail::initResidualKernelResult< Kernel::parameters >();

@@ -7,7 +7,7 @@
 #include "l3ster/bcs/BCDefinition.hpp"
 #include "l3ster/bcs/DirichletBC.hpp"
 #include "l3ster/bcs/GetDirichletDofs.hpp"
-#include "l3ster/post/SolutionManager.hpp"
+#include "l3ster/post/FieldAccess.hpp"
 #include "l3ster/solve/SolverInterface.hpp"
 #include "l3ster/util/GlobalResource.hpp"
 
@@ -35,19 +35,19 @@ public:
                ArrayOf_c< size_t > auto field_inds = util::makeIotaArray< size_t, max_dofs_per_node >(),
                size_t                   n_fields   = 0,
                AssemblyOptions          asm_opts   = AssemblyOptions{} >
-    void assembleProblem(const Kernel&                                        kernel,
-                         const util::ArrayOwner< d_id_t >&                    domain_ids,
-                         const SolutionManager::FieldValueGetter< n_fields >& fval_getter       = {},
-                         util::ConstexprValue< field_inds >                   field_inds_ctwrpr = {},
-                         util::ConstexprValue< asm_opts >                     assembly_options  = {},
-                         val_t                                                time              = 0.)
+    void assembleProblem(const Kernel&                        kernel,
+                         const util::ArrayOwner< d_id_t >&    domain_ids,
+                         const post::FieldAccess< n_fields >& fval_getter       = {},
+                         util::ConstexprValue< field_inds >   field_inds_ctwrpr = {},
+                         util::ConstexprValue< asm_opts >     assembly_options  = {},
+                         val_t                                time              = 0.)
         requires(Kernel::parameters.n_rhs == n_rhs);
 
     template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setDirichletBCValues(const Kernel&                                                 kernel,
                               const util::ArrayOwner< d_id_t >&                             domain_ids,
                               const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                              const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter = {},
+                              const post::FieldAccess< n_fields >&                          field_val_getter = {},
                               val_t                                                         time             = 0.);
     template < size_t n_vals, std::integral dofind_t = size_t >
     void setDirichletBCValues(const std::array< val_t, n_vals >&    values,
@@ -70,14 +70,14 @@ public:
                    const Kernel&                                                 kernel,
                    const util::ArrayOwner< d_id_t >&                             domain_ids,
                    const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                   const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter = {},
+                   const post::FieldAccess< n_fields >&                          field_val_getter = {},
                    val_t                                                         time             = 0.) const;
     template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setValues(const Teuchos::RCP< tpetra_multivector_t >&                   vector,
                    const Kernel&                                                 kernel,
                    const util::ArrayOwner< d_id_t >&                             domain_ids,
                    const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                   const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter = {},
+                   const post::FieldAccess< n_fields >&                          field_val_getter = {},
                    val_t                                                         time             = 0.) const;
 
 private:
@@ -213,7 +213,7 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
     const Kernel&                                                 kernel,
     const util::ArrayOwner< d_id_t >&                             domain_ids,
     const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-    const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
+    const post::FieldAccess< n_fields >&                          field_val_getter,
     val_t                                                         time) const
 {
     util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
@@ -243,7 +243,7 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
     const Kernel&                                                 kernel,
     const util::ArrayOwner< d_id_t >&                             domain_ids,
     const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-    const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
+    const post::FieldAccess< n_fields >&                          field_val_getter,
     val_t                                                         time) const
 {
     const auto vector_downcast = Teuchos::rcp_dynamic_cast< tpetra_femultivector_t >(vector);
@@ -256,7 +256,7 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCV
     const Kernel&                                                 kernel,
     const util::ArrayOwner< d_id_t >&                             domain_ids,
     const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-    const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
+    const post::FieldAccess< n_fields >&                          field_val_getter,
     val_t                                                         time)
 {
     util::throwingAssert(m_dirichlet_bcs.has_value(), "setDirichletBCValues called, but no Dirichlet BCs were defined");
@@ -423,12 +423,12 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setToZero()
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
 template < EquationKernel_c Kernel, ArrayOf_c< size_t > auto field_inds, size_t n_fields, AssemblyOptions asm_opts >
 void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::assembleProblem(
-    const Kernel&                                        kernel,
-    const util::ArrayOwner< d_id_t >&                    domain_ids,
-    const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
-    util::ConstexprValue< field_inds >                   field_inds_ctwrpr,
-    util::ConstexprValue< asm_opts >                     assembly_options,
-    val_t                                                time)
+    const Kernel&                        kernel,
+    const util::ArrayOwner< d_id_t >&    domain_ids,
+    const post::FieldAccess< n_fields >& fval_getter,
+    util::ConstexprValue< field_inds >   field_inds_ctwrpr,
+    util::ConstexprValue< asm_opts >     assembly_options,
+    val_t                                time)
     requires(Kernel::parameters.n_rhs == n_rhs)
 {
     L3STER_PROFILE_FUNCTION;

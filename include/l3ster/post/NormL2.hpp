@@ -29,13 +29,13 @@ auto getNormSquareComputer(const auto& kernel)
 } // namespace post
 
 template < AssemblyOptions opts = {}, typename Kernel, KernelParams params, el_o_t... orders >
-auto computeNormL2(const MpiComm&                                              comm,
-                   const ResidualDomainKernel< Kernel, params >&               eval_residual,
-                   const mesh::MeshPartition< orders... >&                     mesh,
-                   const util::ArrayOwner< d_id_t >&                           domain_ids,
-                   const SolutionManager::FieldValueGetter< params.n_fields >& field_val_getter = {},
-                   util::ConstexprValue< opts >                                options_ctwrpr   = {},
-                   val_t time = 0.) -> KernelInterface< params >::Rhs
+auto computeNormL2(const MpiComm&                                comm,
+                   const ResidualDomainKernel< Kernel, params >& eval_residual,
+                   const mesh::MeshPartition< orders... >&       mesh,
+                   const util::ArrayOwner< d_id_t >&             domain_ids,
+                   const post::FieldAccess< params.n_fields >&   field_val_getter = {},
+                   util::ConstexprValue< opts >                  options_ctwrpr   = {},
+                   val_t                                         time = 0.) -> KernelInterface< params >::Rhs
 {
     const auto compute_squared_norm = post::getNormSquareComputer(eval_residual);
     const auto wrapped_sqn          = wrapDomainResidualKernel(compute_squared_norm, util::ConstexprValue< params >{});
@@ -45,13 +45,13 @@ auto computeNormL2(const MpiComm&                                              c
 }
 
 template < AssemblyOptions opts = {}, typename Kernel, KernelParams params, el_o_t... orders >
-auto computeNormL2(const MpiComm&                                              comm,
-                   const ResidualBoundaryKernel< Kernel, params >&             eval_residual,
-                   const mesh::MeshPartition< orders... >&                     mesh,
-                   const util::ArrayOwner< d_id_t >&                           boundary_ids,
-                   const SolutionManager::FieldValueGetter< params.n_fields >& field_val_getter = {},
-                   util::ConstexprValue< opts >                                options_ctwrpr   = {},
-                   val_t time = 0.) -> KernelInterface< params >::Rhs
+auto computeNormL2(const MpiComm&                                  comm,
+                   const ResidualBoundaryKernel< Kernel, params >& eval_residual,
+                   const mesh::MeshPartition< orders... >&         mesh,
+                   const util::ArrayOwner< d_id_t >&               boundary_ids,
+                   const post::FieldAccess< params.n_fields >&     field_val_getter = {},
+                   util::ConstexprValue< opts >                    options_ctwrpr   = {},
+                   val_t                                           time = 0.) -> KernelInterface< params >::Rhs
 {
     const auto compute_squared_norm = post::getNormSquareComputer(eval_residual);
     const auto wrapped_sqn  = wrapBoundaryResidualKernel(compute_squared_norm, util::ConstexprValue< params >{});

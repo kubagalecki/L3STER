@@ -2,11 +2,10 @@
 #define L3STER_POST_SOLUTIONMANAGER_HPP
 
 #include "l3ster/mesh/MeshPartition.hpp"
+#include "l3ster/post/FieldAccess.hpp"
 #include "l3ster/util/EigenUtils.hpp"
 #include "l3ster/util/RobinHoodHashTables.hpp"
 #include "l3ster/util/TrilinosUtils.hpp"
-
-#include <memory>
 
 namespace lstr
 {
@@ -25,32 +24,10 @@ public:
 
     void setField(size_t field_ind, val_t value) { std::ranges::fill(getFieldView(field_ind), value); }
 
-    template < size_t n_fields >
-    class FieldValueGetter
-    {
-        friend class SolutionManager;
-        FieldValueGetter(const SolutionManager*                parent,
-                         const std::array< size_t, n_fields >& field_inds = util::makeIotaArray< size_t, n_fields >())
-            : m_parent{parent}, m_field_inds{field_inds}
-        {}
-
-    public:
-        template < size_t n_nodes >
-        auto getGloballyIndexed(const std::array< n_id_t, n_nodes >& nodes) const
-            -> util::eigen::RowMajorMatrix< val_t, n_nodes, n_fields >;
-        template < size_t n_nodes >
-        auto getLocallyIndexed(const std::array< n_loc_id_t, n_nodes >& nodes) const
-            -> util::eigen::RowMajorMatrix< val_t, n_nodes, n_fields >;
-
-    private:
-        const SolutionManager*         m_parent;
-        std::array< size_t, n_fields > m_field_inds;
-    };
-
     template < std::integral Index, size_t N >
-    [[nodiscard]] auto makeFieldValueGetter(const std::array< Index, N >& indices) const -> FieldValueGetter< N >;
+    [[nodiscard]] auto makeFieldValueGetter(const std::array< Index, N >& indices) const -> post::FieldAccess< N >;
     template < size_t n_fields, RangeOfConvertibleTo_c< size_t > Indices >
-    [[nodiscard]] auto makeFieldValueGetter(Indices&& indices) const -> FieldValueGetter< n_fields >;
+    [[nodiscard]] auto makeFieldValueGetter(Indices&& indices) const -> post::FieldAccess< n_fields >;
 
 private:
     template < size_t N >
@@ -62,51 +39,6 @@ private:
     std::unique_ptr< val_t[] >                                  m_nodal_values;
     std::shared_ptr< const util::SegmentedOwnership< n_id_t > > m_node_ownership;
 };
-
-template <>
-class SolutionManager::FieldValueGetter< 0 >
-{
-public:
-    template < size_t n_nodes >
-    auto getGloballyIndexed(const std::array< n_id_t, n_nodes >&) const
-        -> util::eigen::RowMajorMatrix< val_t, n_nodes, 0 >
-    {
-        return {};
-    }
-    template < size_t n_nodes >
-    auto getLocallyIndexed(const std::array< n_loc_id_t, n_nodes >&) const
-        -> util::eigen::RowMajorMatrix< val_t, n_nodes, 0 >
-    {
-        return {};
-    }
-};
-inline constexpr auto empty_field_val_getter = SolutionManager::FieldValueGetter< 0 >{};
-
-template < size_t n_fields >
-template < size_t n_nodes >
-auto SolutionManager::FieldValueGetter< n_fields >::getGloballyIndexed(const std::array< n_id_t, n_nodes >& nodes) const
-    -> util::eigen::RowMajorMatrix< val_t, n_nodes, n_fields >
-{
-    util::eigen::RowMajorMatrix< val_t, n_nodes, n_fields > retval;
-    const auto                                              vals_from_node = [&](auto node) {
-        return m_parent->getNodeValuesGlobal(node, m_field_inds);
-    };
-    std::ranges::copy(nodes | std::views::transform(vals_from_node) | std::views::join, retval.data());
-    return retval;
-}
-
-template < size_t n_fields >
-template < size_t n_nodes >
-auto SolutionManager::FieldValueGetter< n_fields >::getLocallyIndexed(
-    const std::array< n_loc_id_t, n_nodes >& nodes) const -> util::eigen::RowMajorMatrix< val_t, n_nodes, n_fields >
-{
-    util::eigen::RowMajorMatrix< val_t, n_nodes, n_fields > retval;
-    const auto                                              vals_from_node = [&](auto node) {
-        return m_parent->getNodeValuesLocal(node, m_field_inds);
-    };
-    std::ranges::copy(nodes | std::views::transform(vals_from_node) | std::views::join, retval.data());
-    return retval;
-}
 
 template < el_o_t... orders >
 SolutionManager::SolutionManager(const mesh::MeshPartition< orders... >& mesh, size_t n_fields, val_t initial)
@@ -159,48 +91,22 @@ auto SolutionManager::getRawView() const -> Kokkos::View< const val_t**, Kokkos:
 
 template < std::integral Index, size_t n_fields >
 auto SolutionManager::makeFieldValueGetter(const std::array< Index, n_fields >& field_inds) const
-    -> FieldValueGetter< n_fields >
+    -> post::FieldAccess< n_fields >
 {
-    auto field_inds_size_t = std::array< size_t, n_fields >{};
+    auto field_inds_u32 = std::array< std::uint32_t, n_fields >{};
     std::ranges::transform(
-        field_inds, field_inds_size_t.begin(), [](auto i) { return util::exactIntegerCast< size_t >(i); });
-    return FieldValueGetter{this, field_inds_size_t};
+        field_inds, field_inds_u32.begin(), [](auto i) { return util::exactIntegerCast< std::uint32_t >(i); });
+    return {field_inds_u32, m_node_ownership, m_nodal_values.get()};
 }
 
 template < size_t n_fields, RangeOfConvertibleTo_c< size_t > Indices >
-auto SolutionManager::makeFieldValueGetter(Indices&& indices) const -> FieldValueGetter< n_fields >
+auto SolutionManager::makeFieldValueGetter(Indices&& indices) const -> post::FieldAccess< n_fields >
 {
     util::throwingAssert(std::ranges::distance(indices) == n_fields,
                          "The size of the passed index range differs from the value of the parameter");
-
-    auto field_inds = std::array< size_t, n_fields >{};
+    auto field_inds = std::array< std::uint32_t, n_fields >{};
     std::ranges::copy(std::forward< Indices >(indices), field_inds.begin());
-    return FieldValueGetter{this, field_inds};
+    return {field_inds, m_node_ownership, m_nodal_values.get()};
 }
-
-/*
-auto combineFieldValueGetters(auto&&... fval_getters)
-{
-    return [... getters = std::forward< decltype(fval_getters) >(fval_getters)]< size_t num_nodes >(
-               const std::array< n_id_t, num_nodes >& nodes) {
-        constexpr auto num_fields     = (decltype(std::invoke(getters, nodes))::ColsAtCompileTime + ...);
-        auto           retval         = EigenRowMajorMatrix< val_t, num_nodes, num_fields >{};
-        int            row            = 0;
-        const auto     unconcatenated = std::make_tuple(std::invoke(getters, nodes)...);
-        auto concatenator = [&, out = retval.data()]< size_t I >(std::integral_constant< size_t, I >) mutable {
-            const auto&    vals   = std::get< I >(unconcatenated);
-            constexpr auto n_cols = std::decay_t< decltype(vals) >::ColsAtCompileTime;
-            for (int col = 0; col != n_cols; ++col)
-                *out++ = vals(row, col);
-        };
-        for (size_t node = 0; node != num_nodes; ++node)
-        {
-            forConstexpr(concatenator, std::make_index_sequence< sizeof...(getters) >{});
-            ++row;
-        }
-        return retval;
-    };
-}
- */
 } // namespace lstr
 #endif // L3STER_POST_SOLUTIONMANAGER_HPP
