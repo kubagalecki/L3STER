@@ -10,23 +10,8 @@ using namespace lstr;
 using namespace lstr::mesh;
 using namespace lstr::bcs;
 
-const auto node_dist = util::linspaceVector(-1., 1., 5);
-const auto N         = node_dist.size();
-const auto dx        = N - 1;
-const auto dy        = dx * N;
-const auto dz        = dy * N;
-
-template < el_o_t mesh_order = 1 >
-auto makeMesh2D(const MpiComm& comm, auto probdef_ctwrpr, const std::vector< double >& nd = node_dist)
-{
-    return generateAndDistributeMesh< mesh_order >(comm, [&] { return makeSquareMesh(nd); }, {}, probdef_ctwrpr);
-}
-
-template < el_o_t mesh_order = 1 >
-auto makeMesh3D(const MpiComm& comm, auto probdef_ctwrpr)
-{
-    return generateAndDistributeMesh< mesh_order >(comm, [&] { return makeCubeMesh(node_dist); }, {}, probdef_ctwrpr);
-}
+constexpr auto node_dist = util::linspaceArray< 5 >(-1., 1.);
+constexpr auto N         = node_dist.size();
 
 template < size_t dim >
 void assertCorrectNumEdges(const MpiComm& comm, const bcs::PeriodicBC< dim >& bc)
@@ -38,18 +23,21 @@ void assertCorrectNumEdges(const MpiComm& comm, const bcs::PeriodicBC< dim >& bc
                 ++dir_to_edge_local[i];
     auto dir_to_edge_global = std::array< size_t, dim >{};
     comm.allReduce(dir_to_edge_local, dir_to_edge_global.begin(), MPI_SUM);
-    const auto boundary_size = dim == 2 ? node_dist.size() : node_dist.size() * node_dist.size();
+    const auto boundary_size = dim == 2 ? N : N * N;
     REQUIRE(std::ranges::all_of(dir_to_edge_global, [&](size_t e) { return e == boundary_size; }));
 }
 
 void testBoundaryMatching2D()
 {
+    constexpr auto   dx        = N - 1;
+    constexpr auto   dy        = dx * N;
     constexpr d_id_t domain_id = 0, bot_bound = 1, top_bound = 2, left_bound = 3, right_bound = 4;
     constexpr auto   problem_def    = ProblemDef{defineDomain< 2 >(domain_id, ALL_DOFS)};
     constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
     const auto       comm           = std::make_shared< MpiComm >(MPI_COMM_WORLD);
-    const auto       mesh           = makeMesh2D(*comm, probdef_ctwrpr);
-    auto             period_def     = PeriodicBCDefinition< 2 >{};
+    const auto       mesh =
+        generateAndDistributeMesh< 1 >(*comm, [&] { return makeSquareMesh(node_dist); }, {}, probdef_ctwrpr);
+    auto period_def = PeriodicBCDefinition< 2 >{};
     period_def.definePeriodicBoundary({bot_bound}, {top_bound}, {0., node_dist.back() - node_dist.front(), 0.}, {0});
     period_def.definePeriodicBoundary({left_bound}, {right_bound}, {node_dist.back() - node_dist.front(), 0., 0.}, {1});
     const auto bc = PeriodicBC{period_def, *mesh, *comm};
@@ -65,13 +53,17 @@ void testBoundaryMatching2D()
 
 void testBoundaryMatching3D()
 {
+    constexpr auto   dx        = N - 1;
+    constexpr auto   dy        = dx * N;
+    constexpr auto   dz        = dy * N;
     constexpr d_id_t domain_id = 0;
     constexpr d_id_t bot_bound = 1, top_bound = 2, left_bound = 3, right_bound = 4, back_bound = 5, front_bound = 6;
     constexpr auto   problem_def    = ProblemDef{defineDomain< 3 >(domain_id, ALL_DOFS)};
     constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
     const auto       comm           = std::make_shared< MpiComm >(MPI_COMM_WORLD);
-    const auto       mesh           = makeMesh3D(*comm, probdef_ctwrpr);
-    auto             period_def     = PeriodicBCDefinition< 3 >{};
+    const auto       mesh =
+        generateAndDistributeMesh< 1 >(*comm, [&] { return makeCubeMesh(node_dist); }, {}, probdef_ctwrpr);
+    auto period_def = PeriodicBCDefinition< 3 >{};
     period_def.definePeriodicBoundary({bot_bound}, {top_bound}, {0., 0., node_dist.back() - node_dist.front()}, {0});
     period_def.definePeriodicBoundary({left_bound}, {right_bound}, {0., node_dist.back() - node_dist.front(), 0.}, {1});
     period_def.definePeriodicBoundary({back_bound}, {front_bound}, {node_dist.back() - node_dist.front(), 0., 0.}, {2});
@@ -82,7 +74,7 @@ void testBoundaryMatching3D()
         for (n_id_t x = 0; x != N; ++x)
             for (n_id_t y = 0; y != N; ++y)
             {
-                const auto n1 = y * node_dist.size() + x;
+                const auto n1 = y * N + x;
                 const auto n2 = n1 + dz;
                 REQUIRE(bc.lookup(n1)[0] == n2 or bc.lookup(n2)[0] == n1);
             }
