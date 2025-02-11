@@ -251,11 +251,11 @@ inline auto makeTpetraMapOwnedPlusShared(const util::SegmentedOwnership< global_
     return util::makeTeuchosRCP< const tpetra_map_t >(unknown_num_dofs, dofs_teuchos_view, 0, std::move(comm));
 }
 
-void insertIntoTpetraGraph(const LocalGraphGID&                            local_graph,
-                           const row_to_entries_map_t&                     shared_entries,
-                           const util::SegmentedOwnership< global_dof_t >& row_ownership,
-                           const util::SegmentedOwnership< global_dof_t >& col_ownership,
-                           tpetra_crsgraph_t&                              tpetra_graph)
+inline void insertIntoTpetraGraph(const LocalGraphGID&                            local_graph,
+                                  const row_to_entries_map_t&                     shared_entries,
+                                  const util::SegmentedOwnership< global_dof_t >& row_ownership,
+                                  const util::SegmentedOwnership< global_dof_t >& col_ownership,
+                                  tpetra_crsgraph_t&                              tpetra_graph)
 {
     L3STER_PROFILE_FUNCTION;
     // Construct hashmap instead of calling col_ownership.getLocalIndex()
@@ -277,9 +277,9 @@ void insertIntoTpetraGraph(const LocalGraphGID&                            local
     }
 }
 
-auto makeRowSizes(const LocalGraphGID&                            local_graph,
-                  const row_to_entries_map_t&                     shared_entries,
-                  const util::SegmentedOwnership< global_dof_t >& row_ownership)
+inline auto makeRowSizes(const LocalGraphGID&                            local_graph,
+                         const row_to_entries_map_t&                     shared_entries,
+                         const util::SegmentedOwnership< global_dof_t >& row_ownership)
 {
     using return_t       = Kokkos::DualView< size_t*, tpetra_fecrsgraph_t::execution_space >;
     const auto num_rows  = local_graph.row_sizes.size();
