@@ -5,11 +5,6 @@
 
 namespace lstr::dofs
 {
-// Don't trigger false positive Warray-bounds
-#if defined(__GNUC__) || defined(__GNUG__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warray-bounds"
-#endif
 template < CondensationPolicy CP, size_t max_dofs_per_node, mesh::ElementType ET, el_o_t EO, std::integral I >
 auto getDofsCopy(const NodeToGlobalDofMap< max_dofs_per_node >& node2dof,
                  const mesh::Element< ET, EO >&                 element,
@@ -33,10 +28,6 @@ auto getDofsCopy(const NodeToGlobalDofMap< max_dofs_per_node >& node2dof,
     retval.erase(erase_begin, retval.end());
     return retval;
 }
-
-#if defined(__GNUC__) || defined(__GNUG__)
-#pragma GCC diagnostic pop
-#endif
 
 template < IndexRange_c auto dof_inds, size_t n_nodes, size_t dofs_per_node >
 auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&             nodes,
