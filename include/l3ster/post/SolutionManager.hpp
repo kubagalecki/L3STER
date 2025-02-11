@@ -28,8 +28,8 @@ public:
                           const Kernel&                           kernel,
                           const util::ArrayOwner< d_id_t >&       domain_ids,
                           const util::ArrayOwner< size_t >&       inds,
-                          const post::FieldAccess< n_fields >&    field_access,
-                          val_t                                   time = 0.);
+                          const post::FieldAccess< n_fields >&    field_access = {},
+                          val_t                                   time         = 0.);
     inline void setFields(const util::ArrayOwner< size_t >& field_inds, val_t value);
 
     template < std::integral Index, size_t N >
@@ -112,7 +112,7 @@ void SolutionManager::setFields(const MpiComm&                          comm,
                                 const post::FieldAccess< n_fields >&    field_access,
                                 val_t                                   time)
 {
-    algsys::computeValuesAtNodes(comm,  mesh, kernel, domain_ids, inds, getRawView(), field_access, time);
+    algsys::computeValuesAtNodes(comm, mesh, kernel, domain_ids, inds, getRawView(), field_access, time);
 }
 
 template < std::integral Index, size_t n_fields >
