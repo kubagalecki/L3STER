@@ -73,6 +73,8 @@ void BelosSolverInterface::init(const Teuchos::RCP< const tpetra_operator_t >&  
 
 IterSolveResult BelosSolverInterface::solveImpl()
 {
+    m_solver->reset(Belos::Problem);
+    m_solver->reset(Belos::RecycleSubspace);
     const auto solve_status = m_solver->solve();
     const auto converged    = solve_status == Belos::Converged;
     util::throwingAssert(not m_solver_opts.throw_on_fail or converged, "Solver failed to converge");

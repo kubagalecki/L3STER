@@ -36,7 +36,8 @@ void testSendRecv(const MpiComm& comm)
     else
     {
         const auto recv_mesh = receiveMesh< 1 >(comm, 0);
-        REQUIRE(std::ranges::equal(read_mesh.getAllNodes(), recv_mesh.getAllNodes()));
+        REQUIRE(std::ranges::equal(read_mesh.getOwnedNodes(), recv_mesh.getOwnedNodes()));
+        REQUIRE(std::ranges::equal(read_mesh.getGhostNodes(), recv_mesh.getGhostNodes()));
         REQUIRE(std::ranges::equal(read_mesh.getDomainIds(), recv_mesh.getDomainIds()));
         for (d_id_t domain_id : read_mesh.getDomainIds())
         {
@@ -53,10 +54,10 @@ void testSendRecv(const MpiComm& comm)
 }
 
 // Test whether the mesh is correctly distributed across the communicator
-void testDistribute(const MpiComm& comm)
+void testDistribute(const MpiComm& comm, MeshDistOpts opts)
 {
     const auto mesh_path = L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh);
-    const auto part      = readAndDistributeMesh< 2 >(comm, mesh_path, mesh::gmsh_tag, {});
+    const auto part      = readAndDistributeMesh< 2 >(comm, mesh_path, mesh::gmsh_tag, {}, {}, {}, opts);
 
     const size_t n_elems = part->getNElements();
     size_t       sum_elems{};
@@ -75,5 +76,6 @@ int main(int argc, char* argv[])
     MpiComm          comm{MPI_COMM_WORLD};
 
     testSendRecv(comm);
-    testDistribute(comm);
+    testDistribute(comm, {.optimize = false});
+    testDistribute(comm, {.optimize = true});
 }

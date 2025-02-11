@@ -1,8 +1,8 @@
 #include "l3ster/bcs/DirichletBC.hpp"
-#include "l3ster/bcs/GetDirichletDofs.hpp"
-#include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/algsys/ScatterLocalSystem.hpp"
 #include "l3ster/algsys/SparsityGraph.hpp"
+#include "l3ster/bcs/GetDirichletDofs.hpp"
+#include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/solve/Amesos2Solvers.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
@@ -23,20 +23,19 @@ void test()
     constexpr auto   boundary       = 3;
     constexpr d_id_t domain_id      = 0;
     constexpr auto   problem_def    = ProblemDef{defineDomain< 1 >(domain_id, 0)};
-    constexpr auto   dirichlet_def  = ProblemDef{defineDomain< 1 >(boundary, 0)};
     constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
-    constexpr auto   dirdef_ctwrpr  = util::ConstexprValue< dirichlet_def >{};
+    auto             dirichlet_def  = DirichletBCDefinition< 1 >{};
+    dirichlet_def.defineDirichletBoundary({boundary}, {0});
 
     constexpr auto node_dist    = std::array{0., 1., 2., 3., 4., 5.};
-    auto           my_partition = comm::distributeMesh(comm, makeCubeMesh(node_dist));
+    auto           my_partition = comm::distributeMesh(comm, [&] { return makeCubeMesh(node_dist); });
 
-    const auto cond_map            = makeCondensationMap< CP >(comm, *my_partition, probdef_ctwrpr);
-    const auto dof_intervals       = computeDofIntervals(comm, *my_partition, cond_map, probdef_ctwrpr);
-    const auto global_node_dof_map = NodeToGlobalDofMap{dof_intervals, cond_map};
-    const auto sparsity_graph = makeSparsityGraph(comm, *my_partition, global_node_dof_map, cond_map, probdef_ctwrpr);
+    constexpr auto cp_tag              = CondensationPolicyTag< CP >{};
+    const auto     global_node_dof_map = NodeToGlobalDofMap{comm, *my_partition, probdef_ctwrpr, {}, cp_tag};
+    const auto     sparsity_graph = makeSparsityGraph(comm, *my_partition, global_node_dof_map, probdef_ctwrpr, cp_tag);
 
     const auto [owned_bcdofs, shared_bcdofs] =
-        getDirichletDofs(*my_partition, sparsity_graph, global_node_dof_map, cond_map, probdef_ctwrpr, dirdef_ctwrpr);
+        getDirichletDofs(*my_partition, sparsity_graph, global_node_dof_map, probdef_ctwrpr, dirichlet_def);
     const auto dirichlet_bc = DirichletBCAlgebraic{sparsity_graph, owned_bcdofs, shared_bcdofs};
 
     auto matrix         = util::makeTeuchosRCP< tpetra_fecrsmatrix_t >(sparsity_graph);
@@ -46,8 +45,8 @@ void test()
     matrix->beginAssembly();
     input_vectors.beginAssembly();
 
-    const auto dof_map = NodeToLocalDofMap{
-        cond_map, global_node_dof_map, *matrix->getRowMap(), *matrix->getColMap(), *input_vectors.getMap()};
+    const auto dof_map =
+        NodeToLocalDofMap{global_node_dof_map, *matrix->getRowMap(), *matrix->getColMap(), *input_vectors.getMap()};
 
     {
         auto rhs      = input_vectors.getVectorNonConst(0)->getDataNonConst();
@@ -65,7 +64,7 @@ void test()
 
                     constexpr auto dof_inds_wrpr = util::ConstexprValue< std::array{size_t{0}} >{};
                     const auto [row_dofs, col_dofs, rhs_dofs] =
-                        getUnsortedPrimaryDofs(element, dof_map, CondensationPolicyTag< CP >{}, dof_inds_wrpr);
+                        getDofsFromNodes(getPrimaryNodesArray< CP >(element), dof_map, dof_inds_wrpr);
                     scatterLocalSystem(
                         local_mat, local_vec, *matrix, std::array{rhs_view}, row_dofs, col_dofs, rhs_dofs);
                 }

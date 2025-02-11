@@ -17,13 +17,12 @@ int main(int argc, char* argv[])
     // Define the flow problem
     constexpr auto problem_def = ProblemDef{defineDomain< n_unknowns >(domain, ALL_DOFS)};
 
-    // Dirichlet conditions: velocity prescribed at inlet + walls
-    constexpr auto dirichlet_def =
-        ProblemDef{defineDomain< n_unknowns >(inlet, IU, IV), defineDomain< n_unknowns >(wall, IU, IV)};
-
-    // Wrap as compile-time values
+    // Wrap as compile-time value
     constexpr auto probdef_ctwrpr = L3STER_WRAP_CTVAL(problem_def);
-    constexpr auto dirdef_ctwrpr  = L3STER_WRAP_CTVAL(dirichlet_def);
+
+    // Dirichlet conditions: velocity prescribed at inlet + walls
+    auto bc_def = BCDefinition< n_unknowns >{};
+    bc_def.defineDirichlet({inlet, wall}, {IU, IV});
 
     // Read mesh
     const std::string mesh_file  = argc > 1 ? argv[1] : "../karman.msh";
@@ -34,7 +33,7 @@ int main(int argc, char* argv[])
     // Algebraic system used for both the steady and transient problems
     constexpr auto sys_opts         = AlgebraicSystemParams{.cond_policy = CondensationPolicy::ElementBoundary};
     constexpr auto sysopts_ctval    = L3STER_WRAP_CTVAL(sys_opts);
-    auto           algebraic_system = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, dirdef_ctwrpr, sysopts_ctval);
+    auto           algebraic_system = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, bc_def, sysopts_ctval);
     algebraic_system.describe();
 
     // Time step

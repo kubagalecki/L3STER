@@ -24,7 +24,10 @@ using val_t        = double;            // floating point value type
 using global_dof_t = long long int;     // global DOF type
 using local_dof_t  = int;               // local DOF type
 
-inline constexpr auto invalid_domain_id = std::numeric_limits< d_id_t >::max();
-inline constexpr auto invalid_dim       = std::numeric_limits< dim_t >::max();
+inline constexpr auto         invalid_domain_id  = std::numeric_limits< d_id_t >::max();
+inline constexpr auto         invalid_dim        = std::numeric_limits< dim_t >::max();
+inline constexpr auto         invalid_node       = std::numeric_limits< n_id_t >::max();
+inline constexpr global_dof_t invalid_global_dof = -1;
+inline constexpr local_dof_t  invalid_local_dof  = -1;
 } // namespace lstr
 #endif // L3STER_COMMON_TYPEDEFS_H

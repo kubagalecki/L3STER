@@ -207,6 +207,14 @@ constexpr auto getTrueInds(const std::array< bool, N >& a) -> util::StaticVector
     return retval;
 }
 
+template < size_t N >
+constexpr auto getTrueInds(const std::bitset< N >& a) -> util::StaticVector< size_t, N >
+{
+    auto retval = util::StaticVector< size_t, N >{};
+    std::ranges::copy_if(std::views::iota(0uz, a.size()), std::back_inserter(retval), [&a](size_t i) { return a[i]; });
+    return retval;
+}
+
 template < ArrayOf_c< bool > auto A >
 constexpr auto getTrueInds(ConstexprValue< A > = {})
 {

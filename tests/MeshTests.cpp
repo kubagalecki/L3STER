@@ -192,7 +192,7 @@ TEST_CASE("Serial mesh partitioning", "[mesh]")
     constexpr auto n_parts      = 2;
     const auto     mesh         = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), boundary_ids, gmsh_tag);
     const auto     n_elements   = mesh.getNElements();
-    const auto     n_nodes      = mesh.getAllNodes().size();
+    const auto     n_nodes      = mesh.getNNodes();
 
     // No elements lost
     REQUIRE_NOTHROW(partitionMesh(mesh, 1));
@@ -275,6 +275,14 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
     }
 }
 
+template < ElementType ET, el_o_t EO, el_o_t... orders >
+auto getGlobalNodes(const LocalElementView< ET, EO >& el, const MeshPartition< orders... >& m)
+{
+    auto retval = std::array< n_id_t, Element< ET, EO >::n_nodes >{};
+    std::ranges::transform(el.getLocalNodes(), retval.begin(), [&](n_loc_id_t n) { return m.getGlobalNodeIndex(n); });
+    return retval;
+}
+
 template < el_o_t O >
 using Order = std::integral_constant< el_o_t, O >;
 TEMPLATE_TEST_CASE("Local mesh view", "[mesh]", Order< 1 >, Order< 2 >, Order< 4 >)
@@ -284,8 +292,7 @@ TEMPLATE_TEST_CASE("Local mesh view", "[mesh]", Order< 1 >, Order< 2 >, Order< 4
 
     constexpr auto check_local_view = [](const auto& global_mesh) {
         auto             nodes_reordered = computeNodeOrder(global_mesh);
-        const auto       node_map        = NodeMap{std::move(nodes_reordered)};
-        const auto       local_view      = LocalMeshView{global_mesh, node_map};
+        const auto       local_view      = LocalMeshView{global_mesh, global_mesh};
         constexpr d_id_t domain_id       = 0;
         const auto       global_domain   = global_mesh.getDomain(domain_id);
         const auto       local_domain    = local_view.getDomains().at(domain_id);
@@ -296,7 +303,7 @@ TEMPLATE_TEST_CASE("Local mesh view", "[mesh]", Order< 1 >, Order< 2 >, Order< 4
                 using global_t = std::remove_cvref_t< decltype(global_element) >;
                 if constexpr (local_t::type == global_t::type and local_t::order == global_t::order)
                 {
-                    const auto nodes = local_element.getGlobalNodes(node_map);
+                    const auto nodes = getGlobalNodes(local_element, global_mesh);
                     return nodes == global_element.getNodes() and local_element.getData() == global_element.getData();
                 }
                 return false;
@@ -317,7 +324,7 @@ TEMPLATE_TEST_CASE("Local mesh view", "[mesh]", Order< 1 >, Order< 2 >, Order< 4
                     for (const auto& [side, boundary] : local_element.getBoundaries())
                         if (boundary == boundary_id)
                         {
-                            const auto nodes = local_element.getGlobalNodes(node_map);
+                            const auto nodes = getGlobalNodes(local_element, global_mesh);
                             if (nodes == global_boundary_view->getNodes() and
                                 local_element.getData() == global_boundary_view->getData() and
                                 side == global_boundary_view.getSide())

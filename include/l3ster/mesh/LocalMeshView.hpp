@@ -9,20 +9,6 @@
 
 namespace lstr::mesh
 {
-class NodeMap
-{
-public:
-    inline explicit NodeMap(util::ArrayOwner< n_id_t > global_nodes);
-
-    n_loc_id_t toLocal(n_id_t gid) const { return m_gid2lid_map.at(gid); }
-    n_id_t     toGlobal(n_loc_id_t lid) const { return m_global_nodes.at(lid); }
-    size_t     size() const { return m_global_nodes.size(); }
-
-private:
-    util::ArrayOwner< n_id_t >                           m_global_nodes;
-    robin_hood::unordered_flat_map< n_id_t, n_loc_id_t > m_gid2lid_map;
-};
-
 template < ElementType ET, el_o_t EO >
 class LocalElementView
 {
@@ -48,14 +34,14 @@ public:
     static constexpr auto type  = ET;
     static constexpr auto order = EO;
 
-    inline LocalElementView(const Element< ET, EO >&       global_elem,
-                            const NodeMap&                 map,
-                            std::span< const bound_descr > sides);
+    template < el_o_t... orders >
+    LocalElementView(const Element< ET, EO >&          global_elem,
+                     const MeshPartition< orders... >& mesh,
+                     std::span< const bound_descr >    sides);
 
     inline auto getLocalNodes() const -> std::array< n_loc_id_t, n_nodes >
         requires optimize_internal;
     inline auto getLocalNodes() const -> const std::array< n_loc_id_t, n_nodes >& requires(not optimize_internal);
-    inline auto getGlobalNodes(const NodeMap& map) const -> std::array< n_id_t, n_nodes >;
     auto        getData() const -> const Data& { return m_data; }
     inline auto getBoundaries() const -> util::StaticVector< bound_descr, n_sides >;
     [[nodiscard]] bool hasBoundaries() const
@@ -70,9 +56,8 @@ private:
 };
 
 template < ElementType ET, el_o_t EO, typename Map >
-LocalElementView(const Element< ET, EO >&,
-                 const Map&,
-                 std::span< const std::pair< el_side_t, d_id_t > >) -> LocalElementView< ET, EO >;
+LocalElementView(const Element< ET, EO >&, const Map&, std::span< const std::pair< el_side_t, d_id_t > >)
+    -> LocalElementView< ET, EO >;
 
 template < el_o_t... orders >
 struct LocalDomainView
@@ -113,7 +98,7 @@ class LocalMeshView
 {
 public:
     LocalMeshView() = default;
-    explicit LocalMeshView(const MeshPartition< orders... >& mesh, const NodeMap& node_map);
+    LocalMeshView(const MeshPartition< orders... >& part, const MeshPartition< orders... >& full);
 
     template < typename Visitor, SimpleExecutionPolicy_c ExecPolicy = MeshPartition< orders... >::DefaultExec >
     void visit(Visitor&& visitor, ExecPolicy&& policy = {}) const;
@@ -216,24 +201,18 @@ void LocalMeshView< orders... >::visitBoundaries(Visitor&& visitor, ExecPolicy&&
     visit(visit_el_boundaries, std::forward< ExecPolicy >(policy));
 }
 
-NodeMap::NodeMap(util::ArrayOwner< n_id_t > global_nodes)
-    : m_global_nodes{std::move(global_nodes)}, m_gid2lid_map(m_global_nodes.size())
-{
-    for (n_loc_id_t lid = 0; n_id_t gid : m_global_nodes)
-        m_gid2lid_map.insert({gid, lid++});
-}
-
 template < ElementType ET, el_o_t EO >
-LocalElementView< ET, EO >::LocalElementView(const Element< ET, EO >&       global_elem,
-                                             const NodeMap&                 map,
-                                             std::span< const bound_descr > sides)
+template < el_o_t... orders >
+LocalElementView< ET, EO >::LocalElementView(const Element< ET, EO >&          global_elem,
+                                             const MeshPartition< orders... >& mesh,
+                                             std::span< const bound_descr >    sides)
     : m_data{global_elem.getData()}
 {
+    const auto g2l = [&](auto n) {
+        return mesh.getLocalNodeIndex(n);
+    };
     if constexpr (optimize_internal)
     {
-        const auto g2l = [&](auto n) {
-            return map.toLocal(n);
-        };
         std::ranges::transform(getBoundaryNodes(global_elem), m_nodes.begin(), g2l);
         const auto internal_nodes  = getInternalNodes(global_elem) | std::views::transform(g2l);
         const bool internal_sorted = std::ranges::is_sorted(internal_nodes);
@@ -242,7 +221,7 @@ LocalElementView< ET, EO >::LocalElementView(const Element< ET, EO >&       glob
         m_nodes.back() = internal_nodes.front();
     }
     else
-        std::ranges::transform(global_elem.getNodes(), m_nodes.begin(), [&](auto n) { return map.toLocal(n); });
+        std::ranges::transform(global_elem.getNodes(), m_nodes.begin(), g2l);
 
     m_sides.fill(invalid_domain_id);
     for (const auto& [side, boundary_id] : sides)
@@ -264,14 +243,6 @@ auto LocalElementView< ET, EO >::getLocalNodes() const -> std::array< n_loc_id_t
 template < ElementType ET, el_o_t EO >
 auto LocalElementView< ET, EO >::getLocalNodes() const
     -> const std::array< n_loc_id_t, n_nodes >& requires(not optimize_internal) { return m_nodes; }
-
-template < ElementType ET, el_o_t EO >
-auto LocalElementView< ET, EO >::getGlobalNodes(const NodeMap& map) const -> std::array< n_id_t, n_nodes >
-{
-    auto retval = std::array< n_id_t, n_nodes >{};
-    std::ranges::transform(getLocalNodes(), retval.begin(), [&](n_loc_id_t lid) { return map.toGlobal(lid); });
-    return retval;
-}
 
 template < ElementType ET, el_o_t EO >
 auto LocalElementView< ET, EO >::getBoundaries() const -> util::StaticVector< bound_descr, n_sides >
@@ -469,9 +440,10 @@ auto computeNodeOrder(const MeshPartition< orders... >& mesh) -> util::ArrayOwne
     const auto is_internal = [&](n_id_t node) {
         return internal_node_set.contains(node);
     };
-    const size_t num_internal = std::ranges::count_if(mesh.getOwnedNodes(), util::negatePredicate(is_internal));
-    const size_t num_total    = num_internal + internal_node_vec.size() + mesh.getGhostNodes().size();
-    util::throwingAssert(num_total == mesh.getAllNodes().size(), "Internal nodes cannot be ghost nodes");
+    const auto num_internal =
+        static_cast< size_t >(std::ranges::count_if(mesh.getOwnedNodes(), util::negatePredicate(is_internal)));
+    const size_t num_total = num_internal + internal_node_vec.size() + mesh.getGhostNodes().size();
+    util::throwingAssert(num_total == mesh.getNNodes(), "Internal nodes cannot be ghost nodes");
     auto retval = util::ArrayOwner< n_id_t >(num_total);
     auto iter   = std::ranges::copy_if(mesh.getOwnedNodes(), retval.begin(), util::negatePredicate(is_internal)).out;
     iter        = std::ranges::copy(internal_node_vec, iter).out;
@@ -480,23 +452,24 @@ auto computeNodeOrder(const MeshPartition< orders... >& mesh) -> util::ArrayOwne
 }
 
 template < el_o_t... orders >
-LocalMeshView< orders... >::LocalMeshView(const MeshPartition< orders... >& mesh, const NodeMap& node_map)
+LocalMeshView< orders... >::LocalMeshView(const MeshPartition< orders... >& part,
+                                          const MeshPartition< orders... >& full)
 {
-    const auto owned_nodes = mesh.getOwnedNodes();
-    m_owned_limit = static_cast< n_loc_id_t >(owned_nodes.empty() ? 0uz : (node_map.toLocal(owned_nodes.back()) + 1));
-    const auto elem_side_map    = detail::makeElementIdToSidesMap(mesh);
+    const auto owned_nodes      = part.getOwnedNodes();
+    m_owned_limit               = owned_nodes.empty() ? 0u : (full.getLocalNodeIndex(owned_nodes.back()) + 1u);
+    const auto elem_side_map    = detail::makeElementIdToSidesMap(part);
     const auto element_to_local = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
         const auto side_info = elem_side_map.find(element.getId());
-        return side_info != elem_side_map.end() ? LocalElementView{element, node_map, side_info->second}
-                                                : LocalElementView{element, node_map, {}};
+        return side_info != elem_side_map.end() ? LocalElementView{element, full, side_info->second}
+                                                : LocalElementView{element, full, {}};
     };
-    const auto boundaries = mesh.getBoundaryIdsCopy();
+    const auto boundaries = part.getBoundaryIdsCopy();
     auto       cache      = detail::NodeCacheHotnessModel{};
-    for (d_id_t domain_id : mesh.getDomainIds())
+    for (d_id_t domain_id : part.getDomainIds())
     {
         if (std::ranges::binary_search(boundaries, domain_id))
             continue;
-        const auto& global_domain = mesh.getDomain(domain_id);
+        const auto& global_domain = part.getDomain(domain_id);
         auto        local_domain  = LocalDomainView< orders... >{};
         local_domain.elements.reserve(global_domain.elements.sizes());
         const auto make_vec_view = [&]< ElementType ET, el_o_t EO >(const std::vector< Element< ET, EO > >& el_vec) {
@@ -509,8 +482,8 @@ LocalMeshView< orders... >::LocalMeshView(const MeshPartition< orders... >& mesh
         global_domain.elements.visitVectors(make_vec_view);
         m_domains[domain_id] = std::move(local_domain);
     }
-    for (d_id_t dom_id : mesh.getDomainIds())
-        m_dims[dom_id] = mesh.getDomain(dom_id).dim;
+    for (d_id_t dom_id : part.getDomainIds())
+        m_dims[dom_id] = part.getDomain(dom_id).dim;
 }
 } // namespace lstr::mesh
 #endif // L3STER_MESH_LOCALMESHVIEW_HPP

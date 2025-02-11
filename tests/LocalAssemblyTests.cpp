@@ -1,8 +1,8 @@
 #include "catch2/catch.hpp"
 
-#include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 #include "l3ster/algsys/AssembleLocalSystem.hpp"
 #include "l3ster/algsys/EvaluateLocalOperator.hpp"
+#include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 #include "l3ster/mapping/ComputePhysBasisDer.hpp"
 #include "l3ster/mesh/NodePhysicalLocation.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
@@ -110,7 +110,6 @@ static auto makeSolution(const mesh::Element< ET, EO >& element)
 TEST_CASE("Local system assembly", "[local_asm]")
 {
     // Solve problems using a 1 element discretization and compare with known results
-
     SECTION("Diffusion 2D")
     {
         constexpr auto element = makeQuadElement();
@@ -133,7 +132,6 @@ TEST_CASE("Local system assembly", "[local_asm]")
 TEST_CASE("Local operator evaluation", "[local_asm]")
 {
     // Compare matrix-free evaluation result with multiplication using explicitly constructed operator
-
     SECTION("Diffusion 2D")
     {
         constexpr auto element = makeQuadElement();
@@ -144,9 +142,11 @@ TEST_CASE("Local operator evaluation", "[local_asm]")
         auto [A, b]            = assembleDiffusionProblem2D< params >(element);
         applyDirichletBCs< ET, EO, params >(A, b, phi);
 
+        auto dom_map = mesh::MeshPartition< EO >::domain_map_t{};
+        mesh::pushToDomain(dom_map[0], element);
+        const auto global_mesh    = mesh::MeshPartition< EO >{std::move(dom_map), {}};
         using dirichlet_index     = util::smallest_integral_t< operand_size< ET, EO, params > >;
-        const auto  node_map      = mesh::NodeMap{std::views::iota(0uz, element.getNodes().size())};
-        const auto  local_element = mesh::LocalElementView{element, node_map, {}};
+        const auto  local_element = mesh::LocalElementView{element, global_mesh, {}};
         const auto& bnd_node_inds = mesh::ElementTraits< mesh::Element< ET, EO > >::boundary_node_inds;
         auto        dirichlet_bcs = std::vector< dirichlet_index >{};
         for (auto i : bnd_node_inds)

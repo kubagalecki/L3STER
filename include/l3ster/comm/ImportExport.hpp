@@ -3,6 +3,7 @@
 
 #include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/util/Algorithm.hpp"
+#include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/CrsGraph.hpp"
 #include "l3ster/util/IndexMap.hpp"
 #include "l3ster/util/RobinHoodHashTables.hpp"
@@ -51,7 +52,7 @@ public:
                std::views::transform([this](size_t i) { return std::make_pair(m_nbrs.at(i), m_owned_inds(i)); });
     }
     auto getSharedNbrs() const -> NbrSpan { return {m_nbrs | std::views::drop(m_num_owned_nbrs)}; }
-    auto getNumSharedInds() const -> size_t { return m_shared_ind_offsets.back(); }
+    auto getNumSharedInds() const -> size_t { return static_cast< size_t >(m_shared_ind_offsets.back()); }
     auto getSharedRange() const
     {
         return std::views::zip_transform(
@@ -70,17 +71,16 @@ private:
     util::ArrayOwner< LocalIndex > m_shared_ind_offsets;
 };
 template < std::ranges::contiguous_range R1, std::ranges::contiguous_range R2 >
-ImportExportContext(const MpiComm& comm,
-                    R1&&,
-                    R2&&) -> ImportExportContext< std::remove_const_t< std::ranges::range_value_t< R1 > > >;
+ImportExportContext(const MpiComm& comm, R1&&, R2&&)
+    -> ImportExportContext< std::remove_const_t< std::ranges::range_value_t< R1 > > >;
 
 template < Arithmetic_c Scalar, std::signed_integral LocalIndex >
 class ImportExportBase
 {
     // Each import/export object has a unique ID, which is used to deconflict comms from different objects
-    inline static unsigned counter   = 0;
-    static constexpr int   half_bits = sizeof(int) * CHAR_BIT / 2;
-    static constexpr int   lo_mask   = -1 >> half_bits;
+    inline static unsigned id_counter = 0;
+    static constexpr int   half_bits  = sizeof(int) * CHAR_BIT / 2;
+    static constexpr int   lo_mask    = -1 >> half_bits;
 
 public:
     auto getContext() const { return m_context; }
@@ -96,7 +96,7 @@ protected:
           m_requests(num_vecs * m_context->getNumNbrs()),
           m_pack_buf(num_vecs * m_context->getOwnedInds().size()),
           m_max_owned{m_context->getOwnedInds().empty() ? -1 : std::ranges::max(m_context->getOwnedInds())},
-          m_id{counter++}
+          m_id{id_counter++ & (-1u >> 1)} // make sure the highest bit is always 0
     {}
 
     bool isOwnedSizeSufficient(size_t size) const;
@@ -134,18 +134,13 @@ public:
         wait();
     }
 
-    template < util::KokkosView_c View >
-    void setOwned(View&& view)
-        requires(std::remove_cvref_t< View >::rank() == 2)
+    void setOwned(const Kokkos::View< const Scalar**, Kokkos::LayoutLeft >& view)
     {
-        setOwned(util::flatten(view), view.stride(0));
+        setOwned(util::getMemorySpan(view), view.stride(1));
     }
-    template < util::KokkosView_c View >
-    void setShared(View&& view)
-        requires(std::remove_cvref_t< View >::rank() == 2 and
-                 not std::is_const_v< typename std::remove_cvref_t< View >::value_type >)
+    void setShared(const Kokkos::View< Scalar**, Kokkos::LayoutLeft >& view)
     {
-        setShared(util::flatten(view), view.stride(0));
+        setShared(util::getMemorySpan(view), view.stride(1));
     }
 
 private:
@@ -177,19 +172,21 @@ public:
     inline void postRecvs(const MpiComm& comm);
     template < std::invocable< Scalar&, Scalar > Combine >
     void wait(Combine&& combine);
-
-    template < util::KokkosView_c View >
-    void setOwned(View&& view)
-        requires(std::remove_cvref_t< View >::rank() == 2 and
-                 not std::is_const_v< typename std::remove_cvref_t< View >::value_type >)
+    template < std::invocable< Scalar&, Scalar > Combine >
+    void doBlockingExport(const MpiComm& comm, Combine&& combine)
     {
-        setOwned(util::flatten(view), view.stride(0));
+        postRecvs(comm);
+        postSends(comm);
+        wait(std::forward< Combine >(combine));
     }
-    template < util::KokkosView_c View >
-    void setShared(View&& view)
-        requires(std::remove_cvref_t< View >::rank() == 2)
+
+    void setOwned(const Kokkos::View< Scalar**, Kokkos::LayoutLeft >& view)
     {
-        setShared(util::flatten(view), view.stride(0));
+        setOwned(util::getMemorySpan(view), view.stride(1));
+    }
+    void setShared(const Kokkos::View< const Scalar**, Kokkos::LayoutLeft >& view)
+    {
+        setShared(util::getMemorySpan(view), view.stride(1));
     }
 
 private:
@@ -261,7 +258,7 @@ template < std::signed_integral GlobalIndex >
 bool checkSharedIndexing(const rank_ind_map_t< GlobalIndex >& shared_map, std::span< const GlobalIndex > shared_inds)
 {
     const auto g2l         = util::IndexMap< GlobalIndex >{shared_inds};
-    auto       shared_lids = shared_map | std::views::join | std::views::transform(g2l);
+    auto       shared_lids = shared_map | std::views::join | std::views::transform(std::cref(g2l));
     const auto num_shared  = std::transform_reduce(
         shared_map.begin(), shared_map.end(), 0uz, std::plus{}, [](const auto& vec) { return vec.size(); });
     return std::ranges::equal(shared_lids, std::views::iota(0uz, num_shared));
@@ -285,8 +282,8 @@ struct FlattenMapResult
 };
 
 template < std::signed_integral LocalIndex, std::signed_integral GlobalIndex >
-auto flattenOwnedMap(const rank_ind_map_t< GlobalIndex >& owned_map,
-                     std::span< const GlobalIndex >       owned_inds) -> FlattenMapResult< LocalIndex >
+auto flattenOwnedMap(const rank_ind_map_t< GlobalIndex >& owned_map, std::span< const GlobalIndex > owned_inds)
+    -> FlattenMapResult< LocalIndex >
 {
     constexpr auto not_empty          = util::negatePredicate(&std::vector< GlobalIndex >::empty);
     constexpr auto get_size           = &std::vector< GlobalIndex >::size;
@@ -325,6 +322,7 @@ ImportExportContext< LocalIndex >::ImportExportContext(const MpiComm&           
                                                        std::span< const GlobalIndex > owned_inds,
                                                        std::span< const GlobalIndex > shared_inds)
 {
+    L3STER_PROFILE_FUNCTION;
     util::throwingAssert(std::ranges::is_sorted(owned_inds), "Owned GIDs must be sorted");
     const auto owned_map  = detail::makeOwnedMap(comm, owned_inds, shared_inds);
     const auto shared_map = detail::makeSharedMap(comm, owned_map);
@@ -342,13 +340,17 @@ ImportExportContext< LocalIndex >::ImportExportContext(const MpiComm&           
 template < Arithmetic_c Scalar, std::signed_integral LocalIndex >
 bool ImportExportBase< Scalar, LocalIndex >::isOwnedSizeSufficient(size_t size) const
 {
-    return size >= (m_num_vecs - 1) * m_owned_stride + m_max_owned + 1;
+    const auto num_owned     = static_cast< size_t >(m_max_owned + 1);
+    const auto required_size = (m_num_vecs - 1) * m_owned_stride + num_owned;
+    return num_owned > 0 ? size >= required_size : true;
 }
 
 template < Arithmetic_c Scalar, std::signed_integral LocalIndex >
 bool ImportExportBase< Scalar, LocalIndex >::isSharedSizeSufficient(size_t size) const
 {
-    return size >= (m_num_vecs - 1) * m_shared_stride + m_context->getNumSharedInds();
+    const auto num_shared    = m_context->getNumSharedInds();
+    const auto required_size = (m_num_vecs - 1) * m_shared_stride + num_shared;
+    return num_shared > 0 ? size >= required_size : true;
 }
 
 template < Arithmetic_c Scalar, std::signed_integral LocalIndex >

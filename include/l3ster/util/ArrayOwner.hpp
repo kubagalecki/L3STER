@@ -18,7 +18,7 @@ inline constexpr CacheAlign cache_align{};
 template < std::default_initializable T >
 class ArrayOwner
 {
-    static constexpr std::size_t cacheline_size = 64;
+    static constexpr std::size_t cacheline_size = std::hardware_destructive_interference_size;
 
 public:
     using size_type = std::size_t;
@@ -45,12 +45,12 @@ public:
     const T& operator[](size_type i) const { return m_data[i]; }
     T&       at(size_type i, std::source_location sl = std::source_location::current())
     {
-        util::throwingAssert(i < m_size, {}, sl);
+        util::throwingAssert(i < m_size, "ArrayOwner: out of bounds access", sl);
         return m_data[i];
     }
     const T& at(size_type i, std::source_location sl = std::source_location::current()) const
     {
-        util::throwingAssert(i < m_size, {}, sl);
+        util::throwingAssert(i < m_size, "ArrayOwner: out of bounds access", sl);
         return m_data[i];
     }
     T&        front() { return m_data[0]; }

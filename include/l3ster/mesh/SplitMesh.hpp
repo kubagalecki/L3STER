@@ -86,24 +86,23 @@ template < el_o_t... orders >
 auto makeMesh(const MeshPartition< orders... >&                   parent_mesh,
               typename MeshPartition< orders... >::domain_map_t&& dom_map) -> MeshPartition< orders... >
 {
-    robin_hood::unordered_flat_set< n_id_t > owned_nodes, ghost_nodes;
+    auto       owned_nodes        = std::set< n_id_t >{};
+    const auto insert_owned_nodes = [&](const auto& element) {
+        for (auto node : element.getNodes() | std::views::filter(parent_mesh.getOwnedNodePredicate()))
+            owned_nodes.insert(node);
+    };
     for (const auto& domain : dom_map | std::views::values)
-        domain.elements.visit(
-            [&](const auto& element) {
-                for (auto node : element.getNodes())
-                {
-                    auto& dest = parent_mesh.isGhostNode(node) ? ghost_nodes : owned_nodes;
-                    dest.insert(node);
-                }
-            },
-            std::execution::seq);
-    return {std::move(dom_map), owned_nodes, ghost_nodes, parent_mesh.getBoundaryIdsCopy()};
+        domain.elements.visit(insert_owned_nodes, std::execution::seq);
+    return {std::move(dom_map),
+            owned_nodes.empty() ? 0uz : *owned_nodes.begin(),
+            owned_nodes.size(),
+            parent_mesh.getBoundaryIdsCopy()};
 }
 } // namespace detail
 
 template < typename ElementPredicate, el_o_t... orders >
-auto splitMeshPartition(const MeshPartition< orders... >& mesh,
-                        ElementPredicate&& element_predicate) -> std::array< MeshPartition< orders... >, 2 >
+auto splitMeshPartition(const MeshPartition< orders... >& mesh, ElementPredicate&& element_predicate)
+    -> std::array< MeshPartition< orders... >, 2 >
     requires ElementPredicate_c< ElementPredicate, orders... >
 {
     auto [true_map, false_map] = detail::makeDomainMaps(mesh, std::forward< ElementPredicate >(element_predicate));

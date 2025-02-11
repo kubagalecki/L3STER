@@ -35,18 +35,18 @@ int main(int argc, char* argv[])
     // Define the advection problem - 1 unknown (scalar concentration, at index 0) in the entire domain
     constexpr auto problem_def = ProblemDef{defineDomain< 1 >(domain_id, 0)};
 
-    // Dirichlet condition - we will be setting the value of the scalar concentration at the left (inflow) boundary
-    constexpr auto dirichlet_def = ProblemDef{defineDomain< 1 >(left_boundary, 0)};
-
-    // Wrap as compile-time values
+    // Wrap as compile-time value
     constexpr auto probdef_ctwrpr = L3STER_WRAP_CTVAL(problem_def);
-    constexpr auto dirdef_ctwrpr  = L3STER_WRAP_CTVAL(dirichlet_def);
+
+    // Dirichlet condition - we will be setting the value of the scalar concentration at the left (inflow) boundary
+    auto bc_def = BCDefinition< 1 >{};
+    bc_def.defineDirichlet({left_boundary});
 
     // std::shared_ptr to the current rank's mesh partition
     const auto mesh = makeMesh(*comm, probdef_ctwrpr);
 
     // Algebraic system which we will need to fill
-    auto algebraic_system = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, dirdef_ctwrpr);
+    auto algebraic_system = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, bc_def);
     algebraic_system.describe();
 
     // Time step

@@ -40,6 +40,13 @@ auto asSpan(const Kokkos::View< T*, Layout, Params... >& view) -> std::span< T >
 template < typename... Params >
 auto flatten(const Kokkos::View< Params... >& view) -> std::span< typename Kokkos::View< Params... >::value_type >
 {
+    util::throwingAssert(view.span_is_contiguous(), "Cannot flatten non-contiguous view");
+    return {view.data(), view.size()};
+}
+
+template < typename... Params >
+auto getMemorySpan(const Kokkos::View< Params... >& view) -> std::span< typename Kokkos::View< Params... >::value_type >
+{
     return {view.data(), view.span()};
 }
 
@@ -56,8 +63,8 @@ auto asSpans(const Kokkos::View< T**, Layout, Params... >& view) -> std::vector<
 }
 
 template < size_t N, Arithmetic_c T, typename Layout, typename... Params >
-auto asSpans(const Kokkos::View< T**, Layout, Params... >& view,
-             std::integral_constant< size_t, N > = {}) -> std::array< std::span< T >, N >
+auto asSpans(const Kokkos::View< T**, Layout, Params... >& view, std::integral_constant< size_t, N > = {})
+    -> std::array< std::span< T >, N >
     requires std::same_as< Layout, Kokkos::LayoutLeft >
 {
     const auto n_rows = view.extent(0), n_cols = view.extent(1);
@@ -82,8 +89,8 @@ auto makeTeuchosRCP(Args&&... args) -> Teuchos::RCP< T >
     return Teuchos::rcp(new T(std::forward< Args >(args)...));
 }
 
-inline auto getLocalRowView(const tpetra_crsgraph_t& graph,
-                            local_dof_t              row) -> tpetra_crsgraph_t::local_inds_host_view_type
+inline auto getLocalRowView(const tpetra_crsgraph_t& graph, local_dof_t row)
+    -> tpetra_crsgraph_t::local_inds_host_view_type
 {
     auto retval = tpetra_crsgraph_t::local_inds_host_view_type{};
     graph.getLocalRowView(row, retval);
@@ -100,9 +107,8 @@ inline auto getLocalRowView(const tpetra_crsmatrix_t& matrix, local_dof_t row)
 }
 
 template < std::predicate< global_dof_t > RowPred, std::predicate< global_dof_t > ColPred >
-auto getSubgraph(const Teuchos::RCP< const tpetra_crsgraph_t >& full_graph,
-                 RowPred&&                                      is_row,
-                 ColPred&&                                      is_col) -> Teuchos::RCP< tpetra_crsgraph_t >
+auto getSubgraph(const Teuchos::RCP< const tpetra_crsgraph_t >& full_graph, RowPred&& is_row, ColPred&& is_col)
+    -> Teuchos::RCP< tpetra_crsgraph_t >
 {
     const auto full_num_rows   = full_graph->getLocalNumRows();
     const auto full_row_map    = full_graph->getRowMap();

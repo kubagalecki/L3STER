@@ -18,8 +18,8 @@ struct NeighborInfo
     d_id_t                      domain;
 };
 
-inline auto
-makeNeighborInfoMap(const MeshPartition< 1 >& mesh) -> robin_hood::unordered_flat_map< el_id_t, NeighborInfo >
+inline auto makeNeighborInfoMap(const MeshPartition< 1 >& mesh)
+    -> robin_hood::unordered_flat_map< el_id_t, NeighborInfo >
 {
     auto retval = robin_hood::unordered_flat_map< el_id_t, NeighborInfo >(mesh.getNElements());
     for (d_id_t domain_id : mesh.getDomainIds())
@@ -49,8 +49,8 @@ auto initNewDomains(const MeshPartition< 1 >& mesh_old) -> MeshPartition< conver
 } // namespace detail
 
 template < el_o_t OC >
-auto convertMeshToOrder(const MeshPartition< 1 >& mesh,
-                        std::integral_constant< el_o_t, OC > = {}) -> MeshPartition< OC >
+auto convertMeshToOrder(const MeshPartition< 1 >& mesh, std::integral_constant< el_o_t, OC > = {})
+    -> MeshPartition< OC >
 {
     L3STER_PROFILE_FUNCTION;
     const auto nbr_info_map = detail::makeNeighborInfoMap(mesh);
@@ -100,12 +100,7 @@ auto convertMeshToOrder(const MeshPartition< 1 >& mesh,
     for (auto domain_id : mesh.getDomainIds())
         convert_domain(mesh.getDomain(domain_id), new_domains[domain_id]);
 
-    constexpr auto make_node_iota_array = [](size_t max) {
-        auto retval = util::ArrayOwner< n_id_t >(max);
-        std::iota(retval.begin(), retval.end(), n_id_t{0});
-        return retval;
-    };
-    return {std::move(new_domains), make_node_iota_array(max_node), max_node, mesh.getBoundaryIdsCopy()};
+    return {std::move(new_domains), 0, max_node, mesh.getBoundaryIdsCopy()};
 }
 } // namespace lstr::mesh
 #endif // L3STER_MESH_CONVERTMESHTOORDER_HPP

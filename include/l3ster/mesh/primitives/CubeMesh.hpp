@@ -129,9 +129,7 @@ auto makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz) -> MeshPartition< 1 >
         }
     }
 
-    std::vector< n_id_t > nodes(n_dx * n_dy * n_dz);
-    std::iota(begin(nodes), end(nodes), 0u);
-    return {std::move(domains), std::move(nodes), std::vector< n_id_t >{}, {1, 2, 3, 4, 5, 6}};
+    return {std::move(domains), 0, n_dx * n_dy * n_dz, {1, 2, 3, 4, 5, 6}};
 }
 
 template < std::ranges::random_access_range R >

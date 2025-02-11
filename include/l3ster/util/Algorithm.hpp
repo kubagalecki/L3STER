@@ -2,7 +2,11 @@
 #define L3STER_UTIL_ALGORITHM_HPP
 
 #include "l3ster/comm/MpiComm.hpp"
+#include "l3ster/util/ArrayOwner.hpp"
+#include "l3ster/util/CrsGraph.hpp"
+#include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/Meta.hpp"
+#include "l3ster/util/RobinHoodHashTables.hpp"
 
 #include "oneapi/tbb/parallel_invoke.h"
 
@@ -169,39 +173,6 @@ constexpr bool contains(std::initializer_list< T > list, T value)
     return std::ranges::any_of(list, [value = value](T t) { return t == value; });
 }
 
-template <
-    std::ranges::forward_range                                                                   R,
-    std::indirect_binary_predicate< std::ranges::iterator_t< R >, std::ranges::iterator_t< R > > Cmp =
-        std::ranges::equal_to,
-    std::regular_invocable< std::ranges::range_value_t< R >, std::ranges::range_value_t< R > > Red = std::plus<> >
-constexpr std::ranges::borrowed_subrange_t< R >
-reduceConsecutive(R&& range, Cmp&& comparator = {}, Red&& reduction = {})
-    requires std::permutable< std::ranges::iterator_t< R > > and
-             std::assignable_from<
-                 std::ranges::range_reference_t< R >,
-                 std::invoke_result_t< Red, std::ranges::range_value_t< R >, std::ranges::range_value_t< R > > >
-{
-    auto it        = std::ranges::begin(range);
-    auto write_pos = it;
-    while (it != std::ranges::end(range))
-    {
-        const auto adj_range_begin = std::adjacent_find(it, std::ranges::end(range), comparator);
-        if (it != write_pos)
-            std::copy(it, adj_range_begin, write_pos);
-        std::advance(write_pos, std::distance(it, adj_range_begin));
-        if (adj_range_begin == std::ranges::end(range))
-            break;
-        auto next_adjacent = std::next(adj_range_begin);
-        *write_pos         = std::invoke(reduction, std::as_const(*adj_range_begin), std::as_const(*next_adjacent));
-        while (std::next(next_adjacent) != std::ranges::end(range) and
-               std::invoke(comparator, std::as_const(*next_adjacent), std::as_const(*std::next(next_adjacent))))
-            *write_pos = reduction(*write_pos, *++next_adjacent);
-        ++write_pos;
-        it = ++next_adjacent;
-    }
-    return std::ranges::borrowed_subrange_t< R >(write_pos, std::ranges::end(range));
-}
-
 template < typename T, size_t size >
 constexpr auto makeIotaArray(const T& first = T{})
 {
@@ -217,6 +188,21 @@ void sortRemoveDup(std::vector< T >& vec)
     const auto erase_range = std::ranges::unique(vec);
     vec.erase(erase_range.begin(), erase_range.end());
     vec.shrink_to_fit();
+}
+
+template < typename T >
+auto sortRemoveDup(util::ArrayOwner< T >& vec) -> size_t
+{
+    std::ranges::sort(vec);
+    const auto erase_range = std::ranges::unique(vec);
+    return static_cast< size_t >(std::distance(vec.begin(), erase_range.begin()));
+}
+
+template < typename T >
+auto getUniqueCopy(util::ArrayOwner< T > vec) -> util::ArrayOwner< T >
+{
+    const auto unique_sz = sortRemoveDup(vec);
+    return unique_sz == vec.size() ? vec : util::ArrayOwner< T >{vec | std::views::take(unique_sz)};
 }
 
 template < std::array array >
@@ -242,8 +228,8 @@ Iter copyValuesAtInds(const std::array< T, N >& array, Iter out_iter, ConstexprV
 }
 
 template < IndexRange_c auto inds, typename T, size_t N >
-auto getValuesAtInds(const std::array< T, N >& array,
-                     ConstexprValue< inds >    inds_ctwrpr = {}) -> std::array< T, std::ranges::size(inds) >
+auto getValuesAtInds(const std::array< T, N >& array, ConstexprValue< inds > inds_ctwrpr = {})
+    -> std::array< T, std::ranges::size(inds) >
     requires(std::ranges::all_of(inds, [](size_t i) { return i < N; }))
 {
     std::array< T, std::ranges::size(inds) > retval;
@@ -269,10 +255,9 @@ void staggeredAllGather(const MpiComm& comm, std::span< const T > my_data, Proce
 
     auto       request            = MpiComm::Request{};
     const auto begin_broadcasting = [&](int send_rank) {
-        const auto comm_buf = my_rank == send_rank
-                                ? my_data_mut
-                                : std::span{recv_buf}.subspan(0, msg_sizes[static_cast< size_t >(send_rank)]);
-        request             = comm.broadcastAsync(comm_buf, send_rank);
+        const auto comm_buf =
+            my_rank == send_rank ? my_data_mut : std::span{recv_buf}.first(msg_sizes[static_cast< size_t >(send_rank)]);
+        request = comm.broadcastAsync(comm_buf, send_rank);
     };
     const auto finish_broadcasting = [&]() {
         request.wait();
@@ -292,6 +277,96 @@ void staggeredAllGather(const MpiComm& comm, std::span< const T > my_data, Proce
     }
     finish_broadcasting();
     do_processing(comm_size - 1);
+}
+
+// CRS graph algorithms
+template < typename VertexType, typename Fun >
+auto depthFirstSearch(const CrsGraph< VertexType >& graph, Fun&& op, VertexType start = 0)
+    -> robin_hood::unordered_flat_set< VertexType >
+    requires std::invocable< Fun, VertexType >
+{
+    auto visited  = robin_hood::unordered_flat_set< VertexType >{};
+    auto to_visit = std::vector< VertexType >{start};
+    while (not to_visit.empty())
+    {
+        const auto current = to_visit.back();
+        to_visit.pop_back();
+        if (not visited.contains(current))
+        {
+            std::invoke(op, current);
+            visited.insert(current);
+            std::ranges::remove_copy_if(graph(current) | std::views::reverse,
+                                        std::back_inserter(to_visit),
+                                        [&](VertexType vertex) { return visited.contains(vertex); });
+        }
+    }
+    return visited;
+}
+
+/// Get components of an undirected graph. Assumes $v_1 \in graph(v_2) <=> v_2 \in graph(v_1)$.
+/// Each element of the returned vector is the sorted set of vertices constituting a component of the input graph
+template < typename VertexType >
+auto getComponentsUndirected(const CrsGraph< VertexType >& graph) -> std::vector< ArrayOwner< VertexType > >
+{
+    constexpr auto ignore = [](VertexType) {
+    };
+    auto visited_lu = DynamicBitset{graph.getNRows()};
+    auto retval     = std::vector< ArrayOwner< VertexType > >{};
+    for (VertexType v = 0; v != graph.getNRows(); ++v)
+    {
+        if (visited_lu.test(v))
+            continue;
+        retval.emplace_back(depthFirstSearch(graph, ignore, v));
+        std::ranges::sort(retval.back());
+        for (auto i : retval.back())
+            visited_lu.set(i);
+    }
+    return retval;
+}
+
+enum struct GraphType
+{
+    Undirected,
+    Directed
+};
+
+/// Creates CRS graph from edges, defined by pairs of corresponding elements of the 2 input ranges
+/// If graph_type == GraphType::Undirected, both (from[i], to[i]) and (to[i], from[i]) will be included in the result
+template < std::ranges::range From, std::ranges::range To >
+auto makeCrsGraph(From&& from, To&& to, GraphType graph_type = GraphType::Directed)
+    requires std::integral< std::remove_cvref_t< std::ranges::range_value_t< From > > > and
+             std::integral< std::remove_cvref_t< std::ranges::range_value_t< To > > > and
+             std::common_with< std::remove_cvref_t< std::ranges::range_value_t< From > >,
+                               std::remove_cvref_t< std::ranges::range_value_t< To > > >
+{
+    using VertexType = std::common_type_t< std::remove_cvref_t< std::ranges::range_value_t< From > >,
+                                           std::remove_cvref_t< std::ranges::range_value_t< To > > >;
+    if (std::ranges::empty(from))
+        return CrsGraph< VertexType >{};
+    auto vert_map = robin_hood::unordered_flat_map< VertexType, robin_hood::unordered_flat_set< VertexType > >{};
+    auto max_vert = std::numeric_limits< VertexType >::min();
+    for (const auto& [f, t] : std::views::zip(std::forward< From >(from), std::forward< To >(to)))
+    {
+        const auto v_from = static_cast< VertexType >(f);
+        const auto v_to   = static_cast< VertexType >(t);
+        max_vert          = std::max(max_vert, v_from);
+        max_vert          = std::max(max_vert, v_to);
+        vert_map[v_from].insert(v_to);
+        if (graph_type == GraphType::Undirected)
+            vert_map[v_to].insert(v_from);
+    }
+    auto degrees = std::views::iota(VertexType{0}, max_vert + 1) | std::views::transform([&](auto v) {
+                       const auto iter = vert_map.find(v);
+                       return iter == vert_map.end() ? size_t{0} : iter->second.size();
+                   });
+    auto retval  = CrsGraph< VertexType >{degrees};
+    for (const auto& [v, dests] : vert_map)
+    {
+        const auto row = retval(v);
+        std::ranges::copy(dests, row.begin());
+        std::ranges::sort(row);
+    }
+    return retval;
 }
 } // namespace lstr::util
 #endif // L3STER_UTIL_ALGORITHM_HPP

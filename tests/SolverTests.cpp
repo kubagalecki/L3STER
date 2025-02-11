@@ -127,7 +127,7 @@ bool runDirectTest(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
     const auto err_norm = diffMVNorm(*x, solution);
     const bool passed   = err_norm <= 1e-8;
     if (A->getComm()->getRank() == 0)
-        std::cout << std::format("{:<15}{:^12.3}{:^10}\n", name, err_norm, passed ? "PASS" : "FAIL");
+        std::cout << std::format("{:<15}{:^12.3e}{:^10}\n", name, err_norm, passed ? "PASS" : "FAIL");
     return passed;
 }
 

@@ -41,6 +41,9 @@ out/
 build/
 cmake-build-*/
 
+# Generated
+include/l3ster/util/CacheSizesAtCompileTime.hpp
+
 # KDevelop projects
 *.kdev4
 

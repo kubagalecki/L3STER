@@ -275,17 +275,6 @@ std::array< size_t, 2 > getLocalTopoSize(const mesh::MeshPartition< orders... >&
 }
 
 template < el_o_t... orders >
-unsigned getLocalNodeIndex(const mesh::MeshPartition< orders... >& mesh, n_id_t node)
-{
-    const auto owned_find_result = std::ranges::lower_bound(mesh.getOwnedNodes(), node);
-    if (owned_find_result != end(mesh.getOwnedNodes()) and *owned_find_result == node)
-        return static_cast< unsigned >(std::distance(begin(mesh.getOwnedNodes()), owned_find_result));
-    const auto ghost_find_result = std::ranges::lower_bound(mesh.getGhostNodes(), node);
-    return static_cast< unsigned >(mesh.getOwnedNodes().size() +
-                                   std::distance(begin(mesh.getGhostNodes()), ghost_find_result));
-}
-
-template < el_o_t... orders >
 auto serializeTopology(const mesh::MeshPartition< orders... >& mesh)
 {
     constexpr auto n_unsigned_chars = sizeof(std::uint64_t) / sizeof(unsigned char);
@@ -313,7 +302,7 @@ auto serializeTopology(const mesh::MeshPartition< orders... >& mesh)
     const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
         const auto serialized_subtopo = serializeElementSubtopo(element);
         std::ranges::transform(serialized_subtopo, std::back_inserter(topo_data), [&mesh](n_id_t node) {
-            return getLocalNodeIndex(mesh, node);
+            return mesh.getLocalNodeIndex(node);
         });
         std::fill_n(std::back_inserter(cell_types), numSubels< ET, EO >(), subelCellType< ET, EO >());
         std::generate_n(std::back_inserter(offsets), numSubels< ET, EO >(), [&offset]() {
@@ -350,7 +339,7 @@ template < el_o_t... orders >
 std::string makeCoordsSerialized(const mesh::MeshPartition< orders... >& mesh)
 {
     constexpr size_t space_dim        = 3;
-    const auto       n_nodes          = mesh.getAllNodes().size();
+    const auto       n_nodes          = mesh.getNNodes();
     const size_t     n_vals_to_encode = n_nodes * space_dim + 1;
     auto             alloc_to_encode  = util::ArrayOwner< val_t >(n_vals_to_encode);
     const auto       data_to_encode   = std::span{alloc_to_encode};
@@ -363,7 +352,7 @@ std::string makeCoordsSerialized(const mesh::MeshPartition< orders... >& mesh)
         const auto node_coords = nodePhysicalLocation(element);
         for (size_t i = 0; const auto& point : node_coords)
         {
-            const auto local_node_ind = getLocalNodeIndex(mesh, element.getNodes()[i]);
+            const auto local_node_ind = mesh.getLocalNodeIndex(element.getNodes()[i]);
             std::atomic_ref{coords[local_node_ind * space_dim]}.store(point.x(), std::memory_order_relaxed);
             std::atomic_ref{coords[local_node_ind * space_dim + 1]}.store(point.y(), std::memory_order_relaxed);
             std::atomic_ref{coords[local_node_ind * space_dim + 2]}.store(point.z(), std::memory_order_relaxed);
@@ -452,8 +441,8 @@ auto encodeField(const SolutionManager& solution_manager, Inds&& component_inds)
 }
 
 template < SizedRangeOfConvertibleTo_c< std::span< const size_t > > FieldComps >
-auto encodeSolution(const SolutionManager& solution_manager,
-                    FieldComps&&           field_components) -> std::vector< util::ArrayOwner< char > >
+auto encodeSolution(const SolutionManager& solution_manager, FieldComps&& field_components)
+    -> std::vector< util::ArrayOwner< char > >
 {
     auto retval         = std::vector< util::ArrayOwner< char > >(std::ranges::size(field_components));
     auto grouping_range = std::forward< FieldComps >(field_components) | std::views::common;
@@ -509,7 +498,7 @@ auto makeFieldIndsArrayOwner(FieldCompInds&& inds) -> util::ArrayOwner< util::Ar
 
 template < el_o_t... orders >
 PvtuExporter::PvtuExporter(std::shared_ptr< const MpiComm > comm, const mesh::MeshPartition< orders... >& mesh)
-    : m_comm{std::move(comm)}, m_n_nodes{mesh.getAllNodes().size()}
+    : m_comm{std::move(comm)}, m_n_nodes{mesh.getNNodes()}
 {
     L3STER_PROFILE_FUNCTION;
     updateNodeCoords(mesh);

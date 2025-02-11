@@ -185,9 +185,11 @@ static void BM_NS3DLocalEvaluation(benchmark::State& state)
     constexpr auto  BT = basis::BasisType::Lagrange;
     constexpr q_o_t QO = 4 * EO - 1;
 
-    const auto element       = getExampleHexElement< EO >();
-    const auto node_map      = mesh::NodeMap{std::views::iota(0uz, element.getNodes().size())};
-    const auto local_element = mesh::LocalElementView{element, node_map, {}};
+    const auto element = getExampleHexElement< EO >();
+    auto       dom_map = typename mesh::MeshPartition< EO >::domain_map_t{};
+    mesh::pushToDomain(dom_map[0], element);
+    const auto mesh          = mesh::MeshPartition< EO >{dom_map, 0, element.getNodes().size(), {}};
+    const auto local_element = mesh::LocalElementView{element, mesh, {}};
 
     constexpr size_t n_fields     = 7;
     constexpr size_t n_eq         = 8;
@@ -236,9 +238,11 @@ static void BM_DiffS3DLocalEvaluation(benchmark::State& state)
     constexpr auto  BT     = basis::BasisType::Lagrange;
     constexpr q_o_t QO     = 2 * EO;
 
-    const auto element            = getExampleHexElement< EO >();
-    const auto node_map           = mesh::NodeMap{std::views::iota(0uz, element.getNodes().size())};
-    const auto local_element      = mesh::LocalElementView{element, node_map, {}};
+    const auto element = getExampleHexElement< EO >();
+    auto       dom_map = typename mesh::MeshPartition< EO >::domain_map_t{};
+    mesh::pushToDomain(dom_map[0], element);
+    const auto mesh               = mesh::MeshPartition< EO >{dom_map, 0, element.getNodes().size(), {}};
+    const auto local_element      = mesh::LocalElementView{element, mesh, {}};
     using nodal_vals_t            = Eigen::Matrix< val_t, element.n_nodes, params.n_fields >;
     const nodal_vals_t nodal_vals = nodal_vals_t::Random();
     constexpr auto     n_nodes    = mesh::Element< mesh::ElementType ::Hex, EO >::n_nodes;

@@ -21,7 +21,7 @@ TEST_CASE("Solution Manager", "[sol_man]")
 
     REQUIRE(std::ranges::all_of(sol_mans, [&](const SolutionManager& sm) { return sm.nFields() == n_fields; }));
     for (size_t i = 0; const auto& sm : sol_mans)
-        REQUIRE(sm.nNodes() == partitions.at(i++).getAllNodes().size());
+        REQUIRE(sm.nNodes() == partitions.at(i++).getNNodes());
 
     for (auto& sm : sol_mans)
         for (size_t i = 0; i != n_fields; ++i)
@@ -31,32 +31,32 @@ TEST_CASE("Solution Manager", "[sol_man]")
         }
 
     constexpr auto field_inds = util::makeIotaArray< size_t, n_fields >();
-    for (size_t i = 0; const auto& sm : sol_mans)
+    for (const auto& [i, sm] : sol_mans | std::views::enumerate)
     {
-        const auto& part = partitions.at(i);
-        part.visit(
-            [&](const auto& element) {
-                for (auto n : element.getNodes())
-                    for (auto fv : sm.getNodeValuesGlobal(n, field_inds))
-                        CHECK(fv == static_cast< val_t >(i));
-            },
-            std::execution::par);
-        ++i;
+        const auto  field_access = sm.makeFieldValueGetter(field_inds);
+        const auto& part         = partitions.at(static_cast< size_t >(i));
+        const auto  check_el     = [&](const auto& element) {
+            const auto vals = field_access.getGloballyIndexed(element.getNodes());
+            for (int r = 0; r != vals.rows(); ++r)
+                for (int c = 0; c != vals.cols(); ++c)
+                    CHECK(vals(r, c) == static_cast< val_t >(i));
+        };
+        part.visit(check_el, std::execution::par);
     }
 
     for (auto& sm : sol_mans)
         for (auto i : field_inds)
-            sm.setField(i, 42.);
-    for (size_t i = 0; const auto& sm : sol_mans)
+            sm.setFields({i}, 42.);
+    for (const auto& [i, sm] : sol_mans | std::views::enumerate)
     {
-        const auto& part = partitions.at(i);
-        part.visit(
-            [&](const auto& element) {
-                for (auto n : element.getNodes())
-                    for (auto fv : sm.getNodeValuesGlobal(n, field_inds))
-                        CHECK(fv == 42.);
-            },
-            std::execution::par);
-        ++i;
+        const auto  field_access = sm.makeFieldValueGetter(field_inds);
+        const auto& part         = partitions.at(static_cast< size_t >(i));
+        const auto  check_el     = [&](const auto& element) {
+            const auto vals = field_access.getGloballyIndexed(element.getNodes());
+            for (int r = 0; r != vals.rows(); ++r)
+                for (int c = 0; c != vals.cols(); ++c)
+                    CHECK(vals(r, c) == 42.);
+        };
+        part.visit(check_el, std::execution::par);
     }
 }

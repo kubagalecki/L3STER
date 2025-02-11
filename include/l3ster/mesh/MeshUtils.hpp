@@ -32,7 +32,7 @@ auto findDomainElement(const MeshPartition< orders... >& mesh,
 template < el_o_t... orders >
 bool isUnpartitioned(const MeshPartition< orders... >& mesh)
 {
-    return mesh.getAllNodes().empty() or
+    return mesh.getNNodes() == 0 or
            (mesh.getGhostNodes().empty() and mesh.getOwnedNodes().back() + 1 == mesh.getOwnedNodes().size());
 }
 

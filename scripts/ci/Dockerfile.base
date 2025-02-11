@@ -8,7 +8,7 @@ FROM ubuntu:latest
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata && apt-get upgrade -y --fix-missing
 RUN apt-get install -y git curl tar python3 unzip xz-utils bzip2 lbzip2 patch binutils cmake make gcovr gpg gcc g++ gfortran
 RUN git clone https://github.com/spack/spack.git &&\
-  cd spack && git checkout tags/v0.22.2 -b v0.22.2 && cd .. &&\
+  cd spack && git checkout tags/v0.23.0 -b v0.23.0 && cd .. &&\
   . spack/share/spack/setup-env.sh && spack compiler find && spack external find binutils cmake coreutils curl diffutils findutils git gmake openssh perl python sed tar
 RUN . spack/share/spack/setup-env.sh &&\
   spack env create build-env && spack env activate build-env &&\

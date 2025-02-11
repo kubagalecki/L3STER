@@ -4,9 +4,10 @@
 #include "l3ster/algsys/ComputeValuesAtNodes.hpp"
 #include "l3ster/algsys/SparsityGraph.hpp"
 #include "l3ster/algsys/StaticCondensationManager.hpp"
+#include "l3ster/bcs/BCDefinition.hpp"
 #include "l3ster/bcs/DirichletBC.hpp"
 #include "l3ster/bcs/GetDirichletDofs.hpp"
-#include "l3ster/post/SolutionManager.hpp"
+#include "l3ster/post/FieldAccess.hpp"
 #include "l3ster/solve/SolverInterface.hpp"
 #include "l3ster/util/GlobalResource.hpp"
 
@@ -18,11 +19,11 @@ template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t
 class AssembledSystem
 {
 public:
-    template < ProblemDef problem_def, ProblemDef dirichlet_def >
+    template < ProblemDef problem_def >
     AssembledSystem(std::shared_ptr< const MpiComm >                          comm,
                     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-                    util::ConstexprValue< problem_def >,
-                    util::ConstexprValue< dirichlet_def >);
+                    util::ConstexprValue< problem_def >                       probdef_ctwrpr,
+                    const BCDefinition< problem_def.n_fields >&               bc_def);
 
     inline auto getMatrix() const -> Teuchos::RCP< const tpetra_crsmatrix_t >;
     inline auto getRhs() const -> Teuchos::RCP< const tpetra_multivector_t >;
@@ -34,20 +35,20 @@ public:
                ArrayOf_c< size_t > auto field_inds = util::makeIotaArray< size_t, max_dofs_per_node >(),
                size_t                   n_fields   = 0,
                AssemblyOptions          asm_opts   = AssemblyOptions{} >
-    void assembleProblem(const Kernel&                                        kernel,
-                         const util::ArrayOwner< d_id_t >&                    domain_ids,
-                         const SolutionManager::FieldValueGetter< n_fields >& fval_getter       = {},
-                         util::ConstexprValue< field_inds >                   field_inds_ctwrpr = {},
-                         util::ConstexprValue< asm_opts >                     assembly_options  = {},
-                         val_t                                                time              = 0.)
+    void assembleProblem(const Kernel&                        kernel,
+                         const util::ArrayOwner< d_id_t >&    domain_ids,
+                         const post::FieldAccess< n_fields >& field_access      = {},
+                         util::ConstexprValue< field_inds >   field_inds_ctwrpr = {},
+                         util::ConstexprValue< asm_opts >     assembly_options  = {},
+                         val_t                                time              = 0.)
         requires(Kernel::parameters.n_rhs == n_rhs);
 
     template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setDirichletBCValues(const Kernel&                                                 kernel,
                               const util::ArrayOwner< d_id_t >&                             domain_ids,
                               const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                              const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter = {},
-                              val_t                                                         time             = 0.);
+                              const post::FieldAccess< n_fields >&                          field_access = {},
+                              val_t                                                         time         = 0.);
     template < size_t n_vals, std::integral dofind_t = size_t >
     void setDirichletBCValues(const std::array< val_t, n_vals >&    values,
                               const util::ArrayOwner< d_id_t >&     domain_ids,
@@ -69,15 +70,15 @@ public:
                    const Kernel&                                                 kernel,
                    const util::ArrayOwner< d_id_t >&                             domain_ids,
                    const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                   const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter = {},
-                   val_t                                                         time             = 0.) const;
+                   const post::FieldAccess< n_fields >&                          field_access = {},
+                   val_t                                                         time         = 0.) const;
     template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setValues(const Teuchos::RCP< tpetra_multivector_t >&                   vector,
                    const Kernel&                                                 kernel,
                    const util::ArrayOwner< d_id_t >&                             domain_ids,
                    const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                   const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter = {},
-                   val_t                                                         time             = 0.) const;
+                   const post::FieldAccess< n_fields >&                          field_access = {},
+                   val_t                                                         time         = 0.) const;
 
 private:
     inline auto initMultiVector(size_t cols = n_rhs) const -> Teuchos::RCP< tpetra_femultivector_t >;
@@ -212,7 +213,7 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
     const Kernel&                                                 kernel,
     const util::ArrayOwner< d_id_t >&                             domain_ids,
     const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-    const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
+    const post::FieldAccess< n_fields >&                          field_access,
     val_t                                                         time) const
 {
     util::throwingAssert(util::isValidIndexRange(dof_inds, max_dofs_per_node),
@@ -222,15 +223,8 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
     auto       num_contribs       = initMultiVector(1);
     const auto compute_local_vals = [&](const tpetra_femultivector_t::host_view_type& vals_view,
                                         const tpetra_femultivector_t::host_view_type& num_contribs_view) {
-        computeValuesAtNodes(kernel,
-                             *m_mesh,
-                             domain_ids,
-                             m_node_dof_map,
-                             dof_inds,
-                             field_val_getter,
-                             vals_view,
-                             num_contribs_view,
-                             time);
+        computeValuesAtNodes(
+            kernel, *m_mesh, domain_ids, m_node_dof_map, dof_inds, field_access, vals_view, num_contribs_view, time);
     };
     detail::averageNodeVals(*vector, *num_contribs, compute_local_vals);
 }
@@ -242,11 +236,11 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setValues(
     const Kernel&                                                 kernel,
     const util::ArrayOwner< d_id_t >&                             domain_ids,
     const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-    const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
+    const post::FieldAccess< n_fields >&                          field_access,
     val_t                                                         time) const
 {
     const auto vector_downcast = Teuchos::rcp_dynamic_cast< tpetra_femultivector_t >(vector);
-    setValues(vector_downcast, kernel, domain_ids, dof_inds, field_val_getter, time);
+    setValues(vector_downcast, kernel, domain_ids, dof_inds, field_access, time);
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
@@ -255,7 +249,7 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCV
     const Kernel&                                                 kernel,
     const util::ArrayOwner< d_id_t >&                             domain_ids,
     const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-    const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
+    const post::FieldAccess< n_fields >&                          field_access,
     val_t                                                         time)
 {
     util::throwingAssert(m_dirichlet_bcs.has_value(), "setDirichletBCValues called, but no Dirichlet BCs were defined");
@@ -265,15 +259,8 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setDirichletBCV
     auto       num_contribs       = initMultiVector(1);
     const auto compute_local_vals = [&](const tpetra_femultivector_t::host_view_type& vals_view,
                                         const tpetra_femultivector_t::host_view_type& num_contribs_view) {
-        computeValuesAtNodes(kernel,
-                             *m_mesh,
-                             domain_ids,
-                             m_node_dof_map,
-                             dof_inds,
-                             field_val_getter,
-                             vals_view,
-                             num_contribs_view,
-                             time);
+        computeValuesAtNodes(
+            kernel, *m_mesh, domain_ids, m_node_dof_map, dof_inds, field_access, vals_view, num_contribs_view, time);
     };
     detail::averageNodeVals(*m_dirichlet_values, *num_contribs, compute_local_vals);
 }
@@ -333,18 +320,18 @@ auto AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::initMultiVector
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-template < ProblemDef problem_def, ProblemDef dirichlet_def >
+template < ProblemDef problem_def >
 AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::AssembledSystem(
     std::shared_ptr< const MpiComm >                          comm,
     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-    util::ConstexprValue< problem_def >                       problemdef_ctwrpr,
-    util::ConstexprValue< dirichlet_def >                     dbcdef_ctwrpr)
+    util::ConstexprValue< problem_def >                       probdef_ctwrpr,
+    const BCDefinition< problem_def.n_fields >&               bc_def)
     : m_comm{std::move(comm)}, m_mesh{std::move(mesh)}, m_state{State::OpenForAssembly}
 {
-    const auto cond_map            = dofs::makeCondensationMap< CP >(*m_comm, *m_mesh, problemdef_ctwrpr);
-    const auto dof_intervals       = computeDofIntervals(*m_comm, *m_mesh, cond_map, problemdef_ctwrpr);
-    const auto node_global_dof_map = dofs::NodeToGlobalDofMap{dof_intervals, cond_map};
-    m_sparsity_graph = makeSparsityGraph(*m_comm, *m_mesh, node_global_dof_map, cond_map, problemdef_ctwrpr);
+    constexpr auto cp_tag          = CondensationPolicyTag< CP >{};
+    const auto     periodic_bc     = bcs::PeriodicBC{bc_def.getPeriodic(), *m_mesh, *m_comm};
+    const auto node_global_dof_map = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, probdef_ctwrpr, periodic_bc, cp_tag};
+    m_sparsity_graph               = makeSparsityGraph(*m_comm, *m_mesh, node_global_dof_map, probdef_ctwrpr, cp_tag);
 
     L3STER_PROFILE_REGION_BEGIN("Create Tpetra objects");
     m_matrix   = util::makeTeuchosRCP< tpetra_fecrsmatrix_t >(m_sparsity_graph);
@@ -354,16 +341,17 @@ AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::AssembledSystem(
     m_rhs->beginAssembly();
     L3STER_PROFILE_REGION_END("Create Tpetra objects");
 
-    m_node_dof_map = dofs::NodeToLocalDofMap{
-        cond_map, node_global_dof_map, *m_matrix->getRowMap(), *m_matrix->getColMap(), *m_rhs->getMap()};
-    m_condensation_manager = StaticCondensationManager< CP >{*m_mesh, m_node_dof_map, problemdef_ctwrpr, n_rhs};
+    m_node_dof_map =
+        dofs::NodeToLocalDofMap{node_global_dof_map, *m_matrix->getRowMap(), *m_matrix->getColMap(), *m_rhs->getMap()};
+    m_condensation_manager = StaticCondensationManager< CP >{*m_mesh, m_node_dof_map, probdef_ctwrpr, n_rhs};
     m_condensation_manager.beginAssembly();
 
-    if constexpr (dirichlet_def.n_domains != 0)
+    const auto& dirichlet = bc_def.getDirichlet();
+    if (not dirichlet.empty())
     {
         L3STER_PROFILE_REGION_BEGIN("Dirichlet BCs");
-        auto [owned_bcdofs, shared_bcdofs] = bcs::getDirichletDofs(
-            *m_mesh, m_sparsity_graph, node_global_dof_map, cond_map, problemdef_ctwrpr, dbcdef_ctwrpr);
+        auto [owned_bcdofs, shared_bcdofs] =
+            bcs::getDirichletDofs(*m_mesh, m_sparsity_graph, node_global_dof_map, probdef_ctwrpr, dirichlet);
         m_dirichlet_bcs.emplace(m_sparsity_graph, std::move(owned_bcdofs), std::move(shared_bcdofs));
         L3STER_PROFILE_REGION_END("Dirichlet BCs");
     }
@@ -421,12 +409,12 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::setToZero()
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
 template < EquationKernel_c Kernel, ArrayOf_c< size_t > auto field_inds, size_t n_fields, AssemblyOptions asm_opts >
 void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::assembleProblem(
-    const Kernel&                                        kernel,
-    const util::ArrayOwner< d_id_t >&                    domain_ids,
-    const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
-    util::ConstexprValue< field_inds >                   field_inds_ctwrpr,
-    util::ConstexprValue< asm_opts >                     assembly_options,
-    val_t                                                time)
+    const Kernel&                        kernel,
+    const util::ArrayOwner< d_id_t >&    domain_ids,
+    const post::FieldAccess< n_fields >& field_access,
+    util::ConstexprValue< field_inds >   field_inds_ctwrpr,
+    util::ConstexprValue< asm_opts >     assembly_options,
+    val_t                                time)
     requires(Kernel::parameters.n_rhs == n_rhs)
 {
     L3STER_PROFILE_FUNCTION;
@@ -436,7 +424,7 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::assembleProblem
     assembleGlobalSystem(kernel,
                          *m_mesh,
                          domain_ids,
-                         fval_getter,
+                         field_access,
                          *m_matrix,
                          rhs_views,
                          m_node_dof_map,

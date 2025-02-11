@@ -22,9 +22,7 @@ auto makeLineMesh(Rx&& distx) -> MeshPartition< 1 >
         emplaceInDomain< ElementType::Line, 1 >(domains[0], nodes, verts, id);
     }
 
-    std::vector< n_id_t > nodes(n_dx);
-    std::iota(begin(nodes), end(nodes), 0);
-    return {std::move(domains), std::move(nodes), std::vector< n_id_t >{}, {}};
+    return {std::move(domains), 0, n_dx, {}};
 }
 } // namespace lstr::mesh
 #endif // L3STER_LINEMESH_HPP

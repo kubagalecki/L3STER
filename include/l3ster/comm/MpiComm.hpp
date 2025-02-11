@@ -205,8 +205,8 @@ public:
     template < comm::MpiBorrowedBuf_c Data >
     [[nodiscard]] auto receiveAsync(Data&& data, int src = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG) const -> Request;
     [[nodiscard]] inline auto probe(int source = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG) const -> Status;
-    [[nodiscard]] inline auto probeAsync(int source = MPI_ANY_SOURCE,
-                                         int tag    = MPI_ANY_TAG) const -> std::pair< Status, bool >;
+    [[nodiscard]] inline auto probeAsync(int source = MPI_ANY_SOURCE, int tag = MPI_ANY_TAG) const
+        -> std::pair< Status, bool >;
 
     // collectives
     void barrier() const { L3STER_INVOKE_MPI(MPI_Barrier, m_comm); }
@@ -222,6 +222,14 @@ public:
     void allGather(Data&& data, It out_it) const;
     template < comm::MpiBuf_c Data >
     void broadcast(Data&& data, int root) const;
+    template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
+    void inclusiveScan(Data&& data, It out_it, MPI_Op op) const;
+    template < comm::MpiBuf_c Data >
+    void inclusiveScanInPlace(Data&& data, MPI_Op op) const;
+    template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
+    void exclusiveScan(Data&& data, It out_it, MPI_Op op) const;
+    template < comm::MpiBuf_c Data >
+    void exclusiveScanInPlace(Data&& data, MPI_Op op) const;
 
     template < comm::MpiBorrowedBuf_c Data >
     [[nodiscard]] auto broadcastAsync(Data&& data, int root) const -> Request;
@@ -481,6 +489,34 @@ void MpiComm::broadcast(Data&& data, int root) const
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
     L3STER_INVOKE_MPI(MPI_Bcast, buf_begin, buf_size, datatype, root, m_comm);
+}
+
+template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
+void MpiComm::inclusiveScan(Data&& data, It out_it, MPI_Op op) const
+{
+    const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
+    L3STER_INVOKE_MPI(MPI_Scan, buf_begin, std::addressof(*out_it), buf_size, datatype, op, m_comm);
+}
+
+template < comm::MpiBuf_c Data >
+void MpiComm::inclusiveScanInPlace(Data&& data, MPI_Op op) const
+{
+    const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
+    L3STER_INVOKE_MPI(MPI_Scan, MPI_IN_PLACE, buf_begin, buf_size, datatype, op, m_comm);
+}
+
+template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
+void MpiComm::exclusiveScan(Data&& data, It out_it, MPI_Op op) const
+{
+    const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
+    L3STER_INVOKE_MPI(MPI_Exscan, buf_begin, std::addressof(*out_it), buf_size, datatype, op, m_comm);
+}
+
+template < comm::MpiBuf_c Data >
+void MpiComm::exclusiveScanInPlace(Data&& data, MPI_Op op) const
+{
+    const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
+    L3STER_INVOKE_MPI(MPI_Exscan, MPI_IN_PLACE, buf_begin, buf_size, datatype, op, m_comm);
 }
 
 template < comm::MpiBorrowedBuf_c Data >

@@ -4,10 +4,11 @@
 #include "l3ster/algsys/ComputeValuesAtNodes.hpp"
 #include "l3ster/algsys/EvaluateLocalOperator.hpp"
 #include "l3ster/algsys/SparsityGraph.hpp"
+#include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 #include "l3ster/bcs/LocalDirichletBC.hpp"
 #include "l3ster/comm/ImportExport.hpp"
 #include "l3ster/mesh/SplitMesh.hpp"
-#include "l3ster/post/SolutionManager.hpp"
+#include "l3ster/post/FieldAccess.hpp"
 #include "l3ster/solve/SolverInterface.hpp"
 #include "l3ster/util/GlobalResource.hpp"
 #include "l3ster/util/TypeErasedOverload.hpp"
@@ -42,11 +43,11 @@ public:
         const MatrixFreeSystem* m_system;
     };
 
-    template < ProblemDef problem_def, ProblemDef dirichlet_def >
+    template < ProblemDef problem_def >
     MatrixFreeSystem(std::shared_ptr< const MpiComm >                          comm,
                      std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-                     util::ConstexprValue< problem_def >                       problemdef_ctwrpr,
-                     util::ConstexprValue< dirichlet_def >                     dbcdef_ctwrpr);
+                     util::ConstexprValue< problem_def >                       probdef_ctwrpr,
+                     const BCDefinition< problem_def.n_fields >&               bc_def);
 
     [[nodiscard]] inline auto getOperator() const -> Teuchos::RCP< const tpetra_operator_t >;
     [[nodiscard]] inline auto getRhs() const -> Teuchos::RCP< const tpetra_multivector_t >;
@@ -58,20 +59,20 @@ public:
                ArrayOf_c< size_t > auto field_inds = util::makeIotaArray< size_t, max_dofs_per_node >(),
                size_t                   n_fields   = 0,
                AssemblyOptions          asm_opts   = AssemblyOptions{} >
-    void assembleProblem(const Kernel&                                        kernel,
-                         const util::ArrayOwner< d_id_t >&                    domain_ids,
-                         const SolutionManager::FieldValueGetter< n_fields >& fval_getter       = {},
-                         util::ConstexprValue< field_inds >                   field_inds_ctwrpr = {},
-                         util::ConstexprValue< asm_opts >                     asm_options       = {},
-                         val_t                                                time              = 0.)
+    void assembleProblem(const Kernel&                        kernel,
+                         const util::ArrayOwner< d_id_t >&    domain_ids,
+                         const post::FieldAccess< n_fields >& field_access      = {},
+                         util::ConstexprValue< field_inds >   field_inds_ctwrpr = {},
+                         util::ConstexprValue< asm_opts >     asm_options       = {},
+                         val_t                                time              = 0.)
         requires(Kernel::parameters.n_rhs == n_rhs);
 
     template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setDirichletBCValues(const Kernel&                                                 kernel,
                               const util::ArrayOwner< d_id_t >&                             domain_ids,
                               const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                              const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter = {},
-                              val_t                                                         time             = 0.);
+                              const post::FieldAccess< n_fields >&                          field_access = {},
+                              val_t                                                         time         = 0.);
     template < size_t n_vals, std::integral dofind_t = size_t >
     void setDirichletBCValues(const std::array< val_t, n_vals >&    values,
                               const util::ArrayOwner< d_id_t >&     domain_ids,
@@ -92,8 +93,8 @@ public:
                    const Kernel&                                                 kernel,
                    const util::ArrayOwner< d_id_t >&                             domain_ids,
                    const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                   const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter = {},
-                   val_t                                                         time             = 0.);
+                   const post::FieldAccess< n_fields >&                          field_access = {},
+                   val_t                                                         time         = 0.);
 
 private:
     using view_t       = decltype(std::declval< tpetra_multivector_t >().getLocalViewHost(Tpetra::Access::ReadWrite));
@@ -166,10 +167,10 @@ private:
     inline void zeroExportBuf() const;
 
     template < EquationKernel_c Kernel, auto field_inds, size_t n_fields, AssemblyOptions asm_opts >
-    void pushKernel(const Kernel&                                        kernel,
-                    const util::ArrayOwner< d_id_t >&                    domain_ids,
-                    const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
-                    util::ConstexprValue< field_inds >                   field_inds_ctwrpr,
+    void pushKernel(const Kernel&                        kernel,
+                    const util::ArrayOwner< d_id_t >&    domain_ids,
+                    const post::FieldAccess< n_fields >& field_access,
+                    util::ConstexprValue< field_inds >   field_inds_ctwrpr,
                     util::ConstexprValue< asm_opts >,
                     val_t time);
     template < typename AccessGenerator,
@@ -177,12 +178,12 @@ private:
                auto             field_inds,
                size_t           n_fields,
                AssemblyOptions  asm_opts >
-    auto makeInitKernel(AccessGenerator&&                                    rhs_access_generator,
-                        const Kernel&                                        kernel,
-                        const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
-                        util::ConstexprValue< field_inds >                   field_inds_ctwrpr,
-                        util::ConstexprValue< asm_opts >                     asm_options,
-                        val_t                                                time)
+    auto makeInitKernel(AccessGenerator&&                    rhs_access_generator,
+                        const Kernel&                        kernel,
+                        const post::FieldAccess< n_fields >& field_access,
+                        util::ConstexprValue< field_inds >   field_inds_ctwrpr,
+                        util::ConstexprValue< asm_opts >     asm_options,
+                        val_t                                time)
         -> std::conditional_t< DomainKernel_c< Kernel >, DomainInitializerOverload, BoundaryInitializerOverload >;
     template < typename XAccessGenerator,
                typename YAccessGenerator,
@@ -190,13 +191,13 @@ private:
                auto             field_inds,
                size_t           n_fields,
                AssemblyOptions  asm_opts >
-    auto makeEvalKernel(XAccessGenerator&&                                   x_access_generator,
-                        YAccessGenerator&&                                   y_access_generator,
-                        const Kernel&                                        kernel,
-                        const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
-                        util::ConstexprValue< field_inds >                   field_inds_ctwrpr,
-                        util::ConstexprValue< asm_opts >                     asm_options,
-                        val_t                                                time)
+    auto makeEvalKernel(XAccessGenerator&&                   x_access_generator,
+                        YAccessGenerator&&                   y_access_generator,
+                        const Kernel&                        kernel,
+                        const post::FieldAccess< n_fields >& field_access,
+                        util::ConstexprValue< field_inds >   field_inds_ctwrpr,
+                        util::ConstexprValue< asm_opts >     asm_options,
+                        val_t                                time)
         -> std::conditional_t< DomainKernel_c< Kernel >, DomainEvaluatorOverload, BoundaryEvaluatorOverload >;
 
     std::shared_ptr< const MpiComm >                          m_comm;
@@ -212,7 +213,7 @@ private:
     view_t                                                    m_dirichlet_values;
     dofs::LocalDofMap< max_dofs_per_node >                    m_node_dof_map;
     KernelMaps                                                m_kernel_maps;
-    Teuchos::RCP< tpetra_map_t >                              m_operator_map;
+    Teuchos::RCP< const tpetra_map_t >                        m_operator_map;
     State                                                     m_state;
     bool                                                      m_bcs_need_import = false;
 };
@@ -396,14 +397,14 @@ struct CommonElemData
     static constexpr auto n_nodes = mesh::Element< ET, EO >::n_nodes;
     static constexpr auto n_dofs  = params.n_unknowns * n_nodes;
 
-    CommonElemData(const mesh::LocalElementView< ET, EO >&              element,
-                   const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
-                   const dofs::LocalDofMap< max_dofs_per_node >&        dof_map,
-                   const std::optional< bcs::LocalDirichletBC >&        dirichlet_bc,
-                   const tpetra_multivector_t::host_view_type&          dirichlet_vals)
+    CommonElemData(const mesh::LocalElementView< ET, EO >&       element,
+                   const post::FieldAccess< n_fields >&          field_access,
+                   const dofs::LocalDofMap< max_dofs_per_node >& dof_map,
+                   const std::optional< bcs::LocalDirichletBC >& dirichlet_bc,
+                   const tpetra_multivector_t::host_view_type&   dirichlet_vals)
     {
         const auto& el_nodes = element.getLocalNodes();
-        node_values          = fval_getter.getLocallyIndexed(el_nodes);
+        node_values          = field_access.getLocallyIndexed(el_nodes);
         dofs                 = detail::getDofs(el_nodes, dof_map, util::ConstexprValue< field_inds >{});
         dirichlet_dof_inds   = detail::getDirichletDofInds(dofs, dirichlet_bc);
         dirichlet_values     = detail::gatherDirichletVals< ET, EO, params >(dofs, dirichlet_dof_inds, dirichlet_vals);
@@ -423,9 +424,9 @@ template < typename AccessGenerator,
            size_t           n_fields,
            AssemblyOptions  asm_opts >
 auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeInitKernel(
-    AccessGenerator&&                                    rhs_access_generator,
-    const Kernel&                                        kernel,
-    const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
+    AccessGenerator&&                    rhs_access_generator,
+    const Kernel&                        kernel,
+    const post::FieldAccess< n_fields >& field_access,
     util::ConstexprValue< field_inds >,
     util::ConstexprValue< asm_opts >,
     val_t time)
@@ -451,9 +452,9 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeInitKernel(
             };
             const auto get_data = [&] -> CommonData {
                 if constexpr (is_domain)
-                    return {element, fval_getter, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
+                    return {element, field_access, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
                 else
-                    return {*element, fval_getter, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
+                    return {*element, field_access, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
             };
             const auto [node_vals, dofs, dir_dof_inds, dir_vals] = get_data();
             const auto& rbq                                      = get_reference_basis();
@@ -472,10 +473,10 @@ template < typename XAccessGenerator,
            size_t           n_fields,
            AssemblyOptions  asm_opts >
 auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeEvalKernel(
-    XAccessGenerator&&                                   x_access_generator,
-    YAccessGenerator&&                                   y_access_generator,
-    const Kernel&                                        kernel,
-    const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
+    XAccessGenerator&&                   x_access_generator,
+    YAccessGenerator&&                   y_access_generator,
+    const Kernel&                        kernel,
+    const post::FieldAccess< n_fields >& field_access,
     util::ConstexprValue< field_inds >,
     util::ConstexprValue< asm_opts >,
     val_t time) -> std::conditional_t< DomainKernel_c< Kernel >, DomainEvaluatorOverload, BoundaryEvaluatorOverload >
@@ -499,9 +500,9 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeEvalKernel(
             };
             const auto get_data = [&] -> CommonData {
                 if constexpr (is_domain)
-                    return {element, fval_getter, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
+                    return {element, field_access, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
                 else
-                    return {*element, fval_getter, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
+                    return {*element, field_access, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
             };
             const auto [node_vals, dofs, dir_dof_inds, dir_vals] = get_data();
             const auto& rbq                                      = get_reference_basis();
@@ -517,12 +518,12 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeEvalKernel(
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
 template < EquationKernel_c Kernel, auto field_inds, size_t n_fields, AssemblyOptions asm_opts >
 void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::pushKernel(
-    const Kernel&                                        kernel,
-    const util::ArrayOwner< d_id_t >&                    domain_ids,
-    const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
-    util::ConstexprValue< field_inds >                   field_inds_ctwrpr,
-    util::ConstexprValue< asm_opts >                     asm_options,
-    val_t                                                time)
+    const Kernel&                        kernel,
+    const util::ArrayOwner< d_id_t >&    domain_ids,
+    const post::FieldAccess< n_fields >& field_access,
+    util::ConstexprValue< field_inds >   field_inds_ctwrpr,
+    util::ConstexprValue< asm_opts >     asm_options,
+    val_t                                time)
 {
     constexpr auto int_gen = [](const auto& view) {
         return InteriorAccessor{view};
@@ -536,10 +537,10 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::pushKernel(
 
     for (d_id_t domain : domain_ids)
     {
-        auto iinit = makeInitKernel(int_gen, kernel, fval_getter, field_inds_ctwrpr, asm_options, time);
-        auto binit = makeInitKernel(exp_gen, kernel, fval_getter, field_inds_ctwrpr, asm_options, time);
-        auto ieval = makeEvalKernel(int_gen, int_gen, kernel, fval_getter, field_inds_ctwrpr, asm_options, time);
-        auto beval = makeEvalKernel(imp_gen, exp_gen, kernel, fval_getter, field_inds_ctwrpr, asm_options, time);
+        auto iinit = makeInitKernel(int_gen, kernel, field_access, field_inds_ctwrpr, asm_options, time);
+        auto binit = makeInitKernel(exp_gen, kernel, field_access, field_inds_ctwrpr, asm_options, time);
+        auto ieval = makeEvalKernel(int_gen, int_gen, kernel, field_access, field_inds_ctwrpr, asm_options, time);
+        auto beval = makeEvalKernel(imp_gen, exp_gen, kernel, field_access, field_inds_ctwrpr, asm_options, time);
 
         if constexpr (BoundaryKernel_c< Kernel >)
         {
@@ -562,15 +563,15 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::pushKernel(
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
 template < EquationKernel_c Kernel, ArrayOf_c< size_t > auto field_inds, size_t n_fields, AssemblyOptions asm_opts >
 void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::assembleProblem(
-    const Kernel&                                        kernel,
-    const util::ArrayOwner< d_id_t >&                    domain_ids,
-    const SolutionManager::FieldValueGetter< n_fields >& fval_getter,
-    util::ConstexprValue< field_inds >                   field_inds_ctwrpr,
-    util::ConstexprValue< asm_opts >                     asm_options,
-    val_t                                                time)
+    const Kernel&                        kernel,
+    const util::ArrayOwner< d_id_t >&    domain_ids,
+    const post::FieldAccess< n_fields >& field_access,
+    util::ConstexprValue< field_inds >   field_inds_ctwrpr,
+    util::ConstexprValue< asm_opts >     asm_options,
+    val_t                                time)
     requires(Kernel::parameters.n_rhs == n_rhs)
 {
-    pushKernel(kernel, domain_ids, fval_getter, field_inds_ctwrpr, asm_options, time);
+    pushKernel(kernel, domain_ids, field_access, field_inds_ctwrpr, asm_options, time);
 }
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
@@ -710,11 +711,16 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::getSolution() cons
 
 namespace detail
 {
-template < el_o_t... orders >
-auto splitBorderAndInterior(const mesh::MeshPartition< orders... >& mesh)
+template < CondensationPolicy CP, el_o_t... orders, size_t max_dofs_per_node >
+auto splitBorderAndInterior(const mesh::MeshPartition< orders... >&              mesh,
+                            const dofs::NodeToGlobalDofMap< max_dofs_per_node >& node2dofs,
+                            CondensationPolicyTag< CP > = {})
 {
-    const auto is_interior = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
-        return std::ranges::none_of(element.getNodes(), mesh.getGhostNodePredicate());
+    const auto& ownership   = node2dofs.ownership();
+    const auto  is_interior = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
+        auto valid_dofs = dofs::getPrimaryNodesView< CP >(element) | std::views::transform(std::cref(node2dofs)) |
+                          std::views::join | std::views::filter([](auto dof) { return dof != invalid_global_dof; });
+        return std::ranges::none_of(valid_dofs, [&](auto dof) { return ownership.isOwned(dof); });
     };
     return mesh::splitMeshPartition(mesh, is_interior);
 }
@@ -737,42 +743,41 @@ inline auto makeOperatorMap(Teuchos::RCP< const Teuchos::Comm< int > > teuchos_c
 } // namespace detail
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
-template < ProblemDef problem_def, ProblemDef dirichlet_def >
+template < ProblemDef problem_def >
 MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::MatrixFreeSystem(
     std::shared_ptr< const MpiComm >                          comm,
     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-    util::ConstexprValue< problem_def >                       problemdef_ctwrpr,
-    util::ConstexprValue< dirichlet_def >                     dbcdef_ctwrpr)
+    util::ConstexprValue< problem_def >                       probdef_ctwrpr,
+    const BCDefinition< problem_def.n_fields >&               bc_def)
     : m_comm{std::move(comm)}, m_mesh{std::move(mesh)}, m_state{State::OpenForAssembly}
 {
-    const auto [interior, border] = detail::splitBorderAndInterior(*m_mesh);
-    const auto node_map           = mesh::NodeMap{m_mesh->getAllNodes()};
-    m_interior_mesh               = mesh::LocalMeshView{interior, node_map};
-    m_border_mesh                 = mesh::LocalMeshView{border, node_map};
-
-    const auto cond_map = dofs::makeCondensationMap< CondensationPolicy::None >(*m_comm, *m_mesh, problemdef_ctwrpr);
-    const auto dof_intervals            = computeDofIntervals(*m_comm, *m_mesh, cond_map, problemdef_ctwrpr);
-    const auto node2dof                 = dofs::NodeToGlobalDofMap{dof_intervals, cond_map};
-    const auto [all_dofs, n_owned_dofs] = detail::computeNodeDofs(*m_mesh, node2dof, cond_map);
-    const auto owned_dofs               = std::span{all_dofs}.subspan(0, n_owned_dofs);
-    const auto shared_dofs              = std::span{all_dofs}.subspan(n_owned_dofs);
-    m_node_dof_map                      = dofs::LocalDofMap{cond_map, node2dof, node_map, all_dofs, n_owned_dofs};
-    m_operator_map                      = detail::makeOperatorMap(*m_comm, owned_dofs);
-    m_rhs                               = util::makeTeuchosRCP< tpetra_multivector_t >(m_operator_map, n_rhs);
-    m_solution                          = util::makeTeuchosRCP< tpetra_multivector_t >(m_operator_map, n_rhs);
-    m_rhs_view                          = m_rhs->getLocalViewHost(Tpetra::Access::ReadWrite);
-    m_diagonal                          = util::ArrayOwner< val_t >(all_dofs.size()); // Alloc shared inds for export
-    const auto context = std::make_shared< comm::ImportExportContext< local_dof_t > >(*m_comm, owned_dofs, shared_dofs);
-    m_import           = std::make_unique< comm::Import< val_t, local_dof_t > >(context, n_rhs);
-    m_export           = std::make_unique< comm::Export< val_t, local_dof_t > >(context, n_rhs);
-    m_import_shared_buf = view_t("import buf", shared_dofs.size(), n_rhs);
-    m_export_shared_buf = view_t("export buf", shared_dofs.size(), n_rhs);
+    constexpr auto cp_tag         = no_condensation_tag;
+    const auto     periodic_bc    = bcs::PeriodicBC{bc_def.getPeriodic(), *m_mesh, *m_comm};
+    const auto     node2dof       = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, probdef_ctwrpr, periodic_bc, cp_tag};
+    const auto [interior, border] = detail::splitBorderAndInterior(*m_mesh, node2dof, cp_tag);
+    m_interior_mesh               = mesh::LocalMeshView{interior, *m_mesh};
+    m_border_mesh                 = mesh::LocalMeshView{border, *m_mesh};
+    const auto& dof_ownership     = node2dof.ownership();
+    m_node_dof_map                = dofs::LocalDofMap{node2dof, *m_mesh};
+    const auto teuchos_comm       = util::makeTeuchosRCP< Teuchos::MpiComm< int > >(m_comm->get());
+    const auto num_all_dofs       = dof_ownership.getOwnershipDist(*m_comm).back();
+    m_operator_map                = detail::makeTpetraMapOwned(dof_ownership, teuchos_comm, num_all_dofs);
+    m_rhs                         = util::makeTeuchosRCP< tpetra_multivector_t >(m_operator_map, n_rhs);
+    m_solution                    = util::makeTeuchosRCP< tpetra_multivector_t >(m_operator_map, n_rhs);
+    m_rhs_view                    = m_rhs->getLocalViewHost(Tpetra::Access::ReadWrite);
+    m_diagonal                    = util::ArrayOwner< val_t >(dof_ownership.localSize());
+    const auto context            = dof_ownership.makeCommContext(*m_comm);
+    m_import                      = std::make_unique< comm::Import< val_t, local_dof_t > >(context, n_rhs);
+    m_export                      = std::make_unique< comm::Export< val_t, local_dof_t > >(context, n_rhs);
+    m_import_shared_buf           = view_t("import buf", dof_ownership.shared().size(), n_rhs);
+    m_export_shared_buf           = view_t("export buf", dof_ownership.shared().size(), n_rhs);
     initKernelMaps();
-    if constexpr (not dirichlet_def.domain_defs.empty())
+    const auto& dirichlet = bc_def.getDirichlet();
+    if (not dirichlet.empty())
     {
-        m_dirichlet_bc.emplace(m_node_dof_map, m_interior_mesh, m_border_mesh, *m_comm, context, dbcdef_ctwrpr);
+        m_dirichlet_bc.emplace(m_node_dof_map, m_interior_mesh, m_border_mesh, *m_comm, context, dirichlet);
         if (not m_dirichlet_bc->isEmpty()) // Skip allocation if no BC DOFs present in partition
-            m_dirichlet_values = view_t("Dirichlet values", all_dofs.size(), n_rhs);
+            m_dirichlet_values = view_t("Dirichlet values", dof_ownership.localSize(), n_rhs);
     }
 }
 
@@ -895,7 +900,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::setValues(
     const Kernel&                                                 kernel,
     const util::ArrayOwner< d_id_t >&                             domain_ids,
     const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-    const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
+    const post::FieldAccess< n_fields >&                          field_access,
     val_t                                                         time)
 {
     util::throwingAssert(vector->getNumVectors() == n_rhs);
@@ -907,7 +912,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::setValues(
                          domain_ids,
                          m_node_dof_map,
                          dof_inds,
-                         field_val_getter,
+                         field_access,
                          vector->getLocalViewHost(Tpetra::Access::ReadWrite),
                          time);
 }
@@ -918,7 +923,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::setDirichletBCValu
     const Kernel&                                                 kernel,
     const util::ArrayOwner< d_id_t >&                             domain_ids,
     const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-    const SolutionManager::FieldValueGetter< n_fields >&          field_val_getter,
+    const post::FieldAccess< n_fields >&                          field_access,
     val_t                                                         time)
 {
     util::throwingAssert(m_dirichlet_bc.has_value(), "`setDirichletBCValues` called but no Dirichlet BCs were defined");
@@ -933,7 +938,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::setDirichletBCValu
                              domain_ids,
                              m_node_dof_map,
                              dof_inds,
-                             field_val_getter,
+                             field_access,
                              Kokkos::subview(m_dirichlet_values, owned_range, Kokkos::ALL),
                              time);
         m_bcs_need_import = true;

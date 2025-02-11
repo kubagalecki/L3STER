@@ -1,8 +1,8 @@
 #ifndef L3STER_ALGSYS_STATICCONDENSATIONMANAGER_HPP
 #define L3STER_ALGSYS_STATICCONDENSATIONMANAGER_HPP
 
-#include "l3ster/dofs/DofsFromNodes.hpp"
 #include "l3ster/algsys/ScatterLocalSystem.hpp"
+#include "l3ster/dofs/DofsFromNodes.hpp"
 #include "l3ster/post/SolutionManager.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 #include "l3ster/util/TbbUtils.hpp"
@@ -56,14 +56,25 @@ public:
     }
 
 protected:
+    StaticCondensationManagerInterface() = default;
+    template < el_o_t... orders >
+    StaticCondensationManagerInterface(const mesh::MeshPartition< orders... >& mesh)
+        : m_node_ownership{mesh.getNodeOwnershipSharedPtr()}
+    {}
+
     template < size_t max_dofs_per_node, size_t n_rhs, IndexRange_c SolInds, IndexRange_c SolManInds >
     static void validateSolutionUpdateInds(SolInds&& sol_inds, SolutionManager& sol_man, SolManInds&& sol_man_inds);
     template < size_t max_dofs_per_node, size_t n_rhs, IndexRange_c SolInds, IndexRange_c SolManInds >
-    static void updateSolutionPrimaryDofs(const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
-                                          const std::array< std::span< const val_t >, n_rhs >&   condensed_solutions,
-                                          SolInds&&                                              sol_inds,
-                                          SolutionManager&                                       sol_man,
-                                          SolManInds&&                                           sol_man_inds);
+    void updateSolutionPrimaryDofs(const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
+                                   const std::array< std::span< const val_t >, n_rhs >&   condensed_solutions,
+                                   SolInds&&                                              sol_inds,
+                                   SolutionManager&                                       sol_man,
+                                   SolManInds&&                                           sol_man_inds) const;
+
+    auto getNodeLid(n_id_t node) const { return static_cast< n_loc_id_t >(m_node_ownership->getLocalIndex(node)); }
+
+private:
+    std::shared_ptr< const util::SegmentedOwnership< n_id_t > > m_node_ownership;
 };
 
 template < CondensationPolicy CP >
@@ -73,13 +84,16 @@ template <>
 class StaticCondensationManager< CondensationPolicy::None > :
     public StaticCondensationManagerInterface< StaticCondensationManager< CondensationPolicy::None > >
 {
+    using Base = StaticCondensationManagerInterface< StaticCondensationManager< CondensationPolicy::None > >;
+
 public:
     StaticCondensationManager() = default;
     template < el_o_t... orders, size_t max_dofs_per_node, ProblemDef problem_def >
-    StaticCondensationManager(const mesh::MeshPartition< orders... >&,
+    StaticCondensationManager(const mesh::MeshPartition< orders... >& mesh,
                               const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >&,
                               util::ConstexprValue< problem_def >,
                               size_t)
+        : Base{mesh}
     {}
 
     void beginAssemblyImpl() {}
@@ -104,7 +118,7 @@ public:
                             util::ConstexprValue< field_inds >                             field_inds_ctwrpr)
     {
         const auto [row_dofs, col_dofs, rhs_dofs] =
-            dofs::getUnsortedPrimaryDofs(element, node_dof_map, no_condensation_tag, field_inds_ctwrpr);
+            dofs::getDofsFromNodes(element.getNodes(), node_dof_map, field_inds_ctwrpr);
         scatterLocalSystem(local_mat, local_rhs, global_mat, global_rhs, row_dofs, col_dofs, rhs_dofs);
     }
     template < el_o_t... orders, size_t max_dofs_per_node, size_t n_rhs, IndexRange_c SolInds, IndexRange_c SolManInds >
@@ -128,6 +142,7 @@ template <>
 class StaticCondensationManager< CondensationPolicy::ElementBoundary > :
     public StaticCondensationManagerInterface< StaticCondensationManager< CondensationPolicy::ElementBoundary > >
 {
+    using Base = StaticCondensationManagerInterface< StaticCondensationManager< CondensationPolicy::ElementBoundary > >;
     template < mesh::ElementType ET, el_o_t EO, size_t dofs_per_node >
     struct LocalDofInds
     {
@@ -220,7 +235,7 @@ void StaticCondensationManagerInterface< Derived >::updateSolutionPrimaryDofs(
     const std::array< std::span< const val_t >, n_rhs >&   condensed_solutions,
     SolInds&&                                              sol_inds,
     SolutionManager&                                       sol_man,
-    SolManInds&&                                           sol_man_inds)
+    SolManInds&&                                           sol_man_inds) const
 {
     const auto dest_col_views      = std::invoke([&] {
         std::vector< std::span< val_t > > retval(std::ranges::distance(sol_man_inds));
@@ -231,7 +246,7 @@ void StaticCondensationManagerInterface< Derived >::updateSolutionPrimaryDofs(
     const auto update_node_entries = [&](const auto& map_entry) {
         const auto& [node, dof_triplet] = map_entry;
         const auto& dofs                = dof_triplet.back();
-        const auto  local_node_ind      = sol_man.getNodeMap().at(node);
+        const auto  local_node_ind      = getNodeLid(node);
         for (size_t target_ind = 0; size_t src_ind : sol_inds_vec)
         {
             const auto local_dof = dofs[src_ind];
@@ -253,16 +268,17 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
     const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map,
     util::ConstexprValue< problem_def >,
     size_t n_rhs)
+    : Base{mesh}
 {
     const auto compute_elem_dof_info = [&dof_map]< mesh::ElementType ET, el_o_t EO >(
                                            const mesh::Element< ET, EO >& element) {
         // Bitmap is initially inverted, i.e., 0 implies that the dof is active (avoids awkward all-true construction)
         using dof_bmp_t    = std::bitset< max_dofs_per_node >;
-        auto dof_bmp_range = getBoundaryNodes(element) | std::views::transform(dof_map) | std::views::keys |
+        auto dof_bmp_range = getBoundaryNodes(element) | std::views::transform(std::cref(dof_map)) | std::views::keys |
                              std::views::transform([&](const std::array< local_dof_t, max_dofs_per_node >& dofs) {
                                  auto retval = dof_bmp_t{};
-                                 for (size_t i = 0; auto dof : dofs)
-                                     retval[i++] = dof == dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >::invalid_dof;
+                                 for (auto&& [i, dof] : dofs | std::views::enumerate)
+                                     retval[i] = not dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >::isValid(dof);
                                  return retval;
                              }) |
                              std::views::common;
@@ -328,8 +344,8 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemb
             thread_local Eigen::Matrix< val_t, Eigen::Dynamic, int{n_rhs} >            primary_upd_rhs;
             primary_upd_mat = -(elem_data.upper_block * elem_data.diag_block_inv * elem_data.upper_block.transpose());
             primary_upd_rhs = -(elem_data.upper_block * elem_data.diag_block_inv * elem_data.rhs);
-            const auto [row_dofs, col_dofs, rhs_dofs] =
-                dofs::getUnsortedPrimaryDofs(*element_ptr, dof_map, element_boundary_tag);
+            const auto [row_dofs, col_dofs, rhs_dofs] = dofs::getDofsFromNodes(
+                dofs::getPrimaryNodesArray< CondensationPolicy::ElementBoundary >(*element_ptr), dof_map);
             scatterLocalSystem(primary_upd_mat, primary_upd_rhs, matrix, rhs, row_dofs, col_dofs, rhs_dofs);
         };
         std::visit(finalize_element, element_ptr_variant);
@@ -354,8 +370,8 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
     L3STER_PROFILE_FUNCTION;
     auto&      elem_data = m_elem_data_map.at(element.getId());
     const auto dof_inds  = computeLocalDofInds(element, node_dof_map, elem_data, field_inds_ctwrpr);
-    const auto [row_dofs, col_dofs, rhs_dofs] =
-        dofs::getUnsortedPrimaryDofs(element, node_dof_map, element_boundary_tag, field_inds_ctwrpr);
+    const auto [row_dofs, col_dofs, rhs_dofs] = dofs::getDofsFromNodes(
+        dofs::getPrimaryNodesArray< CondensationPolicy::ElementBoundary >(element), node_dof_map, field_inds_ctwrpr);
 
     // Primary diagonal block + RHS
     constexpr int           n_prim_dofs = std::tuple_size_v< decltype(dof_inds.primary_src_inds) >;
@@ -415,8 +431,6 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSo
         return retval;
     });
     auto&&     sol_inds_vec   = util::toVector(std::forward< SolInds >(sol_inds));
-
-    const auto pg = util::MaxParallelismGuard{1};
     util::tbb::parallelFor(m_element_ids, [&](el_id_t id) {
         // Thread local variables to minimize contention on the global allocator in a parallel context
         thread_local Eigen::Matrix< val_t, Eigen::Dynamic, int{n_rhs} > primary_vals, internal_vals;
@@ -424,8 +438,8 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSo
         const auto& el_data             = m_elem_data_map.at(id);
         const auto  element_ptr_variant = mesh.find(id).value();
         const auto  do_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >* element_ptr) {
-            const auto [r_dofs, c_dofs, rhs_dofs] =
-                dofs::getUnsortedPrimaryDofs(*element_ptr, node_dof_map, element_boundary_tag);
+            const auto [r_dofs, c_dofs, rhs_dofs] = dofs::getDofsFromNodes(
+                dofs::getPrimaryNodesArray< CondensationPolicy::ElementBoundary >(*element_ptr), node_dof_map);
             primary_vals.resize(rhs_dofs.size(), n_rhs);
             for (size_t rhs_ind = 0; rhs_ind != n_rhs; ++rhs_ind)
                 for (Eigen::Index i = 0; auto dof : rhs_dofs)
@@ -446,7 +460,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSo
 
             for (size_t internal_ind = 0; auto node : getInternalNodes(*element_ptr))
             {
-                const auto   local_node_ind = sol_man.getNodeMap().at(node);
+                const auto   local_node_ind = getNodeLid(node);
                 const size_t node_base      = internal_ind * n_internal_dofs;
                 for (size_t dest_ind = 0; size_t sol_ind : sol_inds_vec)
                     for (size_t rhs_ind = 0; rhs_ind != n_rhs; ++rhs_ind)

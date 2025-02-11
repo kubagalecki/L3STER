@@ -1,8 +1,8 @@
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/Base64.hpp"
-#include "l3ster/util/BitsetManip.hpp"
 #include "l3ster/util/Common.hpp"
 #include "l3ster/util/ConstexprRefStableCollection.hpp"
+#include "l3ster/util/CrsGraph.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/HwlocWrapper.hpp"
 #include "l3ster/util/IO.hpp"
@@ -11,6 +11,7 @@
 #include "l3ster/util/MetisUtils.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 #include "l3ster/util/SetStackSize.hpp"
+#include "l3ster/util/SpatialHashTable.hpp"
 #include "l3ster/util/StaticVector.hpp"
 #include "l3ster/util/TbbUtils.hpp"
 #include "l3ster/util/TypeErasedOverload.hpp"
@@ -146,32 +147,6 @@ TEST_CASE("Stack size manipulation", "[util]")
     }
 }
 
-TEMPLATE_TEST_CASE("Bitset (de-)serialization",
-                   "[util]",
-                   util::ConstexprValue< 10u >,
-                   util::ConstexprValue< 64u >,
-                   util::ConstexprValue< 100u >,
-                   util::ConstexprValue< 128u >,
-                   util::ConstexprValue< 257u >)
-{
-    constexpr static auto size               = TestType::value;
-    constexpr auto        n_runs             = 1 << 8;
-    constexpr auto        make_random_bitset = [] {
-        std::bitset< size >                    retval;
-        std::uniform_int_distribution< short > dist{0, 1};
-        std::mt19937                           prng{std::random_device{}()};
-        for (unsigned i = 0; i < size; ++i)
-            retval[i] = dist(prng);
-        return retval;
-    };
-    for (int i = 0; i < n_runs; ++i)
-    {
-        const auto test_data = make_random_bitset();
-        const auto result    = util::trimBitset< size >(util::deserializeBitset(util::serializeBitset(test_data)));
-        CHECK(test_data == result);
-    }
-}
-
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpragmas"
@@ -216,93 +191,6 @@ TEST_CASE("MetisGraphWrapper", "[util]")
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic pop
 #endif
-
-TEST_CASE("Consecutive reduce algo", "[util]")
-{
-    SECTION("Default args")
-    {
-        std::vector v{1, 1, 1, 2, 3, 3, 4, 5, 5, 5};
-        v.erase(util::reduceConsecutive(v).begin(), v.end());
-        REQUIRE(v.size() == 5);
-        CHECK(v[0] == 3);
-        CHECK(v[1] == 2);
-        CHECK(v[2] == 6);
-        CHECK(v[3] == 4);
-        CHECK(v[4] == 15);
-    }
-
-    SECTION("Custom comp & reduce")
-    {
-        std::vector v{std::pair{1, 2},
-                      std::pair{4, -1},
-                      std::pair{11, -8},
-                      std::pair{2, 1},
-                      std::pair{2, 0},
-                      std::pair{0, 1},
-                      std::pair{42, 13},
-                      std::pair{54, 1}};
-        const auto  cmp = [](const auto& p1, const auto& p2) {
-            return p1.first + p1.second == p2.first + p2.second;
-        };
-        v.erase(util::reduceConsecutive(v,
-                                        cmp,
-                                        [](const auto& p1, const auto& p2) {
-                                            return std::make_pair(std::abs(p1.first) + std::abs(p2.first),
-                                                                  std::abs(p1.second) + std::abs(p2.second));
-                                        })
-                    .begin(),
-                v.end());
-        REQUIRE(v.size() == 4);
-        CHECK(v[0].first == 18);
-        CHECK(v[0].second == 12);
-        CHECK(v[1].first == 2);
-        CHECK(v[1].second == 0);
-        CHECK(v[2].first == 0);
-        CHECK(v[2].second == 1);
-        CHECK(v[3].first == 96);
-        CHECK(v[3].second == 14);
-    }
-
-    SECTION("Algebraic sequence")
-    {
-        std::vector v{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 42};
-        v.erase(util::reduceConsecutive(
-                    v, [](int e1, int e2) { return e1 + 1 == e2; }, [](int e1, int e2) { return std::max(e1, e2); })
-                    .begin(),
-                v.end());
-        REQUIRE(v.size() == 2);
-        CHECK(v[0] == 10);
-        CHECK(v[1] == 42);
-    }
-
-    SECTION("Interval reduction")
-    {
-        std::vector v{std::pair{1, 2},
-                      std::pair{2, 3},
-                      std::pair{3, 4},
-                      std::pair{4, 5},
-                      std::pair{5, 6},
-                      std::pair{6, 7},
-                      std::pair{7, 8},
-                      std::pair{8, 9}};
-        v.erase(util::reduceConsecutive(
-                    v,
-                    [](const auto& p1, const auto& p2) { return p1.second == p2.first; },
-                    [](const auto& p1, const auto& p2) { return std::make_pair(p1.first, p2.second); })
-                    .begin(),
-                v.end());
-        REQUIRE(v.size() == 1);
-        CHECK(v[0].first == 1);
-        CHECK(v[0].second == 9);
-    }
-
-    SECTION("Empty")
-    {
-        std::vector< int > v;
-        v.erase(util::reduceConsecutive(v).begin(), v.end());
-        REQUIRE(v.size() == 0);
-    }
-}
 
 TEST_CASE("Dynamic bitset", "[util]")
 {
@@ -785,8 +673,8 @@ TEST_CASE("Type-erased overload set tests", "[util]")
 
     SECTION("Target fits in buffer")
     {
-        constexpr int  int_val = 0, str_val = 1;
-        const auto process_int = [&](int) {
+        constexpr int int_val = 0, str_val = 1;
+        const auto    process_int = [&](int) {
             return int_val;
         };
         const auto process_string = [&](const std::string&) {
@@ -919,5 +807,129 @@ TEST_CASE("UniVector", "[util]")
         find_val = 44;
         REQUIRE_FALSE(vec.find(pred).has_value());
         REQUIRE_FALSE(std::as_const(vec).find(pred).has_value());
+    }
+}
+
+TEST_CASE("CrsGraph", "[util]")
+{
+    using VertexType                        = size_t;
+    constexpr size_t size                   = 1uz << 7;
+    const auto       check_dfs_returns_iota = [&](const util::CrsGraph< VertexType >& graph) {
+        auto visited = std::vector< VertexType >{};
+        visited.reserve(size);
+        util::depthFirstSearch(graph, [&](VertexType v) { visited.push_back(v); });
+        CHECK(std::ranges::equal(visited, std::views::iota(VertexType{0}, size)));
+    };
+
+    SECTION("Unary tree")
+    {
+        const auto graph = util::makeCrsGraph(std::views::iota(0uz, size - 1), std::views::iota(1uz, size));
+        for (VertexType v = 0; v != size - 1; ++v)
+            REQUIRE(graph(v).size() == 1);
+        REQUIRE(graph(size - 1).size() == 0);
+        check_dfs_returns_iota(graph);
+    }
+    SECTION("Chain")
+    {
+        auto from = std::views::iota(0uz, size);
+        auto to   = util::ArrayOwner< VertexType >(from);
+        std::ranges::rotate(to, std::next(to.begin()));
+        const auto graph = util::makeCrsGraph(from, to, util::GraphType::Undirected);
+        for (VertexType v = 0; v != size; ++v)
+            REQUIRE(graph(v).size() == 2);
+        check_dfs_returns_iota(graph);
+    }
+    SECTION("Complete")
+    {
+        auto       verts     = std::views::iota(0uz, size);
+        auto       all_combs = std::views::cartesian_product(verts, verts);
+        const auto graph     = util::makeCrsGraph(all_combs | std::views::keys, all_combs | std::views::values);
+        for (VertexType v = 0; v != size; ++v)
+            REQUIRE(graph(v).size() == size);
+        check_dfs_returns_iota(graph);
+    }
+    SECTION("Cluster")
+    {
+        auto from = std::array{std::views::iota(0uz, size / 2), std::views::iota(size / 2, size)};
+        auto to   = std::array{util::ArrayOwner(from.front()), util::ArrayOwner(from.back())};
+        for (auto& t : to)
+            std::ranges::rotate(t, std::next(t.begin()));
+        const auto graph = util::makeCrsGraph(from | std::views::join, to | std::views::join);
+        for (VertexType v = 0; v != size; ++v)
+            REQUIRE(graph(v).size() == 1);
+        auto visited = std::vector< VertexType >{};
+        visited.reserve(size / 2);
+        util::depthFirstSearch(graph, [&](VertexType v) { visited.push_back(v); });
+        CHECK(std::ranges::equal(visited, std::views::iota(VertexType{0}, size / 2)));
+        visited.clear();
+        util::depthFirstSearch(graph, [&](VertexType v) { visited.push_back(v); }, size / 2);
+        CHECK(std::ranges::equal(visited, std::views::iota(VertexType{size / 2}, VertexType{size})));
+    }
+    SECTION("Empty")
+    {
+        const auto graph = util::makeCrsGraph(std::views::empty< VertexType >, std::views::empty< VertexType >);
+        REQUIRE(graph.getNRows() == 0);
+    }
+}
+
+TEST_CASE("Spatial hash table", "[util]")
+{
+    constexpr auto format_point = []< Arithmetic_c T, size_t dim >(const std::array< T, dim >& point) {
+        auto retval = std::string{"("};
+        std::ranges::copy(point | std::views::transform([](auto v) { return std::to_string(v); }) |
+                              std::views::join_with(std::string_view{", "}),
+                          std::back_inserter(retval));
+        retval.push_back(')');
+        return retval;
+    };
+    constexpr int num_ticks = 6;
+    auto ticks = std::views::iota(0, num_ticks) | std::views::transform([](int i) { return static_cast< double >(i); });
+    auto xyz   = std::views::cartesian_product(ticks, ticks, ticks);
+
+    SECTION("Coarse grid")
+    {
+        constexpr auto dx_coarse  = 1.;
+        auto           space_hash = util::SpatialHashTable< std::string, 3 >{dx_coarse};
+        for (const auto& [x, y, z] : xyz)
+        {
+            const auto point = std::array{x, y, z};
+            space_hash.insert(point, format_point(point));
+        }
+        REQUIRE(space_hash.size() == std::ranges::size(xyz));
+        CHECK(static_cast< size_t >(std::ranges::distance(space_hash.all())) == space_hash.size());
+        for (const auto& [x, y, z] : xyz)
+        {
+            const auto point = std::array{x, y, z};
+            auto       prox  = space_hash.proximate(point);
+            CHECK(std::ranges::contains(prox | std::views::keys, point));
+        }
+        auto ticks_inner = ticks | std::views::drop(1) | std::views::take(num_ticks - 2);
+        auto xyz_inner   = std::views::cartesian_product(ticks_inner, ticks_inner, ticks_inner);
+        for (const auto& [x, y, z] : xyz_inner)
+        {
+            const auto point = std::array{x, y, z};
+            auto       prox  = space_hash.proximate(point);
+            CHECK(std::ranges::distance(prox) == 27);
+        }
+    }
+
+    SECTION("Fine grid")
+    {
+        constexpr auto dx_fine    = .01;
+        auto           space_hash = util::SpatialHashTable< std::string, 3 >{dx_fine};
+        for (const auto& [x, y, z] : xyz)
+        {
+            const auto point = std::array{x, y, z};
+            space_hash.insert(point, format_point(point));
+        }
+        REQUIRE(space_hash.size() == std::ranges::size(xyz));
+        CHECK(static_cast< size_t >(std::ranges::distance(space_hash.all())) == space_hash.size());
+        for (const auto& [x, y, z] : xyz)
+        {
+            const auto point = std::array{x, y, z};
+            auto       prox  = space_hash.proximate(point);
+            CHECK(std::ranges::contains(prox | std::views::keys, point));
+            CHECK(std::ranges::distance(prox) == 1);
+        }
     }
 }

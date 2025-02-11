@@ -188,7 +188,7 @@ inline std::size_t alignForSimd(std::span< const std::byte > data, char*& out)
     auto misaligned_by = std::numeric_limits< std::size_t >::max() - space;
     misaligned_by += (misaligned_by % 3) * alignof(int); // Alignment pass can't leave remainder
     if (misaligned_by <= data.size())
-        return encB64SerialImpl(data.subspan(0, misaligned_by), out);
+        return encB64SerialImpl(data.first(misaligned_by), out);
     else
         return 0;
 }

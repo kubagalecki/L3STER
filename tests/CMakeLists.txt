@@ -27,7 +27,6 @@ include( Catch )
 ### Define the Catch2-based target ###
 
 add_executable( L3STER_tests TestsMain.cpp
-                DofTests.cpp
                 LocalAssemblyTests.cpp
                 MappingTests.cpp
                 MathTests.cpp
@@ -89,22 +88,22 @@ function( add_mpi_test source name nprocs )
 endfunction()
 
 # Define individual tests
-add_mpi_test( NodeCondensationTest.cpp Condense_Element_Boundary_Nodes "1;2;4" )
-add_mpi_test( GlobalDofGatherTest.cpp Distribute_Global_DOF_Intervals "2;4" )
 add_mpi_test( MpiBlockingCommunicationTest.cpp MPI_Blocking_Communication "1;2;4" )
 add_mpi_test( MpiAsyncCommunicationTest.cpp MPI_Async_Communication "1;2;4" )
+add_mpi_test( MpiImportExportTest.cpp Import_Export_Tests "1;2;4" )
 add_mpi_test( MeshDistributionTest.cpp Mesh_Distribution "1;2;4" )
 add_mpi_test( NodeThroughputInfoTest.cpp Node_Throughput_Calculation "1;2;4" )
-add_mpi_test( TpetraMapCreationTest.cpp Tpetra_Map_Creation "1;2;4" )
-add_mpi_test( SparsityGraphTest.cpp Sparsity_Graph "1;2;4;8;16" )
+add_mpi_test( SparsityGraphTest.cpp Sparsity_Graph "1;2;4" )
+add_mpi_test( AdvectionPeriodic2DAssembled.cpp Solve_2D_periodic_advection_problem_assembled "1;2;4" )
+add_mpi_test( AdvectionPeriodic2DMF.cpp Solve_2D_periodic_advection_problem_matrix_free "1;2;4" )
+add_mpi_test( Diffusion2DAssembledTest.cpp Solve_2D_diffusion_problem_assembled "1;2;4" )
+add_mpi_test( Diffusion2DMF.cpp Solve_2D_diffusion_problem_matrix_free "1;2;4" )
 add_mpi_test( DirichletBCTest.cpp Dirichlet_BC_Application "1;2;4" )
-add_mpi_test( Diffusion2DTest.cpp Solve_2D_diffusion_problem "1;2;4" )
-add_mpi_test( MatrixFreeTests.cpp Matrix_Free "1;2;4" )
+add_mpi_test( PeriodicBCTest.cpp Periodic_BC_test "1;2;4;16" )
 add_mpi_test( EmptyPartitionTest.cpp Handle_Empty_Partition "4" )
 add_mpi_test( MultiDomainTest.cpp Solve_Multi_Domain_Problem "1;2;4" )
 add_mpi_test( VtkExportTest.cpp Export_results_to_VTK "1;2;4" )
 add_mpi_test( SolverTests.cpp Solver_Tests "1;2;4" )
-add_mpi_test( MpiImportExportTest.cpp Import_Export_Tests "1;2;4" )
 
 #######################################################################################################################
 

@@ -31,7 +31,8 @@ void test()
 
     constexpr auto alg_params       = AlgebraicSystemParams{.cond_policy = CP, .n_rhs = 2};
     constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
-    auto           alg_sys          = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, {}, algparams_ctwrpr);
+    auto           alg_sys =
+        makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, BCDefinition< problem_def.n_fields >{}, algparams_ctwrpr);
 
     constexpr auto   ker_params = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1, .n_rhs = 2};
     constexpr double inc        = 1000.;
@@ -49,7 +50,7 @@ void test()
         set_value                 = static_cast< double >(dom_ind + 1);
         constexpr auto field_inds = std::array{size_t{dom_ind}};
         constexpr auto dom_ids    = std::array{domains[dom_ind]};
-        alg_sys.assembleProblem(const_kernel, dom_ids, empty_field_val_getter, util::ConstexprValue< field_inds >{});
+        alg_sys.assembleProblem(const_kernel, dom_ids, post::FieldAccess< 0 >{}, util::ConstexprValue< field_inds >{});
     };
 
     alg_sys.beginAssembly();
@@ -65,8 +66,8 @@ void test()
     auto solution_manager = SolutionManager{*mesh, problem_def.n_fields * 2};
     for (size_t i = 0; i != problem_def.n_fields; ++i)
     {
-        solution_manager.setField(2 * i, static_cast< double >(i + 1));
-        solution_manager.setField(2 * i + 1, static_cast< double >(i + 1) + inc);
+        solution_manager.setFields({2 * i}, static_cast< double >(i + 1));
+        solution_manager.setFields({2 * i + 1}, static_cast< double >(i + 1) + inc);
     }
     constexpr auto dof_inds     = util::makeIotaArray< size_t, problem_def.n_fields >();
     constexpr auto sol_man_inds = util::makeIotaArray< size_t, problem_def.n_fields * 2 >();
