@@ -20,11 +20,10 @@ auto makeMesh(const MpiComm& comm, auto probdef_ctwrpr)
     return generateAndDistributeMesh< mesh_order >(comm, [&] { return makeSquareMesh(node_dist); }, {}, probdef_ctwrpr);
 }
 
-int main(int argc, char* argv[])
+template < CondensationPolicy CP, OperatorEvaluationStrategy S >
+void test()
 {
-    const auto max_par_guard = util::MaxParallelismGuard{3};
-    const auto scope_guard   = L3sterScopeGuard{argc, argv};
-    const auto comm          = std::make_shared< MpiComm >(MPI_COMM_WORLD);
+    const auto comm = std::make_shared< MpiComm >(MPI_COMM_WORLD);
 
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
     constexpr auto   problem_def    = ProblemDef{defineDomain< 3 >(domain_id, ALL_DOFS)};
@@ -38,10 +37,9 @@ int main(int argc, char* argv[])
     constexpr auto adiabatic_bound_ids = std::array{bot_boundary, top_boundary};
     constexpr auto boundary_ids        = std::array{top_boundary, bot_boundary, left_boundary, right_boundary};
 
-    constexpr auto alg_params       = AlgebraicSystemParams{.eval_strategy = OperatorEvaluationStrategy::MatrixFree};
+    constexpr auto alg_params       = AlgebraicSystemParams{.eval_strategy = S, .cond_policy = CP};
     constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
     auto           alg_sys          = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, bc_def, algparams_ctwrpr);
-    alg_sys.describe();
 
     constexpr auto diff_params = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3};
     constexpr auto diffusion_kernel2d =
@@ -70,22 +68,31 @@ int main(int argc, char* argv[])
     constexpr auto dirbc_params        = KernelParams{.dimension = 2, .n_equations = 1};
     constexpr auto dirichlet_bc_kernel = wrapBoundaryResidualKernel< dirbc_params >(
         [](const auto& in, auto& out) { out[0] = in.point.space.x() / node_dist.back(); });
+
+    const auto assembleDomainProblem = [&] {
+        alg_sys.assembleProblem(diffusion_kernel2d, std::views::single(domain_id));
+    };
+    const auto assembleBoundaryProblem = [&] {
+        alg_sys.assembleProblem(neumann_bc_kernel, adiabatic_bound_ids);
+    };
+
     constexpr auto dirichlet_bound_ids = std::array{left_boundary, right_boundary};
     alg_sys.setDirichletBCValues(dirichlet_bc_kernel, dirichlet_bound_ids, std::array{0});
 
     // Check constraints on assembly state
     alg_sys.beginAssembly();
-    alg_sys.assembleProblem(diffusion_kernel2d, std::views::single(domain_id));
-    alg_sys.assembleProblem(neumann_bc_kernel, adiabatic_bound_ids);
+    assembleDomainProblem();
+    assembleBoundaryProblem();
     alg_sys.endAssembly();
+    alg_sys.describe();
+
+    constexpr auto dof_inds = util::makeIotaArray< size_t, 3 >();
 
     constexpr auto solver_opts  = IterSolverOpts{.tol = 1e-10};
     constexpr auto precond_opts = NativeJacobiOpts{};
     auto           solver       = CG{solver_opts, precond_opts};
     alg_sys.solve(solver);
-
-    constexpr auto dof_inds         = util::makeIotaArray< size_t, 3 >();
-    auto           solution_manager = SolutionManager{*mesh, diff_params.n_unknowns};
+    auto solution_manager = SolutionManager{*mesh, problem_def.n_fields};
     alg_sys.updateSolution(dof_inds, solution_manager, dof_inds);
 
     // Check results
