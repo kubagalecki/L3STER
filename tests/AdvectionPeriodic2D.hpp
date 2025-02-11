@@ -1,10 +1,8 @@
 #include "l3ster/algsys/MakeAlgebraicSystem.hpp"
-#include "l3ster/bcs/PeriodicBC.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 #include "l3ster/post/NormL2.hpp"
-#include "l3ster/post/VtkExport.hpp"
 #include "l3ster/solve/BelosSolvers.hpp"
 #include "l3ster/solve/NativePreconditioners.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
@@ -28,10 +26,11 @@ auto makeMesh2D(const MpiComm& comm, auto probdef_ctwrpr, const std::vector< dou
 template < OperatorEvaluationStrategy S, CondensationPolicy CP >
 void solveAdvection2D()
 {
-    [[maybe_unused]] constexpr d_id_t domain_id = 0, bot_bound = 1, top_bound = 2, left_bound = 3, right_bound = 4;
-    constexpr auto                    problem_def    = ProblemDef{defineDomain< 1 >(domain_id, ALL_DOFS)};
-    constexpr auto                    probdef_ctwrpr = util::ConstexprValue< problem_def >{};
-    auto                              bc_def         = BCDefinition< problem_def.n_fields >{};
+    constexpr d_id_t domain_id = 0, bot_bound = 1, top_bound = 2, left_bound = 3, right_bound = 4;
+    constexpr auto   boundary_ids   = std::array{bot_bound, top_bound, left_bound, right_bound};
+    constexpr auto   problem_def    = ProblemDef{defineDomain< 1 >(domain_id, ALL_DOFS)};
+    constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
+    auto             bc_def         = BCDefinition< problem_def.n_fields >{};
     bc_def.definePeriodic({left_bound}, {right_bound}, {node_dist_x.back() - node_dist_x.front(), 0., 0.});
     bc_def.defineDirichlet({top_bound, bot_bound});
 
@@ -44,6 +43,7 @@ void solveAdvection2D()
     constexpr auto alg_params       = AlgebraicSystemParams{.eval_strategy = S, .cond_policy = CP};
     constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
     auto           alg_sys          = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, bc_def, algparams_ctwrpr);
+    alg_sys.describe();
 
     //    // BDF 2
     //    constexpr auto time_order       = 2;
@@ -85,11 +85,11 @@ void solveAdvection2D()
 
     auto time_hist_inds   = util::makeIotaArray< size_t, time_order >();
     auto solution_manager = SolutionManager{*mesh, time_order};
-    alg_sys.endAssembly();
     for (auto i : time_hist_inds)
     {
-        alg_sys.setValues(alg_sys.getSolution(), solution_kernel, {domain_id}, i0, {}, static_cast< double >(i) * -dt);
-        alg_sys.updateSolution(i0, solution_manager, std::views::single(i));
+        const auto time = static_cast< double >(i) * -dt;
+        solution_manager.setFields(*comm, solution_kernel, *mesh, {domain_id}, {i}, {}, time);
+        solution_manager.setFields(*comm, solution_kernel_bc, *mesh, boundary_ids, {i}, {}, time);
     }
 
     constexpr auto precond_opts = NativeJacobiOpts{};
@@ -127,12 +127,4 @@ void solveAdvection2D()
         std::cout << std::format("Normalized L2 error: {:.2f}%  ->  {}", error, error < thresh ? "PASS" : "FAIL")
                   << std::endl;
     REQUIRE(error < thresh);
-}
-
-int main(int argc, char* argv[])
-{
-    const auto max_par_guard = util::MaxParallelismGuard{3};
-    const auto scope_guard   = L3sterScopeGuard{argc, argv};
-    solveAdvection2D< OperatorEvaluationStrategy::GlobalAssembly, CondensationPolicy::None >();
-    solveAdvection2D< OperatorEvaluationStrategy::MatrixFree, CondensationPolicy::None >();
 }

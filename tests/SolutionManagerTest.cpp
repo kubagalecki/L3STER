@@ -46,7 +46,7 @@ TEST_CASE("Solution Manager", "[sol_man]")
 
     for (auto& sm : sol_mans)
         for (auto i : field_inds)
-            sm.setField(i, 42.);
+            sm.setFields({i}, 42.);
     for (const auto& [i, sm] : sol_mans | std::views::enumerate)
     {
         const auto  field_access = sm.makeFieldValueGetter(field_inds);

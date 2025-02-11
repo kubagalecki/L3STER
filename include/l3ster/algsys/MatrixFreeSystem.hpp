@@ -4,6 +4,7 @@
 #include "l3ster/algsys/ComputeValuesAtNodes.hpp"
 #include "l3ster/algsys/EvaluateLocalOperator.hpp"
 #include "l3ster/algsys/SparsityGraph.hpp"
+#include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 #include "l3ster/bcs/LocalDirichletBC.hpp"
 #include "l3ster/comm/ImportExport.hpp"
 #include "l3ster/mesh/SplitMesh.hpp"

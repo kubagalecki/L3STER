@@ -1,11 +1,14 @@
 #ifndef L3STER_ALGSYS_COMPUTEVALUESATNODES_HPP
 #define L3STER_ALGSYS_COMPUTEVALUESATNODES_HPP
 
-#include "l3ster/algsys/AssembleGlobalSystem.hpp"
+#include "l3ster/algsys/AssembleLocalSystem.hpp"
+#include "l3ster/algsys/OperatorUtils.hpp"
 #include "l3ster/basisfun/ReferenceBasisAtNodes.hpp"
 #include "l3ster/comm/ImportExport.hpp"
+#include "l3ster/dofs/NodeToDofMap.hpp"
 #include "l3ster/mesh/LocalMeshView.hpp"
 #include "l3ster/mesh/NodePhysicalLocation.hpp"
+#include "l3ster/post/FieldAccess.hpp"
 #include "l3ster/util/Ranges.hpp"
 
 #include <atomic>
@@ -148,6 +151,60 @@ void averageElementContributions(const MpiComm&                              com
         if (nc) // nc == 0 means nobody wrote to this index, so we keep the original value
             for (size_t rhs = 0; rhs != num_rhs; ++rhs)
                 owned_values(i, rhs) /= static_cast< val_t >(nc);
+}
+
+template < std::invocable SetValues >
+void exchangeElementContributions(const MpiComm&                                     comm,
+                                  const util::SegmentedOwnership< n_id_t >&          ownership,
+                                  const Kokkos::View< val_t**, Kokkos::LayoutLeft >& values,
+                                  std::span< std::uint16_t >                         num_contribs,
+                                  SetValues&&                                        set_values)
+{
+    const size_t num_owned        = ownership.owned().size();
+    const size_t num_all          = ownership.localSize();
+    const size_t num_inds         = values.extent(1);
+    const auto   shared_range     = std::make_pair(num_owned, num_all);
+    auto         context          = ownership.makeCommContext(comm);
+    auto         contrib_exporter = comm::Export< std::uint16_t, local_dof_t >{context, 1};
+    auto         contrib_importer = comm::Import< std::uint16_t, local_dof_t >{context, 1};
+    auto         value_exporter   = comm::Export< val_t, local_dof_t >{context, num_inds};
+    auto         value_importer   = comm::Import< val_t, local_dof_t >{context, num_inds};
+
+    contrib_exporter.setOwned(num_contribs | std::views::take(num_owned), num_contribs.size());
+    contrib_importer.setOwned(num_contribs | std::views::take(num_owned), num_contribs.size());
+    value_exporter.setOwned(values);
+    value_importer.setOwned(values);
+
+    contrib_exporter.setShared(num_contribs | std::views::drop(num_owned), num_contribs.size());
+    contrib_importer.setShared(num_contribs | std::views::drop(num_owned), num_contribs.size());
+    value_exporter.setShared(Kokkos::subview(values, shared_range, Kokkos::ALL()));
+    value_importer.setShared(Kokkos::subview(values, shared_range, Kokkos::ALL()));
+
+    contrib_exporter.postRecvs(comm);
+    value_exporter.postRecvs(comm);
+    std::invoke(std::forward< SetValues >(set_values));
+    contrib_exporter.postSends(comm);
+    value_exporter.postSends(comm);
+    contrib_exporter.wait(util::AtomicSumInto{});
+    value_exporter.wait(util::AtomicSumInto{});
+    contrib_importer.postComms(comm);
+    value_importer.postComms(comm);
+    contrib_importer.wait();
+    value_importer.wait();
+}
+
+inline void updateNodeVals(const Kokkos::View< val_t**, Kokkos::LayoutLeft >& values,
+                           const Kokkos::View< val_t**, Kokkos::LayoutLeft >& new_values,
+                           const util::ArrayOwner< std::uint16_t >&           num_contribs,
+                           const util::ArrayOwner< size_t >&                  inds)
+{
+    const auto update_row = [&](size_t row) {
+        const auto nc = num_contribs.at(row);
+        if (nc)
+            for (auto&& [src_col, dest_col] : inds | std::views::enumerate)
+                values(row, dest_col) = new_values(row, src_col) / static_cast< val_t >(nc);
+    };
+    util::tbb::parallelFor(std::views::iota(0uz, values.extent(0)), update_row);
 }
 } // namespace detail
 
@@ -399,7 +456,7 @@ template < typename Kernel,
            size_t        n_fields >
 void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&               kernel,
                           const mesh::MeshPartition< orders... >&                       mesh,
-                          const util::ArrayOwner< d_id_t >&                             domain_ids,
+                          const util::ArrayOwner< d_id_t >&                             boundary_ids,
                           const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& dof_map,
                           const std::array< dofind_t, params.n_equations >&             dof_inds,
                           const post::FieldAccess< n_fields >&                          field_access,
@@ -409,10 +466,10 @@ void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&       
 {
     L3STER_PROFILE_FUNCTION;
 
-    const bool dim_match = detail::checkDomainDimension(mesh, domain_ids, params.dimension - 1);
+    const bool dim_match = detail::checkDomainDimension(mesh, boundary_ids, params.dimension - 1);
     util::throwingAssert(dim_match, "The dimension of the kernel does not match the dimension of the boundary");
     util::throwingAssert(params.n_rhs == values.extent(1));
-    detail::zeroOut(mesh, domain_ids, dof_map, dof_inds, values);
+    detail::zeroOut(mesh, boundary_ids, dof_map, dof_inds, values);
     const auto process_el_view = [&]< mesh::ElementType ET, el_o_t EO >(mesh::BoundaryElementView< ET, EO > el_view) {
         if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
         {
@@ -445,7 +502,7 @@ void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&       
             std::ranges::for_each(el_view.getSideNodeInds(), process_node);
         }
     };
-    mesh.visitBoundaries(process_el_view, domain_ids, std::execution::par);
+    mesh.visitBoundaries(process_el_view, boundary_ids, std::execution::par);
 }
 
 template < typename Kernel,
@@ -533,6 +590,132 @@ void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&   kern
     mesh_border.visitBoundaries(init, boundary_ids, std::execution::par);
     detail::averageElementContributions(
         comm, owned_values, shared_values, num_contribs, exporter, do_interior, do_border);
+}
+
+template < typename Kernel, KernelParams params, el_o_t... orders, size_t n_fields >
+void computeValuesAtNodes(const MpiComm&                                     comm,
+                          const ResidualDomainKernel< Kernel, params >&      kernel,
+                          const mesh::MeshPartition< orders... >&            mesh,
+                          const util::ArrayOwner< d_id_t >&                  domain_ids,
+                          const util::ArrayOwner< size_t >&                  inds,
+                          const Kokkos::View< val_t**, Kokkos::LayoutLeft >& node_values,
+                          const post::FieldAccess< n_fields >&               field_access,
+                          val_t                                              time)
+    requires(params.n_rhs == 1)
+{
+    L3STER_PROFILE_FUNCTION;
+    const bool dim_match = detail::checkDomainDimension(mesh, domain_ids, params.dimension);
+    const bool inds_ok   = std::ranges::all_of(inds, [&](auto i) { return i < node_values.extent(1); });
+    util::throwingAssert(dim_match, "The dimension of the kernel does not match the dimension of the domain");
+    util::throwingAssert(inds_ok, "Out of bounds destination field index");
+    util::throwingAssert(inds.size() == params.n_equations, "Number of destination indices must match the kernel size");
+
+    const auto&  ownership    = mesh.getNodeOwnership();
+    const size_t num_all      = ownership.localSize();
+    const size_t num_inds     = inds.size();
+    using view_t              = Kokkos::View< val_t**, Kokkos::LayoutLeft >;
+    auto       num_contribs   = util::ArrayOwner< std::uint16_t >(num_all, 0);
+    const auto new_vals_alloc = std::make_unique< val_t[] >(num_all * num_inds);
+    const auto new_vals       = view_t(new_vals_alloc.get(), num_all, num_inds);
+    const auto zero_el        = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
+        for (auto lid : element.getNodes() | std::views::transform([&](auto n) { return ownership.getLocalIndex(n); }))
+            std::atomic_ref{num_contribs.at(lid)}.fetch_add(1, std::memory_order_relaxed);
+    };
+    const auto set_el_vals = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
+        if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
+        {
+            const auto& el_nodes       = element.getNodes();
+            const auto& el_data        = element.getData();
+            const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
+            const auto& node_locations = mesh::getNodeLocations< ET, EO >();
+            const auto  node_vals      = field_access.getGloballyIndexed(el_nodes);
+            const auto  jacobi_gen     = map::getNatJacobiMatGenerator(el_data);
+            const auto  process_node   = [&](size_t node_ind) {
+                const auto& ref_coords    = node_locations[node_ind];
+                const auto& ref_val       = basis_at_nodes.values[node_ind];
+                const auto& ref_ders      = basis_at_nodes.derivatives[node_ind];
+                const auto [phys_ders, _] = map::mapDomain< ET, EO >(jacobi_gen, ref_coords, ref_ders);
+                const auto ker_res  = evalKernel(kernel, ref_coords, ref_val, phys_ders, node_vals, el_data, time);
+                const auto node_gid = el_nodes[node_ind];
+                const auto node_lid = ownership.getLocalIndex(node_gid);
+                for (Eigen::Index i = 0; i != static_cast< Eigen::Index >(num_inds); ++i)
+                    std::atomic_ref{new_vals(node_lid, i)}.fetch_add(ker_res[i], std::memory_order_relaxed);
+            };
+            std::ranges::for_each(std::views::iota(0u, el_nodes.size()), process_node);
+        }
+    };
+    const auto set_values = [&] {
+        mesh.visit(zero_el, domain_ids, std::execution::par);
+        mesh.visit(set_el_vals, domain_ids, std::execution::par);
+    };
+
+    detail::exchangeElementContributions(comm, ownership, new_vals, num_contribs, set_values);
+    detail::updateNodeVals(node_values, new_vals, num_contribs, inds);
+}
+
+template < typename Kernel, KernelParams params, el_o_t... orders, size_t n_fields >
+void computeValuesAtNodes(const MpiComm&                                     comm,
+                          const ResidualBoundaryKernel< Kernel, params >&    kernel,
+                          const mesh::MeshPartition< orders... >&            mesh,
+                          const util::ArrayOwner< d_id_t >&                  boundary_ids,
+                          const util::ArrayOwner< size_t >&                  inds,
+                          const Kokkos::View< val_t**, Kokkos::LayoutLeft >& node_values,
+                          const post::FieldAccess< n_fields >&               field_access,
+                          val_t                                              time)
+    requires(params.n_rhs == 1)
+{
+    L3STER_PROFILE_FUNCTION;
+    const bool dim_match = detail::checkDomainDimension(mesh, boundary_ids, params.dimension - 1);
+    const bool inds_ok   = std::ranges::all_of(inds, [&](auto i) { return i < node_values.extent(1); });
+    util::throwingAssert(dim_match, "The dimension of the kernel does not match the dimension of the domain");
+    util::throwingAssert(inds_ok, "Out of bounds destination field index");
+    util::throwingAssert(inds.size() == params.n_equations, "Number of destination indices must match the kernel size");
+
+    const auto&  ownership        = mesh.getNodeOwnership();
+    const size_t num_all          = ownership.localSize();
+    const size_t num_inds         = inds.size();
+    using view_t                  = Kokkos::View< val_t**, Kokkos::LayoutLeft >;
+    auto           num_contribs   = util::ArrayOwner< std::uint16_t >(num_all, 0);
+    const auto     new_vals_alloc = std::make_unique< val_t[] >(num_all * num_inds);
+    const auto     new_vals       = view_t(new_vals_alloc.get(), num_all, num_inds);
+    constexpr auto g2l            = &util::SegmentedOwnership< n_id_t >::getLocalIndex;
+    const auto zero_el = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::BoundaryElementView< ET, EO >& el_view) {
+        for (auto lid : el_view.getSideNodesView() | std::views::transform(std::bind_front(g2l, std::cref(ownership))))
+            std::atomic_ref{num_contribs.at(lid)}.fetch_add(1, std::memory_order_relaxed);
+    };
+    const auto set_el_vals = [&]< mesh::ElementType ET, el_o_t EO >(
+                                 const mesh::BoundaryElementView< ET, EO >& el_view) {
+        if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
+        {
+            const auto& el_nodes       = el_view->getNodes();
+            const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
+            const auto& node_locations = mesh::getNodeLocations< ET, EO >();
+            const auto  node_vals      = field_access.getGloballyIndexed(el_nodes);
+            const auto& el_data        = el_view->getData();
+            const auto  jacobi_gen     = map::getNatJacobiMatGenerator(el_data);
+            const auto  side           = el_view.getSide();
+            const auto  process_node   = [&](size_t node_ind) {
+                const auto& ref_coords            = node_locations[node_ind];
+                const auto& ref_ders              = basis_at_nodes.derivatives[node_ind];
+                const auto& basis_val             = basis_at_nodes.values[node_ind];
+                const auto [phys_ders, _, normal] = map::mapBoundary< ET, EO >(jacobi_gen, ref_coords, ref_ders, side);
+                const auto ker_res =
+                    evalKernel(kernel, ref_coords, basis_val, phys_ders, node_vals, el_data, time, normal);
+                const auto node_gid = el_nodes[node_ind];
+                const auto node_lid = ownership.getLocalIndex(node_gid);
+                for (Eigen::Index i = 0; i != static_cast< Eigen::Index >(num_inds); ++i)
+                    std::atomic_ref{new_vals(node_lid, i)}.fetch_add(ker_res[i], std::memory_order_relaxed);
+            };
+            std::ranges::for_each(el_view.getSideNodeInds(), process_node);
+        }
+    };
+    const auto set_values = [&] {
+        mesh.visitBoundaries(zero_el, boundary_ids, std::execution::par);
+        mesh.visitBoundaries(set_el_vals, boundary_ids, std::execution::par);
+    };
+
+    detail::exchangeElementContributions(comm, ownership, new_vals, num_contribs, set_values);
+    detail::updateNodeVals(node_values, new_vals, num_contribs, inds);
 }
 } // namespace lstr::algsys
 #endif // L3STER_ALGSYS_COMPUTEVALUESATNODES_HPP

@@ -66,8 +66,8 @@ void test()
     auto solution_manager = SolutionManager{*mesh, problem_def.n_fields * 2};
     for (size_t i = 0; i != problem_def.n_fields; ++i)
     {
-        solution_manager.setField(2 * i, static_cast< double >(i + 1));
-        solution_manager.setField(2 * i + 1, static_cast< double >(i + 1) + inc);
+        solution_manager.setFields({2 * i}, static_cast< double >(i + 1));
+        solution_manager.setFields({2 * i + 1}, static_cast< double >(i + 1) + inc);
     }
     constexpr auto dof_inds     = util::makeIotaArray< size_t, problem_def.n_fields >();
     constexpr auto sol_man_inds = util::makeIotaArray< size_t, problem_def.n_fields * 2 >();

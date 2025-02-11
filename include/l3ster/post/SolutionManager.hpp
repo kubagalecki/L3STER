@@ -1,8 +1,8 @@
 #ifndef L3STER_POST_SOLUTIONMANAGER_HPP
 #define L3STER_POST_SOLUTIONMANAGER_HPP
 
+#include "l3ster/algsys/ComputeValuesAtNodes.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
-#include "l3ster/post/FieldAccess.hpp"
 #include "l3ster/util/EigenUtils.hpp"
 #include "l3ster/util/RobinHoodHashTables.hpp"
 #include "l3ster/util/TrilinosUtils.hpp"
@@ -22,7 +22,19 @@ public:
     inline auto getRawView() -> Kokkos::View< val_t**, Kokkos::LayoutLeft >;
     inline auto getRawView() const -> Kokkos::View< const val_t**, Kokkos::LayoutLeft >;
 
-    void setField(size_t field_ind, val_t value) { std::ranges::fill(getFieldView(field_ind), value); }
+    template < ResidualKernel_c Kernel, el_o_t... orders, size_t n_fields = 0 >
+    void setFields(const MpiComm&                          comm,
+                   const Kernel&                           kernel,
+                   const mesh::MeshPartition< orders... >& mesh,
+                   const util::ArrayOwner< d_id_t >&       domain_ids,
+                   const util::ArrayOwner< size_t >&       inds,
+                   const post::FieldAccess< n_fields >&    field_access,
+                   val_t                                   time = 0.);
+    void setFields(const util::ArrayOwner< size_t >& field_inds, val_t value)
+    {
+        for (auto i : field_inds)
+            std::ranges::fill(getFieldView(i), value);
+    }
 
     template < std::integral Index, size_t N >
     [[nodiscard]] auto makeFieldValueGetter(const std::array< Index, N >& indices) const -> post::FieldAccess< N >;
@@ -87,6 +99,18 @@ auto SolutionManager::getRawView() -> Kokkos::View< val_t**, Kokkos::LayoutLeft 
 auto SolutionManager::getRawView() const -> Kokkos::View< const val_t**, Kokkos::LayoutLeft >
 {
     return Kokkos::View< const val_t**, Kokkos::LayoutLeft >{m_nodal_values.get(), m_n_nodes, m_n_fields};
+}
+
+template < ResidualKernel_c Kernel, el_o_t... orders, size_t n_fields >
+void SolutionManager::setFields(const MpiComm&                          comm,
+                                const Kernel&                           kernel,
+                                const mesh::MeshPartition< orders... >& mesh,
+                                const util::ArrayOwner< d_id_t >&       domain_ids,
+                                const util::ArrayOwner< size_t >&       inds,
+                                const post::FieldAccess< n_fields >&    field_access,
+                                val_t                                   time)
+{
+    algsys::computeValuesAtNodes(comm, kernel, mesh, domain_ids, inds, getRawView(), field_access, time);
 }
 
 template < std::integral Index, size_t n_fields >

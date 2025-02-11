@@ -12,6 +12,7 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <numeric>
 #include <span>
 #include <tuple>
 #include <type_traits>

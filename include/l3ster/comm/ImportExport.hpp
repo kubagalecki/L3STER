@@ -78,9 +78,9 @@ template < Arithmetic_c Scalar, std::signed_integral LocalIndex >
 class ImportExportBase
 {
     // Each import/export object has a unique ID, which is used to deconflict comms from different objects
-    inline static unsigned counter   = 0;
-    static constexpr int   half_bits = sizeof(int) * CHAR_BIT / 2;
-    static constexpr int   lo_mask   = -1 >> half_bits;
+    inline static unsigned id_counter = 0;
+    static constexpr int   half_bits  = sizeof(int) * CHAR_BIT / 2;
+    static constexpr int   lo_mask    = -1 >> half_bits;
 
 public:
     auto getContext() const { return m_context; }
@@ -96,7 +96,7 @@ protected:
           m_requests(num_vecs * m_context->getNumNbrs()),
           m_pack_buf(num_vecs * m_context->getOwnedInds().size()),
           m_max_owned{m_context->getOwnedInds().empty() ? -1 : std::ranges::max(m_context->getOwnedInds())},
-          m_id{counter++}
+          m_id{id_counter++ & (-1u >> 1)} // make sure the highest bit is always 0
     {}
 
     bool isOwnedSizeSufficient(size_t size) const;

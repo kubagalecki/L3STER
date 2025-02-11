@@ -4,71 +4,12 @@
 #include "l3ster/algsys/StaticCondensationManager.hpp"
 #include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 #include "l3ster/mesh/BoundaryView.hpp"
-#include "l3ster/mesh/LocalMeshView.hpp"
 #include "l3ster/post/FieldAccess.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
-
-#include <iostream>
-
-namespace lstr
-{
-struct AssemblyOptions
-{
-    q_o_t                value_order      = 1;
-    q_o_t                derivative_order = 0;
-    basis::BasisType     basis_type       = basis::BasisType::Lagrange;
-    quad::QuadratureType quad_type        = quad::QuadratureType::GaussLegendre;
-
-    [[nodiscard]] constexpr q_o_t order(el_o_t elem_order) const
-    {
-        return static_cast< q_o_t >(value_order * elem_order + derivative_order * (elem_order - 1));
-    }
-};
-} // namespace lstr
+#include "l3ster/algsys/OperatorUtils.hpp"
 
 namespace lstr::algsys
 {
-namespace detail
-{
-template < el_o_t... orders >
-bool checkDomainDimension(const mesh::MeshPartition< orders... >& mesh,
-                          const util::ArrayOwner< d_id_t >&       ids,
-                          d_id_t                                  dim)
-{
-    const auto check_domain_dim = [&](d_id_t id) {
-        try
-        {
-            const auto domain_dim = mesh.getDomain(id).dim;
-            return domain_dim == dim;
-        }
-        catch (const std::out_of_range&) // Domain not present in partition means kernel will not be invoked
-        {
-            return true;
-        }
-    };
-    return std::ranges::all_of(ids, check_domain_dim);
-}
-
-template < el_o_t... orders >
-bool checkDomainDimension(const mesh::LocalMeshView< orders... >& mesh,
-                          const util::ArrayOwner< d_id_t >&       ids,
-                          d_id_t                                  dim)
-{
-    const auto check_domain_dim = [&](d_id_t id) {
-        try
-        {
-            const auto domain_dim = mesh.getDomain(id).dim;
-            return domain_dim == dim;
-        }
-        catch (const std::out_of_range&) // Domain not present in partition means kernel will not be invoked
-        {
-            return true;
-        }
-    };
-    return std::ranges::all_of(ids, check_domain_dim);
-}
-} // namespace detail
-
 template < typename Kernel,
            KernelParams params,
            el_o_t... orders,

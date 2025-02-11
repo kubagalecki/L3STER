@@ -11,6 +11,22 @@
 #include "l3ster/util/SetStackSize.hpp"
 #include "l3ster/util/Simd.hpp"
 
+namespace lstr
+{
+struct AssemblyOptions
+{
+    q_o_t                value_order      = 1;
+    q_o_t                derivative_order = 0;
+    basis::BasisType     basis_type       = basis::BasisType::Lagrange;
+    quad::QuadratureType quad_type        = quad::QuadratureType::GaussLegendre;
+
+    [[nodiscard]] constexpr q_o_t order(el_o_t elem_order) const
+    {
+        return static_cast< q_o_t >(value_order * elem_order + derivative_order * (elem_order - 1));
+    }
+};
+} // namespace lstr
+
 namespace lstr::algsys
 {
 template < int n_nodes, int n_fields >
