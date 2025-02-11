@@ -592,10 +592,10 @@ void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&   kern
         comm, owned_values, shared_values, num_contribs, exporter, do_interior, do_border);
 }
 
-template < typename Kernel, KernelParams params, el_o_t... orders, size_t n_fields >
+template < el_o_t... orders, KernelParams params, typename Kernel,  size_t n_fields >
 void computeValuesAtNodes(const MpiComm&                                     comm,
-                          const ResidualDomainKernel< Kernel, params >&      kernel,
                           const mesh::MeshPartition< orders... >&            mesh,
+                          const ResidualDomainKernel< Kernel, params >&      kernel,
                           const util::ArrayOwner< d_id_t >&                  domain_ids,
                           const util::ArrayOwner< size_t >&                  inds,
                           const Kokkos::View< val_t**, Kokkos::LayoutLeft >& node_values,
@@ -653,10 +653,10 @@ void computeValuesAtNodes(const MpiComm&                                     com
     detail::updateNodeVals(node_values, new_vals, num_contribs, inds);
 }
 
-template < typename Kernel, KernelParams params, el_o_t... orders, size_t n_fields >
+template < el_o_t... orders, KernelParams params,  typename Kernel, size_t n_fields >
 void computeValuesAtNodes(const MpiComm&                                     comm,
-                          const ResidualBoundaryKernel< Kernel, params >&    kernel,
                           const mesh::MeshPartition< orders... >&            mesh,
+                          const ResidualBoundaryKernel< Kernel, params >&    kernel,
                           const util::ArrayOwner< d_id_t >&                  boundary_ids,
                           const util::ArrayOwner< size_t >&                  inds,
                           const Kokkos::View< val_t**, Kokkos::LayoutLeft >& node_values,

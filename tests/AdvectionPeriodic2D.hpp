@@ -88,8 +88,8 @@ void solveAdvection2D()
     for (auto i : time_hist_inds)
     {
         const auto time = static_cast< double >(i) * -dt;
-        solution_manager.setFields(*comm, solution_kernel, *mesh, {domain_id}, {i}, {}, time);
-        solution_manager.setFields(*comm, solution_kernel_bc, *mesh, boundary_ids, {i}, {}, time);
+        solution_manager.setFields(*comm, *mesh, solution_kernel, {domain_id}, {i}, {}, time);
+        solution_manager.setFields(*comm, *mesh, solution_kernel_bc, boundary_ids, {i}, {}, time);
     }
 
     constexpr auto precond_opts = NativeJacobiOpts{};

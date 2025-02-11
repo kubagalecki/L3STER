@@ -22,19 +22,15 @@ public:
     inline auto getRawView() -> Kokkos::View< val_t**, Kokkos::LayoutLeft >;
     inline auto getRawView() const -> Kokkos::View< const val_t**, Kokkos::LayoutLeft >;
 
-    template < ResidualKernel_c Kernel, el_o_t... orders, size_t n_fields = 0 >
-    void setFields(const MpiComm&                          comm,
-                   const Kernel&                           kernel,
-                   const mesh::MeshPartition< orders... >& mesh,
-                   const util::ArrayOwner< d_id_t >&       domain_ids,
-                   const util::ArrayOwner< size_t >&       inds,
-                   const post::FieldAccess< n_fields >&    field_access,
-                   val_t                                   time = 0.);
-    void setFields(const util::ArrayOwner< size_t >& field_inds, val_t value)
-    {
-        for (auto i : field_inds)
-            std::ranges::fill(getFieldView(i), value);
-    }
+    template < el_o_t... orders, ResidualKernel_c Kernel, size_t n_fields = 0 >
+    void        setFields(const MpiComm&                          comm,
+                          const mesh::MeshPartition< orders... >& mesh,
+                          const Kernel&                           kernel,
+                          const util::ArrayOwner< d_id_t >&       domain_ids,
+                          const util::ArrayOwner< size_t >&       inds,
+                          const post::FieldAccess< n_fields >&    field_access,
+                          val_t                                   time = 0.);
+    inline void setFields(const util::ArrayOwner< size_t >& field_inds, val_t value);
 
     template < std::integral Index, size_t N >
     [[nodiscard]] auto makeFieldValueGetter(const std::array< Index, N >& indices) const -> post::FieldAccess< N >;
@@ -101,16 +97,22 @@ auto SolutionManager::getRawView() const -> Kokkos::View< const val_t**, Kokkos:
     return Kokkos::View< const val_t**, Kokkos::LayoutLeft >{m_nodal_values.get(), m_n_nodes, m_n_fields};
 }
 
-template < ResidualKernel_c Kernel, el_o_t... orders, size_t n_fields >
+void SolutionManager::setFields(const util::ArrayOwner< size_t >& field_inds, val_t value)
+{
+    for (auto i : field_inds)
+        std::ranges::fill(getFieldView(i), value);
+}
+
+template < el_o_t... orders, ResidualKernel_c Kernel, size_t n_fields >
 void SolutionManager::setFields(const MpiComm&                          comm,
-                                const Kernel&                           kernel,
                                 const mesh::MeshPartition< orders... >& mesh,
+                                const Kernel&                           kernel,
                                 const util::ArrayOwner< d_id_t >&       domain_ids,
                                 const util::ArrayOwner< size_t >&       inds,
                                 const post::FieldAccess< n_fields >&    field_access,
                                 val_t                                   time)
 {
-    algsys::computeValuesAtNodes(comm, kernel, mesh, domain_ids, inds, getRawView(), field_access, time);
+    algsys::computeValuesAtNodes(comm,  mesh, kernel, domain_ids, inds, getRawView(), field_access, time);
 }
 
 template < std::integral Index, size_t n_fields >
