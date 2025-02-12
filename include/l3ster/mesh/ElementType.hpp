@@ -19,7 +19,7 @@ enum struct ElementType
 };
 
 // Array containing all defined element types
-inline constexpr auto element_types = std::invoke([] {
+inline constexpr std::array< ElementType, std::to_underlying(ElementType::Count) > element_types = std::invoke([] {
     auto retval = std::array< ElementType, static_cast< size_t >(ElementType::Count) >{};
     std::ranges::generate(retval, [i = 0]() mutable { return static_cast< ElementType >(i++); });
     return retval;
