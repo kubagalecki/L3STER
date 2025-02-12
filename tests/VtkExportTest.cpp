@@ -1,10 +1,7 @@
-#include "Common.hpp"
-
-#include "l3ster/algsys/MakeAlgebraicSystem.hpp"
+#include "l3ster/post/VtkExport.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
-#include "l3ster/post/VtkExport.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
 #include <numbers>
@@ -12,7 +9,7 @@
 using namespace lstr;
 using namespace lstr::algsys;
 using namespace lstr::mesh;
-using namespace std::numbers;
+using std::numbers::pi;
 using namespace std::string_view_literals;
 
 void test2D(const std::shared_ptr< MpiComm >& comm)
@@ -29,31 +26,17 @@ void test2D(const std::shared_ptr< MpiComm >& comm)
             retval[i] = -.5 + static_cast< double >(i) * 2. / (retval.size() - 1);
         return retval;
     });
-    constexpr auto mesh_order = 2;
     const auto     my_partition =
-        generateAndDistributeMesh< mesh_order >(*comm, [&] { return mesh::makeSquareMesh(node_distx, node_disty); });
+        generateAndDistributeMesh< 2 >(*comm, [&] { return mesh::makeSquareMesh(node_distx, node_disty); });
 
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2;
-    constexpr auto   problem_def       = ProblemDef{defineDomain< 4 >(domain_id, 1, 3),
-                                            defineDomain< 4 >(bot_boundary, 0, 2),
-                                            defineDomain< 4 >(top_boundary, 0, 2)};
-    constexpr auto   problemdef_ctwrpr = util::ConstexprValue< problem_def >{};
-    constexpr auto   scalar_inds       = std::array< size_t, 2 >{0, 2};
-    constexpr auto   vec_inds          = std::array< size_t, 2 >{1, 3};
-    constexpr auto   all_field_inds    = util::makeIotaArray< size_t, problem_def.n_fields >();
-
-    auto system_manager =
-        makeAlgebraicSystem(comm, my_partition, problemdef_ctwrpr, BCDefinition< problem_def.n_fields >{});
-    system_manager.endAssembly();
-    auto solution_manager = SolutionManager{*my_partition, problem_def.n_fields};
-
-    constexpr auto params           = KernelParams{.dimension = 2, .n_equations = 2};
-    const auto     bot_top_kernel   = wrapBoundaryResidualKernel< params >([&](const auto&, auto& out) {
+    constexpr auto   params           = KernelParams{.dimension = 2, .n_equations = 2};
+    const auto       bot_top_kernel   = wrapBoundaryResidualKernel< params >([&](const auto&, auto& out) {
         // Some arbitrary constant values
         out[0] = 1.;
         out[1] = pi;
     });
-    const auto     kovasznay_kernel = wrapDomainResidualKernel< params >([&](const auto& in, auto& out) {
+    const auto       kovasznay_kernel = wrapDomainResidualKernel< params >([&](const auto& in, auto& out) {
         // Kovasznay flow velocity field
         const double Re     = 40.;
         const double lambda = Re / 2. - std::sqrt(Re * Re / 4. - 4. * pi * pi);
@@ -61,16 +44,18 @@ void test2D(const std::shared_ptr< MpiComm >& comm)
         out[0]              = 1. - std::exp(lambda * p.x()) * std::cos(2. * pi * p.y());
         out[1]              = lambda * std::exp(lambda * p.x()) * std::sin(2 * pi * p.y()) / (2. * pi);
     });
-    system_manager.setValues(system_manager.getSolution(), kovasznay_kernel, {domain_id}, vec_inds);
-    system_manager.setValues(system_manager.getSolution(), bot_top_kernel, {bot_boundary, top_boundary}, scalar_inds);
-    system_manager.updateSolution(all_field_inds, solution_manager, all_field_inds);
 
-    auto       exporter        = PvtuExporter{comm, *my_partition};
-    const auto field_names     = std::array{"C1"sv, "Cpi"sv, "vel"sv};
-    const auto field_comp_inds = std::array< std::span< const size_t >, 3 >{
-        std::span{std::addressof(scalar_inds[0]), 1}, std::span{std::addressof(scalar_inds[1]), 1}, vec_inds};
-    comm->barrier();
-    exporter.exportSolution("2D/results", solution_manager, field_names, field_comp_inds);
+    constexpr auto scalar_inds      = std::array{0, 2};
+    constexpr auto vec_inds         = std::array{1, 3};
+    auto           solution_manager = SolutionManager{*my_partition, scalar_inds.size() + vec_inds.size()};
+    solution_manager.setFields(*comm, *my_partition, kovasznay_kernel, {domain_id}, vec_inds);
+    solution_manager.setFields(*comm, *my_partition, bot_top_kernel, {bot_boundary, top_boundary}, scalar_inds);
+    auto exporter   = PvtuExporter{comm, *my_partition};
+    auto export_def = ExportDefinition{"2D/results"};
+    export_def.defineField("C1", {scalar_inds.front()});
+    export_def.defineField("Cpi", {scalar_inds.back()});
+    export_def.defineField("vel", {vec_inds});
+    exporter.exportSolution(export_def, solution_manager);
 }
 
 void test3D(const std::shared_ptr< MpiComm >& comm)
@@ -81,27 +66,7 @@ void test3D(const std::shared_ptr< MpiComm >& comm)
             retval[i] = -1. + static_cast< double >(i) * 2. / (retval.size() - 1);
         return retval;
     }();
-    constexpr auto mesh_order = 2;
-    const auto my_partition   = generateAndDistributeMesh< mesh_order >(*comm, [&] { return makeCubeMesh(node_dist); });
-
-    constexpr d_id_t domain_id           = 0;
-    constexpr auto   problem_def         = ProblemDef{defineDomain< 6 >(domain_id, 0, 1, 2),
-                                            defineDomain< 6 >(1, 3, 4, 5),
-                                            defineDomain< 6 >(2, 3, 4, 5),
-                                            defineDomain< 6 >(3, 3, 4, 5),
-                                            defineDomain< 6 >(4, 3, 4, 5),
-                                            defineDomain< 6 >(5, 3, 4, 5),
-                                            defineDomain< 6 >(6, 3, 4, 5)};
-    constexpr auto   problemdef_ctwrpr   = util::ConstexprValue< problem_def >{};
-    constexpr auto   n_fields            = problem_def.n_fields;
-    constexpr auto   domain_field_inds   = std::array< size_t, 3 >{0, 1, 2};
-    constexpr auto   boundary_field_inds = std::array< size_t, 3 >{3, 4, 5};
-    constexpr auto   field_inds          = util::makeIotaArray< size_t, n_fields >();
-
-    auto system_manager =
-        makeAlgebraicSystem(comm, my_partition, problemdef_ctwrpr, BCDefinition< problem_def.n_fields >{});
-    system_manager.endAssembly();
-    auto solution_manager = SolutionManager{*my_partition, n_fields};
+    const auto my_partition = generateAndDistributeMesh< 2 >(*comm, [&] { return makeCubeMesh(node_dist); });
 
     constexpr auto ker_params   = KernelParams{.dimension = 3, .n_equations = 3};
     const auto     dom_kernel   = wrapDomainResidualKernel< ker_params >([&](const auto& in, auto& out) {
@@ -114,18 +79,18 @@ void test3D(const std::shared_ptr< MpiComm >& comm)
     constexpr auto boundary_ids = util::makeIotaArray< d_id_t, 6 >(1);
     const auto     bnd_kernel =
         wrapBoundaryResidualKernel< ker_params >([](const auto& in, auto& out) { out = in.normal; });
-    system_manager.setValues(system_manager.getSolution(), bnd_kernel, boundary_ids, boundary_field_inds);
-    system_manager.setValues(
-        system_manager.getSolution(), dom_kernel, std::views::single(domain_id), domain_field_inds);
-    system_manager.updateSolution(field_inds, solution_manager, field_inds);
 
-    auto       exporter    = PvtuExporter{comm, *my_partition};
-    const auto field_names = std::array{"vec3D"sv, "normal"sv};
-    comm->barrier();
-    exporter.exportSolution("3D/results.nonsense_extension",
-                            solution_manager,
-                            field_names,
-                            std::array{domain_field_inds, boundary_field_inds});
+    constexpr d_id_t domain_id           = 0;
+    constexpr auto   domain_field_inds   = std::array< size_t, 3 >{0, 1, 2};
+    constexpr auto   boundary_field_inds = std::array< size_t, 3 >{3, 4, 5};
+    auto solution_manager = SolutionManager{*my_partition, domain_field_inds.size() + domain_field_inds.size()};
+    solution_manager.setFields(*comm, *my_partition, dom_kernel, {domain_id}, domain_field_inds);
+    solution_manager.setFields(*comm, *my_partition, bnd_kernel, boundary_ids, boundary_field_inds);
+    auto exporter   = PvtuExporter{comm, *my_partition};
+    auto export_def = ExportDefinition{"3D/results.nonsense_extension"};
+    export_def.defineField("vec3D", domain_field_inds);
+    export_def.defineField("normal", boundary_field_inds);
+    exporter.exportSolution(export_def, solution_manager);
 }
 
 int main(int argc, char* argv[])

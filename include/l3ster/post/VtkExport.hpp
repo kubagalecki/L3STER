@@ -13,16 +13,42 @@
 
 namespace lstr
 {
+class ExportDefinition
+{
+public:
+    struct FieldDef
+    {
+        std::string                name;
+        util::ArrayOwner< size_t > inds;
+    };
+
+    ExportDefinition(std::string file_name) : m_file_name{std::move(file_name)} {}
+    void defineField(std::string name, const util::ArrayOwner< size_t >& inds)
+    {
+        m_defs.push_back(FieldDef{std::move(name), copy(inds)});
+    }
+
+    [[nodiscard]] auto fileName() const -> std::string_view { return {m_file_name}; }
+    [[nodiscard]] auto begin() const { return m_defs.begin(); }
+    [[nodiscard]] auto end() const { return m_defs.end(); }
+    [[nodiscard]] auto size() const { return m_defs.size(); }
+
+private:
+    std::string             m_file_name;
+    std::vector< FieldDef > m_defs;
+};
+
 class PvtuExporter
 {
 public:
     template < el_o_t... orders >
     explicit PvtuExporter(std::shared_ptr< const MpiComm > comm, const mesh::MeshPartition< orders... >& mesh);
+    inline void exportSolution(const ExportDefinition& export_def, const SolutionManager& solution_manager);
     template < std::ranges::range FieldCompInds >
-    void exportSolution(std::string_view                       file_name,
-                        const SolutionManager&                 solution_manager,
-                        const util::ArrayOwner< std::string >& field_names,
-                        FieldCompInds&&                        field_component_inds)
+    [[deprecated]] void exportSolution(std::string_view                       file_name,
+                                       const SolutionManager&                 solution_manager,
+                                       const util::ArrayOwner< std::string >& field_names,
+                                       FieldCompInds&&                        field_component_inds)
         requires RangeOfConvertibleTo_c< std::ranges::range_reference_t< FieldCompInds >, size_t >;
     template < el_o_t... orders >
     void        updateNodeCoords(const mesh::MeshPartition< orders... >& mesh);
@@ -488,7 +514,7 @@ inline auto openVtuFile(std::string_view name, const MpiComm& comm)
 template < std::ranges::range FieldCompInds >
 auto makeFieldIndsArrayOwner(FieldCompInds&& inds) -> util::ArrayOwner< util::ArrayOwner< size_t > >
 {
-    auto retval = util::ArrayOwner< util::ArrayOwner< size_t > >(std::ranges::distance(inds));
+    auto retval = util::ArrayOwner< util::ArrayOwner< size_t > >(static_cast< size_t >(std::ranges::distance(inds)));
     std::ranges::transform(std::forward< FieldCompInds >(inds), retval.begin(), []< typename R >(R&& r) {
         return util::ArrayOwner< size_t >(std::forward< R >(r) | std::views::all);
     });
@@ -505,6 +531,25 @@ PvtuExporter::PvtuExporter(std::shared_ptr< const MpiComm > comm, const mesh::Me
     initTopo(mesh);
 }
 
+void PvtuExporter::exportSolution(const ExportDefinition& export_def, const SolutionManager& solution_manager)
+{
+    L3STER_PROFILE_FUNCTION;
+    for (const auto& [_, inds] : export_def)
+        util::throwingAssert(std::ranges::all_of(inds, [&](auto i) { return i < solution_manager.nFields(); }),
+                             "Out of bounds index");
+
+    const auto file_name       = export_def.fileName();
+    const auto field_names     = export_def | std::views::transform(&ExportDefinition::FieldDef::name);
+    const auto field_inds      = export_def | std::views::transform(&ExportDefinition::FieldDef::inds);
+    const auto field_comp_inds = post::vtk::makeFieldIndsArrayOwner(field_inds);
+
+    std::filesystem::create_directories(std::filesystem::absolute(file_name).parent_path());
+    flushWriteQueue();
+    if (m_comm->getRank() == 0)
+        enqueuePvtuFileWrite(file_name, field_names, field_comp_inds);
+    enqueueVtuFileWrite(file_name, solution_manager, field_names, field_comp_inds);
+}
+
 template < std::ranges::range FieldCompInds >
 void PvtuExporter::exportSolution(std::string_view                       file_name,
                                   const SolutionManager&                 solution_manager,
@@ -512,17 +557,12 @@ void PvtuExporter::exportSolution(std::string_view                       file_na
                                   FieldCompInds&&                        field_component_inds_view)
     requires RangeOfConvertibleTo_c< std::ranges::range_reference_t< FieldCompInds >, size_t >
 {
-    L3STER_PROFILE_FUNCTION;
-    const auto field_component_inds =
-        post::vtk::makeFieldIndsArrayOwner(std::forward< FieldCompInds >(field_component_inds_view));
-    util::throwingAssert(field_names.size() == field_component_inds.size(),
+    util::throwingAssert(field_names.size() == std::ranges::distance(field_component_inds_view),
                          "Field names and groupings must have the same size");
-
-    std::filesystem::create_directories(std::filesystem::absolute(file_name).parent_path());
-    flushWriteQueue();
-    if (m_comm->getRank() == 0)
-        enqueuePvtuFileWrite(file_name, field_names, field_component_inds);
-    enqueueVtuFileWrite(file_name, solution_manager, field_names, field_component_inds);
+    auto export_def = ExportDefinition{std::string{file_name}};
+    for (auto&& [name, inds] : std::views::zip(field_names, field_component_inds_view))
+        export_def.defineField(name, inds);
+    exportSolution(export_def, solution_manager);
 }
 
 template < el_o_t... orders >
