@@ -27,22 +27,21 @@ template < OperatorEvaluationStrategy S, CondensationPolicy CP >
 void solveAdvection2D()
 {
     constexpr d_id_t domain_id = 0, bot_bound = 1, top_bound = 2, left_bound = 3, right_bound = 4;
-    constexpr auto   boundary_ids   = std::array{bot_bound, top_bound, left_bound, right_bound};
-    constexpr auto   problem_def    = ProblemDef{defineDomain< 1 >(domain_id, ALL_DOFS)};
-    constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
-    auto             bc_def         = BCDefinition< problem_def.n_fields >{};
+    constexpr auto   boundary_ids = std::array{bot_bound, top_bound, left_bound, right_bound};
+    const auto       problem_def  = ProblemDefinition< 1 >{{domain_id}};
+    auto             bc_def       = BCDefinition{problem_def};
     bc_def.definePeriodic({left_bound}, {right_bound}, {node_dist_x.back() - node_dist_x.front(), 0., 0.});
     bc_def.defineDirichlet({top_bound, bot_bound});
 
     constexpr auto mesh_order = 4;
     const auto     comm       = std::make_shared< MpiComm >(MPI_COMM_WORLD);
     const auto     mesh       = generateAndDistributeMesh< mesh_order >(
-        *comm, [&] { return makeSquareMesh(node_dist_x, node_dist_y); }, {}, probdef_ctwrpr);
+        *comm, [&] { return makeSquareMesh(node_dist_x, node_dist_y); }, {}, problem_def);
     summarizeMesh(*comm, *mesh);
 
     constexpr auto alg_params       = AlgebraicSystemParams{.eval_strategy = S, .cond_policy = CP};
     constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
-    auto           alg_sys          = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, bc_def, algparams_ctwrpr);
+    auto           alg_sys          = makeAlgebraicSystem(comm, mesh, problem_def, bc_def, algparams_ctwrpr);
     alg_sys.describe();
 
     //    // BDF 2

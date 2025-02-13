@@ -22,10 +22,10 @@ struct LocalGraphGID
 
     auto operator()(size_t row) const { return graph(row).first(row_sizes.at(row)); }
 };
-template < CondensationPolicy CP, el_o_t... orders, size_t max_dofs_per_node, size_t n_domains >
+template < CondensationPolicy CP, el_o_t... orders, size_t max_dofs_per_node >
 auto computeLocalGraph(const mesh::MeshPartition< orders... >&              mesh,
                        const dofs::NodeToGlobalDofMap< max_dofs_per_node >& node_to_dof_map,
-                       const ProblemDef< n_domains, max_dofs_per_node >&    problem_def,
+                       const ProblemDefinition< max_dofs_per_node >&        problem_def,
                        CondensationPolicyTag< CP >                          cp = {}) -> LocalGraphGID
 {
     L3STER_PROFILE_FUNCTION;
@@ -33,10 +33,10 @@ auto computeLocalGraph(const mesh::MeshPartition< orders... >&              mesh
     const auto  num_dofs_local            = ownership.localSize();
     auto        row_sizes                 = util::ArrayOwner< std::uint32_t >(num_dofs_local, 0);
     const auto  count_row_sizes_overalloc = [&](const auto& domain_def) {
-        const auto& [domain, dof_bmp] = domain_def;
-        const auto dof_inds           = util::getTrueInds(dof_bmp);
-        const auto inds_span          = std::span{dof_inds};
-        const auto visit_el           = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& el) {
+        const auto& [domains, dof_bmp] = domain_def;
+        const auto dof_inds            = util::getTrueInds(dof_bmp);
+        const auto inds_span           = std::span{dof_inds};
+        const auto visit_el            = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& el) {
             const auto el_dofs     = dofs::getDofsCopy(node_to_dof_map, el, inds_span, cp);
             const auto num_el_dofs = static_cast< std::uint32_t >(el_dofs.size());
             for (auto dof : el_dofs)
@@ -45,15 +45,15 @@ auto computeLocalGraph(const mesh::MeshPartition< orders... >&              mesh
                 std::atomic_ref{row_sizes.at(lid)}.fetch_add(num_el_dofs, std::memory_order_relaxed);
             }
         };
-        mesh.visit(visit_el, domain, std::execution::par);
+        mesh.visit(visit_el, domains, std::execution::par);
     };
     util::tbb::parallelFor(problem_def, count_row_sizes_overalloc);
     auto       local_graph               = util::CrsGraph< global_dof_t >(row_sizes);
     const auto fill_rows_with_duplicates = [&](const auto& domain_def) {
-        const auto& [domain, dof_bmp] = domain_def;
-        const auto dof_inds           = util::getTrueInds(dof_bmp);
-        const auto inds_span          = std::span{dof_inds};
-        const auto visit_el           = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& el) {
+        const auto& [domains, dof_bmp] = domain_def;
+        const auto dof_inds            = util::getTrueInds(dof_bmp);
+        const auto inds_span           = std::span{dof_inds};
+        const auto visit_el            = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& el) {
             const auto el_dofs     = dofs::getDofsCopy(node_to_dof_map, el, inds_span, cp);
             const auto num_el_dofs = static_cast< std::uint32_t >(el_dofs.size());
             for (auto dof : el_dofs)
@@ -66,7 +66,7 @@ auto computeLocalGraph(const mesh::MeshPartition< orders... >&              mesh
                 std::ranges::copy(el_dofs, dest.begin());
             }
         };
-        mesh.visit(visit_el, domain, std::execution::par);
+        mesh.visit(visit_el, domains, std::execution::par);
     };
     util::tbb::parallelFor(problem_def, fill_rows_with_duplicates);
     util::throwingAssert(std::ranges::none_of(row_sizes, std::identity{}));
@@ -295,11 +295,11 @@ inline auto makeRowSizes(const LocalGraphGID&                            local_g
 }
 } // namespace detail
 
-template < CondensationPolicy CP, el_o_t... orders, ProblemDef problem_def >
-auto makeSparsityGraph(const MpiComm&                                          comm,
-                       const mesh::MeshPartition< orders... >&                 mesh,
-                       const dofs::NodeToGlobalDofMap< problem_def.n_fields >& node_to_dof_map,
-                       util::ConstexprValue< problem_def >,
+template < CondensationPolicy CP, el_o_t... orders, size_t dofs_per_node >
+auto makeSparsityGraph(const MpiComm&                                   comm,
+                       const mesh::MeshPartition< orders... >&          mesh,
+                       const dofs::NodeToGlobalDofMap< dofs_per_node >& node_to_dof_map,
+                       const ProblemDefinition< dofs_per_node >&        problem_def,
                        CondensationPolicyTag< CP > cp = {}) -> Teuchos::RCP< const tpetra_fecrsgraph_t >
 {
     L3STER_PROFILE_FUNCTION;

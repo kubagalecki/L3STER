@@ -19,11 +19,10 @@ template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t
 class AssembledSystem
 {
 public:
-    template < ProblemDef problem_def >
-    AssembledSystem(std::shared_ptr< const MpiComm >                          comm,
-                    std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-                    util::ConstexprValue< problem_def >                       probdef_ctwrpr,
-                    const BCDefinition< problem_def.n_fields >&               bc_def);
+    inline AssembledSystem(std::shared_ptr< const MpiComm >                          comm,
+                           std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
+                           const ProblemDefinition< max_dofs_per_node >&             problem_def,
+                           const BCDefinition< max_dofs_per_node >&                  bc_def);
 
     inline auto getMatrix() const -> Teuchos::RCP< const tpetra_crsmatrix_t >;
     inline auto getRhs() const -> Teuchos::RCP< const tpetra_multivector_t >;
@@ -320,18 +319,17 @@ auto AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::initMultiVector
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-template < ProblemDef problem_def >
 AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::AssembledSystem(
     std::shared_ptr< const MpiComm >                          comm,
     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-    util::ConstexprValue< problem_def >                       probdef_ctwrpr,
-    const BCDefinition< problem_def.n_fields >&               bc_def)
+    const ProblemDefinition< max_dofs_per_node >&             problem_def,
+    const BCDefinition< max_dofs_per_node >&                  bc_def)
     : m_comm{std::move(comm)}, m_mesh{std::move(mesh)}, m_state{State::OpenForAssembly}
 {
-    constexpr auto cp_tag          = CondensationPolicyTag< CP >{};
-    const auto     periodic_bc     = bcs::PeriodicBC{bc_def.getPeriodic(), *m_mesh, *m_comm};
-    const auto node_global_dof_map = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, probdef_ctwrpr, periodic_bc, cp_tag};
-    m_sparsity_graph               = makeSparsityGraph(*m_comm, *m_mesh, node_global_dof_map, probdef_ctwrpr, cp_tag);
+    constexpr auto cp_tag              = CondensationPolicyTag< CP >{};
+    const auto     periodic_bc         = bcs::PeriodicBC{bc_def.getPeriodic(), *m_mesh, *m_comm};
+    const auto     node_global_dof_map = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, problem_def, periodic_bc, cp_tag};
+    m_sparsity_graph                   = makeSparsityGraph(*m_comm, *m_mesh, node_global_dof_map, problem_def, cp_tag);
 
     L3STER_PROFILE_REGION_BEGIN("Create Tpetra objects");
     m_matrix   = util::makeTeuchosRCP< tpetra_fecrsmatrix_t >(m_sparsity_graph);
@@ -343,7 +341,7 @@ AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::AssembledSystem(
 
     m_node_dof_map =
         dofs::NodeToLocalDofMap{node_global_dof_map, *m_matrix->getRowMap(), *m_matrix->getColMap(), *m_rhs->getMap()};
-    m_condensation_manager = StaticCondensationManager< CP >{*m_mesh, m_node_dof_map, probdef_ctwrpr, n_rhs};
+    m_condensation_manager = StaticCondensationManager< CP >{*m_mesh, m_node_dof_map, problem_def, n_rhs};
     m_condensation_manager.beginAssembly();
 
     const auto& dirichlet = bc_def.getDirichlet();
@@ -351,7 +349,7 @@ AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::AssembledSystem(
     {
         L3STER_PROFILE_REGION_BEGIN("Dirichlet BCs");
         auto [owned_bcdofs, shared_bcdofs] =
-            bcs::getDirichletDofs(*m_mesh, m_sparsity_graph, node_global_dof_map, probdef_ctwrpr, dirichlet);
+            bcs::getDirichletDofs(*m_mesh, m_sparsity_graph, node_global_dof_map, dirichlet);
         m_dirichlet_bcs.emplace(m_sparsity_graph, std::move(owned_bcdofs), std::move(shared_bcdofs));
         L3STER_PROFILE_REGION_END("Dirichlet BCs");
     }

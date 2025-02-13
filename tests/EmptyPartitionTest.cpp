@@ -11,19 +11,17 @@ using namespace lstr;
 template < CondensationPolicy CP >
 void test()
 {
-    constexpr d_id_t domain_id      = 0;
-    constexpr auto   problem_def    = ProblemDef{defineDomain< 1 >(domain_id, 0)};
-    constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
+    constexpr d_id_t domain_id   = 0;
+    const auto       problem_def = ProblemDefinition< 1 >{{domain_id}};
 
     const auto     comm       = std::make_shared< MpiComm >(MPI_COMM_WORLD);
     constexpr auto mesh_order = 2;
     const auto     mesh       = generateAndDistributeMesh< mesh_order >(
-        *comm, [&] { return mesh::makeSquareMesh(std::array{0., 1.}); }, {}, probdef_ctwrpr);
+        *comm, [&] { return mesh::makeSquareMesh(std::array{0., 1.}); }, {}, problem_def);
 
     constexpr auto alg_params       = AlgebraicSystemParams{.cond_policy = CP};
     constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
-    auto           alg_sys =
-        makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, BCDefinition< problem_def.n_fields >{}, algparams_ctwrpr);
+    auto           alg_sys          = makeAlgebraicSystem(comm, mesh, problem_def, {}, algparams_ctwrpr);
     alg_sys.describe();
 
     constexpr auto params       = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1};

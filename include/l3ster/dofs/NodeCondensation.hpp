@@ -49,25 +49,6 @@ consteval auto getNumPrimaryNodes(util::ValuePack< CP, ET, EO > = {}) -> size_t
     return std::tuple_size_v<
         std::decay_t< decltype(getPrimaryNodesArray< CP >(std::declval< mesh::Element< ET, EO > >())) > >;
 };
-
-template < CondensationPolicy CP, ProblemDef problem_def, el_o_t... orders >
-auto getActiveNodes(const mesh::MeshPartition< orders... >& mesh,
-                    util::ConstexprValue< problem_def >,
-                    CondensationPolicyTag< CP > = {}) -> std::vector< n_id_t >
-{
-    auto active_nodes_set = robin_hood::unordered_flat_set< n_id_t >{};
-    mesh.visit(
-        [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
-            for (auto n : getPrimaryNodesView< CP >(element))
-                active_nodes_set.insert(n);
-        },
-        problem_def | std::views::transform([](const DomainDef< problem_def.n_fields >& d) { return d.domain; }));
-    auto retval = std::vector< n_id_t >{};
-    retval.reserve(active_nodes_set.size());
-    std::ranges::copy(active_nodes_set, std::back_inserter(retval));
-    std::ranges::sort(retval);
-    return retval;
-}
 } // namespace dofs
 } // namespace lstr
 #endif // L3STER_DOFS_NODECONDENSATION_HPP

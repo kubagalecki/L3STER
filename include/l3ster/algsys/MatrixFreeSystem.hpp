@@ -43,11 +43,10 @@ public:
         const MatrixFreeSystem* m_system;
     };
 
-    template < ProblemDef problem_def >
-    MatrixFreeSystem(std::shared_ptr< const MpiComm >                          comm,
-                     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-                     util::ConstexprValue< problem_def >                       probdef_ctwrpr,
-                     const BCDefinition< problem_def.n_fields >&               bc_def);
+    inline MatrixFreeSystem(std::shared_ptr< const MpiComm >                          comm,
+                            std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
+                            const ProblemDefinition< max_dofs_per_node >&             problem_def,
+                            const BCDefinition< max_dofs_per_node >&                  bc_def);
 
     [[nodiscard]] inline auto getOperator() const -> Teuchos::RCP< const tpetra_operator_t >;
     [[nodiscard]] inline auto getRhs() const -> Teuchos::RCP< const tpetra_multivector_t >;
@@ -743,17 +742,16 @@ inline auto makeOperatorMap(Teuchos::RCP< const Teuchos::Comm< int > > teuchos_c
 } // namespace detail
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
-template < ProblemDef problem_def >
 MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::MatrixFreeSystem(
     std::shared_ptr< const MpiComm >                          comm,
     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-    util::ConstexprValue< problem_def >                       probdef_ctwrpr,
-    const BCDefinition< problem_def.n_fields >&               bc_def)
+    const ProblemDefinition< max_dofs_per_node >&             problem_def,
+    const BCDefinition< max_dofs_per_node >&                  bc_def)
     : m_comm{std::move(comm)}, m_mesh{std::move(mesh)}, m_state{State::OpenForAssembly}
 {
     constexpr auto cp_tag         = no_condensation_tag;
     const auto     periodic_bc    = bcs::PeriodicBC{bc_def.getPeriodic(), *m_mesh, *m_comm};
-    const auto     node2dof       = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, probdef_ctwrpr, periodic_bc, cp_tag};
+    const auto     node2dof       = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, problem_def, periodic_bc, cp_tag};
     const auto [interior, border] = detail::splitBorderAndInterior(*m_mesh, node2dof, cp_tag);
     m_interior_mesh               = mesh::LocalMeshView{interior, *m_mesh};
     m_border_mesh                 = mesh::LocalMeshView{border, *m_mesh};

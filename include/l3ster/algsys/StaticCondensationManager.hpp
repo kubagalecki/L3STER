@@ -88,10 +88,10 @@ class StaticCondensationManager< CondensationPolicy::None > :
 
 public:
     StaticCondensationManager() = default;
-    template < el_o_t... orders, size_t max_dofs_per_node, ProblemDef problem_def >
+    template < el_o_t... orders, size_t max_dofs_per_node >
     StaticCondensationManager(const mesh::MeshPartition< orders... >& mesh,
                               const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >&,
-                              util::ConstexprValue< problem_def >,
+                              const ProblemDefinition< max_dofs_per_node >&,
                               size_t)
         : Base{mesh}
     {}
@@ -164,11 +164,11 @@ class StaticCondensationManager< CondensationPolicy::ElementBoundary > :
 
 public:
     StaticCondensationManager() = default;
-    template < el_o_t... orders, size_t max_dofs_per_node, ProblemDef problem_def >
+    template < el_o_t... orders, size_t max_dofs_per_node >
     StaticCondensationManager(const mesh::MeshPartition< orders... >&                mesh,
                               const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map,
-                              util::ConstexprValue< problem_def >,
-                              size_t n_rhs);
+                              const ProblemDefinition< max_dofs_per_node >&          problem_def,
+                              size_t                                                 n_rhs);
 
     inline void beginAssemblyImpl();
     template < el_o_t... orders, size_t max_dofs_per_node, size_t n_rhs >
@@ -262,12 +262,12 @@ void StaticCondensationManagerInterface< Derived >::updateSolutionPrimaryDofs(
     util::tbb::parallelFor(node_dof_map, update_node_entries);
 }
 
-template < el_o_t... orders, size_t max_dofs_per_node, ProblemDef problem_def >
+template < el_o_t... orders, size_t max_dofs_per_node >
 StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensationManager(
     const mesh::MeshPartition< orders... >&                mesh,
     const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >& dof_map,
-    util::ConstexprValue< problem_def >,
-    size_t n_rhs)
+    const ProblemDefinition< max_dofs_per_node >&          problem_def,
+    size_t                                                 n_rhs)
     : Base{mesh}
 {
     const auto compute_elem_dof_info = [&dof_map]< mesh::ElementType ET, el_o_t EO >(
@@ -308,7 +308,7 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
                                                     .upper_block{n_boundary_dofs, n_internal_dofs},
                                                     .rhs{n_internal_dofs, n_rhs}});
         },
-        problem_def | std::views::transform([](const DomainDef< problem_def.n_fields >& d) { return d.domain; }),
+        problem_def | std::views::transform([](const auto& def) { return std::span{def.domains}; }) | std::views::join,
         std::execution::seq);
     m_internal_dof_inds.shrink_to_fit();
     m_element_ids.reserve(m_elem_data_map.size());

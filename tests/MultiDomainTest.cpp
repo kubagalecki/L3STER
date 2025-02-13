@@ -14,25 +14,18 @@ using namespace lstr::algsys;
 template < CondensationPolicy CP >
 void test()
 {
-    constexpr auto domains        = std::array< d_id_t, 4 >{13, 14, 15, 16};
-    constexpr auto problem_def    = ProblemDef{defineDomain< domains.size() >(domains[0], 0),
-                                            defineDomain< domains.size() >(domains[1], 1),
-                                            defineDomain< domains.size() >(domains[2], 2),
-                                            defineDomain< domains.size() >(domains[3], 3)};
-    constexpr auto probdef_ctwrpr = util::ConstexprValue< problem_def >{};
+    constexpr auto domains     = std::array< d_id_t, 4 >{13, 14, 15, 16};
+    auto           problem_def = ProblemDefinition< domains.size() >{};
+    for (auto&& [i, dom] : domains | std::views::enumerate)
+        problem_def.define({dom}, {i});
 
     const auto comm = std::make_shared< MpiComm >(MPI_COMM_WORLD);
-    const auto mesh = readAndDistributeMesh(*comm,
-                                            L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square_multidom.msh),
-                                            mesh::gmsh_tag,
-                                            {},
-                                            util::ConstexprValue< el_o_t{2} >{},
-                                            probdef_ctwrpr);
+    const auto mesh = readAndDistributeMesh< 2 >(
+        *comm, L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square_multidom.msh), mesh::gmsh_tag, {}, {}, problem_def);
 
     constexpr auto alg_params       = AlgebraicSystemParams{.cond_policy = CP, .n_rhs = 2};
     constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
-    auto           alg_sys =
-        makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, BCDefinition< problem_def.n_fields >{}, algparams_ctwrpr);
+    auto           alg_sys          = makeAlgebraicSystem(comm, mesh, problem_def, {}, algparams_ctwrpr);
 
     constexpr auto   ker_params = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1, .n_rhs = 2};
     constexpr double inc        = 1000.;
@@ -50,7 +43,7 @@ void test()
         set_value                 = static_cast< double >(dom_ind + 1);
         constexpr auto field_inds = std::array{size_t{dom_ind}};
         constexpr auto dom_ids    = std::array{domains[dom_ind]};
-        alg_sys.assembleProblem(const_kernel, dom_ids, post::FieldAccess< 0 >{}, util::ConstexprValue< field_inds >{});
+        alg_sys.assembleProblem(const_kernel, dom_ids, {}, util::ConstexprValue< field_inds >{});
     };
 
     alg_sys.beginAssembly();
@@ -63,18 +56,18 @@ void test()
     auto solver = solvers::Lapack{};
     alg_sys.solve(solver);
 
-    auto solution_manager = SolutionManager{*mesh, problem_def.n_fields * 2};
-    for (size_t i = 0; i != problem_def.n_fields; ++i)
+    auto solution_manager = SolutionManager{*mesh, domains.size() * 2};
+    for (size_t i = 0; i != domains.size(); ++i)
     {
         solution_manager.setFields({2 * i}, static_cast< double >(i + 1));
         solution_manager.setFields({2 * i + 1}, static_cast< double >(i + 1) + inc);
     }
-    constexpr auto dof_inds     = util::makeIotaArray< size_t, problem_def.n_fields >();
-    constexpr auto sol_man_inds = util::makeIotaArray< size_t, problem_def.n_fields * 2 >();
+    constexpr auto dof_inds     = util::makeIotaArray< size_t, domains.size() >();
+    constexpr auto sol_man_inds = util::makeIotaArray< size_t, domains.size() * 2 >();
     alg_sys.updateSolution(dof_inds, solution_manager, sol_man_inds);
 
     constexpr double eps = 1e-8;
-    for (size_t i = 0; i != problem_def.n_fields; ++i)
+    for (size_t i = 0; i != domains.size(); ++i)
     {
         const auto field_vals1 = solution_manager.getFieldView(2 * i);
         const auto field_vals2 = solution_manager.getFieldView(2 * i + 1);

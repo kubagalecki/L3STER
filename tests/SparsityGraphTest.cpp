@@ -17,20 +17,20 @@ public:
     [[nodiscard]] auto getRow(size_t row) { return m_entries.getSubView(row * m_dim, (row + 1) * m_dim); }
     [[nodiscard]] auto getRow(size_t row) const { return m_entries.getSubView(row * m_dim, (row + 1) * m_dim); }
 
-    template < CondensationPolicy CP, el_o_t... orders, ProblemDef problem_def >
-    DenseGraph(const MpiComm&                          comm,
-               const mesh::MeshPartition< orders... >& mesh,
-               util::ConstexprValue< problem_def >     probdef_ctwrpr,
-               CondensationPolicyTag< CP >             cp = {})
+    template < CondensationPolicy CP, el_o_t... orders, size_t max_dofs_per_node >
+    DenseGraph(const MpiComm&                                comm,
+               const mesh::MeshPartition< orders... >&       mesh,
+               const ProblemDefinition< max_dofs_per_node >& problem_def,
+               CondensationPolicyTag< CP >                   cp = {})
     {
         using namespace std::views;
-        const auto node_to_dof_map = NodeToGlobalDofMap{comm, mesh, probdef_ctwrpr, {}, cp};
+        const auto node_to_dof_map = NodeToGlobalDofMap{comm, mesh, problem_def, {}, cp};
         m_dim                      = node_to_dof_map.ownership().owned().size();
         m_entries                  = util::DynamicBitset{m_dim * m_dim};
 
-        constexpr auto n_fields     = problem_def.n_fields;
-        const auto     visit_domain = [&]< DomainDef< n_fields > dom_def >(util::ConstexprValue< dom_def >) {
-            const auto dof_inds      = util::getTrueInds(dom_def.active_fields);
+        for (const auto& [domains, dof_bmp] : problem_def)
+        {
+            const auto dof_inds      = util::getTrueInds(dof_bmp);
             const auto dof_inds_span = std::span{dof_inds};
             const auto visit_element = [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >& element) {
                 const auto element_dofs = getDofsCopy(node_to_dof_map, element, dof_inds_span, cp);
@@ -38,9 +38,8 @@ public:
                     for (auto col : element_dofs)
                         getRow(static_cast< size_t >(row)).set(static_cast< size_t >(col));
             };
-            mesh.visit(visit_element, dom_def.domain);
-        };
-        util::forConstexpr(visit_domain, probdef_ctwrpr);
+            mesh.visit(visit_element, domains);
+        }
     }
 
 private:
@@ -108,20 +107,21 @@ void test(const MpiComm& comm)
     const auto       my_partition = generateAndDistributeMesh< order >(comm, mesh_generator);
     const auto       full_mesh    = allGatherMesh(comm, *my_partition);
 
-    constexpr auto problem_def =
-        ProblemDef{defineDomain< 2 >(0, 1), defineDomain< 2 >(1, 0), defineDomain< 2 >(3, 0, 1)};
-    constexpr auto probdef_ctwrpr = util::ConstexprValue< problem_def >{};
+    auto problem_def = ProblemDefinition< 2 >{};
+    problem_def.define({0}, {1});
+    problem_def.define({1}, {0});
+    problem_def.define({3}, {0, 1});
 
     constexpr auto cp_tag         = CondensationPolicyTag< CP >{};
-    const auto     node_dof_map   = NodeToGlobalDofMap{comm, *my_partition, probdef_ctwrpr, {}, cp_tag};
-    const auto     sparsity_graph = makeSparsityGraph(comm, *my_partition, node_dof_map, probdef_ctwrpr, cp_tag);
+    const auto     node_dof_map   = NodeToGlobalDofMap{comm, *my_partition, problem_def, {}, cp_tag};
+    const auto     sparsity_graph = makeSparsityGraph(comm, *my_partition, node_dof_map, problem_def, cp_tag);
 
     const size_t num_dofs_local    = node_dof_map.ownership().owned().size();
     auto         num_dofs_local_sv = std::views::single(num_dofs_local);
     size_t       num_dofs_global{};
     comm.allReduce(num_dofs_local_sv, &num_dofs_global, MPI_SUM);
 
-    const auto dense_graph = DenseGraph{comm_self, full_mesh, probdef_ctwrpr, cp_tag};
+    const auto dense_graph = DenseGraph{comm_self, full_mesh, problem_def, cp_tag};
 
     REQUIRE(sparsity_graph->getLocalNumRows() == num_dofs_local);
     REQUIRE(sparsity_graph->getGlobalNumRows() == num_dofs_global);

@@ -18,10 +18,10 @@ class DirichletBCDefinition
     };
 
 public:
-    void defineDirichletBoundary(const util::ArrayOwner< d_id_t >& domains, const util::ArrayOwner< size_t >& dof_inds)
+    void defineDirichletBoundary(util::ArrayOwner< d_id_t > domains, util::ArrayOwner< size_t > dof_inds)
     {
         util::throwingAssert(std::ranges::all_of(dof_inds, [](auto i) { return i < max_dofs_per_node; }));
-        m_defs.push_back(Def{util::getUniqueCopy(copy(domains)), util::getUniqueCopy(copy(dof_inds))});
+        m_defs.push_back(Def{util::getUniqueCopy(std::move(domains)), util::getUniqueCopy(std::move(dof_inds))});
     }
 
     auto begin() const { return m_defs.begin(); }
@@ -44,16 +44,10 @@ class PeriodicBCDefinition
     };
 
 public:
-    PeriodicBCDefinition() = default;
-    template < ProblemDef problem_def >
-    explicit PeriodicBCDefinition(util::ConstexprValue< problem_def >)
-        requires(problem_def.n_fields == max_dofs_per_node)
-    {}
-
     val_t tolerance = 1.e-12;
 
-    void definePeriodicBoundary(const util::ArrayOwner< d_id_t >& boundaries_src,
-                                const util::ArrayOwner< d_id_t >& boundaries_dest,
+    void definePeriodicBoundary(util::ArrayOwner< d_id_t >        boundaries_src,
+                                util::ArrayOwner< d_id_t >        boundaries_dest,
                                 std::array< val_t, 3 >            translation,
                                 const util::ArrayOwner< size_t >& dof_inds)
     {
@@ -61,8 +55,8 @@ public:
         auto dof_bitset = std::bitset< max_dofs_per_node >{};
         for (auto d : dof_inds)
             dof_bitset.set(d);
-        m_defs.push_back(Def{util::getUniqueCopy(copy(boundaries_src)),
-                             util::getUniqueCopy(copy(boundaries_dest)),
+        m_defs.push_back(Def{util::getUniqueCopy(std::move(boundaries_src)),
+                             util::getUniqueCopy(std::move(boundaries_dest)),
                              translation,
                              dof_bitset});
     }
@@ -82,27 +76,24 @@ class BCDefinition
 {
 public:
     BCDefinition() = default;
-    template < ProblemDef problem_def >
-    explicit BCDefinition(util::ConstexprValue< problem_def >)
-        requires(problem_def.n_fields == max_dofs_per_node)
-    {}
+    explicit BCDefinition(const ProblemDefinition< max_dofs_per_node >&) {}
 
     /// Dirichlet boundary at specified IDs, affects the specified DOFs (all by default)
-    void defineDirichlet(const util::ArrayOwner< d_id_t >& boundaries,
-                         const util::ArrayOwner< size_t >& dof_inds = std::views::iota(0uz, max_dofs_per_node))
+    void defineDirichlet(util::ArrayOwner< d_id_t > boundaries,
+                         util::ArrayOwner< size_t > dof_inds = std::views::iota(0uz, max_dofs_per_node))
     {
-        m_dirichlet.defineDirichletBoundary(boundaries, dof_inds);
+        m_dirichlet.defineDirichletBoundary(std::move(boundaries), std::move(dof_inds));
     }
 
     /// Periodic boundary condition between specified boundaries, affects the specified DOFs (all by default)
     /// Each node at X belonging to source must have a corresponding node at X + translation belonging to destination
     /// Source and destination can be freely swapped (as long as the translation is negated) - this choice is arbitrary
-    void definePeriodic(const util::ArrayOwner< d_id_t >& boundaries_source,
-                        const util::ArrayOwner< d_id_t >& boundaries_destination,
-                        std::array< val_t, 3 >            translation,
-                        const util::ArrayOwner< size_t >& dof_inds = std::views::iota(0uz, max_dofs_per_node))
+    void definePeriodic(util::ArrayOwner< d_id_t > bounds_src,
+                        util::ArrayOwner< d_id_t > bounds_dest,
+                        std::array< val_t, 3 >     trans,
+                        util::ArrayOwner< size_t > dof_inds = std::views::iota(0uz, max_dofs_per_node))
     {
-        m_periodic.definePeriodicBoundary(boundaries_source, boundaries_destination, translation, dof_inds);
+        m_periodic.definePeriodicBoundary(std::move(bounds_src), std::move(bounds_dest), trans, std::move(dof_inds));
     }
 
     /// Condition for matching nodes: |src + translation - dest| < tolerance. Default value is 1e-12.
@@ -115,7 +106,7 @@ private:
     bcs::DirichletBCDefinition< max_dofs_per_node > m_dirichlet;
     bcs::PeriodicBCDefinition< max_dofs_per_node >  m_periodic;
 };
-template < ProblemDef problem_def >
-BCDefinition(util::ConstexprValue< problem_def >) -> BCDefinition< problem_def.n_fields >;
+template < size_t dofs_per_node >
+BCDefinition(const ProblemDefinition< dofs_per_node >& problem_def) -> BCDefinition< dofs_per_node >;
 } // namespace lstr
 #endif // L3STER_BCS_BCDEFINITION_HPP

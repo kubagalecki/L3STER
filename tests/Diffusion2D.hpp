@@ -14,10 +14,10 @@ using namespace lstr::mesh;
 
 constexpr auto node_dist = util::linspaceArray< 5 >(0., 1.);
 
-auto makeMesh(const MpiComm& comm, auto probdef_ctwrpr)
+auto makeMesh(const MpiComm& comm, const auto& problem_def)
 {
     constexpr auto mesh_order = 2;
-    return generateAndDistributeMesh< mesh_order >(comm, [&] { return makeSquareMesh(node_dist); }, {}, probdef_ctwrpr);
+    return generateAndDistributeMesh< mesh_order >(comm, [&] { return makeSquareMesh(node_dist); }, {}, problem_def);
 }
 
 template < CondensationPolicy CP, OperatorEvaluationStrategy S >
@@ -26,12 +26,11 @@ void test()
     const auto comm = std::make_shared< MpiComm >(MPI_COMM_WORLD);
 
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
-    constexpr auto   problem_def    = ProblemDef{defineDomain< 3 >(domain_id, ALL_DOFS)};
-    constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
-    auto             bc_def         = BCDefinition< problem_def.n_fields >{};
+    const auto       problem_def = ProblemDefinition< 3 >{{domain_id}};
+    auto             bc_def      = BCDefinition{problem_def};
     bc_def.defineDirichlet({left_boundary, right_boundary}, {0});
 
-    const auto mesh = makeMesh(*comm, probdef_ctwrpr);
+    const auto mesh = makeMesh(*comm, problem_def);
     summarizeMesh(*comm, *mesh);
 
     constexpr auto adiabatic_bound_ids = std::array{bot_boundary, top_boundary};
@@ -39,7 +38,7 @@ void test()
 
     constexpr auto alg_params       = AlgebraicSystemParams{.eval_strategy = S, .cond_policy = CP};
     constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
-    auto           alg_sys          = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, bc_def, algparams_ctwrpr);
+    auto           alg_sys          = makeAlgebraicSystem(comm, mesh, problem_def, bc_def, algparams_ctwrpr);
 
     constexpr auto diff_params = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3};
     constexpr auto diffusion_kernel2d =
@@ -92,7 +91,7 @@ void test()
     constexpr auto precond_opts = NativeJacobiOpts{};
     auto           solver       = CG{solver_opts, precond_opts};
     alg_sys.solve(solver);
-    auto solution_manager = SolutionManager{*mesh, problem_def.n_fields};
+    auto solution_manager = SolutionManager{*mesh, problem_def.max_dofs_per_node};
     alg_sys.updateSolution(dof_inds, solution_manager, dof_inds);
 
     // Check results
