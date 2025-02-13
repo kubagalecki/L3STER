@@ -99,7 +99,7 @@ void test(const MpiComm& comm)
 {
     const auto     comm_self      = MpiComm{MPI_COMM_SELF};
     constexpr auto mesh_generator = [] {
-        constexpr int nodes_per_edge = 6;
+        constexpr int nodes_per_edge = 5;
         const auto    node_dist      = util::linspaceArray< nodes_per_edge >(0., 1.);
         return mesh::makeCubeMesh(node_dist);
     };
