@@ -59,8 +59,9 @@ public:
     template < solvers::IterativeSolver_c Solver >
     IterSolveResult solve(Solver& solver) const;
 
-    template < IndexRange_c SolInds, IndexRange_c SolManInds >
-    void updateSolution(SolInds&& sol_inds, SolutionManager& sol_man, SolManInds&& sol_man_inds);
+    inline void updateSolution(const util::ArrayOwner< size_t >& sol_inds,
+                               SolutionManager&                  sol_man,
+                               const util::ArrayOwner< size_t >& sol_man_inds);
 
     inline void describe(std::ostream& out = std::cout) const;
 
@@ -135,12 +136,12 @@ IterSolveResult AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::solv
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-template < IndexRange_c SolInds, IndexRange_c SolManInds >
-void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::updateSolution(SolInds&&        sol_inds,
-                                                                                SolutionManager& sol_man,
-                                                                                SolManInds&&     sol_man_inds)
+void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::updateSolution(
+    const util::ArrayOwner< size_t >& sol_inds,
+    SolutionManager&                  sol_man,
+    const util::ArrayOwner< size_t >& sol_man_inds)
 {
-    util::throwingAssert(std::ranges::distance(sol_man_inds) == std::ranges::distance(sol_inds) * ptrdiff_t{n_rhs},
+    util::throwingAssert(sol_man_inds.size() == sol_inds.size() * n_rhs,
                          "Source and destination indices lengths must match");
     util::throwingAssert(std::ranges::none_of(sol_inds, [](size_t i) { return i >= max_dofs_per_node; }),
                          "Source index out of bounds");
@@ -148,12 +149,8 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::updateSolution(
                          "Destination index out of bounds");
 
     const auto solution_view = m_solution->getLocalViewHost(Tpetra::Access::ReadOnly);
-    m_condensation_manager.recoverSolution(*m_mesh,
-                                           m_node_dof_map,
-                                           util::asSpans< n_rhs >(solution_view),
-                                           std::forward< SolInds >(sol_inds),
-                                           sol_man,
-                                           std::forward< SolManInds >(sol_man_inds));
+    m_condensation_manager.recoverSolution(
+        *m_mesh, m_node_dof_map, util::asSpans< n_rhs >(solution_view), sol_inds, sol_man, sol_man_inds);
 }
 
 namespace detail

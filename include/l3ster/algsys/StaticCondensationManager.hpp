@@ -39,20 +39,16 @@ public:
         static_cast< Derived* >(this)->condenseSystemImpl(
             node_dof_map, global_mat, global_rhs, local_matrix, local_rhs, element, field_inds_ctwrpr);
     }
-    template < el_o_t... orders, size_t max_dofs_per_node, size_t n_rhs, IndexRange_c SolInds, IndexRange_c SolManInds >
+    template < el_o_t... orders, size_t max_dofs_per_node, size_t n_rhs >
     void recoverSolution(const mesh::MeshPartition< orders... >&                mesh,
                          const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
                          const std::array< std::span< const val_t >, n_rhs >&   condensed_solutions,
-                         SolInds&&                                              sol_inds,
+                         const util::ArrayOwner< size_t >&                      sol_inds,
                          SolutionManager&                                       sol_man,
-                         SolManInds&&                                           sol_man_inds) const
+                         const util::ArrayOwner< size_t >&                      sol_man_inds) const
     {
-        static_cast< const Derived* >(this)->recoverSolutionImpl(mesh,
-                                                                 node_dof_map,
-                                                                 condensed_solutions,
-                                                                 std::forward< SolInds >(sol_inds),
-                                                                 sol_man,
-                                                                 std::forward< SolManInds >(sol_man_inds));
+        static_cast< const Derived* >(this)->recoverSolutionImpl(
+            mesh, node_dof_map, condensed_solutions, sol_inds, sol_man, sol_man_inds);
     }
 
 protected:
@@ -62,14 +58,16 @@ protected:
         : m_node_ownership{mesh.getNodeOwnershipSharedPtr()}
     {}
 
-    template < size_t max_dofs_per_node, size_t n_rhs, IndexRange_c SolInds, IndexRange_c SolManInds >
-    static void validateSolutionUpdateInds(SolInds&& sol_inds, SolutionManager& sol_man, SolManInds&& sol_man_inds);
-    template < size_t max_dofs_per_node, size_t n_rhs, IndexRange_c SolInds, IndexRange_c SolManInds >
+    template < size_t max_dofs_per_node, size_t n_rhs >
+    static void validateSolutionUpdateInds(const util::ArrayOwner< size_t >& sol_inds,
+                                           SolutionManager&                  sol_man,
+                                           const util::ArrayOwner< size_t >& sol_man_inds);
+    template < size_t max_dofs_per_node, size_t n_rhs >
     void updateSolutionPrimaryDofs(const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
                                    const std::array< std::span< const val_t >, n_rhs >&   condensed_solutions,
-                                   SolInds&&                                              sol_inds,
+                                   const util::ArrayOwner< size_t >&                      sol_inds,
                                    SolutionManager&                                       sol_man,
-                                   SolManInds&&                                           sol_man_inds) const;
+                                   const util::ArrayOwner< size_t >&                      sol_man_inds) const;
 
     auto getNodeLid(n_id_t node) const { return static_cast< n_loc_id_t >(m_node_ownership->getLocalIndex(node)); }
 
@@ -121,20 +119,16 @@ public:
             dofs::getDofsFromNodes(element.getNodes(), node_dof_map, field_inds_ctwrpr);
         scatterLocalSystem(local_mat, local_rhs, global_mat, global_rhs, row_dofs, col_dofs, rhs_dofs);
     }
-    template < el_o_t... orders, size_t max_dofs_per_node, size_t n_rhs, IndexRange_c SolInds, IndexRange_c SolManInds >
+    template < el_o_t... orders, size_t max_dofs_per_node, size_t n_rhs >
     void recoverSolutionImpl(const mesh::MeshPartition< orders... >&,
                              const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
                              const std::array< std::span< const val_t >, n_rhs >&   condensed_solutions,
-                             SolInds&&                                              sol_inds,
+                             const util::ArrayOwner< size_t >&                      sol_inds,
                              SolutionManager&                                       sol_man,
-                             SolManInds&&                                           sol_man_inds) const
+                             const util::ArrayOwner< size_t >&                      sol_man_inds) const
     {
         validateSolutionUpdateInds< max_dofs_per_node, n_rhs >(sol_inds, sol_man, sol_man_inds);
-        updateSolutionPrimaryDofs(node_dof_map,
-                                  condensed_solutions,
-                                  std::forward< SolInds >(sol_inds),
-                                  sol_man,
-                                  std::forward< SolManInds >(sol_man_inds));
+        updateSolutionPrimaryDofs(node_dof_map, condensed_solutions, sol_inds, sol_man, sol_man_inds);
     }
 };
 
@@ -189,13 +183,13 @@ public:
                             const Eigen::Matrix< val_t, system_size, int{n_rhs} >&         local_rhs,
                             const mesh::Element< ET, EO >&                                 element,
                             util::ConstexprValue< field_inds >                             field_inds_ctwrpr);
-    template < el_o_t... orders, size_t max_dofs_per_node, size_t n_rhs, IndexRange_c SolInds, IndexRange_c SolManInds >
+    template < el_o_t... orders, size_t max_dofs_per_node, size_t n_rhs >
     void recoverSolutionImpl(const mesh::MeshPartition< orders... >&,
                              const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
                              const std::array< std::span< const val_t >, n_rhs >&   condensed_solutions,
-                             SolInds&&                                              sol_inds,
+                             const util::ArrayOwner< size_t >&                      sol_inds,
                              SolutionManager&                                       sol_man,
-                             SolManInds&&                                           sol_man_inds) const;
+                             const util::ArrayOwner< size_t >&                      sol_man_inds) const;
 
 private:
     inline auto getInternalDofInds(const ElementCondData& cond_data) const -> std::span< const std::uint8_t >;
@@ -213,10 +207,11 @@ private:
 };
 
 template < typename Derived >
-template < size_t max_dofs_per_node, size_t n_rhs, IndexRange_c SolInds, IndexRange_c SolManInds >
-void StaticCondensationManagerInterface< Derived >::validateSolutionUpdateInds(SolInds&&        sol_inds,
-                                                                               SolutionManager& sol_man,
-                                                                               SolManInds&&     sol_man_inds)
+template < size_t max_dofs_per_node, size_t n_rhs >
+void StaticCondensationManagerInterface< Derived >::validateSolutionUpdateInds(
+    const util::ArrayOwner< size_t >& sol_inds,
+    SolutionManager&                  sol_man,
+    const util::ArrayOwner< size_t >& sol_man_inds)
 {
     util::throwingAssert(std::ranges::distance(sol_man_inds) == std::ranges::distance(sol_inds) * ptrdiff_t{n_rhs},
                          "The number of solution manager indices (target) must be equal to the number of DOF indices "
@@ -229,25 +224,24 @@ void StaticCondensationManagerInterface< Derived >::validateSolutionUpdateInds(S
 }
 
 template < typename Derived >
-template < size_t max_dofs_per_node, size_t n_rhs, IndexRange_c SolInds, IndexRange_c SolManInds >
+template < size_t max_dofs_per_node, size_t n_rhs >
 void StaticCondensationManagerInterface< Derived >::updateSolutionPrimaryDofs(
     const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
     const std::array< std::span< const val_t >, n_rhs >&   condensed_solutions,
-    SolInds&&                                              sol_inds,
+    const util::ArrayOwner< size_t >&                      sol_inds,
     SolutionManager&                                       sol_man,
-    SolManInds&&                                           sol_man_inds) const
+    const util::ArrayOwner< size_t >&                      sol_man_inds) const
 {
     const auto dest_col_views      = std::invoke([&] {
-        std::vector< std::span< val_t > > retval(std::ranges::distance(sol_man_inds));
+        util::ArrayOwner< std::span< val_t > > retval(sol_man_inds.size());
         std::ranges::transform(sol_man_inds, retval.begin(), [&](size_t i) { return sol_man.getFieldView(i); });
         return retval;
     });
-    auto&&     sol_inds_vec        = util::toVector(std::forward< SolInds >(sol_inds));
     const auto update_node_entries = [&](const auto& map_entry) {
         const auto& [node, dof_triplet] = map_entry;
         const auto& dofs                = dof_triplet.back();
         const auto  local_node_ind      = getNodeLid(node);
-        for (size_t target_ind = 0; size_t src_ind : sol_inds_vec)
+        for (size_t target_ind = 0; auto src_ind : sol_inds)
         {
             const auto local_dof = dofs[src_ind];
             for (size_t rhs_ind = 0; rhs_ind != n_rhs; ++rhs_ind)
@@ -413,24 +407,23 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
     }
 }
 
-template < el_o_t... orders, size_t max_dofs_per_node, size_t n_rhs, IndexRange_c SolInds, IndexRange_c SolManInds >
+template < el_o_t... orders, size_t max_dofs_per_node, size_t n_rhs >
 void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSolutionImpl(
     const mesh::MeshPartition< orders... >&                mesh,
     const dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >& node_dof_map,
     const std::array< std::span< const val_t >, n_rhs >&   condensed_solutions,
-    SolInds&&                                              sol_inds,
+    const util::ArrayOwner< size_t >&                      sol_inds,
     SolutionManager&                                       sol_man,
-    SolManInds&&                                           sol_man_inds) const
+    const util::ArrayOwner< size_t >&                      sol_man_inds) const
 {
     L3STER_PROFILE_FUNCTION;
     validateSolutionUpdateInds< max_dofs_per_node, n_rhs >(sol_inds, sol_man, sol_man_inds);
     updateSolutionPrimaryDofs(node_dof_map, condensed_solutions, sol_inds, sol_man, sol_man_inds);
     const auto dest_col_views = std::invoke([&] {
-        std::vector< std::span< val_t > > retval(std::ranges::distance(sol_man_inds));
+        util::ArrayOwner< std::span< val_t > > retval(sol_man_inds.size());
         std::ranges::transform(sol_man_inds, retval.begin(), [&](size_t i) { return sol_man.getFieldView(i); });
         return retval;
     });
-    auto&&     sol_inds_vec   = util::toVector(std::forward< SolInds >(sol_inds));
     util::tbb::parallelFor(m_element_ids, [&](el_id_t id) {
         // Thread local variables to minimize contention on the global allocator in a parallel context
         thread_local Eigen::Matrix< val_t, Eigen::Dynamic, int{n_rhs} > primary_vals, internal_vals;
@@ -462,7 +455,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::recoverSo
             {
                 const auto   local_node_ind = getNodeLid(node);
                 const size_t node_base      = internal_ind * n_internal_dofs;
-                for (size_t dest_ind = 0; size_t sol_ind : sol_inds_vec)
+                for (size_t dest_ind = 0; auto sol_ind : sol_inds)
                     for (size_t rhs_ind = 0; rhs_ind != n_rhs; ++rhs_ind)
                     {
                         if (int_dof_lookup[sol_ind] != invalid)

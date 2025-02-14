@@ -447,8 +447,8 @@ auto encodeFieldImpl(Fields&& fields) -> util::ArrayOwner< char >
     return retval;
 }
 
-template < IndexRange_c Inds >
-auto encodeField(const SolutionManager& solution_manager, Inds&& component_inds) -> util::ArrayOwner< char >
+inline auto encodeField(const SolutionManager& solution_manager, std::span< const size_t > component_inds)
+    -> util::ArrayOwner< char >
 {
     const auto n_fields = std::ranges::size(component_inds);
     util::throwingAssert(n_fields != 0 and n_fields <= 3,
@@ -460,8 +460,7 @@ auto encodeField(const SolutionManager& solution_manager, Inds&& component_inds)
         return encodeFieldImpl(field_vals);
     }
     else // Values of fields in the group should be interleaved before encoding
-        return encodeFieldImpl(std::forward< Inds >(component_inds) |
-                               std::views::transform([&solution_manager](size_t component_index) {
+        return encodeFieldImpl(component_inds | std::views::transform([&solution_manager](size_t component_index) {
                                    return solution_manager.getFieldView(component_index);
                                }));
 }
