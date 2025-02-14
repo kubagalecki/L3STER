@@ -8,7 +8,7 @@ using namespace lstr;
 // We will also be using some simple utilities from lstr::util, however these are not mandatory
 
 // Make a rectangular mesh, distribute it among the ranks of the passed MPI communicator
-auto makeMesh(const MpiComm& comm, auto probdef_ctwrpr)
+auto makeMesh(const MpiComm& comm, const auto& problem_def)
 {
     // Mesh parameters
     constexpr el_o_t mesh_order  = 4;
@@ -21,7 +21,7 @@ auto makeMesh(const MpiComm& comm, auto probdef_ctwrpr)
     return generateAndDistributeMesh(comm,                          // mesh is distributed within this communicator
                                      mesh_generator,                // mesh generator based on L3STER primitive
                                      L3STER_WRAP_CTVAL(mesh_order), // mesh order passed as compile-time value,
-                                     probdef_ctwrpr);               // (optional) problem def helps with load-balancing
+                                     problem_def);                  // (optional) problem def helps with load-balancing
 }
 
 int main(int argc, char* argv[])
@@ -33,20 +33,17 @@ int main(int argc, char* argv[])
     constexpr int domain_id = 0, bot_boundary = 1, top_boundary = 2, left_boundary = 3, right_boundary = 4;
 
     // Define the advection problem - 1 unknown (scalar concentration, at index 0) in the entire domain
-    constexpr auto problem_def = ProblemDef{defineDomain< 1 >(domain_id, 0)};
-
-    // Wrap as compile-time value
-    constexpr auto probdef_ctwrpr = L3STER_WRAP_CTVAL(problem_def);
+    const auto problem_def = ProblemDefinition< 1 >{{domain_id}};
 
     // Dirichlet condition - we will be setting the value of the scalar concentration at the left (inflow) boundary
     auto bc_def = BCDefinition< 1 >{};
     bc_def.defineDirichlet({left_boundary});
 
     // std::shared_ptr to the current rank's mesh partition
-    const auto mesh = makeMesh(*comm, probdef_ctwrpr);
+    const auto mesh = makeMesh(*comm, problem_def);
 
     // Algebraic system which we will need to fill
-    auto algebraic_system = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, bc_def);
+    auto algebraic_system = makeAlgebraicSystem(comm, mesh, problem_def, bc_def);
     algebraic_system.describe();
 
     // Time step
@@ -90,13 +87,13 @@ int main(int argc, char* argv[])
     auto exporter = PvtuExporter{comm, *mesh};
 
     // Subsequently used indices
-    const auto dof_inds       = std::array{0}; // Indices of DOFs in the solution vector
-    const auto sol_inds       = std::array{0}; // Target indices in the solution manager
-    const auto phi_components =                // Solution components constituting the specified fields
-        std::array< std::array< int, 1 >, 1 >{sol_inds};
+    const auto dof_inds = std::array{0}; // Indices of DOFs in the solution vector
+    const auto sol_inds = std::array{0}; // Target indices in the solution manager
 
     // Export initial snapshot (phi = 0)
-    exporter.exportSolution("results/phi_000.pvtu", solution_manager, {"phi"}, phi_components);
+    auto export_def_init = ExportDefinition{"results/phi_000.pvtu"};
+    export_def_init.defineField("phi", {0});
+    exporter.exportSolution(export_def_init, solution_manager);
 
     constexpr int time_steps = 20;
     for (int time_step = 1; time_step <= time_steps; ++time_step)
@@ -117,7 +114,8 @@ int main(int argc, char* argv[])
         algebraic_system.updateSolution(dof_inds, solution_manager, sol_inds);
 
         // Export snapshot
-        const auto file_name = std::format("results/phi_{:03}.pvtu", time_step);
-        exporter.exportSolution(file_name, solution_manager, {"phi"}, phi_components);
+        auto export_def = ExportDefinition{std::format("results/phi_{:03}.pvtu", time_step)};
+        export_def.defineField("phi", {0});
+        exporter.exportSolution(export_def, solution_manager);
     }
 }

@@ -15,10 +15,7 @@ int main(int argc, char* argv[])
     constexpr int n_unknowns = 4;
 
     // Define the flow problem
-    constexpr auto problem_def = ProblemDef{defineDomain< n_unknowns >(domain, ALL_DOFS)};
-
-    // Wrap as compile-time value
-    constexpr auto probdef_ctwrpr = L3STER_WRAP_CTVAL(problem_def);
+    const auto problem_def = ProblemDefinition< n_unknowns >{{domain}};
 
     // Dirichlet conditions: velocity prescribed at inlet + walls
     auto bc_def = BCDefinition< n_unknowns >{};
@@ -27,13 +24,11 @@ int main(int argc, char* argv[])
     // Read mesh
     const std::string mesh_file  = argc > 1 ? argv[1] : "../karman.msh";
     constexpr int     mesh_order = 4;
-    const auto        mesh       = readAndDistributeMesh< mesh_order >(
-        *comm, mesh_file, mesh::gmsh_tag, {inlet, wall, outlet}, {}, probdef_ctwrpr);
+    const auto        mesh =
+        readAndDistributeMesh< mesh_order >(*comm, mesh_file, mesh::gmsh_tag, {inlet, wall, outlet}, {}, problem_def);
 
     // Algebraic system used for both the steady and transient problems
-    constexpr auto sys_opts         = AlgebraicSystemParams{.cond_policy = CondensationPolicy::ElementBoundary};
-    constexpr auto sysopts_ctval    = L3STER_WRAP_CTVAL(sys_opts);
-    auto           algebraic_system = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, bc_def, sysopts_ctval);
+    auto algebraic_system = makeAlgebraicSystem(comm, mesh, problem_def, bc_def);
     algebraic_system.describe();
 
     // Time step
@@ -239,10 +234,11 @@ int main(int argc, char* argv[])
     auto exporter = PvtuExporter{comm, *mesh};
 
     // Export initial snapshot
-    exporter.exportSolution("results/karman_000.pvtu",
-                            solution_manager,
-                            {"Velocity", "Vorticity", "Pressure"},
-                            util::gatherAsCommon(vel_inds2, vort_inds, p_inds));
+    auto export_def_init = ExportDefinition{"results/karman_000.pvtu"};
+    export_def_init.defineField("Velocity", vel_inds2);
+    export_def_init.defineField("Vorticity", vort_inds);
+    export_def_init.defineField("Pressure", p_inds);
+    exporter.exportSolution(export_def_init, solution_manager);
 
     // Print flow rate info, note that the computed integrals are vectors of length 1, hence the "[0]"
     {
@@ -282,11 +278,11 @@ int main(int argc, char* argv[])
         report_flowrate(time_step, inflow_rate, outflow_rate);
 
         // Export snapshot
-        const auto file_name = std::format("results/karman_{:03}.pvtu", time_step);
-        exporter.exportSolution(file_name,
-                                solution_manager,
-                                {"Velocity", "Vorticity", "Pressure"},
-                                util::gatherAsCommon(vel_inds2, vort_inds, p_inds));
+        auto export_def = ExportDefinition{std::format("results/karman_{:03}.pvtu", time_step)};
+        export_def.defineField("Velocity", vel_inds2);
+        export_def.defineField("Vorticity", vort_inds);
+        export_def.defineField("Pressure", p_inds);
+        exporter.exportSolution(export_def, solution_manager);
 
         // Swap velocity indices - the current time step becomes the previous time step
         // For time stepping schemes of order >= 3 consider using std::rotate
