@@ -205,8 +205,8 @@ private:
     Teuchos::RCP< tpetra_multivector_t >                      m_rhs, m_solution;
     view_t                                                    m_rhs_view;
     util::ArrayOwner< val_t >                                 m_diagonal;
-    std::unique_ptr< comm::Import< val_t, local_dof_t > >     m_import;
-    std::unique_ptr< comm::Export< val_t, local_dof_t > >     m_export;
+    std::unique_ptr< comm::Import< val_t > >                  m_import;
+    std::unique_ptr< comm::Export< val_t > >                  m_export;
     view_t                                                    m_import_shared_buf, m_export_shared_buf;
     std::optional< bcs::LocalDirichletBC >                    m_dirichlet_bc;
     view_t                                                    m_dirichlet_values;
@@ -666,7 +666,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::computeDiagAndRhs(
     std::ranges::fill(m_diagonal, 0.);
     zeroExportBuf();
 
-    auto diag_export = comm::Export< val_t, local_dof_t >{m_export->getContext(), 1};
+    auto diag_export = comm::Export< val_t >{m_export->getContext(), 1};
     diag_export.setOwned(m_diagonal, m_diagonal.size());
     diag_export.setShared(std::span{m_diagonal}.subspan(num_owned), num_shared);
     m_export->setOwned(m_rhs_view);
@@ -764,9 +764,9 @@ MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::MatrixFreeSystem(
     m_solution                    = util::makeTeuchosRCP< tpetra_multivector_t >(m_operator_map, n_rhs);
     m_rhs_view                    = m_rhs->getLocalViewHost(Tpetra::Access::ReadWrite);
     m_diagonal                    = util::ArrayOwner< val_t >(dof_ownership.localSize());
-    const auto context            = dof_ownership.makeCommContext(*m_comm);
-    m_import                      = std::make_unique< comm::Import< val_t, local_dof_t > >(context, n_rhs);
-    m_export                      = std::make_unique< comm::Export< val_t, local_dof_t > >(context, n_rhs);
+    const auto context            = std::make_shared< comm::ImportExportContext >(*m_comm, dof_ownership);
+    m_import                      = std::make_unique< comm::Import< val_t > >(context, n_rhs);
+    m_export                      = std::make_unique< comm::Export< val_t > >(context, n_rhs);
     m_import_shared_buf           = view_t("import buf", dof_ownership.shared().size(), n_rhs);
     m_export_shared_buf           = view_t("export buf", dof_ownership.shared().size(), n_rhs);
     initKernelMaps();

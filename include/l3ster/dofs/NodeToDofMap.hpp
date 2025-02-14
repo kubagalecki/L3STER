@@ -207,15 +207,15 @@ auto makeLocalDofBmp(const mesh::MeshPartition< orders... >&       mesh,
     return retval;
 }
 
-inline void exportDofBmp(const MpiComm&                                              comm,
-                         const std::shared_ptr< const comm::ImportExportContext<> >& context,
-                         const Kokkos::View< char**, Kokkos::LayoutLeft >&           dof_bmp,
-                         size_t                                                      num_owned_nodes)
+inline void exportDofBmp(const MpiComm&                                            comm,
+                         const std::shared_ptr< const comm::ImportExportContext >& context,
+                         const Kokkos::View< char**, Kokkos::LayoutLeft >&         dof_bmp,
+                         size_t                                                    num_owned_nodes)
 {
     using namespace std::views;
     const auto num_all       = dof_bmp.extent(0);
     const auto dofs_per_node = dof_bmp.extent(1);
-    auto       exporter      = comm::Export< char, local_dof_t >{context, dofs_per_node};
+    auto       exporter      = comm::Export< char >{context, dofs_per_node};
     const auto shared_range  = std::make_pair(num_owned_nodes, num_all);
     const auto shared_view   = Kokkos::subview(dof_bmp, shared_range, Kokkos::ALL());
     exporter.setOwned(dof_bmp);
@@ -263,14 +263,14 @@ auto computeOwnedDofs(const util::SegmentedOwnership< n_id_t >&               no
     return retval;
 }
 
-inline void communicateSharedDofs(const MpiComm&                                              comm,
-                                  const std::shared_ptr< const comm::ImportExportContext<> >& context,
-                                  const Kokkos::View< global_dof_t**, Kokkos::LayoutLeft >&   dofs,
-                                  size_t                                                      num_owned_nodes)
+inline void communicateSharedDofs(const MpiComm&                                            comm,
+                                  const std::shared_ptr< const comm::ImportExportContext >& context,
+                                  const Kokkos::View< global_dof_t**, Kokkos::LayoutLeft >& dofs,
+                                  size_t                                                    num_owned_nodes)
 {
     const auto num_all       = dofs.extent(0);
     const auto dofs_per_node = dofs.extent(1);
-    auto       importer      = comm::Import< global_dof_t, local_dof_t >{context, dofs_per_node};
+    auto       importer      = comm::Import< global_dof_t >{context, dofs_per_node};
     const auto shared_range  = std::make_pair(num_owned_nodes, num_all);
     const auto shared_view   = Kokkos::subview(dofs, shared_range, Kokkos::ALL());
     importer.setOwned(dofs);
@@ -344,7 +344,7 @@ NodeToGlobalDofMap< dofs_per_node >::NodeToGlobalDofMap(const MpiComm&          
     const auto node_ownership  = detail::makeNodeOwnership(mesh, periodic_bc);
     const auto num_owned_nodes = node_ownership.owned().size();
     const auto dof_bmp         = detail::makeLocalDofBmp(mesh, problem_def, node_ownership, periodic_bc, cp);
-    const auto context         = node_ownership.makeCommContext(comm);
+    const auto context         = std::make_shared< comm::ImportExportContext >(comm, node_ownership);
     detail::exportDofBmp(comm, context, dof_bmp, num_owned_nodes);
     const auto num_owned_dofs = detail::computeNumOwnedDofs(node_ownership, periodic_bc, dof_bmp);
     const auto base_dof       = detail::computeBaseDof(comm, num_owned_dofs);

@@ -15,12 +15,12 @@ class LocalDirichletBC
 public:
     LocalDirichletBC() = default;
     template < size_t max_dofs_per_node, el_o_t... orders >
-    LocalDirichletBC(const dofs::LocalDofMap< max_dofs_per_node >&                            node_dof_map,
-                     const mesh::LocalMeshView< orders... >&                                  interior_mesh,
-                     const mesh::LocalMeshView< orders... >&                                  border_mesh,
-                     const MpiComm&                                                           comm,
-                     const std::shared_ptr< const comm::ImportExportContext< local_dof_t > >& comm_context,
-                     const bcs::DirichletBCDefinition< max_dofs_per_node >&                   bc_def);
+    LocalDirichletBC(const dofs::LocalDofMap< max_dofs_per_node >&             node_dof_map,
+                     const mesh::LocalMeshView< orders... >&                   interior_mesh,
+                     const mesh::LocalMeshView< orders... >&                   border_mesh,
+                     const MpiComm&                                            comm,
+                     const std::shared_ptr< const comm::ImportExportContext >& comm_context,
+                     const bcs::DirichletBCDefinition< max_dofs_per_node >&    bc_def);
 
     bool isEmpty() const { return m_dofs_set.empty(); }
     bool isDirichletDof(local_dof_t dof) const { return m_dofs_set.contains(dof); }
@@ -32,13 +32,12 @@ private:
 };
 
 template < size_t max_dofs_per_node, el_o_t... orders >
-LocalDirichletBC::LocalDirichletBC(
-    const dofs::LocalDofMap< max_dofs_per_node >&                            node_dof_map,
-    const mesh::LocalMeshView< orders... >&                                  interior_mesh,
-    const mesh::LocalMeshView< orders... >&                                  border_mesh,
-    const MpiComm&                                                           comm,
-    const std::shared_ptr< const comm::ImportExportContext< local_dof_t > >& comm_context,
-    const bcs::DirichletBCDefinition< max_dofs_per_node >&                   bc_def)
+LocalDirichletBC::LocalDirichletBC(const dofs::LocalDofMap< max_dofs_per_node >&             node_dof_map,
+                                   const mesh::LocalMeshView< orders... >&                   interior_mesh,
+                                   const mesh::LocalMeshView< orders... >&                   border_mesh,
+                                   const MpiComm&                                            comm,
+                                   const std::shared_ptr< const comm::ImportExportContext >& comm_context,
+                                   const bcs::DirichletBCDefinition< max_dofs_per_node >&    bc_def)
 {
     if (bc_def.empty())
         return;
@@ -71,8 +70,8 @@ LocalDirichletBC::LocalDirichletBC(
             domain.elements.visit(mark_side_dofs, std::execution::par);
     };
 
-    auto importer = comm::Import< char, local_dof_t >{comm_context, 1};
-    auto exporter = comm::Export< char, local_dof_t >{comm_context, 1};
+    auto importer = comm::Import< char >{comm_context, 1};
+    auto exporter = comm::Export< char >{comm_context, 1};
     importer.setOwned(dirichlet_dofs_bmp, num_dofs_owned);
     exporter.setOwned(dirichlet_dofs_bmp, num_dofs_owned);
     importer.setShared(std::span{dirichlet_dofs_bmp}.subspan(num_dofs_owned), num_dofs_total);

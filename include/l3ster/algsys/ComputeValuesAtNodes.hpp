@@ -114,7 +114,7 @@ void averageElementContributions(const MpiComm&                              com
                                  const tpetra_multivector_t::host_view_type& owned_values,
                                  const tpetra_multivector_t::host_view_type& shared_values,
                                  std::span< std::uint16_t >                  num_contribs,
-                                 comm::Export< val_t, local_dof_t >&         exporter,
+                                 comm::Export< val_t >&                      exporter,
                                  DoInterior&&                                do_interior,
                                  DoBorder&&                                  do_border)
 {
@@ -125,7 +125,7 @@ void averageElementContributions(const MpiComm&                              com
     exporter.setOwned(owned_values);
     exporter.setShared(shared_values);
 
-    auto contrib_export = comm::Export< std::uint16_t, local_dof_t >{exporter.getContext(), 1};
+    auto contrib_export = comm::Export< std::uint16_t >{exporter.getContext(), 1};
     contrib_export.setOwned(num_contribs, num_owned);
     contrib_export.setShared(std::span{num_contribs}.subspan(num_owned), num_shared);
     contrib_export.postRecvs(comm);
@@ -164,11 +164,11 @@ void exchangeElementContributions(const MpiComm&                                
     const size_t num_all          = ownership.localSize();
     const size_t num_inds         = values.extent(1);
     const auto   shared_range     = std::make_pair(num_owned, num_all);
-    auto         context          = ownership.makeCommContext(comm);
-    auto         contrib_exporter = comm::Export< std::uint16_t, local_dof_t >{context, 1};
-    auto         contrib_importer = comm::Import< std::uint16_t, local_dof_t >{context, 1};
-    auto         value_exporter   = comm::Export< val_t, local_dof_t >{context, num_inds};
-    auto         value_importer   = comm::Import< val_t, local_dof_t >{context, num_inds};
+    auto         context          = std::make_shared< comm::ImportExportContext >(comm, ownership);
+    auto         contrib_exporter = comm::Export< std::uint16_t >{context, 1};
+    auto         contrib_importer = comm::Import< std::uint16_t >{context, 1};
+    auto         value_exporter   = comm::Export< val_t >{context, num_inds};
+    auto         value_importer   = comm::Import< val_t >{context, num_inds};
 
     contrib_exporter.setOwned(num_contribs | std::views::take(num_owned), num_contribs.size());
     contrib_importer.setOwned(num_contribs | std::views::take(num_owned), num_contribs.size());
@@ -244,7 +244,7 @@ template < el_o_t... orders, size_t max_dofs_per_node, std::integral dofind_t, s
 void computeValuesAtNodes(const MpiComm&                                               comm,
                           const mesh::LocalMeshView< orders... >&                      interior_mesh,
                           const mesh::LocalMeshView< orders... >&                      border_mesh,
-                          comm::Export< val_t, local_dof_t >&                          exporter,
+                          comm::Export< val_t >&                                       exporter,
                           const util::ArrayOwner< d_id_t >&                            domain_ids,
                           const dofs::LocalDofMap< max_dofs_per_node >&                dof_map,
                           const std::array< dofind_t, n_dofs >&                        dof_inds,
@@ -378,7 +378,7 @@ void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&     kern
                           const MpiComm&                                    comm,
                           const mesh::LocalMeshView< orders... >&           mesh_interior,
                           const mesh::LocalMeshView< orders... >&           mesh_border,
-                          comm::Export< val_t, local_dof_t >&               exporter,
+                          comm::Export< val_t >&                            exporter,
                           const util::ArrayOwner< d_id_t >&                 domain_ids,
                           const dofs::LocalDofMap< max_dofs_per_node >&     dof_map,
                           const std::array< dofind_t, params.n_equations >& dof_inds,
@@ -515,7 +515,7 @@ void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&   kern
                           const MpiComm&                                    comm,
                           const mesh::LocalMeshView< orders... >&           mesh_interior,
                           const mesh::LocalMeshView< orders... >&           mesh_border,
-                          comm::Export< val_t, local_dof_t >&               exporter,
+                          comm::Export< val_t >&                            exporter,
                           const util::ArrayOwner< d_id_t >&                 boundary_ids,
                           const dofs::LocalDofMap< max_dofs_per_node >&     dof_map,
                           const std::array< dofind_t, params.n_equations >& dof_inds,
@@ -592,7 +592,7 @@ void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&   kern
         comm, owned_values, shared_values, num_contribs, exporter, do_interior, do_border);
 }
 
-template < el_o_t... orders, KernelParams params, typename Kernel,  size_t n_fields >
+template < el_o_t... orders, KernelParams params, typename Kernel, size_t n_fields >
 void computeValuesAtNodes(const MpiComm&                                     comm,
                           const mesh::MeshPartition< orders... >&            mesh,
                           const ResidualDomainKernel< Kernel, params >&      kernel,
@@ -653,7 +653,7 @@ void computeValuesAtNodes(const MpiComm&                                     com
     detail::updateNodeVals(node_values, new_vals, num_contribs, inds);
 }
 
-template < el_o_t... orders, KernelParams params,  typename Kernel, size_t n_fields >
+template < el_o_t... orders, KernelParams params, typename Kernel, size_t n_fields >
 void computeValuesAtNodes(const MpiComm&                                     comm,
                           const mesh::MeshPartition< orders... >&            mesh,
                           const ResidualBoundaryKernel< Kernel, params >&    kernel,
