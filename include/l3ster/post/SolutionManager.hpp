@@ -33,9 +33,12 @@ public:
     inline void setFields(const util::ArrayOwner< size_t >& field_inds, val_t value);
 
     template < std::integral Index, size_t N >
-    [[nodiscard]] auto makeFieldValueGetter(const std::array< Index, N >& indices) const -> post::FieldAccess< N >;
+    [[nodiscard]] auto getFieldAccess(const std::array< Index, N >& indices) const -> post::FieldAccess< N >;
+    template < std::integral Index, size_t N >
+    [[deprecated]] [[nodiscard]] auto makeFieldValueGetter(const std::array< Index, N >& indices) const
+        -> post::FieldAccess< N >;
     template < size_t n_fields, RangeOfConvertibleTo_c< size_t > Indices >
-    [[nodiscard]] auto makeFieldValueGetter(Indices&& indices) const -> post::FieldAccess< n_fields >;
+    [[deprecated]] [[nodiscard]] auto makeFieldValueGetter(Indices&& indices) const -> post::FieldAccess< n_fields >;
 
 private:
     template < size_t N >
@@ -116,13 +119,20 @@ void SolutionManager::setFields(const MpiComm&                          comm,
 }
 
 template < std::integral Index, size_t n_fields >
-auto SolutionManager::makeFieldValueGetter(const std::array< Index, n_fields >& field_inds) const
+auto SolutionManager::getFieldAccess(const std::array< Index, n_fields >& field_inds) const
     -> post::FieldAccess< n_fields >
 {
     auto field_inds_u32 = std::array< std::uint32_t, n_fields >{};
     std::ranges::transform(
         field_inds, field_inds_u32.begin(), [](auto i) { return util::exactIntegerCast< std::uint32_t >(i); });
     return {field_inds_u32, m_node_ownership, m_nodal_values.get()};
+}
+
+template < std::integral Index, size_t n_fields >
+auto SolutionManager::makeFieldValueGetter(const std::array< Index, n_fields >& field_inds) const
+    -> post::FieldAccess< n_fields >
+{
+    return getFieldAccess(field_inds);
 }
 
 template < size_t n_fields, RangeOfConvertibleTo_c< size_t > Indices >
@@ -132,7 +142,7 @@ auto SolutionManager::makeFieldValueGetter(Indices&& indices) const -> post::Fie
                          "The size of the passed index range differs from the value of the parameter");
     auto field_inds = std::array< std::uint32_t, n_fields >{};
     std::ranges::copy(std::forward< Indices >(indices), field_inds.begin());
-    return {field_inds, m_node_ownership, m_nodal_values.get()};
+    return getFieldAccess(field_inds);
 }
 } // namespace lstr
 #endif // L3STER_POST_SOLUTIONMANAGER_HPP

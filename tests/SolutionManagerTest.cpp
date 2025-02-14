@@ -33,7 +33,7 @@ TEST_CASE("Solution Manager", "[sol_man]")
     constexpr auto field_inds = util::makeIotaArray< size_t, n_fields >();
     for (const auto& [i, sm] : sol_mans | std::views::enumerate)
     {
-        const auto  field_access = sm.makeFieldValueGetter(field_inds);
+        const auto  field_access = sm.getFieldAccess(field_inds);
         const auto& part         = partitions.at(static_cast< size_t >(i));
         const auto  check_el     = [&](const auto& element) {
             const auto vals = field_access.getGloballyIndexed(element.getNodes());
@@ -49,7 +49,7 @@ TEST_CASE("Solution Manager", "[sol_man]")
             sm.setFields({i}, 42.);
     for (const auto& [i, sm] : sol_mans | std::views::enumerate)
     {
-        const auto  field_access = sm.makeFieldValueGetter(field_inds);
+        const auto  field_access = sm.getFieldAccess(field_inds);
         const auto& part         = partitions.at(static_cast< size_t >(i));
         const auto  check_el     = [&](const auto& element) {
             const auto vals = field_access.getGloballyIndexed(element.getNodes());

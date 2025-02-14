@@ -209,11 +209,11 @@ int main(int argc, char* argv[])
         // Zero out system
         algebraic_system.beginAssembly();
 
-        // Velocity getter - we only need one velocity snapshot for the steady-state iteration
-        const auto vel_getter = solution_manager.makeFieldValueGetter(vel_inds1);
+        // Velocity access - we only need one velocity snapshot for the steady-state iteration
+        const auto vel_access = solution_manager.getFieldAccess(vel_inds1);
 
         // Assemble problem based on the defined kernels
-        algebraic_system.assembleProblem(kernel_steady, {domain}, vel_getter, {}, asmopt_ctval);
+        algebraic_system.assembleProblem(kernel_steady, {domain}, vel_access, {}, asmopt_ctval);
         algebraic_system.assembleProblem(kernel_outlet, {outlet}, {}, outdof_ctval);
 
         // Finalize assembly
@@ -227,8 +227,8 @@ int main(int argc, char* argv[])
     }
 
     // Set the remaining solution components to the steady state solution
-    algebraic_system.updateSolution(
-        std::views::iota(0, 4), solution_manager, util::concatRanges(vel_inds2, vort_inds, p_inds));
+    const auto solman_update_inds = util::concatArrays(vel_inds2, vort_inds, p_inds);
+    algebraic_system.updateSolution(std::views::iota(0, 4), solution_manager, solman_update_inds);
 
     // Paraview exporter object
     auto exporter = PvtuExporter{comm, *mesh};
@@ -242,9 +242,9 @@ int main(int argc, char* argv[])
 
     // Print flow rate info, note that the computed integrals are vectors of length 1, hence the "[0]"
     {
-        const auto vel_getter   = solution_manager.makeFieldValueGetter(vel_inds1);
-        const auto inflow_rate  = -computeIntegral(*comm, kernel_flowrate, *mesh, {inlet}, vel_getter)[0];
-        const auto outflow_rate = computeIntegral(*comm, kernel_flowrate, *mesh, {outlet}, vel_getter)[0];
+        const auto vel_access   = solution_manager.getFieldAccess(vel_inds1);
+        const auto inflow_rate  = -computeIntegral(*comm, kernel_flowrate, *mesh, {inlet}, vel_access)[0];
+        const auto outflow_rate = computeIntegral(*comm, kernel_flowrate, *mesh, {outlet}, vel_access)[0];
         report_flowrate(0, inflow_rate, outflow_rate);
     }
 
@@ -254,11 +254,12 @@ int main(int argc, char* argv[])
         // Zero out system
         algebraic_system.beginAssembly();
 
-        // Velocity getter
-        const auto vel_getter = solution_manager.makeFieldValueGetter< 4 >(util::concatRanges(vel_inds1, vel_inds2));
+        // Velocity access
+        const auto vel_inds_for_access = util::concatArrays(vel_inds1, vel_inds2);
+        const auto vel_access          = solution_manager.getFieldAccess(vel_inds_for_access);
 
         // Assemble problem based on the defined kernels
-        algebraic_system.assembleProblem(kernel_trans, {domain}, vel_getter, {}, asmopt_ctval);
+        algebraic_system.assembleProblem(kernel_trans, {domain}, vel_access, {}, asmopt_ctval);
         algebraic_system.assembleProblem(kernel_outlet, {outlet}, {}, outdof_ctval);
 
         // Finalize assembly
@@ -272,9 +273,9 @@ int main(int argc, char* argv[])
         algebraic_system.updateSolution(std::views::iota(0, 4), solution_manager, solution_manager_inds);
 
         // Print flow rate info
-        const auto current_vel_getter = solution_manager.makeFieldValueGetter(vel_inds2);
-        const auto inflow_rate        = -computeIntegral(*comm, kernel_flowrate, *mesh, {inlet}, current_vel_getter)[0];
-        const auto outflow_rate       = computeIntegral(*comm, kernel_flowrate, *mesh, {outlet}, current_vel_getter)[0];
+        const auto current_vel_access = solution_manager.getFieldAccess(vel_inds2);
+        const auto inflow_rate        = -computeIntegral(*comm, kernel_flowrate, *mesh, {inlet}, current_vel_access)[0];
+        const auto outflow_rate       = computeIntegral(*comm, kernel_flowrate, *mesh, {outlet}, current_vel_access)[0];
         report_flowrate(time_step, inflow_rate, outflow_rate);
 
         // Export snapshot

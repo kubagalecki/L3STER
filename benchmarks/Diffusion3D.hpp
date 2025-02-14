@@ -118,7 +118,7 @@ void solveDiffusion3DProblem()
     L3STER_PROFILE_REGION_END("Solution management");
 
     L3STER_PROFILE_REGION_BEGIN("Compute solution error");
-    const auto field_access = solution_manager.makeFieldValueGetter(field_inds);
+    const auto field_access = solution_manager.getFieldAccess(field_inds);
     const auto error        = computeNormL2(*comm, error_kernel, *my_partition, {domain_id}, field_access);
     L3STER_PROFILE_REGION_END("Compute solution error");
 

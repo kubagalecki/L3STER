@@ -77,8 +77,8 @@ int main(int argc, char* argv[])
     auto solution_manager = SolutionManager{*mesh, /* number of solution components to store */ 1};
 
     // Object used to access the values stored in the solution manager
-    const auto phi_prev_ind    = std::array< size_t, 1 >{0}; // array of indices of components to access
-    const auto phi_prev_getter = solution_manager.makeFieldValueGetter(phi_prev_ind);
+    const auto phi_prev_ind    = std::array{0}; // array of indices of components to access
+    const auto phi_prev_access = solution_manager.getFieldAccess(phi_prev_ind);
 
     // L3STER interface to KLU2 direct solver
     auto solver = solvers::KLU2{};
@@ -102,7 +102,7 @@ int main(int argc, char* argv[])
         algebraic_system.beginAssembly();
 
         // Assemble problem based on the defined kernel
-        algebraic_system.assembleProblem(kernel, {domain_id}, phi_prev_getter);
+        algebraic_system.assembleProblem(kernel, {domain_id}, phi_prev_access);
 
         // Finalize assembly
         algebraic_system.endAssembly();

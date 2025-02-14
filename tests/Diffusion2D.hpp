@@ -106,7 +106,7 @@ void test()
     };
     constexpr auto dom_error_kernel = wrapDomainResidualKernel< params >(compute_error);
     constexpr auto bnd_error_kernel = wrapBoundaryResidualKernel< params >(compute_error);
-    const auto     field_access     = solution_manager.makeFieldValueGetter(dof_inds);
+    const auto     field_access     = solution_manager.getFieldAccess(dof_inds);
 
     const auto error = computeNormL2(*comm, dom_error_kernel, *mesh, std::views::single(domain_id), field_access);
     const auto boundary_error = computeNormL2(*comm, bnd_error_kernel, *mesh, boundary_ids, field_access);

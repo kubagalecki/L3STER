@@ -99,7 +99,7 @@ void solveAdvection2D()
         const auto time = static_cast< double >(time_step) * dt;
         alg_sys.setDirichletBCValues(solution_kernel_bc, {bot_bound, top_bound}, i0, {}, time);
         alg_sys.beginAssembly();
-        alg_sys.assembleProblem(advection_kernel2d, {domain_id}, solution_manager.makeFieldValueGetter(time_hist_inds));
+        alg_sys.assembleProblem(advection_kernel2d, {domain_id}, solution_manager.getFieldAccess(time_hist_inds));
         alg_sys.endAssembly();
         alg_sys.solve(solver);
         const auto last_ind = time_hist_inds.back();
@@ -117,7 +117,7 @@ void solveAdvection2D()
                                      error_kernel,
                                      *mesh,
                                      std::views::single(domain_id),
-                                     solution_manager.makeFieldValueGetter(std::array{time_hist_inds.front()}),
+                                     solution_manager.getFieldAccess(std::array{time_hist_inds.front()}),
                                                 {},
                                      dt * static_cast< double >(num_steps))[0] /
                        (W * H) * 100.;
