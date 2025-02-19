@@ -77,7 +77,7 @@ target_link_libraries( my-executable-target L3STER )
 That being said, L3STER has several dependencies, which will need to be installed first:
 
 - CMake 3.24 or newer
-- A C++ 23 compiler, gcc 13 or newer will work
+- A C++ 23 compliant compiler, gcc 14 or newer will work
 - MPI
 - Hwloc
 - Metis
