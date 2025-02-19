@@ -128,11 +128,11 @@ void solveDiffusion3DProblem()
     L3STER_PROFILE_REGION_END("Compute solution error");
 
     if (comm->getRank() == 0)
-        std::cout << std::format("\nThe L2 error components are:\n  {:.3e}\n  {:.3e}\n  {:.3e}\n  {:.3e}\n\n",
-                                 error[0],
-                                 error[1],
-                                 error[2],
-                                 error[3]);
+        std::println("\nThe L2 error components are:\n  {:.3e}\n  {:.3e}\n  {:.3e}\n  {:.3e}\n",
+                     error[0],
+                     error[1],
+                     error[2],
+                     error[3]);
 
     L3STER_PROFILE_REGION_BEGIN("Export results to VTK");
     auto exporter   = PvtuExporter{comm, *my_partition};

@@ -11,7 +11,7 @@
 #include "l3ster/solve/SolverInterface.hpp"
 #include "l3ster/util/GlobalResource.hpp"
 
-#include <format>
+#include <print>
 
 namespace lstr::algsys
 {
@@ -65,7 +65,7 @@ public:
                                SolutionManager&                  sol_man,
                                const util::ArrayOwner< size_t >& sol_man_inds);
 
-    inline void describe(std::ostream& out = std::cout) const;
+    inline void describe(std::FILE* out_stream = stdout) const;
 
     template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setValues(const Teuchos::RCP< tpetra_femultivector_t >&                 vector,
@@ -461,7 +461,7 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::assertState(Sta
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::describe(std::ostream& out) const
+void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::describe(std::FILE* out_stream) const
 {
     const auto local_num_rows    = m_matrix->getLocalNumRows();
     const auto local_num_cols    = m_matrix->getLocalNumCols();
@@ -476,31 +476,32 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::describe(std::o
         const auto global_num_rows_sum   = m_matrix->getGlobalNumRows();
         const auto global_num_cols       = m_matrix->getGlobalNumCols();
         const auto global_num_entries    = m_matrix->getGlobalNumEntries();
-        out << std::format("The algebraic system has dimensions {} by {}\n"
-                           "Distribution among {} MPI rank(s):\n"
-                           "{:<10}|{:^17}|{:^17}|{:^17}|\n"
-                           "{:<10}|{:^17}|{:^17}|{:^17}|\n"
-                           "{:<10}|{:^17}|{:^17}|{:^17}|\n"
-                           "{:<10}|{:^17}|{:^17}|{:^17}|\n\n",
-                           global_num_rows_range,
-                           global_num_cols,
-                           m_comm->getSize(),
-                           "",
-                           "* MIN *",
-                           "* MAX *",
-                           "* TOTAL *",
-                           "ROWS",
-                           local_sizes_min[0],
-                           local_sizes_max[0],
-                           global_num_rows_sum,
-                           "COLUMNS",
-                           local_sizes_min[1],
-                           local_sizes_max[1],
-                           global_num_cols,
-                           "NON-ZEROS",
-                           local_sizes_min[2],
-                           local_sizes_max[2],
-                           global_num_entries);
+        std::println(out_stream,
+                     "The algebraic system has dimensions {} by {}\n"
+                     "Distribution among {} MPI rank(s):\n"
+                     "{:<10}|{:^17}|{:^17}|{:^17}|\n"
+                     "{:<10}|{:^17}|{:^17}|{:^17}|\n"
+                     "{:<10}|{:^17}|{:^17}|{:^17}|\n"
+                     "{:<10}|{:^17}|{:^17}|{:^17}|\n",
+                     global_num_rows_range,
+                     global_num_cols,
+                     m_comm->getSize(),
+                     "",
+                     "* MIN *",
+                     "* MAX *",
+                     "* TOTAL *",
+                     "ROWS",
+                     local_sizes_min[0],
+                     local_sizes_max[0],
+                     global_num_rows_sum,
+                     "COLUMNS",
+                     local_sizes_min[1],
+                     local_sizes_max[1],
+                     global_num_cols,
+                     "NON-ZEROS",
+                     local_sizes_min[2],
+                     local_sizes_max[2],
+                     global_num_entries);
     }
     m_comm->barrier();
 }

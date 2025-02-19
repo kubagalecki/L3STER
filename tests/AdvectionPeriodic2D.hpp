@@ -123,7 +123,6 @@ void solveAdvection2D()
                        (W * H) * 100.;
     constexpr auto thresh = 5.;
     if (comm->getRank() == 0)
-        std::cout << std::format("Normalized L2 error: {:.2f}%  ->  {}", error, error < thresh ? "PASS" : "FAIL")
-                  << std::endl;
+        std::println("Normalized L2 error: {:.2f}%  ->  {}", error, error < thresh ? "PASS" : "FAIL");
     REQUIRE(error < thresh);
 }

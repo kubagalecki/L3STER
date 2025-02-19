@@ -87,7 +87,7 @@ public:
                                SolutionManager&                  sol_man,
                                const util::ArrayOwner< size_t >& sol_man_inds);
 
-    inline void describe(std::ostream& out = std::cout) const;
+    inline void describe(std::FILE* out_stream = stdout) const;
 
     template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setValues(const Teuchos::RCP< tpetra_multivector_t >&                   vector,
@@ -576,7 +576,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::assembleProblem(
 }
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
-void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::describe(std::ostream& out) const
+void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::describe(std::FILE* out_stream) const
 {
     auto local_sizes_min = std::array{m_operator_map->getLocalNumElements(), m_diagonal.size()};
     auto local_sizes_max = local_sizes_min;
@@ -586,25 +586,26 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::describe(std::ostr
     m_comm->reduceInPlace(sizes_sum, 0, MPI_SUM);
     if (m_comm->getRank() == 0)
     {
-        out << std::format("The algebraic system has a total number of {} DOFs\n"
-                           "Distribution among {} MPI rank(s):\n"
-                           "{:<16}|{:^17}|{:^17}|{:^17}|\n"
-                           "{:<16}|{:^17}|{:^17}|{:^17}|\n"
-                           "{:<16}|{:^17}|{:^17}|{:^17}|\n\n",
-                           sizes_sum[0],
-                           m_comm->getSize(),
-                           "",
-                           "* MIN *",
-                           "* MAX *",
-                           "* TOTAL *",
-                           "OWNED",
-                           local_sizes_min[0],
-                           local_sizes_max[0],
-                           sizes_sum[0],
-                           "OWNED + SHARED",
-                           local_sizes_min[1],
-                           local_sizes_max[1],
-                           sizes_sum[1]);
+        std::println(out_stream,
+                     "The algebraic system has a total number of {} DOFs\n"
+                     "Distribution among {} MPI rank(s):\n"
+                     "{:<16}|{:^17}|{:^17}|{:^17}|\n"
+                     "{:<16}|{:^17}|{:^17}|{:^17}|\n"
+                     "{:<16}|{:^17}|{:^17}|{:^17}|\n",
+                     sizes_sum[0],
+                     m_comm->getSize(),
+                     "",
+                     "* MIN *",
+                     "* MAX *",
+                     "* TOTAL *",
+                     "OWNED",
+                     local_sizes_min[0],
+                     local_sizes_max[0],
+                     sizes_sum[0],
+                     "OWNED + SHARED",
+                     local_sizes_min[1],
+                     local_sizes_max[1],
+                     sizes_sum[1]);
     }
 }
 

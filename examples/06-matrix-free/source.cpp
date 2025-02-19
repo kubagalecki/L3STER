@@ -150,8 +150,8 @@ int main(int argc, char* argv[])
     exporter.exportSolution(export_def, solution_manager);
 
     // Print error report header
-    std::cout << std::format(
-        "|{:^11}|{:^16}|{:^19}|{:^17}|\n", "Time Step", "Rel. Error [%]", "CG solution error", "# CG iterations");
+    std::println(
+        "|{:^11}|{:^16}|{:^19}|{:^17}|", "Time Step", "Rel. Error [%]", "CG solution error", "# CG iterations");
 
     const auto num_steps = static_cast< unsigned >(std::lround(L / dt)); // 1 period
     for (unsigned time_step = 1; time_step <= num_steps; ++time_step)
@@ -190,8 +190,8 @@ int main(int argc, char* argv[])
         // Compute the L2 error norm
         const auto error_access = solution_manager.getFieldAccess(std::array{last_ind});
         const auto error        = computeNormL2(*comm, error_kernel, *mesh, {domain_id}, error_access, {}, time)[0];
-        std::cout << std::format(
-            "|{:^11}|{:^16.3f}|{:^19.2e}|{:^17}|\n", time_step, 100. * error / (sol_integral * W * L), tol, iters);
+        std::println(
+            "|{:^11}|{:^16.3f}|{:^19.2e}|{:^17}|", time_step, 100. * error / (sol_integral * W * L), tol, iters);
 
         // Left-rotate time history indices - last_ind is moved to the front of the array
         std::ranges::rotate(time_hist_inds, std::prev(time_hist_inds.end()));

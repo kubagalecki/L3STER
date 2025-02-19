@@ -196,11 +196,11 @@ int main(int argc, char* argv[])
     // Utility for printing the table of results
     const auto report_flowrate = [&](int iter, double in, double out) {
         const double err = (in - out) / in * 100.;
-        std::cout << std::format("{:^10}|{:^8.4f}|{:^9.4f}|{:^21.3f}\n", iter, in, out, err);
+        std::println("{:^10}|{:^8.4f}|{:^9.4f}|{:^21.3f}", iter, in, out, err);
     };
 
     // Print table header
-    std::cout << std::format("{:^10}|{:^8}|{:^9}|{:^21}\n", "Time step", "Inflow", "Outflow", "Flow rate error [%]");
+    std::println("{:^10}|{:^8}|{:^9}|{:^21}", "Time step", "Inflow", "Outflow", "Flow rate error [%]");
 
     // Newton iterations for the steady state solution
     const int steady_iters = 10;

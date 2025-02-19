@@ -111,13 +111,13 @@ void test()
     const auto error = computeNormL2(*comm, dom_error_kernel, *mesh, std::views::single(domain_id), field_access);
     const auto boundary_error = computeNormL2(*comm, bnd_error_kernel, *mesh, boundary_ids, field_access);
     if (comm->getRank() == 0)
-        std::cout << std::format("L2 error components:\n{:<15}{}\n{:<15}{}\n{:<15}{}\n",
-                                 "value:",
-                                 error[0],
-                                 "x derivative:",
-                                 error[1],
-                                 "y derivative:",
-                                 error[2]);
+        std::println("L2 error components:\n{:<15}{}\n{:<15}{}\n{:<15}{}",
+                     "value:",
+                     error[0],
+                     "x derivative:",
+                     error[1],
+                     "y derivative:",
+                     error[2]);
     comm->barrier();
     constexpr auto eps = 1.e-8;
     REQUIRE(error.norm() < eps);

@@ -9,6 +9,6 @@ int main(int argc, char* argv[])
     // L3STER wrapper for an MPI communicator - you will need to wrap it in a std::shared_ptr in subsequent examples
     const auto comm = lstr::MpiComm{MPI_COMM_WORLD};
 
-    // Print message - feel free to use std::print if your compiler supports it (gcc 14+)
-    std::cout << std::format("Hello, World!\nLove,\nL3STER app, rank {} of {}\n\n", comm.getRank(), comm.getSize());
+    // Print message
+    std::println("Hello, World!\nLove,\nL3STER app, rank {} of {}\n", comm.getRank(), comm.getSize());
 }
