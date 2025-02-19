@@ -57,7 +57,7 @@ auto convertMeshToOrder(const MeshPartition< 1 >& mesh, std::integral_constant< 
     const auto dual_graph   = computeMeshDual(mesh);
     auto       new_domains  = detail::initNewDomains< OC >(mesh);
 
-    n_id_t max_node  = mesh.getOwnedNodes().size();
+    n_id_t max_node  = mesh.getNodeOwnership().owned().size();
     auto   converted = util::DynamicBitset{mesh.getNElements()};
 
     const auto convert_domain = [&](const Domain< 1 >& old_domain, Domain< OC >& new_domain) {

@@ -25,14 +25,16 @@ auto makeGhostToWgtMap(const mesh::MeshPartition< orders... >&       mesh,
                        const ProblemDefinition< max_dofs_per_node >& problem_def)
     -> robin_hood::unordered_flat_map< n_id_t, int >
 {
-    auto retval = robin_hood::unordered_flat_map< n_id_t, int >(mesh.getGhostNodes().size());
+    auto retval = robin_hood::unordered_flat_map< n_id_t, int >(mesh.getNodeOwnership().shared().size());
     if constexpr (max_dofs_per_node == 0)
-        for (auto n : mesh.getGhostNodes())
+        for (auto n : mesh.getNodeOwnership().shared())
             retval[n] = 1;
     else
     {
-        const auto is_ghost_node = util::negatePredicate(mesh.getOwnedNodePredicate());
-        auto       dof_map = robin_hood::unordered_flat_map< n_id_t, std::bitset< max_dofs_per_node > >{retval.size()};
+        const auto is_ghost_node = [&](n_id_t node) {
+            return not mesh.getNodeOwnership().isOwned(node);
+        };
+        auto dof_map = robin_hood::unordered_flat_map< n_id_t, std::bitset< max_dofs_per_node > >{retval.size()};
         for (const auto& [domains, dof_bmp] : problem_def)
         {
             const auto visit_elem = [&](const auto& element) {
@@ -56,7 +58,7 @@ auto makeNodeDist(const util::ArrayOwner< mesh::MeshPartition< orders... > >& me
         mesh_parts.end(),
         retval.begin(),
         std::plus{},
-        [](const mesh::MeshPartition< orders... >& part) { return part.getOwnedNodes().size(); });
+        [](const mesh::MeshPartition< orders... >& part) { return part.getNodeOwnership().owned().size(); });
     return retval;
 }
 
@@ -78,7 +80,7 @@ auto makeCommVolumeInfo(const util::ArrayOwner< mesh::MeshPartition< orders... >
     {
         const auto ghost_to_wgt_map = makeGhostToWgtMap(part, problem_def);
         std::ranges::fill(dest_wgts, 0);
-        for (auto node : part.getGhostNodes())
+        for (auto node : part.getNodeOwnership().shared())
             if (const auto dof_it = ghost_to_wgt_map.find(node); dof_it != ghost_to_wgt_map.end())
             {
                 const auto owner = get_node_owner(node);
@@ -142,7 +144,8 @@ auto permuteMesh(const MpiComm&                                       comm,
     for (auto&& [old_ind, new_ind] : opt_permutation | std::views::enumerate)
         retval[new_ind] = std::move(mesh_parts[old_ind]);
     const auto node_reorder_map = util::IndexMap< n_id_t, n_id_t >{
-        retval | std::views::transform(&mesh::MeshPartition< orders... >::getOwnedNodes) | std::views::join};
+        retval | std::views::transform([](const auto& mesh) { return mesh.getNodeOwnership().owned(); }) |
+        std::views::join};
     for (auto& part : retval)
         part.reindexNodes(node_reorder_map);
     return retval;
@@ -159,8 +162,8 @@ void sendMesh(const MpiComm&                                comm,
     const auto       num_domains  = mesh.getNDomains();
     const auto       boundary_ids = mesh.getBoundaryIdsCopy();
     auto             descr_ints   = util::ArrayOwner< size_t >(num_domains + boundary_ids.size() + glob_params);
-    descr_ints[0]                 = mesh.getOwnedNodes().size();
-    descr_ints[1]                 = descr_ints[0] ? mesh.getOwnedNodes().front() : 0uz;
+    descr_ints[0]                 = mesh.getNodeOwnership().owned().size();
+    descr_ints[1]                 = descr_ints[0] ? mesh.getNodeOwnership().owned().front() : 0uz;
     descr_ints[2]                 = num_domains;
     const auto write_iter = std::ranges::copy(mesh.getDomainIds(), std::next(descr_ints.begin(), glob_params)).out;
     std::ranges::copy(boundary_ids, write_iter);

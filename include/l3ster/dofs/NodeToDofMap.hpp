@@ -155,7 +155,7 @@ LocalDofMap< max_dofs_per_node >::LocalDofMap(const NodeToGlobalDofMap< max_dofs
     };
     for (const auto& [node_gid, gids] : global_map.map())
     {
-        const auto node_lid = mesh.getLocalNodeIndex(node_gid);
+        const auto node_lid = mesh.getNodeOwnership().getLocalIndex(node_gid);
         auto       lids     = payload_t{};
         std::ranges::transform(gids, lids.begin(), translate_dof);
         m_map.at(node_lid) = lids;

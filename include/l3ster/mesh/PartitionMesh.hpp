@@ -50,8 +50,10 @@ auto computeNodeWeights(const MeshPartition< orders... >&             mesh,
         const auto node_dofs = node_dof_inds.getSubView(node * max_dofs_per_node, (node + 1) * max_dofs_per_node);
         return node_dofs.count();
     };
-    std::ranges::transform(mesh.getOwnedNodes(), retval.begin(), get_num_dofs);
-    std::ranges::transform(mesh.getGhostNodes(), std::next(retval.begin(), mesh.getOwnedNodes().size()), get_num_dofs);
+    std::ranges::transform(mesh.getNodeOwnership().owned(), retval.begin(), get_num_dofs);
+    std::ranges::transform(mesh.getNodeOwnership().shared(),
+                           std::next(retval.begin(), mesh.getNodeOwnership().owned().size()),
+                           get_num_dofs);
     return retval;
 }
 
@@ -462,8 +464,8 @@ auto partitionMesh(const MeshPartition< orders... >&             mesh,
     -> util::ArrayOwner< MeshPartition< orders... > >
 {
     L3STER_PROFILE_FUNCTION;
-    util::throwingAssert(mesh.getGhostNodes().empty() and
-                             mesh.getOwnedNodes().back() == mesh.getOwnedNodes().size() - 1,
+    util::throwingAssert(mesh.getNodeOwnership().shared().empty() and
+                             mesh.getNodeOwnership().owned().back() == mesh.getNodeOwnership().owned().size() - 1,
                          "You cannot partition a mesh which has already been partitioned");
     util::throwingAssert(n_parts >= 1, "The number of resulting partitions cannot be smaller than 1");
 

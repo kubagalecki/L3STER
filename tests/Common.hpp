@@ -45,8 +45,8 @@ void summarizeMesh(const lstr::MpiComm& comm, const lstr::mesh::MeshPartition< o
         {
             std::cout << std::format("*** Rank {} ***\nOwned nodes: {}, ghost nodes: {}\n",
                                      comm.getRank(),
-                                     mesh.getOwnedNodes().size(),
-                                     mesh.getGhostNodes().size(),
+                                     mesh.getNodeOwnership().owned().size(),
+                                     mesh.getNodeOwnership().shared().size(),
                                      mesh.getNDomains());
             constexpr auto fmt_str = "{:^12}|{:^12}|{:^12}\n";
             std::cout << std::format(fmt_str, "Domain ID", "Dimension", "#Elements");
@@ -68,10 +68,10 @@ void printMesh(const lstr::MpiComm& comm, const lstr::mesh::MeshPartition< order
         if (comm.getRank() == rank)
         {
             std::cout << std::format("Rank: {}\nOwned nodes: ", comm.getRank());
-            for (auto n : mesh.getOwnedNodes())
+            for (auto n : mesh.getNodeOwnership().owned())
                 std::cout << std::format("{} ", n);
             std::cout << "\nGhost nodes: ";
-            for (auto n : mesh.getGhostNodes())
+            for (auto n : mesh.getNodeOwnership().shared())
                 std::cout << std::format("{} ", n);
             std::cout << '\n';
             for (auto dom : mesh.getDomainIds())

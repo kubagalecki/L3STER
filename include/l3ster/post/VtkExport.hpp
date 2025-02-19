@@ -328,7 +328,7 @@ auto serializeTopology(const mesh::MeshPartition< orders... >& mesh)
     const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
         const auto serialized_subtopo = serializeElementSubtopo(element);
         std::ranges::transform(serialized_subtopo, std::back_inserter(topo_data), [&mesh](n_id_t node) {
-            return mesh.getLocalNodeIndex(node);
+            return mesh.getNodeOwnership().getLocalIndex(node);
         });
         std::fill_n(std::back_inserter(cell_types), numSubels< ET, EO >(), subelCellType< ET, EO >());
         std::generate_n(std::back_inserter(offsets), numSubels< ET, EO >(), [&offset]() {
@@ -376,13 +376,12 @@ std::string makeCoordsSerialized(const mesh::MeshPartition< orders... >& mesh)
 
     const auto process_element = [&](const auto& element) {
         const auto node_coords = nodePhysicalLocation(element);
-        for (size_t i = 0; const auto& point : node_coords)
+        for (auto&& [i, point] : node_coords | std::views::enumerate)
         {
-            const auto local_node_ind = mesh.getLocalNodeIndex(element.getNodes()[i]);
+            const auto local_node_ind = mesh.getNodeOwnership().getLocalIndex(element.getNodes()[i]);
             std::atomic_ref{coords[local_node_ind * space_dim]}.store(point.x(), std::memory_order_relaxed);
             std::atomic_ref{coords[local_node_ind * space_dim + 1]}.store(point.y(), std::memory_order_relaxed);
             std::atomic_ref{coords[local_node_ind * space_dim + 2]}.store(point.z(), std::memory_order_relaxed);
-            ++i;
         }
     };
     mesh.visit(process_element, std::execution::par);

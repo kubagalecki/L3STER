@@ -33,7 +33,8 @@ template < el_o_t... orders >
 bool isUnpartitioned(const MeshPartition< orders... >& mesh)
 {
     return mesh.getNNodes() == 0 or
-           (mesh.getGhostNodes().empty() and mesh.getOwnedNodes().back() + 1 == mesh.getOwnedNodes().size());
+           (mesh.getNodeOwnership().shared().empty() and
+            mesh.getNodeOwnership().owned().back() + 1 == mesh.getNodeOwnership().owned().size());
 }
 
 template < el_o_t... orders >
@@ -46,7 +47,7 @@ auto computeMeshDual(const MeshPartition< orders... >& mesh) -> util::metis::Gra
         "result in signed integer overflow. Consider recompiling METIS with 64 bit integer support";
     constexpr auto max_metis_id = static_cast< std::uintmax_t >(std::numeric_limits< idx_t >::max());
     const auto     max_el_id    = static_cast< std::uintmax_t >(mesh.getNElements() + 1);
-    const auto     max_n_id     = static_cast< std::uintmax_t >(mesh.getOwnedNodes().back());
+    const auto     max_n_id     = static_cast< std::uintmax_t >(mesh.getNodeOwnership().owned().back());
     util::throwingAssert(max_el_id <= max_metis_id and max_n_id <= max_metis_id, overflow_msg);
 
     const auto convert_topo_to_metis_format = [&]() {
@@ -76,7 +77,7 @@ auto computeMeshDual(const MeshPartition< orders... >& mesh) -> util::metis::Gra
     };
     auto [eptr, eind] = convert_topo_to_metis_format(); // should be const, but METIS API is const-averse
     idx_t  ne         = static_cast< idx_t >(mesh.getNElements());
-    idx_t  nn         = static_cast< idx_t >(mesh.getOwnedNodes().size());
+    idx_t  nn         = static_cast< idx_t >(mesh.getNodeOwnership().owned().size());
     idx_t  ncommon    = 2;
     idx_t  numflag    = 0;
     idx_t* xadj{};
