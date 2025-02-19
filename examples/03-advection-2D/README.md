@@ -1,8 +1,11 @@
-# 2D advection
+# 2D Advection
 
 In this example, we will show how to solve a 2D advection problem in a channel.
 
-$$ \frac{\partial \phi}{\partial t} + \mathbf{u} \cdot \nabla \phi = 0 \quad  \mathrm{in} \quad \Omega=[0,1] \times [0,3] $$
+$$ \begin{align}
+\frac{\partial \phi}{\partial t} + \mathbf{u} \cdot \nabla \phi &= 0 &\mathrm{in} \; \Omega=[0,3] \times [0,1] \\
+\phi &= \phi_D & \mathrm{on} \; \partial \Omega_D
+\end{align} $$
 
 The advection velocity field follows a parabolic profile (Poiseuille flow).
 

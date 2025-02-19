@@ -110,25 +110,7 @@ public:
 private:
     bool m_is_owning = false;
 };
-} // namespace util
 
-class L3sterScopeGuard
-{
-public:
-    L3sterScopeGuard(int& argc, char** argv)
-        : m_mpi_guard{argc, argv}, m_kokkos_guard{argc, argv}, m_stack_size_guard{util::MaxStackSizeTracker::get()}
-    {
-        (void)util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized();
-    }
-
-private:
-    util::MpiScopeGuard    m_mpi_guard;
-    util::KokkosScopeGuard m_kokkos_guard;
-    util::StackSizeGuard   m_stack_size_guard;
-};
-
-namespace util
-{
 class MaxParallelismGuard
 {
 #ifdef _OPENMP
@@ -175,9 +157,9 @@ class MaxParallelismGuard
     }
 
 public:
-    explicit MaxParallelismGuard(size_t max_threads_unclamped) : m_previous{getCurrentMaxPar()}
+    explicit MaxParallelismGuard(size_t max_threads) : m_previous{getCurrentMaxPar()}
     {
-        const auto max_threads = std::clamp(max_threads_unclamped, size_t{1}, std::numeric_limits< size_t >::max());
+        max_threads = std::max(max_threads, 1uz);
         if (max_threads < m_previous)
         {
             m_thread_guards.emplace(max_threads);
@@ -200,5 +182,22 @@ private:
     size_t                        m_previous;
 };
 } // namespace util
+
+class L3sterScopeGuard
+{
+public:
+    L3sterScopeGuard(int& argc, char** argv)
+        : m_stack_size_guard{util::MaxStackSizeTracker::get()},
+          m_mpi_guard{argc, argv},
+          m_max_par_guard{util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNHwThreads()},
+          m_kokkos_guard{argc, argv}
+    {}
+
+private:
+    util::StackSizeGuard      m_stack_size_guard;
+    util::MpiScopeGuard       m_mpi_guard;
+    util::MaxParallelismGuard m_max_par_guard;
+    util::KokkosScopeGuard    m_kokkos_guard;
+};
 } // namespace lstr
 #endif // L3STER_UTIL_KOKKOSSCOPEGUARD_HPP

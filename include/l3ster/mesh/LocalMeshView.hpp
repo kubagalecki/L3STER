@@ -209,7 +209,7 @@ LocalElementView< ET, EO >::LocalElementView(const Element< ET, EO >&          g
     : m_data{global_elem.getData()}
 {
     const auto g2l = [&](auto n) {
-        return mesh.getLocalNodeIndex(n);
+        return static_cast< n_loc_id_t >(mesh.getNodeOwnership().getLocalIndex(n));
     };
     if constexpr (optimize_internal)
     {
@@ -440,14 +440,15 @@ auto computeNodeOrder(const MeshPartition< orders... >& mesh) -> util::ArrayOwne
     const auto is_internal = [&](n_id_t node) {
         return internal_node_set.contains(node);
     };
-    const auto num_internal =
-        static_cast< size_t >(std::ranges::count_if(mesh.getOwnedNodes(), util::negatePredicate(is_internal)));
-    const size_t num_total = num_internal + internal_node_vec.size() + mesh.getGhostNodes().size();
+    const auto num_internal = static_cast< size_t >(
+        std::ranges::count_if(mesh.getNodeOwnership().owned(), util::negatePredicate(is_internal)));
+    const size_t num_total = num_internal + internal_node_vec.size() + mesh.getNodeOwnership().shared().size();
     util::throwingAssert(num_total == mesh.getNNodes(), "Internal nodes cannot be ghost nodes");
     auto retval = util::ArrayOwner< n_id_t >(num_total);
-    auto iter   = std::ranges::copy_if(mesh.getOwnedNodes(), retval.begin(), util::negatePredicate(is_internal)).out;
-    iter        = std::ranges::copy(internal_node_vec, iter).out;
-    std::ranges::copy(mesh.getGhostNodes(), iter);
+    auto iter =
+        std::ranges::copy_if(mesh.getNodeOwnership().owned(), retval.begin(), util::negatePredicate(is_internal)).out;
+    iter = std::ranges::copy(internal_node_vec, iter).out;
+    std::ranges::copy(mesh.getNodeOwnership().shared(), iter);
     return retval;
 }
 
@@ -455,8 +456,11 @@ template < el_o_t... orders >
 LocalMeshView< orders... >::LocalMeshView(const MeshPartition< orders... >& part,
                                           const MeshPartition< orders... >& full)
 {
-    const auto owned_nodes      = part.getOwnedNodes();
-    m_owned_limit               = owned_nodes.empty() ? 0u : (full.getLocalNodeIndex(owned_nodes.back()) + 1u);
+    const auto g2l = [&](n_id_t node) {
+        return static_cast< n_loc_id_t >(full.getNodeOwnership().getLocalIndex(node));
+    };
+    const auto owned_nodes      = part.getNodeOwnership().owned();
+    m_owned_limit               = owned_nodes.empty() ? 0u : (g2l(owned_nodes.back()) + 1u);
     const auto elem_side_map    = detail::makeElementIdToSidesMap(part);
     const auto element_to_local = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
         const auto side_info = elem_side_map.find(element.getId());

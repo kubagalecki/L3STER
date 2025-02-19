@@ -15,10 +15,7 @@ int main(int argc, char* argv[])
     constexpr int n_unknowns = 4;
 
     // Define the flow problem
-    constexpr auto problem_def = ProblemDef{defineDomain< n_unknowns >(domain, ALL_DOFS)};
-
-    // Wrap as compile-time value
-    constexpr auto probdef_ctwrpr = L3STER_WRAP_CTVAL(problem_def);
+    const auto problem_def = ProblemDefinition< n_unknowns >{{domain}};
 
     // Dirichlet conditions: velocity prescribed at inlet + walls
     auto bc_def = BCDefinition< n_unknowns >{};
@@ -27,13 +24,11 @@ int main(int argc, char* argv[])
     // Read mesh
     const std::string mesh_file  = argc > 1 ? argv[1] : "../karman.msh";
     constexpr int     mesh_order = 4;
-    const auto        mesh       = readAndDistributeMesh< mesh_order >(
-        *comm, mesh_file, mesh::gmsh_tag, {inlet, wall, outlet}, {}, probdef_ctwrpr);
+    const auto        mesh =
+        readAndDistributeMesh< mesh_order >(*comm, mesh_file, mesh::gmsh_tag, {inlet, wall, outlet}, {}, problem_def);
 
     // Algebraic system used for both the steady and transient problems
-    constexpr auto sys_opts         = AlgebraicSystemParams{.cond_policy = CondensationPolicy::ElementBoundary};
-    constexpr auto sysopts_ctval    = L3STER_WRAP_CTVAL(sys_opts);
-    auto           algebraic_system = makeAlgebraicSystem(comm, mesh, probdef_ctwrpr, bc_def, sysopts_ctval);
+    auto algebraic_system = makeAlgebraicSystem(comm, mesh, problem_def, bc_def);
     algebraic_system.describe();
 
     // Time step
@@ -180,9 +175,9 @@ int main(int argc, char* argv[])
     ////////// END KERNELS //////////
 
     // Set Dirichlet BC values
-    constexpr auto bc_inds = std::array{IU, IV}; // indices of DOFs for which we wish to prescribe a Dirichlet BC
-    constexpr auto u_wall  = std::array{0., 0.};
-    algebraic_system.setDirichletBCValues(u_wall, {wall}, bc_inds);
+    constexpr auto bc_inds       = std::array{IU, IV}; // indices of DOFs for which we wish to prescribe a Dirichlet BC
+    constexpr auto wall_velocity = std::array{0., 0.}; // no-slip condition
+    algebraic_system.setDirichletBCValues(wall_velocity, {wall}, bc_inds);
     algebraic_system.setDirichletBCValues(kernel_inlet, {inlet}, bc_inds);
 
     // Solution manager
@@ -196,16 +191,16 @@ int main(int argc, char* argv[])
     const auto p_inds    = std::array{5};    // Pressure
 
     // L3STER interface to KLU2 direct solver
-    auto solver = solvers::KLU2{};
+    auto solver = Klu2{};
 
     // Utility for printing the table of results
     const auto report_flowrate = [&](int iter, double in, double out) {
         const double err = (in - out) / in * 100.;
-        std::cout << std::format("{:^10}|{:^8.4f}|{:^9.4f}|{:^21.3f}\n", iter, in, out, err);
+        std::println("{:^10}|{:^8.4f}|{:^9.4f}|{:^21.3f}", iter, in, out, err);
     };
 
     // Print table header
-    std::cout << std::format("{:^10}|{:^8}|{:^9}|{:^21}\n", "Time step", "Inflow", "Outflow", "Flow rate error [%]");
+    std::println("{:^10}|{:^8}|{:^9}|{:^21}", "Time step", "Inflow", "Outflow", "Flow rate error [%]");
 
     // Newton iterations for the steady state solution
     const int steady_iters = 10;
@@ -214,11 +209,11 @@ int main(int argc, char* argv[])
         // Zero out system
         algebraic_system.beginAssembly();
 
-        // Velocity getter - we only need one velocity snapshot for the steady-state iteration
-        const auto vel_getter = solution_manager.makeFieldValueGetter(vel_inds1);
+        // Velocity access - we only need one velocity snapshot for the steady-state iteration
+        const auto vel_access = solution_manager.getFieldAccess(vel_inds1);
 
         // Assemble problem based on the defined kernels
-        algebraic_system.assembleProblem(kernel_steady, {domain}, vel_getter, {}, asmopt_ctval);
+        algebraic_system.assembleProblem(kernel_steady, {domain}, vel_access, {}, asmopt_ctval);
         algebraic_system.assembleProblem(kernel_outlet, {outlet}, {}, outdof_ctval);
 
         // Finalize assembly
@@ -232,23 +227,24 @@ int main(int argc, char* argv[])
     }
 
     // Set the remaining solution components to the steady state solution
-    algebraic_system.updateSolution(
-        std::views::iota(0, 4), solution_manager, util::concatRanges(vel_inds2, vort_inds, p_inds));
+    const auto solman_update_inds = util::concatArrays(vel_inds2, vort_inds, p_inds);
+    algebraic_system.updateSolution(std::views::iota(0, 4), solution_manager, solman_update_inds);
 
     // Paraview exporter object
     auto exporter = PvtuExporter{comm, *mesh};
 
     // Export initial snapshot
-    exporter.exportSolution("results/karman_000.pvtu",
-                            solution_manager,
-                            {"Velocity", "Vorticity", "Pressure"},
-                            util::gatherAsCommon(vel_inds2, vort_inds, p_inds));
+    auto export_def = ExportDefinition{"results/karman_000.pvtu"};
+    export_def.defineField("Velocity", vel_inds2);
+    export_def.defineField("Vorticity", vort_inds);
+    export_def.defineField("Pressure", p_inds);
+    exporter.exportSolution(export_def, solution_manager);
 
     // Print flow rate info, note that the computed integrals are vectors of length 1, hence the "[0]"
     {
-        const auto vel_getter   = solution_manager.makeFieldValueGetter(vel_inds1);
-        const auto inflow_rate  = -computeIntegral(*comm, kernel_flowrate, *mesh, {inlet}, vel_getter)[0];
-        const auto outflow_rate = computeIntegral(*comm, kernel_flowrate, *mesh, {outlet}, vel_getter)[0];
+        const auto vel_access   = solution_manager.getFieldAccess(vel_inds1);
+        const auto inflow_rate  = -computeIntegral(*comm, kernel_flowrate, *mesh, {inlet}, vel_access)[0];
+        const auto outflow_rate = computeIntegral(*comm, kernel_flowrate, *mesh, {outlet}, vel_access)[0];
         report_flowrate(0, inflow_rate, outflow_rate);
     }
 
@@ -258,11 +254,12 @@ int main(int argc, char* argv[])
         // Zero out system
         algebraic_system.beginAssembly();
 
-        // Velocity getter
-        const auto vel_getter = solution_manager.makeFieldValueGetter< 4 >(util::concatRanges(vel_inds1, vel_inds2));
+        // Velocity access
+        const auto vel_inds_for_access = util::concatArrays(vel_inds1, vel_inds2);
+        const auto vel_access          = solution_manager.getFieldAccess(vel_inds_for_access);
 
         // Assemble problem based on the defined kernels
-        algebraic_system.assembleProblem(kernel_trans, {domain}, vel_getter, {}, asmopt_ctval);
+        algebraic_system.assembleProblem(kernel_trans, {domain}, vel_access, {}, asmopt_ctval);
         algebraic_system.assembleProblem(kernel_outlet, {outlet}, {}, outdof_ctval);
 
         // Finalize assembly
@@ -276,17 +273,17 @@ int main(int argc, char* argv[])
         algebraic_system.updateSolution(std::views::iota(0, 4), solution_manager, solution_manager_inds);
 
         // Print flow rate info
-        const auto current_vel_getter = solution_manager.makeFieldValueGetter(vel_inds2);
-        const auto inflow_rate        = -computeIntegral(*comm, kernel_flowrate, *mesh, {inlet}, current_vel_getter)[0];
-        const auto outflow_rate       = computeIntegral(*comm, kernel_flowrate, *mesh, {outlet}, current_vel_getter)[0];
+        const auto current_vel_access = solution_manager.getFieldAccess(vel_inds2);
+        const auto inflow_rate        = -computeIntegral(*comm, kernel_flowrate, *mesh, {inlet}, current_vel_access)[0];
+        const auto outflow_rate       = computeIntegral(*comm, kernel_flowrate, *mesh, {outlet}, current_vel_access)[0];
         report_flowrate(time_step, inflow_rate, outflow_rate);
 
         // Export snapshot
-        const auto file_name = std::format("results/karman_{:03}.pvtu", time_step);
-        exporter.exportSolution(file_name,
-                                solution_manager,
-                                {"Velocity", "Vorticity", "Pressure"},
-                                util::gatherAsCommon(vel_inds2, vort_inds, p_inds));
+        export_def = ExportDefinition{std::format("results/karman_{:03}.pvtu", time_step)};
+        export_def.defineField("Velocity", vel_inds2);
+        export_def.defineField("Vorticity", vort_inds);
+        export_def.defineField("Pressure", p_inds);
+        exporter.exportSolution(export_def, solution_manager);
 
         // Swap velocity indices - the current time step becomes the previous time step
         // For time stepping schemes of order >= 3 consider using std::rotate

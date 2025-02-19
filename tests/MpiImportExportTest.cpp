@@ -9,14 +9,13 @@ namespace sr = std::ranges;
 namespace sv = std::views;
 
 using GID                       = long;
-using LID                       = int;
 using Scalar                    = GID;
 constexpr size_t mv_cols        = 5;
 constexpr size_t elems_per_rank = 1000;
 
 void runTest(const MpiComm&                    comm,
-             Import< Scalar, LID >&            importer,
-             Export< Scalar, LID >&            exporter,
+             Import< Scalar >&                 importer,
+             Export< Scalar >&                 exporter,
              const util::ArrayOwner< Scalar >& x,
              util::ArrayOwner< Scalar >&       y)
 {
@@ -85,7 +84,6 @@ int main(int argc, char* argv[])
     auto shared_inds = util::ArrayOwner< GID >(not is_last);
     if (not shared_inds.empty())
         shared_inds.front() = first_ind + static_cast< GID >(elems_per_rank);
-    const std::span< const GID > owned_span = owned_inds, shared_span = shared_inds;
 
     const auto                 all_inds_sz  = owned_inds.size() + shared_inds.size();
     const auto                 total_vec_sz = mv_cols * all_inds_sz;
@@ -98,9 +96,10 @@ int main(int argc, char* argv[])
             x_col.back() = -42; // This needs to be imported
     }
 
-    auto context  = std::make_shared< const ImportExportContext< LID > >(comm, owned_span, shared_span);
-    auto importer = Import< Scalar, LID >{context, mv_cols};
-    auto exporter = Export< Scalar, LID >{std::move(context), mv_cols};
+    const auto ownership = util::SegmentedOwnership{first_ind, owned_inds.size(), shared_inds};
+    auto       context   = std::make_shared< const ImportExportContext >(comm, ownership);
+    auto       importer  = Import< Scalar >{context, mv_cols};
+    auto       exporter  = Export< Scalar >{std::move(context), mv_cols};
     importer.setOwned(x, all_inds_sz);
     importer.setShared(std::span{x}.subspan(owned_inds.size()), all_inds_sz);
     exporter.setOwned(y, all_inds_sz);

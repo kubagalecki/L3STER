@@ -132,30 +132,8 @@ public:
     auto        getDomainIds() const { return m_domains | std::views::keys; }
     auto        getDomain(d_id_t id) const -> const Domain< orders... >& { return m_domains.at(id); }
     inline auto getMaxDim() const -> dim_t;
-    auto        getOwnedNodes() const { return m_node_ownership->owned(); }
-    auto        getGhostNodes() const -> node_span_t { return m_node_ownership->shared(); }
     auto        getNodeOwnership() const -> const node_ownership_t& { return *m_node_ownership; }
     auto        getNodeOwnershipSharedPtr() const -> const_node_ownership_sp_t { return m_node_ownership; }
-    auto        getGlobalNodeIndex(n_loc_id_t node) const { return m_node_ownership->getGlobalIndex(node); }
-    auto        getLocalNodeIndex(n_id_t node) const
-    {
-        return static_cast< n_loc_id_t >(m_node_ownership->getLocalIndex(node));
-    }
-
-    bool isGhostNode(n_id_t node) const { return m_node_ownership->isShared(node); }
-    bool isOwnedNode(n_id_t node) const { return m_node_ownership->isOwned(node); }
-    auto getGhostNodePredicate() const
-    {
-        return [this](n_id_t node) {
-            return isGhostNode(node);
-        };
-    }
-    auto getOwnedNodePredicate() const
-    {
-        return [this](n_id_t node) {
-            return isOwnedNode(node);
-        };
-    }
 
     // Needed for partitioning
     template < Mapping_c< n_id_t, n_id_t > Map >

@@ -266,7 +266,7 @@ auto scatterMatched(const mesh::MeshPartition< orders... >&          mesh,
     -> std::array< std::vector< n_id_t >, 2 >
 {
     constexpr int p_tag = 0, a_tag = 1;
-    const auto    num_owned_nodes = mesh.getOwnedNodes().size();
+    const auto    num_owned_nodes = mesh.getNodeOwnership().owned().size();
     if (comm.getRank() == 0)
     {
         auto owned = util::ArrayOwner< size_t >(static_cast< size_t >(comm.getSize()));
@@ -343,7 +343,7 @@ PeriodicBC< max_dofs_per_node >::PeriodicBC(const PeriodicBCDefinition< max_dofs
             auto& value = m_periodic_info.try_emplace(my_node, map_init_element).first->second;
             for (auto i : dof_inds)
                 value[i] = dof_owner;
-            if (not mesh.isOwnedNode(dof_owner) and not mesh.isGhostNode(dof_owner))
+            if (not mesh.getNodeOwnership().isOwned(dof_owner) and not mesh.getNodeOwnership().isShared(dof_owner))
                 periodic_ghosts.insert(dof_owner);
         }
     }

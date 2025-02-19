@@ -32,12 +32,10 @@ void testBoundaryMatching2D()
     constexpr auto   dx        = N - 1;
     constexpr auto   dy        = dx * N;
     constexpr d_id_t domain_id = 0, bot_bound = 1, top_bound = 2, left_bound = 3, right_bound = 4;
-    constexpr auto   problem_def    = ProblemDef{defineDomain< 2 >(domain_id, ALL_DOFS)};
-    constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
-    const auto       comm           = std::make_shared< MpiComm >(MPI_COMM_WORLD);
-    const auto       mesh =
-        generateAndDistributeMesh< 1 >(*comm, [&] { return makeSquareMesh(node_dist); }, {}, probdef_ctwrpr);
-    auto period_def = PeriodicBCDefinition< 2 >{};
+    const auto       problem_def = ProblemDefinition< 2 >{{domain_id}};
+    const auto       comm        = std::make_shared< MpiComm >(MPI_COMM_WORLD);
+    const auto mesh = generateAndDistributeMesh< 1 >(*comm, [&] { return makeSquareMesh(node_dist); }, {}, problem_def);
+    auto       period_def = PeriodicBCDefinition< 2 >{};
     period_def.definePeriodicBoundary({bot_bound}, {top_bound}, {0., node_dist.back() - node_dist.front(), 0.}, {0});
     period_def.definePeriodicBoundary({left_bound}, {right_bound}, {node_dist.back() - node_dist.front(), 0., 0.}, {1});
     const auto bc = PeriodicBC{period_def, *mesh, *comm};
@@ -58,12 +56,10 @@ void testBoundaryMatching3D()
     constexpr auto   dz        = dy * N;
     constexpr d_id_t domain_id = 0;
     constexpr d_id_t bot_bound = 1, top_bound = 2, left_bound = 3, right_bound = 4, back_bound = 5, front_bound = 6;
-    constexpr auto   problem_def    = ProblemDef{defineDomain< 3 >(domain_id, ALL_DOFS)};
-    constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
-    const auto       comm           = std::make_shared< MpiComm >(MPI_COMM_WORLD);
-    const auto       mesh =
-        generateAndDistributeMesh< 1 >(*comm, [&] { return makeCubeMesh(node_dist); }, {}, probdef_ctwrpr);
-    auto period_def = PeriodicBCDefinition< 3 >{};
+    const auto       problem_def = ProblemDefinition< 3 >{{domain_id}};
+    const auto       comm        = std::make_shared< MpiComm >(MPI_COMM_WORLD);
+    const auto mesh = generateAndDistributeMesh< 1 >(*comm, [&] { return makeCubeMesh(node_dist); }, {}, problem_def);
+    auto       period_def = PeriodicBCDefinition< 3 >{};
     period_def.definePeriodicBoundary({bot_bound}, {top_bound}, {0., 0., node_dist.back() - node_dist.front()}, {0});
     period_def.definePeriodicBoundary({left_bound}, {right_bound}, {0., node_dist.back() - node_dist.front(), 0.}, {1});
     period_def.definePeriodicBoundary({back_bound}, {front_bound}, {node_dist.back() - node_dist.front(), 0., 0.}, {2});

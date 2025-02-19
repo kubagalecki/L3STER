@@ -181,7 +181,7 @@ constexpr auto linspaceArray(T lo, T hi) -> std::array< T, N >
     const auto d      = L / static_cast< T >(N - 1);
     auto       retval = std::array< T, N >{};
     std::ranges::transform(
-        std::views::iota(size_t{0}, N), retval.begin(), [&](size_t i) { return lo + static_cast< T >(i) * d; });
+        std::views::iota(0uz, N), retval.begin(), [&](size_t i) { return lo + static_cast< T >(i) * d; });
     return retval;
 }
 
@@ -193,7 +193,7 @@ auto linspaceVector(T lo, T hi, size_t N) -> std::vector< T >
     const auto d      = L / static_cast< T >(N - 1);
     auto       retval = std::vector< T >{};
     retval.reserve(N);
-    std::ranges::transform(std::views::iota(size_t{0}, N), std::back_inserter(retval), [&](size_t i) -> T {
+    std::ranges::transform(std::views::iota(0uz, N), std::back_inserter(retval), [&](size_t i) -> T {
         return lo + static_cast< T >(i) * d;
     });
     return retval;

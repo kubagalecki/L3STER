@@ -12,12 +12,11 @@ struct DirichletDofs
     std::vector< global_dof_t > owned, shared;
 };
 
-template < el_o_t... orders, ProblemDef problem_def >
-auto getDirichletDofs(const mesh::MeshPartition< orders... >&                 mesh,
-                      const Teuchos::RCP< const tpetra_fecrsgraph_t >&        sparsity_graph,
-                      const dofs::NodeToGlobalDofMap< problem_def.n_fields >& node_to_dof_map,
-                      util::ConstexprValue< problem_def >,
-                      const DirichletBCDefinition< problem_def.n_fields >& bc_def) -> DirichletDofs
+template < el_o_t... orders, size_t max_dofs_per_node >
+auto getDirichletDofs(const mesh::MeshPartition< orders... >&              mesh,
+                      const Teuchos::RCP< const tpetra_fecrsgraph_t >&     sparsity_graph,
+                      const dofs::NodeToGlobalDofMap< max_dofs_per_node >& node_to_dof_map,
+                      const DirichletBCDefinition< max_dofs_per_node >&    bc_def) -> DirichletDofs
 {
     const auto mark_owned_dirichlet_dofs = [&] {
         const auto dirichlet_dofs = util::makeTeuchosRCP< tpetra_femultivector_t >(

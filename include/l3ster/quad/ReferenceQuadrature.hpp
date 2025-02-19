@@ -16,7 +16,6 @@ consteval size_t getRefQuadSize(QuadratureType QT, q_o_t QO)
     {
     case QuadratureType::GaussLegendre:
         return QO / 2 + 1;
-        break;
     default:
         throw "Reference quadrature size is unknown for this quadrature type";
     }

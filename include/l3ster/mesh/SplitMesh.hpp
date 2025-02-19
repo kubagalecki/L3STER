@@ -88,7 +88,9 @@ auto makeMesh(const MeshPartition< orders... >&                   parent_mesh,
 {
     auto       owned_nodes        = std::set< n_id_t >{};
     const auto insert_owned_nodes = [&](const auto& element) {
-        for (auto node : element.getNodes() | std::views::filter(parent_mesh.getOwnedNodePredicate()))
+        for (auto node : element.getNodes() | std::views::filter([&](n_id_t node) {
+                             return parent_mesh.getNodeOwnership().isOwned(node);
+                         }))
             owned_nodes.insert(node);
     };
     for (const auto& domain : dom_map | std::views::values)

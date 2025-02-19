@@ -20,28 +20,29 @@ namespace comm
 {
 namespace detail
 {
-template < el_o_t... orders, ProblemDef problem_def >
-auto makeGhostToWgtMap(const mesh::MeshPartition< orders... >& mesh, util::ConstexprValue< problem_def > probdef_ctwrpr)
+template < el_o_t... orders, size_t max_dofs_per_node >
+auto makeGhostToWgtMap(const mesh::MeshPartition< orders... >&       mesh,
+                       const ProblemDefinition< max_dofs_per_node >& problem_def)
     -> robin_hood::unordered_flat_map< n_id_t, int >
 {
-    constexpr auto n_fields = problem_def.n_fields;
-    auto           retval   = robin_hood::unordered_flat_map< n_id_t, int >(mesh.getGhostNodes().size());
-    if constexpr (n_fields == 0)
-        for (auto n : mesh.getGhostNodes())
+    auto retval = robin_hood::unordered_flat_map< n_id_t, int >(mesh.getNodeOwnership().shared().size());
+    if constexpr (max_dofs_per_node == 0)
+        for (auto n : mesh.getNodeOwnership().shared())
             retval[n] = 1;
     else
     {
-        const auto is_ghost_node = util::negatePredicate(mesh.getOwnedNodePredicate());
-        auto dof_map = robin_hood::unordered_flat_map< n_id_t, std::bitset< problem_def.n_fields > >{retval.size()};
-        const auto visit_dom = [&]< DomainDef< n_fields > dom_def >(util::ConstexprValue< dom_def >) {
-            const auto dom_bitset = util::toStdBitset(dom_def.active_fields);
+        const auto is_ghost_node = [&](n_id_t node) {
+            return not mesh.getNodeOwnership().isOwned(node);
+        };
+        auto dof_map = robin_hood::unordered_flat_map< n_id_t, std::bitset< max_dofs_per_node > >{retval.size()};
+        for (const auto& [domains, dof_bmp] : problem_def)
+        {
             const auto visit_elem = [&](const auto& element) {
                 for (auto node : element.getNodes() | std::views::filter(is_ghost_node))
-                    dof_map[node] |= dom_bitset;
+                    dof_map[node] |= dof_bmp;
             };
-            mesh.visit(visit_elem, dom_def.domain);
-        };
-        forConstexpr(visit_dom, probdef_ctwrpr);
+            mesh.visit(visit_elem, domains);
+        }
         for (auto&& [n, b] : dof_map)
             retval[n] = static_cast< int >(b.count());
     }
@@ -57,7 +58,7 @@ auto makeNodeDist(const util::ArrayOwner< mesh::MeshPartition< orders... > >& me
         mesh_parts.end(),
         retval.begin(),
         std::plus{},
-        [](const mesh::MeshPartition< orders... >& part) { return part.getOwnedNodes().size(); });
+        [](const mesh::MeshPartition< orders... >& part) { return part.getNodeOwnership().owned().size(); });
     return retval;
 }
 
@@ -65,9 +66,9 @@ struct CommVolumeInfo
 {
     std::vector< int > sources, degrees, destinations, weights;
 };
-template < el_o_t... orders, ProblemDef problem_def >
+template < el_o_t... orders, size_t max_dofs_per_node >
 auto makeCommVolumeInfo(const util::ArrayOwner< mesh::MeshPartition< orders... > >& mesh_parts,
-                        util::ConstexprValue< problem_def >                         probdef_ctwrapper) -> CommVolumeInfo
+                        const ProblemDefinition< max_dofs_per_node >&               problem_def) -> CommVolumeInfo
 {
     const auto get_node_owner = [node_dist = makeNodeDist(mesh_parts)](n_id_t node) {
         const auto lb_iter = std::ranges::upper_bound(node_dist, node);
@@ -77,9 +78,9 @@ auto makeCommVolumeInfo(const util::ArrayOwner< mesh::MeshPartition< orders... >
     auto dest_wgts = util::ArrayOwner< int >(mesh_parts.size(), 0);
     for (auto&& [part_ind, part] : mesh_parts | std::views::enumerate)
     {
-        const auto ghost_to_wgt_map = makeGhostToWgtMap(part, probdef_ctwrapper);
+        const auto ghost_to_wgt_map = makeGhostToWgtMap(part, problem_def);
         std::ranges::fill(dest_wgts, 0);
-        for (auto node : part.getGhostNodes())
+        for (auto node : part.getNodeOwnership().shared())
             if (const auto dof_it = ghost_to_wgt_map.find(node); dof_it != ghost_to_wgt_map.end())
             {
                 const auto owner = get_node_owner(node);
@@ -100,12 +101,13 @@ auto makeCommVolumeInfo(const util::ArrayOwner< mesh::MeshPartition< orders... >
     return retval;
 }
 
-template < el_o_t... orders, ProblemDef problem_def >
+template < el_o_t... orders, size_t max_dofs_per_node >
 auto computeOptimizedRankPermutation(const MpiComm&                                              comm,
                                      const util::ArrayOwner< mesh::MeshPartition< orders... > >& mesh_parts,
-                                     util::ConstexprValue< problem_def > probdef_ctwrapper) -> util::ArrayOwner< int >
+                                     const ProblemDefinition< max_dofs_per_node >&               problem_def)
+    -> util::ArrayOwner< int >
 {
-    const auto& [sources, degrees, dests, wgts] = makeCommVolumeInfo(mesh_parts, probdef_ctwrapper);
+    const auto& [sources, degrees, dests, wgts] = makeCommVolumeInfo(mesh_parts, problem_def);
     MPI_Comm new_comm                           = MPI_COMM_NULL;
     L3STER_INVOKE_MPI(MPI_Dist_graph_create,
                       comm.get(),
@@ -127,22 +129,23 @@ auto computeOptimizedRankPermutation(const MpiComm&                             
     return retval;
 }
 
-template < el_o_t... orders, ProblemDef problem_def >
+template < el_o_t... orders, size_t max_dofs_per_node >
 auto permuteMesh(const MpiComm&                                       comm,
                  util::ArrayOwner< mesh::MeshPartition< orders... > > mesh_parts,
-                 util::ConstexprValue< problem_def >                  probdef_ctwrapper,
+                 const ProblemDefinition< max_dofs_per_node >&        problem_def,
                  const MeshDistOpts& opts) -> util::ArrayOwner< mesh::MeshPartition< orders... > >
 {
     if (opts.optimize == false)
         return mesh_parts;
-    const auto opt_permutation = computeOptimizedRankPermutation(comm, mesh_parts, probdef_ctwrapper);
+    const auto opt_permutation = computeOptimizedRankPermutation(comm, mesh_parts, problem_def);
     if (mesh_parts.empty())
         return {}; // All ranks need to participate in computing the permutation, but only rank 0 actually performs it
     auto retval = util::ArrayOwner< mesh::MeshPartition< orders... > >(mesh_parts.size());
     for (auto&& [old_ind, new_ind] : opt_permutation | std::views::enumerate)
         retval[new_ind] = std::move(mesh_parts[old_ind]);
     const auto node_reorder_map = util::IndexMap< n_id_t, n_id_t >{
-        retval | std::views::transform(&mesh::MeshPartition< orders... >::getOwnedNodes) | std::views::join};
+        retval | std::views::transform([](const auto& mesh) { return mesh.getNodeOwnership().owned(); }) |
+        std::views::join};
     for (auto& part : retval)
         part.reindexNodes(node_reorder_map);
     return retval;
@@ -159,8 +162,8 @@ void sendMesh(const MpiComm&                                comm,
     const auto       num_domains  = mesh.getNDomains();
     const auto       boundary_ids = mesh.getBoundaryIdsCopy();
     auto             descr_ints   = util::ArrayOwner< size_t >(num_domains + boundary_ids.size() + glob_params);
-    descr_ints[0]                 = mesh.getOwnedNodes().size();
-    descr_ints[1]                 = descr_ints[0] ? mesh.getOwnedNodes().front() : 0uz;
+    descr_ints[0]                 = mesh.getNodeOwnership().owned().size();
+    descr_ints[1]                 = descr_ints[0] ? mesh.getNodeOwnership().owned().front() : 0uz;
     descr_ints[2]                 = num_domains;
     const auto write_iter = std::ranges::copy(mesh.getDomainIds(), std::next(descr_ints.begin(), glob_params)).out;
     std::ranges::copy(boundary_ids, write_iter);
@@ -217,11 +220,11 @@ auto receiveMesh(const MpiComm& comm, int src_rank, util::TypePack< mesh::MeshPa
     return receiveMesh< orders... >(comm, src_rank);
 }
 
-template < typename MeshGenerator, ProblemDef problem_def = EmptyProblemDef{} >
-auto distributeMesh(const MpiComm&                       comm,
-                    MeshGenerator&&                      mesh_generator,
-                    util::ConstexprValue< problem_def >  probdef_ctwrpr = {},
-                    [[maybe_unused]] const MeshDistOpts& opts           = {})
+template < typename MeshGenerator, size_t max_dofs_per_node = 0 >
+auto distributeMesh(const MpiComm&                                comm,
+                    MeshGenerator&&                               mesh_generator,
+                    const ProblemDefinition< max_dofs_per_node >& problem_def = {},
+                    const MeshDistOpts&                           opts        = {})
 {
     L3STER_PROFILE_FUNCTION;
     using partition_t = std::remove_cvref_t< decltype(std::invoke(mesh_generator)) >;
@@ -230,9 +233,9 @@ auto distributeMesh(const MpiComm&                       comm,
 
     const auto node_throughputs = comm::gatherNodeThroughputs(comm);
     const auto mesh             = comm.getRank() == 0 ? std::invoke(mesh_generator) : partition_t{};
-    auto       mesh_parted = comm.getRank() == 0 ? partitionMesh(mesh, comm.getSize(), node_throughputs, probdef_ctwrpr)
+    auto       mesh_parted = comm.getRank() == 0 ? partitionMesh(mesh, comm.getSize(), node_throughputs, problem_def)
                                                  : util::ArrayOwner< partition_t >{};
-    mesh_parted            = detail::permuteMesh(comm, std::move(mesh_parted), probdef_ctwrpr, opts);
+    mesh_parted            = detail::permuteMesh(comm, std::move(mesh_parted), problem_def, opts);
     if (comm.getRank() == 0)
     {
         auto reqs = std::vector< MpiComm::Request >{};
@@ -247,13 +250,11 @@ auto distributeMesh(const MpiComm&                       comm,
 }
 } // namespace comm
 
-template < el_o_t                                     order,
-           GeneratorFor_c< mesh::MeshPartition< 1 > > Generator,
-           ProblemDef                                 problem_def = EmptyProblemDef{} >
-auto generateAndDistributeMesh(const MpiComm&                      comm,
-                               Generator&&                         mesh_generator,
-                               util::ConstexprValue< order >       order_ctwrpr   = {},
-                               util::ConstexprValue< problem_def > probdef_ctwrpr = {},
+template < el_o_t order, GeneratorFor_c< mesh::MeshPartition< 1 > > Generator, size_t max_dofs_per_node = 0 >
+auto generateAndDistributeMesh(const MpiComm&                                comm,
+                               Generator&&                                   mesh_generator,
+                               util::ConstexprValue< order >                 order_ctwrpr = {},
+                               const ProblemDefinition< max_dofs_per_node >& problem_def  = {},
                                const MeshDistOpts& opts = {}) -> std::shared_ptr< mesh::MeshPartition< order > >
 {
     const auto converted_mesh_generator = [&] {
@@ -263,22 +264,48 @@ auto generateAndDistributeMesh(const MpiComm&                      comm,
         else
             return convertMeshToOrder< order >(generated_mesh);
     };
-    return comm::distributeMesh(comm, converted_mesh_generator, probdef_ctwrpr, opts);
+    return comm::distributeMesh(comm, converted_mesh_generator, problem_def, opts);
 }
 
-template < el_o_t order, mesh::MeshFormat mesh_format, ProblemDef problem_def = EmptyProblemDef{} >
-auto readAndDistributeMesh(const MpiComm&                      comm,
-                           std::string_view                    mesh_file,
-                           mesh::MeshFormatTag< mesh_format >  format_tag,
-                           const util::ArrayOwner< d_id_t >&   boundaries,
-                           util::ConstexprValue< order >       order_ctwrpr   = {},
-                           util::ConstexprValue< problem_def > probdef_ctwrpr = {},
+template < el_o_t order, mesh::MeshFormat mesh_format, size_t max_dofs_per_node = 0 >
+auto readAndDistributeMesh(const MpiComm&                                comm,
+                           std::string_view                              mesh_file,
+                           mesh::MeshFormatTag< mesh_format >            format_tag,
+                           const util::ArrayOwner< d_id_t >&             boundaries,
+                           util::ConstexprValue< order >                 order_ctwrpr = {},
+                           const ProblemDefinition< max_dofs_per_node >& problem_def  = {},
                            const MeshDistOpts& opts = {}) -> std::shared_ptr< mesh::MeshPartition< order > >
 {
     const auto read_generator = [&] {
         return readMesh(mesh_file, boundaries, format_tag);
     };
-    return generateAndDistributeMesh(comm, read_generator, order_ctwrpr, probdef_ctwrpr, opts);
+    return generateAndDistributeMesh(comm, read_generator, order_ctwrpr, problem_def, opts);
+}
+
+template < el_o_t order, GeneratorFor_c< mesh::MeshPartition< 1 > > Generator, ProblemDef problem_def >
+[[deprecated]] auto generateAndDistributeMesh(const MpiComm&                comm,
+                                              Generator&&                   mesh_generator,
+                                              util::ConstexprValue< order > order_ctwrpr,
+                                              util::ConstexprValue< problem_def >,
+                                              const MeshDistOpts& opts = {})
+    -> std::shared_ptr< mesh::MeshPartition< order > >
+{
+    const auto prob_def = detail::convertToRuntime(problem_def);
+    return generateAndDistributeMesh(comm, std::forward< Generator >(mesh_generator), order_ctwrpr, prob_def, opts);
+}
+
+template < el_o_t order, mesh::MeshFormat mesh_format, ProblemDef problem_def >
+[[deprecated]] auto readAndDistributeMesh(const MpiComm&                     comm,
+                                          std::string_view                   mesh_file,
+                                          mesh::MeshFormatTag< mesh_format > format_tag,
+                                          const util::ArrayOwner< d_id_t >&  boundaries,
+                                          util::ConstexprValue< order >      order_ctwrpr,
+                                          util::ConstexprValue< problem_def >,
+                                          const MeshDistOpts& opts = {})
+    -> std::shared_ptr< mesh::MeshPartition< order > >
+{
+    const auto prob_def = detail::convertToRuntime(problem_def);
+    return readAndDistributeMesh(comm, mesh_file, format_tag, boundaries, order_ctwrpr, prob_def, opts);
 }
 } // namespace lstr
 #endif // L3STER_COMM_DISTRIBUTEMESH_HPP

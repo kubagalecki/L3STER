@@ -22,40 +22,38 @@ inline auto convertPartWeights(util::ArrayOwner< real_t > wgts) -> util::ArrayOw
     return wgts;
 }
 
-template < el_o_t... orders, ProblemDef problem_def >
-auto computeNodeWeights(const MeshPartition< orders... >& mesh, util::ConstexprValue< problem_def > probdef_ctwrpr)
-    -> util::ArrayOwner< idx_t >
+template < el_o_t... orders, size_t max_dofs_per_node >
+auto computeNodeWeights(const MeshPartition< orders... >&             mesh,
+                        const ProblemDefinition< max_dofs_per_node >& problem_def) -> util::ArrayOwner< idx_t >
 {
-    if constexpr (problem_def.n_domains == 0)
+    if (problem_def.empty())
         return {};
 
-    constexpr auto n_fields      = problem_def.n_fields;
-    auto           node_dof_inds = util::DynamicBitset{problem_def.n_fields * mesh.getNNodes()};
-    util::forConstexpr(
-        [&]< DomainDef< n_fields > dom_def >(util::ConstexprValue< dom_def >) {
-            constexpr auto dom_dofs = util::getTrueInds< dom_def.active_fields >();
-            mesh.visit(
-                [&](const auto& element) {
-                    for (auto node : element.getNodes())
-                    {
-                        const auto begin_ind      = node * problem_def.n_fields;
-                        const auto end_ind        = begin_ind + problem_def.n_fields;
-                        auto       node_dofs_view = node_dof_inds.getSubView(begin_ind, end_ind);
-                        for (auto dof : dom_dofs)
-                            node_dofs_view.set(dof);
-                    }
-                },
-                dom_def.domain);
-        },
-        probdef_ctwrpr);
-
+    auto node_dof_inds = util::DynamicBitset{max_dofs_per_node * mesh.getNNodes()};
+    for (const auto& [domains, dof_bmp] : problem_def)
+    {
+        const auto dom_dofs   = util::getTrueInds(dof_bmp);
+        const auto do_element = [&](const auto& element) {
+            for (auto node : element.getNodes())
+            {
+                const auto begin_ind      = node * max_dofs_per_node;
+                const auto end_ind        = begin_ind + max_dofs_per_node;
+                auto       node_dofs_view = node_dof_inds.getSubView(begin_ind, end_ind);
+                for (auto dof : dom_dofs)
+                    node_dofs_view.set(dof);
+            }
+        };
+        mesh.visit(do_element, domains);
+    }
     auto       retval       = util::ArrayOwner< idx_t >(mesh.getNNodes());
     const auto get_num_dofs = [&](auto node) {
-        const auto node_dofs = node_dof_inds.getSubView(node * problem_def.n_fields, (node + 1) * problem_def.n_fields);
+        const auto node_dofs = node_dof_inds.getSubView(node * max_dofs_per_node, (node + 1) * max_dofs_per_node);
         return node_dofs.count();
     };
-    std::ranges::transform(mesh.getOwnedNodes(), retval.begin(), get_num_dofs);
-    std::ranges::transform(mesh.getGhostNodes(), std::next(retval.begin(), mesh.getOwnedNodes().size()), get_num_dofs);
+    std::ranges::transform(mesh.getNodeOwnership().owned(), retval.begin(), get_num_dofs);
+    std::ranges::transform(mesh.getNodeOwnership().shared(),
+                           std::next(retval.begin(), mesh.getNodeOwnership().owned().size()),
+                           get_num_dofs);
     return retval;
 }
 
@@ -458,16 +456,16 @@ auto partitionMeshImpl(const MeshPartition< orders... >& mesh,
 }
 } // namespace detail
 
-template < el_o_t... orders, ProblemDef problem_def = EmptyProblemDef{} >
-auto partitionMesh(const MeshPartition< orders... >&   mesh,
-                   idx_t                               n_parts,
-                   util::ArrayOwner< real_t >          part_weights   = {},
-                   util::ConstexprValue< problem_def > probdef_ctwrpr = {})
+template < el_o_t... orders, size_t max_dofs_per_node = 0 >
+auto partitionMesh(const MeshPartition< orders... >&             mesh,
+                   idx_t                                         n_parts,
+                   util::ArrayOwner< real_t >                    part_weights = {},
+                   const ProblemDefinition< max_dofs_per_node >& problem_def  = {})
     -> util::ArrayOwner< MeshPartition< orders... > >
 {
     L3STER_PROFILE_FUNCTION;
-    util::throwingAssert(mesh.getGhostNodes().empty() and
-                             mesh.getOwnedNodes().back() == mesh.getOwnedNodes().size() - 1,
+    util::throwingAssert(mesh.getNodeOwnership().shared().empty() and
+                             mesh.getNodeOwnership().owned().back() == mesh.getNodeOwnership().owned().size() - 1,
                          "You cannot partition a mesh which has already been partitioned");
     util::throwingAssert(n_parts >= 1, "The number of resulting partitions cannot be smaller than 1");
 
@@ -479,7 +477,7 @@ auto partitionMesh(const MeshPartition< orders... >&   mesh,
     }
 
     const auto boundary_ids = mesh.getBoundaryIdsCopy();
-    auto       node_wgts    = detail::computeNodeWeights(mesh, probdef_ctwrpr);
+    auto       node_wgts    = detail::computeNodeWeights(mesh, problem_def);
     return detail::partitionMeshImpl(mesh, n_parts, boundary_ids, std::move(part_weights), std::move(node_wgts));
 }
 } // namespace lstr::mesh

@@ -11,36 +11,49 @@
 
 namespace lstr::mesh
 {
+template < ElementType ET, el_o_t EO >
+class Element;
+
 namespace detail
 {
 template < el_o_t... orders >
-    requires(sizeof...(orders) > 0)
-inline constexpr auto element_orders_array = util::sortedUniqueElements< std::array{orders...} >();
-}
-template < template < typename... > typename T, template < ElementType, el_o_t > typename U, el_o_t... orders >
-using parametrize_type_over_element_types_and_orders_t =
-    util::cart_prod_t< U, T, element_types, detail::element_orders_array< orders... > >;
+using ElementTypesPack =
+    util::CartesianProductApply< util::ValuePack, util::TypePack, element_types, std::array{orders...} >;
+
+template < template < typename... > typename Outer, template < ElementType, el_o_t > typename Inner, el_o_t... orders >
+class CalculateAppliedType
+{
+    template < typename >
+    struct SubInner;
+    template < typename T >
+    struct SubOuter;
+
+    template < mesh::ElementType ET, el_o_t EO >
+    struct SubInner< util::ValuePack< ET, EO > >
+    {
+        using type = Inner< ET, EO >;
+    };
+    template < typename... Ts >
+    struct SubOuter< util::TypePack< Ts... > >
+    {
+        using type = Outer< typename SubInner< Ts >::type... >;
+    };
+
+public:
+    using type = SubOuter< ElementTypesPack< orders... > >::type;
+};
+} // namespace detail
+
+template < template < typename... > typename Outer, template < ElementType, el_o_t > typename Inner, el_o_t... orders >
+using parametrize_type_over_element_types_and_orders_t = detail::CalculateAppliedType< Outer, Inner, orders... >::type;
 
 template < ElementType ET, el_o_t EO >
-class Element;
-template < ElementType ET, el_o_t EO >
-using element_ptr_t = Element< ET, EO >*;
-template < ElementType ET, el_o_t EO >
 using element_cptr_t = const Element< ET, EO >*;
-template < el_o_t... orders >
-using element_ptr_variant_t =
-    parametrize_type_over_element_types_and_orders_t< std::variant, element_ptr_t, orders... >;
 template < el_o_t... orders >
 using element_cptr_variant_t =
     parametrize_type_over_element_types_and_orders_t< std::variant, element_cptr_t, orders... >;
 template < ElementType ET, el_o_t EO >
 class BoundaryElementView;
-
-template < ElementType ET, el_o_t EO >
-using type_order_set = util::ValuePack< ET, EO >;
-template < el_o_t... orders >
-using type_order_combinations =
-    parametrize_type_over_element_types_and_orders_t< util::TypePack, type_order_set, orders... >;
 
 template < bool is_const, ElementType ET, el_o_t EO >
 using cond_const_elref_t = std::conditional_t< is_const, const Element< ET, EO >&, Element< ET, EO >& >;

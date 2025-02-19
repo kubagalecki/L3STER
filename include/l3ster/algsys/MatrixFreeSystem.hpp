@@ -43,11 +43,10 @@ public:
         const MatrixFreeSystem* m_system;
     };
 
-    template < ProblemDef problem_def >
-    MatrixFreeSystem(std::shared_ptr< const MpiComm >                          comm,
-                     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-                     util::ConstexprValue< problem_def >                       probdef_ctwrpr,
-                     const BCDefinition< problem_def.n_fields >&               bc_def);
+    inline MatrixFreeSystem(std::shared_ptr< const MpiComm >                          comm,
+                            std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
+                            const ProblemDefinition< max_dofs_per_node >&             problem_def,
+                            const BCDefinition< max_dofs_per_node >&                  bc_def);
 
     [[nodiscard]] inline auto getOperator() const -> Teuchos::RCP< const tpetra_operator_t >;
     [[nodiscard]] inline auto getRhs() const -> Teuchos::RCP< const tpetra_multivector_t >;
@@ -70,13 +69,15 @@ public:
     template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setDirichletBCValues(const Kernel&                                                 kernel,
                               const util::ArrayOwner< d_id_t >&                             domain_ids,
-                              const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                              const post::FieldAccess< n_fields >&                          field_access = {},
-                              val_t                                                         time         = 0.);
+                              const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds =
+                                  util::makeIotaArray< dofind_t, Kernel::parameters.n_equations >(),
+                              const post::FieldAccess< n_fields >& field_access = {},
+                              val_t                                time         = 0.);
     template < size_t n_vals, std::integral dofind_t = size_t >
-    void setDirichletBCValues(const std::array< val_t, n_vals >&    values,
-                              const util::ArrayOwner< d_id_t >&     domain_ids,
-                              const std::array< dofind_t, n_vals >& dof_inds)
+    void
+    setDirichletBCValues(const std::array< val_t, n_vals >&    values,
+                         const util::ArrayOwner< d_id_t >&     domain_ids,
+                         const std::array< dofind_t, n_vals >& dof_inds = util::makeIotaArray< dofind_t, n_vals >())
         requires(n_rhs == 1);
 
     template < solvers::IterativeSolver_c Solver >
@@ -86,7 +87,7 @@ public:
                                SolutionManager&                  sol_man,
                                const util::ArrayOwner< size_t >& sol_man_inds);
 
-    inline void describe(std::ostream& out = std::cout) const;
+    inline void describe(std::FILE* out_stream = stdout) const;
 
     template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setValues(const Teuchos::RCP< tpetra_multivector_t >&                   vector,
@@ -206,8 +207,8 @@ private:
     Teuchos::RCP< tpetra_multivector_t >                      m_rhs, m_solution;
     view_t                                                    m_rhs_view;
     util::ArrayOwner< val_t >                                 m_diagonal;
-    std::unique_ptr< comm::Import< val_t, local_dof_t > >     m_import;
-    std::unique_ptr< comm::Export< val_t, local_dof_t > >     m_export;
+    std::unique_ptr< comm::Import< val_t > >                  m_import;
+    std::unique_ptr< comm::Export< val_t > >                  m_export;
     view_t                                                    m_import_shared_buf, m_export_shared_buf;
     std::optional< bcs::LocalDirichletBC >                    m_dirichlet_bc;
     view_t                                                    m_dirichlet_values;
@@ -575,7 +576,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::assembleProblem(
 }
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
-void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::describe(std::ostream& out) const
+void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::describe(std::FILE* out_stream) const
 {
     auto local_sizes_min = std::array{m_operator_map->getLocalNumElements(), m_diagonal.size()};
     auto local_sizes_max = local_sizes_min;
@@ -585,25 +586,26 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::describe(std::ostr
     m_comm->reduceInPlace(sizes_sum, 0, MPI_SUM);
     if (m_comm->getRank() == 0)
     {
-        out << std::format("The algebraic system has a total number of {} DOFs\n"
-                           "Distribution among {} MPI rank(s):\n"
-                           "{:<16}|{:^17}|{:^17}|{:^17}|\n"
-                           "{:<16}|{:^17}|{:^17}|{:^17}|\n"
-                           "{:<16}|{:^17}|{:^17}|{:^17}|\n\n",
-                           sizes_sum[0],
-                           m_comm->getSize(),
-                           "",
-                           "* MIN *",
-                           "* MAX *",
-                           "* TOTAL *",
-                           "OWNED",
-                           local_sizes_min[0],
-                           local_sizes_max[0],
-                           sizes_sum[0],
-                           "OWNED + SHARED",
-                           local_sizes_min[1],
-                           local_sizes_max[1],
-                           sizes_sum[1]);
+        std::println(out_stream,
+                     "The algebraic system has a total number of {} DOFs\n"
+                     "Distribution among {} MPI rank(s):\n"
+                     "{:<16}|{:^17}|{:^17}|{:^17}|\n"
+                     "{:<16}|{:^17}|{:^17}|{:^17}|\n"
+                     "{:<16}|{:^17}|{:^17}|{:^17}|\n",
+                     sizes_sum[0],
+                     m_comm->getSize(),
+                     "",
+                     "* MIN *",
+                     "* MAX *",
+                     "* TOTAL *",
+                     "OWNED",
+                     local_sizes_min[0],
+                     local_sizes_max[0],
+                     sizes_sum[0],
+                     "OWNED + SHARED",
+                     local_sizes_min[1],
+                     local_sizes_max[1],
+                     sizes_sum[1]);
     }
 }
 
@@ -667,7 +669,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::computeDiagAndRhs(
     std::ranges::fill(m_diagonal, 0.);
     zeroExportBuf();
 
-    auto diag_export = comm::Export< val_t, local_dof_t >{m_export->getContext(), 1};
+    auto diag_export = comm::Export< val_t >{m_export->getContext(), 1};
     diag_export.setOwned(m_diagonal, m_diagonal.size());
     diag_export.setShared(std::span{m_diagonal}.subspan(num_owned), num_shared);
     m_export->setOwned(m_rhs_view);
@@ -711,50 +713,31 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::getSolution() cons
 
 namespace detail
 {
-template < CondensationPolicy CP, el_o_t... orders, size_t max_dofs_per_node >
+template < el_o_t... orders, size_t max_dofs_per_node >
 auto splitBorderAndInterior(const mesh::MeshPartition< orders... >&              mesh,
-                            const dofs::NodeToGlobalDofMap< max_dofs_per_node >& node2dofs,
-                            CondensationPolicyTag< CP > = {})
+                            const dofs::NodeToGlobalDofMap< max_dofs_per_node >& node2dofs)
 {
     const auto& ownership   = node2dofs.ownership();
     const auto  is_interior = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
-        auto valid_dofs = dofs::getPrimaryNodesView< CP >(element) | std::views::transform(std::cref(node2dofs)) |
-                          std::views::join | std::views::filter([](auto dof) { return dof != invalid_global_dof; });
-        return std::ranges::none_of(valid_dofs, [&](auto dof) { return ownership.isOwned(dof); });
+        auto valid_dofs = element.getNodes() | std::views::transform(std::cref(node2dofs)) | std::views::join |
+                          std::views::filter([](auto dof) { return dof != invalid_global_dof; });
+        return std::ranges::all_of(valid_dofs, [&](auto dof) { return ownership.isOwned(dof); });
     };
     return mesh::splitMeshPartition(mesh, is_interior);
-}
-
-inline auto makeOperatorMap(const MpiComm& comm, std::span< const global_dof_t > dofs) -> Teuchos::RCP< tpetra_map_t >
-{
-    auto       teuchos_comm           = util::makeTeuchosRCP< const Teuchos::MpiComm< int > >(comm.get());
-    const auto auto_compute_global_sz = Teuchos::OrdinalTraits< Tpetra::global_size_t >::invalid();
-    const auto dofs_view              = Teuchos::ArrayView< const global_dof_t >(dofs.data(), std::ranges::ssize(dofs));
-    return util::makeTeuchosRCP< tpetra_map_t >(auto_compute_global_sz, dofs_view, 0, teuchos_comm);
-}
-
-inline auto makeOperatorMap(Teuchos::RCP< const Teuchos::Comm< int > > teuchos_comm,
-                            std::span< const global_dof_t >            dofs) -> Teuchos::RCP< tpetra_map_t >
-{
-    const auto auto_compute_global_sz = Teuchos::OrdinalTraits< Tpetra::global_size_t >::invalid();
-    const auto dofs_view              = Teuchos::ArrayView< const global_dof_t >(dofs.data(), std::ranges::ssize(dofs));
-    return util::makeTeuchosRCP< tpetra_map_t >(auto_compute_global_sz, dofs_view, 0, std::move(teuchos_comm));
 }
 } // namespace detail
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
-template < ProblemDef problem_def >
 MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::MatrixFreeSystem(
     std::shared_ptr< const MpiComm >                          comm,
     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-    util::ConstexprValue< problem_def >                       probdef_ctwrpr,
-    const BCDefinition< problem_def.n_fields >&               bc_def)
+    const ProblemDefinition< max_dofs_per_node >&             problem_def,
+    const BCDefinition< max_dofs_per_node >&                  bc_def)
     : m_comm{std::move(comm)}, m_mesh{std::move(mesh)}, m_state{State::OpenForAssembly}
 {
-    constexpr auto cp_tag         = no_condensation_tag;
-    const auto     periodic_bc    = bcs::PeriodicBC{bc_def.getPeriodic(), *m_mesh, *m_comm};
-    const auto     node2dof       = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, probdef_ctwrpr, periodic_bc, cp_tag};
-    const auto [interior, border] = detail::splitBorderAndInterior(*m_mesh, node2dof, cp_tag);
+    const auto periodic_bc = bcs::PeriodicBC{bc_def.getPeriodic(), *m_mesh, *m_comm};
+    const auto node2dof    = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, problem_def, periodic_bc, no_condensation_tag};
+    const auto [interior, border] = detail::splitBorderAndInterior(*m_mesh, node2dof);
     m_interior_mesh               = mesh::LocalMeshView{interior, *m_mesh};
     m_border_mesh                 = mesh::LocalMeshView{border, *m_mesh};
     const auto& dof_ownership     = node2dof.ownership();
@@ -766,9 +749,9 @@ MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::MatrixFreeSystem(
     m_solution                    = util::makeTeuchosRCP< tpetra_multivector_t >(m_operator_map, n_rhs);
     m_rhs_view                    = m_rhs->getLocalViewHost(Tpetra::Access::ReadWrite);
     m_diagonal                    = util::ArrayOwner< val_t >(dof_ownership.localSize());
-    const auto context            = dof_ownership.makeCommContext(*m_comm);
-    m_import                      = std::make_unique< comm::Import< val_t, local_dof_t > >(context, n_rhs);
-    m_export                      = std::make_unique< comm::Export< val_t, local_dof_t > >(context, n_rhs);
+    const auto context            = std::make_shared< comm::ImportExportContext >(*m_comm, dof_ownership);
+    m_import                      = std::make_unique< comm::Import< val_t > >(context, n_rhs);
+    m_export                      = std::make_unique< comm::Export< val_t > >(context, n_rhs);
     m_import_shared_buf           = view_t("import buf", dof_ownership.shared().size(), n_rhs);
     m_export_shared_buf           = view_t("export buf", dof_ownership.shared().size(), n_rhs);
     initKernelMaps();

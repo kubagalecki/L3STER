@@ -20,22 +20,21 @@ void test()
 {
     const MpiComm comm{MPI_COMM_WORLD};
 
-    constexpr auto   boundary       = 3;
-    constexpr d_id_t domain_id      = 0;
-    constexpr auto   problem_def    = ProblemDef{defineDomain< 1 >(domain_id, 0)};
-    constexpr auto   probdef_ctwrpr = util::ConstexprValue< problem_def >{};
-    auto             dirichlet_def  = DirichletBCDefinition< 1 >{};
+    constexpr auto   boundary      = 3;
+    constexpr d_id_t domain_id     = 0;
+    const auto       problem_def   = ProblemDefinition< 1 >{{domain_id}};
+    auto             dirichlet_def = DirichletBCDefinition< 1 >{};
     dirichlet_def.defineDirichletBoundary({boundary}, {0});
 
     constexpr auto node_dist    = std::array{0., 1., 2., 3., 4., 5.};
     auto           my_partition = comm::distributeMesh(comm, [&] { return makeCubeMesh(node_dist); });
 
     constexpr auto cp_tag              = CondensationPolicyTag< CP >{};
-    const auto     global_node_dof_map = NodeToGlobalDofMap{comm, *my_partition, probdef_ctwrpr, {}, cp_tag};
-    const auto     sparsity_graph = makeSparsityGraph(comm, *my_partition, global_node_dof_map, probdef_ctwrpr, cp_tag);
+    const auto     global_node_dof_map = NodeToGlobalDofMap{comm, *my_partition, problem_def, {}, cp_tag};
+    const auto     sparsity_graph = makeSparsityGraph(comm, *my_partition, global_node_dof_map, problem_def, cp_tag);
 
     const auto [owned_bcdofs, shared_bcdofs] =
-        getDirichletDofs(*my_partition, sparsity_graph, global_node_dof_map, probdef_ctwrpr, dirichlet_def);
+        getDirichletDofs(*my_partition, sparsity_graph, global_node_dof_map, dirichlet_def);
     const auto dirichlet_bc = DirichletBCAlgebraic{sparsity_graph, owned_bcdofs, shared_bcdofs};
 
     auto matrix         = util::makeTeuchosRCP< tpetra_fecrsmatrix_t >(sparsity_graph);
@@ -109,7 +108,7 @@ void test()
     for (int i = 0; i < data_notransp.extent_int(0); ++i)
         REQUIRE(approx(data_notransp[i], data_transp[i]));
 
-    auto solver = solvers::KLU2{};
+    auto solver = Klu2{};
     solver.solve(matrix, rhs_vector, result_vector1);
 
     const auto solution_vals =

@@ -20,13 +20,12 @@ public:
     static constexpr bool isValid(dof_t dof) { return dof != invalid_global_dof; }
 
     NodeToGlobalDofMap() = default;
-    template < CondensationPolicy CP, el_o_t... orders, ProblemDef problem_def >
-    NodeToGlobalDofMap(const MpiComm&                          comm,
-                       const mesh::MeshPartition< orders... >& m_mesh,
-                       util::ConstexprValue< problem_def >     problemdef_ctwrpr,
-                       const bcs::PeriodicBC< dofs_per_node >& periodic_bc = {},
-                       CondensationPolicyTag< CP >             cp          = {})
-        requires(problem_def.n_fields == dofs_per_node);
+    template < CondensationPolicy CP, el_o_t... orders >
+    NodeToGlobalDofMap(const MpiComm&                            comm,
+                       const mesh::MeshPartition< orders... >&   m_mesh,
+                       const ProblemDefinition< dofs_per_node >& problem_def,
+                       const bcs::PeriodicBC< dofs_per_node >&   periodic_bc = {},
+                       CondensationPolicyTag< CP >               cp          = {});
 
     [[nodiscard]] auto operator()(n_id_t node) const -> const payload_t& { return m_map.at(node); }
     [[nodiscard]] auto map() const -> const auto& { return m_map; }
@@ -43,15 +42,15 @@ private:
     robin_hood::unordered_flat_map< n_id_t, payload_t > m_map;
     util::SegmentedOwnership< global_dof_t >            m_dof_ownership;
 };
-template < CondensationPolicy CP, el_o_t... orders, ProblemDef problem_def >
+template < CondensationPolicy CP, el_o_t... orders, size_t dofs_per_node >
 NodeToGlobalDofMap(const MpiComm&,
                    const mesh::MeshPartition< orders... >&,
-                   util::ConstexprValue< problem_def >,
-                   const bcs::PeriodicBC< problem_def.n_fields >&,
-                   CondensationPolicyTag< CP >) -> NodeToGlobalDofMap< problem_def.n_fields >;
-template < el_o_t... orders, ProblemDef problem_def >
-NodeToGlobalDofMap(const MpiComm&, const mesh::MeshPartition< orders... >&, util::ConstexprValue< problem_def >)
-    -> NodeToGlobalDofMap< problem_def.n_fields >;
+                   const ProblemDefinition< dofs_per_node >,
+                   const bcs::PeriodicBC< dofs_per_node >&,
+                   CondensationPolicyTag< CP >) -> NodeToGlobalDofMap< dofs_per_node >;
+template < el_o_t... orders, size_t dofs_per_node >
+NodeToGlobalDofMap(const MpiComm&, const mesh::MeshPartition< orders... >&, const ProblemDefinition< dofs_per_node >)
+    -> NodeToGlobalDofMap< dofs_per_node >;
 
 template < size_t dofs_per_node, size_t num_maps >
 class NodeToLocalDofMap
@@ -156,7 +155,7 @@ LocalDofMap< max_dofs_per_node >::LocalDofMap(const NodeToGlobalDofMap< max_dofs
     };
     for (const auto& [node_gid, gids] : global_map.map())
     {
-        const auto node_lid = mesh.getLocalNodeIndex(node_gid);
+        const auto node_lid = mesh.getNodeOwnership().getLocalIndex(node_gid);
         auto       lids     = payload_t{};
         std::ranges::transform(gids, lids.begin(), translate_dof);
         m_map.at(node_lid) = lids;
@@ -178,15 +177,15 @@ auto makeNodeOwnership(const mesh::MeshPartition< orders... >&     mesh,
     return {owned_begin, mesh_ownership.owned().size(), shared};
 }
 
-template < CondensationPolicy CP, el_o_t... orders, size_t num_domains, size_t max_dofs_per_node >
-auto makeLocalDofBmp(const mesh::MeshPartition< orders... >&             mesh,
-                     const ProblemDef< num_domains, max_dofs_per_node >& problem_def,
-                     const util::SegmentedOwnership< n_id_t >&           node_ownership,
-                     const bcs::PeriodicBC< max_dofs_per_node >&         periodic_bc,
+template < CondensationPolicy CP, el_o_t... orders, size_t max_dofs_per_node >
+auto makeLocalDofBmp(const mesh::MeshPartition< orders... >&       mesh,
+                     const ProblemDefinition< max_dofs_per_node >& problem_def,
+                     const util::SegmentedOwnership< n_id_t >&     node_ownership,
+                     const bcs::PeriodicBC< max_dofs_per_node >&   periodic_bc,
                      CondensationPolicyTag< CP > = {}) -> Kokkos::View< char**, Kokkos::LayoutLeft >
 {
     auto retval = Kokkos::View< char**, Kokkos::LayoutLeft >{"DOF bmp", node_ownership.localSize(), max_dofs_per_node};
-    for (const auto& [domain, active_bmp] : problem_def)
+    for (const auto& [domains, active_bmp] : problem_def)
     {
         const auto active_inds = util::getTrueInds(active_bmp);
         const auto mark_node   = [&](n_id_t node) {
@@ -203,20 +202,20 @@ auto makeLocalDofBmp(const mesh::MeshPartition< orders... >&             mesh,
             for (auto n : getPrimaryNodesView< CP >(el))
                 mark_node(n);
         };
-        mesh.visit(mark_el, domain, std::execution::par);
+        mesh.visit(mark_el, domains, std::execution::par);
     }
     return retval;
 }
 
-inline void exportDofBmp(const MpiComm&                                              comm,
-                         const std::shared_ptr< const comm::ImportExportContext<> >& context,
-                         const Kokkos::View< char**, Kokkos::LayoutLeft >&           dof_bmp,
-                         size_t                                                      num_owned_nodes)
+inline void exportDofBmp(const MpiComm&                                            comm,
+                         const std::shared_ptr< const comm::ImportExportContext >& context,
+                         const Kokkos::View< char**, Kokkos::LayoutLeft >&         dof_bmp,
+                         size_t                                                    num_owned_nodes)
 {
     using namespace std::views;
     const auto num_all       = dof_bmp.extent(0);
     const auto dofs_per_node = dof_bmp.extent(1);
-    auto       exporter      = comm::Export< char, local_dof_t >{context, dofs_per_node};
+    auto       exporter      = comm::Export< char >{context, dofs_per_node};
     const auto shared_range  = std::make_pair(num_owned_nodes, num_all);
     const auto shared_view   = Kokkos::subview(dof_bmp, shared_range, Kokkos::ALL());
     exporter.setOwned(dof_bmp);
@@ -264,14 +263,14 @@ auto computeOwnedDofs(const util::SegmentedOwnership< n_id_t >&               no
     return retval;
 }
 
-inline void communicateSharedDofs(const MpiComm&                                              comm,
-                                  const std::shared_ptr< const comm::ImportExportContext<> >& context,
-                                  const Kokkos::View< global_dof_t**, Kokkos::LayoutLeft >&   dofs,
-                                  size_t                                                      num_owned_nodes)
+inline void communicateSharedDofs(const MpiComm&                                            comm,
+                                  const std::shared_ptr< const comm::ImportExportContext >& context,
+                                  const Kokkos::View< global_dof_t**, Kokkos::LayoutLeft >& dofs,
+                                  size_t                                                    num_owned_nodes)
 {
     const auto num_all       = dofs.extent(0);
     const auto dofs_per_node = dofs.extent(1);
-    auto       importer      = comm::Import< global_dof_t, local_dof_t >{context, dofs_per_node};
+    auto       importer      = comm::Import< global_dof_t >{context, dofs_per_node};
     const auto shared_range  = std::make_pair(num_owned_nodes, num_all);
     const auto shared_view   = Kokkos::subview(dofs, shared_range, Kokkos::ALL());
     importer.setOwned(dofs);
@@ -334,19 +333,18 @@ void NodeToGlobalDofMap< dofs_per_node >::initFromDofs(
 }
 
 template < size_t dofs_per_node >
-template < CondensationPolicy CP, el_o_t... orders, ProblemDef problem_def >
-NodeToGlobalDofMap< dofs_per_node >::NodeToGlobalDofMap(const MpiComm&                          comm,
-                                                        const mesh::MeshPartition< orders... >& mesh,
-                                                        util::ConstexprValue< problem_def >,
-                                                        const bcs::PeriodicBC< dofs_per_node >& periodic_bc,
-                                                        CondensationPolicyTag< CP >             cp)
-    requires(problem_def.n_fields == dofs_per_node)
+template < CondensationPolicy CP, el_o_t... orders >
+NodeToGlobalDofMap< dofs_per_node >::NodeToGlobalDofMap(const MpiComm&                            comm,
+                                                        const mesh::MeshPartition< orders... >&   mesh,
+                                                        const ProblemDefinition< dofs_per_node >& problem_def,
+                                                        const bcs::PeriodicBC< dofs_per_node >&   periodic_bc,
+                                                        CondensationPolicyTag< CP >               cp)
 {
     L3STER_PROFILE_FUNCTION;
     const auto node_ownership  = detail::makeNodeOwnership(mesh, periodic_bc);
     const auto num_owned_nodes = node_ownership.owned().size();
     const auto dof_bmp         = detail::makeLocalDofBmp(mesh, problem_def, node_ownership, periodic_bc, cp);
-    const auto context         = node_ownership.makeCommContext(comm);
+    const auto context         = std::make_shared< comm::ImportExportContext >(comm, node_ownership);
     detail::exportDofBmp(comm, context, dof_bmp, num_owned_nodes);
     const auto num_owned_dofs = detail::computeNumOwnedDofs(node_ownership, periodic_bc, dof_bmp);
     const auto base_dof       = detail::computeBaseDof(comm, num_owned_dofs);

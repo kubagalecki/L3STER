@@ -68,5 +68,16 @@ auto concatRanges(Ranges&&... ranges)
     (write_copy(std::forward< Ranges >(ranges)), ...);
     return retval;
 }
+
+template < typename T, size_t... Ns >
+auto concatArrays(const std::array< T, Ns >&... arrays) -> std::array< T, (Ns + ...) >
+{
+    auto retval      = std::array< T, (Ns + ...) >{};
+    auto write_array = [out = retval.begin()](const auto& a) mutable {
+        out = std::ranges::copy(a, out).out;
+    };
+    (write_array(arrays), ...);
+    return retval;
+}
 } // namespace lstr::util
 #endif // L3STER_UTIL_RANGES_HPP

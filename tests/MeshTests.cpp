@@ -31,8 +31,8 @@ TEST_CASE("2D mesh import", "[mesh]")
     };
     mesh.visit(update_max_node);
     REQUIRE(max_node + 1 == expected_n_nodes);
-    REQUIRE(max_node + 1 == mesh.getOwnedNodes().size());
-    REQUIRE(mesh.getGhostNodes().size() == 0);
+    REQUIRE(max_node + 1 == mesh.getNodeOwnership().owned().size());
+    REQUIRE(mesh.getNodeOwnership().shared().size() == 0);
 
     // BoundaryView
     for (auto bnd_id : boundary_ids)
@@ -49,7 +49,7 @@ TEST_CASE("3D mesh import", "[mesh]")
     constexpr size_t expected_nvertices = 5885;
     constexpr size_t expected_nelements = 5664;
     CHECK(mesh.getNElements() == expected_nelements);
-    CHECK(mesh.getOwnedNodes().size() == expected_nvertices);
+    CHECK(mesh.getNodeOwnership().owned().size() == expected_nvertices);
 
     for (d_id_t id : boundary_ids)
         CHECK_NOTHROW(mesh.getBoundary(id));
@@ -206,14 +206,17 @@ TEST_CASE("Serial mesh partitioning", "[mesh]")
     CHECK(partitions.front().getNElements() == Approx(partitions.back().getNElements()).epsilon(.1));
 
     // Nodes partitioned correctly
-    CHECK(partitions.front().getOwnedNodes().size() + partitions.back().getOwnedNodes().size() == n_nodes);
+    CHECK(partitions.front().getNodeOwnership().owned().size() + partitions.back().getNodeOwnership().owned().size() ==
+          n_nodes);
     std::vector< n_id_t > intersects;
-    std::ranges::set_intersection(
-        partitions.front().getOwnedNodes(), partitions.back().getOwnedNodes(), std::back_inserter(intersects));
+    std::ranges::set_intersection(partitions.front().getNodeOwnership().owned(),
+                                  partitions.back().getNodeOwnership().owned(),
+                                  std::back_inserter(intersects));
     CHECK(intersects.empty());
     intersects.clear();
-    std::ranges::set_intersection(
-        partitions.front().getGhostNodes(), partitions.back().getGhostNodes(), std::back_inserter(intersects));
+    std::ranges::set_intersection(partitions.front().getNodeOwnership().shared(),
+                                  partitions.back().getNodeOwnership().shared(),
+                                  std::back_inserter(intersects));
     CHECK(intersects.empty());
 
     // Boundaries reconstructed correctly
@@ -249,9 +252,10 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
             CHECK(O == 2);
         };
         mesh.visit(validate_elorder);
-        CHECK(mesh.getOwnedNodes().size() == 44745u);
-        CHECK(std::ranges::adjacent_find(mesh.getOwnedNodes(), [](auto n1, auto n2) { return n2 - n1 != 1; }) ==
-              mesh.getOwnedNodes().end());
+        CHECK(mesh.getNodeOwnership().owned().size() == 44745u);
+        CHECK(std::ranges::adjacent_find(mesh.getNodeOwnership().owned(), [](auto n1, auto n2) {
+                  return n2 - n1 != 1;
+              }) == mesh.getNodeOwnership().owned().end());
     }
 
     SECTION("procedurally generated mesh")
@@ -261,7 +265,7 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
         constexpr auto       n_edge_els = dist.size() - 1;
         auto                 mesh1      = makeCubeMesh(dist);
         const auto           n_elements = mesh1.getNElements();
-        const auto           n_nodes_o1 = mesh1.getOwnedNodes().size();
+        const auto           n_nodes_o1 = mesh1.getNodeOwnership().owned().size();
         REQUIRE(n_elements == n_edge_els * n_edge_els * n_edge_els + 6 * n_edge_els * n_edge_els);
         REQUIRE(n_nodes_o1 == dist.size() * dist.size() * dist.size());
 
@@ -269,17 +273,18 @@ TEST_CASE("Mesh conversion to higher order", "[mesh]")
         CHECK(mesh.getNElements() == n_elements);
         const auto expected_edge_nodes = (dist.size() - 1) * order + 1;
         const auto expected_n_nodes    = expected_edge_nodes * expected_edge_nodes * expected_edge_nodes;
-        CHECK(mesh.getOwnedNodes().size() == expected_n_nodes);
-        for (size_t i = 0; i < mesh.getOwnedNodes().size() - 1; ++i)
-            CHECK(mesh.getOwnedNodes()[i] + 1 == mesh.getOwnedNodes()[i + 1]);
+        CHECK(mesh.getNodeOwnership().owned().size() == expected_n_nodes);
+        for (size_t i = 0; i < mesh.getNodeOwnership().owned().size() - 1; ++i)
+            CHECK(mesh.getNodeOwnership().owned()[i] + 1 == mesh.getNodeOwnership().owned()[i + 1]);
     }
 }
 
 template < ElementType ET, el_o_t EO, el_o_t... orders >
-auto getGlobalNodes(const LocalElementView< ET, EO >& el, const MeshPartition< orders... >& m)
+auto getGlobalNodes(const LocalElementView< ET, EO >& el, const MeshPartition< orders... >& mesh)
 {
     auto retval = std::array< n_id_t, Element< ET, EO >::n_nodes >{};
-    std::ranges::transform(el.getLocalNodes(), retval.begin(), [&](n_loc_id_t n) { return m.getGlobalNodeIndex(n); });
+    std::ranges::transform(
+        el.getLocalNodes(), retval.begin(), [&](n_loc_id_t n) { return mesh.getNodeOwnership().getGlobalIndex(n); });
     return retval;
 }
 

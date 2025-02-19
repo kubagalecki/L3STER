@@ -357,7 +357,7 @@ auto makeCrsGraph(From&& from, To&& to, GraphType graph_type = GraphType::Direct
     }
     auto degrees = std::views::iota(VertexType{0}, max_vert + 1) | std::views::transform([&](auto v) {
                        const auto iter = vert_map.find(v);
-                       return iter == vert_map.end() ? size_t{0} : iter->second.size();
+                       return iter == vert_map.end() ? 0uz : iter->second.size();
                    });
     auto retval  = CrsGraph< VertexType >{degrees};
     for (const auto& [v, dests] : vert_map)

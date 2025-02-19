@@ -203,7 +203,7 @@ TEST_CASE("Dynamic bitset", "[util]")
     };
     constexpr auto make_reset_inds = [](size_t size, const std::vector< size_t >& set_inds) {
         std::vector< size_t > retval(size - set_inds.size());
-        std::ranges::set_difference(std::views::iota(size_t{0}, size), set_inds, begin(retval));
+        std::ranges::set_difference(std::views::iota(0uz, size), set_inds, begin(retval));
         return retval;
     };
 
@@ -236,7 +236,7 @@ TEST_CASE("Dynamic bitset", "[util]")
         for (size_t size : sizes)
         {
             bitset.resize(size);
-            for (auto i : std::views::iota(size_t{0}, bitset.size()))
+            for (auto i : std::views::iota(0uz, bitset.size()))
                 bitset.reset(i);
 
             const auto set_inds   = make_set_inds(size);
@@ -252,14 +252,14 @@ TEST_CASE("Dynamic bitset", "[util]")
                 bitset.set(i);
             check_set_correctly();
 
-            for (auto i : std::views::iota(size_t{0}, bitset.size()))
+            for (auto i : std::views::iota(0uz, bitset.size()))
                 bitset.flip(i);
             check_are_set(bitset, reset_inds);
             check_are_reset(bitset, set_inds);
 
             for (auto i : reset_inds)
                 bitset.reset(i);
-            check_are_reset(bitset, std::views::iota(size_t{0}, bitset.size()));
+            check_are_reset(bitset, std::views::iota(0uz, bitset.size()));
             CHECK(bitset.count() == 0);
 
             for (auto i : set_inds)

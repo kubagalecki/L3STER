@@ -3,7 +3,6 @@ include( CTest )
 
 add_executable( Non_MPI_benchmarks BenchmarksMain.cpp
                 ElementBenchmarks.cpp
-                GlobalAssemblyBenchmarks.cpp
                 LocalAssemblyBenchmarks.cpp
                 MeshBenchmarks.cpp
                 UtilBenchmarks.cpp
@@ -28,13 +27,13 @@ function( addMpiBenchmark source name nprocs )
     target_include_directories( ${bench_target} PRIVATE ${CMAKE_CURRENT_BINARY_DIR} )
     target_link_libraries( ${bench_target} L3STER caliper )
     target_compile_options( ${bench_target} PRIVATE "-DL3STER_PROFILE_EXECUTION" )
-    set( bench_env "OMP_PROC_BIND=false;CALI_CONFIG=runtime-report,mem.highwatermark,calc.inclusive" )
+    set( bench_env "OMP_PROC_BIND=false;OMP_WAIT_POLICY=PASSIVE;CALI_CONFIG=runtime-report,mem.highwatermark,calc.inclusive" )
     set( bench_driver mpiexec )
     if ( ${ARGC} EQUAL 4 )
         set( args ${ARGV4} )
     endif ()
     foreach ( np ${nprocs} )
-        set( bench_args "--nooversubscribe;--display-map;--bind-to;socket;--map-by;ppr:1:package;-np;${np};$<TARGET_FILE:${bench_target}>;${args}" )
+        set( bench_args "--nooversubscribe;--display-map;--map-by;package;--bind-to;package;-n;${np};$<TARGET_FILE:${bench_target}>;${args}" )
         set( bench_name ${name}_np_${np} )
         set( bench_dir "${CMAKE_CURRENT_BINARY_DIR}/${bench_name}" )
         file( MAKE_DIRECTORY ${bench_dir} )

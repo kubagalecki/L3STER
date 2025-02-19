@@ -11,7 +11,7 @@
 #include "l3ster/solve/SolverInterface.hpp"
 #include "l3ster/util/GlobalResource.hpp"
 
-#include <format>
+#include <print>
 
 namespace lstr::algsys
 {
@@ -19,11 +19,10 @@ template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t
 class AssembledSystem
 {
 public:
-    template < ProblemDef problem_def >
-    AssembledSystem(std::shared_ptr< const MpiComm >                          comm,
-                    std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-                    util::ConstexprValue< problem_def >                       probdef_ctwrpr,
-                    const BCDefinition< problem_def.n_fields >&               bc_def);
+    inline AssembledSystem(std::shared_ptr< const MpiComm >                          comm,
+                           std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
+                           const ProblemDefinition< max_dofs_per_node >&             problem_def,
+                           const BCDefinition< max_dofs_per_node >&                  bc_def);
 
     inline auto getMatrix() const -> Teuchos::RCP< const tpetra_crsmatrix_t >;
     inline auto getRhs() const -> Teuchos::RCP< const tpetra_multivector_t >;
@@ -46,13 +45,15 @@ public:
     template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setDirichletBCValues(const Kernel&                                                 kernel,
                               const util::ArrayOwner< d_id_t >&                             domain_ids,
-                              const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                              const post::FieldAccess< n_fields >&                          field_access = {},
-                              val_t                                                         time         = 0.);
+                              const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds =
+                                  util::makeIotaArray< dofind_t, Kernel::parameters.n_equations >(),
+                              const post::FieldAccess< n_fields >& field_access = {},
+                              val_t                                time         = 0.);
     template < size_t n_vals, std::integral dofind_t = size_t >
-    void setDirichletBCValues(const std::array< val_t, n_vals >&    values,
-                              const util::ArrayOwner< d_id_t >&     domain_ids,
-                              const std::array< dofind_t, n_vals >& dof_inds)
+    void
+    setDirichletBCValues(const std::array< val_t, n_vals >&    values,
+                         const util::ArrayOwner< d_id_t >&     domain_ids,
+                         const std::array< dofind_t, n_vals >& dof_inds = util::makeIotaArray< dofind_t, n_vals >())
         requires(n_rhs == 1);
 
     template < solvers::DirectSolver_c Solver >
@@ -60,10 +61,11 @@ public:
     template < solvers::IterativeSolver_c Solver >
     IterSolveResult solve(Solver& solver) const;
 
-    template < IndexRange_c SolInds, IndexRange_c SolManInds >
-    void updateSolution(SolInds&& sol_inds, SolutionManager& sol_man, SolManInds&& sol_man_inds);
+    inline void updateSolution(const util::ArrayOwner< size_t >& sol_inds,
+                               SolutionManager&                  sol_man,
+                               const util::ArrayOwner< size_t >& sol_man_inds);
 
-    inline void describe(std::ostream& out = std::cout) const;
+    inline void describe(std::FILE* out_stream = stdout) const;
 
     template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setValues(const Teuchos::RCP< tpetra_femultivector_t >&                 vector,
@@ -136,12 +138,12 @@ IterSolveResult AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::solv
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-template < IndexRange_c SolInds, IndexRange_c SolManInds >
-void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::updateSolution(SolInds&&        sol_inds,
-                                                                                SolutionManager& sol_man,
-                                                                                SolManInds&&     sol_man_inds)
+void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::updateSolution(
+    const util::ArrayOwner< size_t >& sol_inds,
+    SolutionManager&                  sol_man,
+    const util::ArrayOwner< size_t >& sol_man_inds)
 {
-    util::throwingAssert(std::ranges::distance(sol_man_inds) == std::ranges::distance(sol_inds) * ptrdiff_t{n_rhs},
+    util::throwingAssert(sol_man_inds.size() == sol_inds.size() * n_rhs,
                          "Source and destination indices lengths must match");
     util::throwingAssert(std::ranges::none_of(sol_inds, [](size_t i) { return i >= max_dofs_per_node; }),
                          "Source index out of bounds");
@@ -149,12 +151,8 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::updateSolution(
                          "Destination index out of bounds");
 
     const auto solution_view = m_solution->getLocalViewHost(Tpetra::Access::ReadOnly);
-    m_condensation_manager.recoverSolution(*m_mesh,
-                                           m_node_dof_map,
-                                           util::asSpans< n_rhs >(solution_view),
-                                           std::forward< SolInds >(sol_inds),
-                                           sol_man,
-                                           std::forward< SolManInds >(sol_man_inds));
+    m_condensation_manager.recoverSolution(
+        *m_mesh, m_node_dof_map, util::asSpans< n_rhs >(solution_view), sol_inds, sol_man, sol_man_inds);
 }
 
 namespace detail
@@ -320,18 +318,17 @@ auto AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::initMultiVector
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-template < ProblemDef problem_def >
 AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::AssembledSystem(
     std::shared_ptr< const MpiComm >                          comm,
     std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-    util::ConstexprValue< problem_def >                       probdef_ctwrpr,
-    const BCDefinition< problem_def.n_fields >&               bc_def)
+    const ProblemDefinition< max_dofs_per_node >&             problem_def,
+    const BCDefinition< max_dofs_per_node >&                  bc_def)
     : m_comm{std::move(comm)}, m_mesh{std::move(mesh)}, m_state{State::OpenForAssembly}
 {
-    constexpr auto cp_tag          = CondensationPolicyTag< CP >{};
-    const auto     periodic_bc     = bcs::PeriodicBC{bc_def.getPeriodic(), *m_mesh, *m_comm};
-    const auto node_global_dof_map = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, probdef_ctwrpr, periodic_bc, cp_tag};
-    m_sparsity_graph               = makeSparsityGraph(*m_comm, *m_mesh, node_global_dof_map, probdef_ctwrpr, cp_tag);
+    constexpr auto cp_tag              = CondensationPolicyTag< CP >{};
+    const auto     periodic_bc         = bcs::PeriodicBC{bc_def.getPeriodic(), *m_mesh, *m_comm};
+    const auto     node_global_dof_map = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, problem_def, periodic_bc, cp_tag};
+    m_sparsity_graph                   = makeSparsityGraph(*m_comm, *m_mesh, node_global_dof_map, problem_def, cp_tag);
 
     L3STER_PROFILE_REGION_BEGIN("Create Tpetra objects");
     m_matrix   = util::makeTeuchosRCP< tpetra_fecrsmatrix_t >(m_sparsity_graph);
@@ -343,7 +340,7 @@ AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::AssembledSystem(
 
     m_node_dof_map =
         dofs::NodeToLocalDofMap{node_global_dof_map, *m_matrix->getRowMap(), *m_matrix->getColMap(), *m_rhs->getMap()};
-    m_condensation_manager = StaticCondensationManager< CP >{*m_mesh, m_node_dof_map, probdef_ctwrpr, n_rhs};
+    m_condensation_manager = StaticCondensationManager< CP >{*m_mesh, m_node_dof_map, problem_def, n_rhs};
     m_condensation_manager.beginAssembly();
 
     const auto& dirichlet = bc_def.getDirichlet();
@@ -351,7 +348,7 @@ AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::AssembledSystem(
     {
         L3STER_PROFILE_REGION_BEGIN("Dirichlet BCs");
         auto [owned_bcdofs, shared_bcdofs] =
-            bcs::getDirichletDofs(*m_mesh, m_sparsity_graph, node_global_dof_map, probdef_ctwrpr, dirichlet);
+            bcs::getDirichletDofs(*m_mesh, m_sparsity_graph, node_global_dof_map, dirichlet);
         m_dirichlet_bcs.emplace(m_sparsity_graph, std::move(owned_bcdofs), std::move(shared_bcdofs));
         L3STER_PROFILE_REGION_END("Dirichlet BCs");
     }
@@ -464,7 +461,7 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::assertState(Sta
 }
 
 template < size_t max_dofs_per_node, CondensationPolicy CP, size_t n_rhs, el_o_t... orders >
-void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::describe(std::ostream& out) const
+void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::describe(std::FILE* out_stream) const
 {
     const auto local_num_rows    = m_matrix->getLocalNumRows();
     const auto local_num_cols    = m_matrix->getLocalNumCols();
@@ -479,31 +476,32 @@ void AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::describe(std::o
         const auto global_num_rows_sum   = m_matrix->getGlobalNumRows();
         const auto global_num_cols       = m_matrix->getGlobalNumCols();
         const auto global_num_entries    = m_matrix->getGlobalNumEntries();
-        out << std::format("The algebraic system has dimensions {} by {}\n"
-                           "Distribution among {} MPI rank(s):\n"
-                           "{:<10}|{:^17}|{:^17}|{:^17}|\n"
-                           "{:<10}|{:^17}|{:^17}|{:^17}|\n"
-                           "{:<10}|{:^17}|{:^17}|{:^17}|\n"
-                           "{:<10}|{:^17}|{:^17}|{:^17}|\n\n",
-                           global_num_rows_range,
-                           global_num_cols,
-                           m_comm->getSize(),
-                           "",
-                           "* MIN *",
-                           "* MAX *",
-                           "* TOTAL *",
-                           "ROWS",
-                           local_sizes_min[0],
-                           local_sizes_max[0],
-                           global_num_rows_sum,
-                           "COLUMNS",
-                           local_sizes_min[1],
-                           local_sizes_max[1],
-                           global_num_cols,
-                           "NON-ZEROS",
-                           local_sizes_min[2],
-                           local_sizes_max[2],
-                           global_num_entries);
+        std::println(out_stream,
+                     "The algebraic system has dimensions {} by {}\n"
+                     "Distribution among {} MPI rank(s):\n"
+                     "{:<10}|{:^17}|{:^17}|{:^17}|\n"
+                     "{:<10}|{:^17}|{:^17}|{:^17}|\n"
+                     "{:<10}|{:^17}|{:^17}|{:^17}|\n"
+                     "{:<10}|{:^17}|{:^17}|{:^17}|\n",
+                     global_num_rows_range,
+                     global_num_cols,
+                     m_comm->getSize(),
+                     "",
+                     "* MIN *",
+                     "* MAX *",
+                     "* TOTAL *",
+                     "ROWS",
+                     local_sizes_min[0],
+                     local_sizes_max[0],
+                     global_num_rows_sum,
+                     "COLUMNS",
+                     local_sizes_min[1],
+                     local_sizes_max[1],
+                     global_num_cols,
+                     "NON-ZEROS",
+                     local_sizes_min[2],
+                     local_sizes_max[2],
+                     global_num_entries);
     }
     m_comm->barrier();
 }

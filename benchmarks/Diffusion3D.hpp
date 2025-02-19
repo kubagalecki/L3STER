@@ -5,7 +5,7 @@
 using namespace lstr;
 using namespace std::string_view_literals;
 
-auto makeMesh(const lstr::MpiComm& comm, auto probdef_ctwrpr)
+auto makeMesh(const lstr::MpiComm& comm, const auto& problem_def)
 {
     constexpr auto node_dist  = std::invoke([] {
         constexpr size_t                   edge_divs = 6;
@@ -20,24 +20,29 @@ auto makeMesh(const lstr::MpiComm& comm, auto probdef_ctwrpr)
     });
     constexpr auto mesh_order = 6;
     return generateAndDistributeMesh< mesh_order >(
-        comm, [&] { return mesh::makeCubeMesh(node_dist); }, {}, probdef_ctwrpr);
+        comm, [&] { return mesh::makeCubeMesh(node_dist); }, {}, problem_def);
 }
 
 template < CondensationPolicy CP, OperatorEvaluationStrategy S >
 void solveDiffusion3DProblem()
 {
+    std::cerr << std::format(
+        "*** Number of threads ***\nAccording to TBB: {}\nAccording to OpenMP: {}\nhwloc: {}\n\n",
+        oneapi::tbb::global_control::active_value(oneapi::tbb::global_control::max_allowed_parallelism),
+        omp_get_num_threads(),
+        util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNHwThreads());
     const auto comm = std::make_shared< MpiComm >(MPI_COMM_WORLD);
 
-    constexpr d_id_t      domain_id      = 0;
-    static constexpr auto problem_def    = ProblemDef{defineDomain< 4 >(domain_id, ALL_DOFS)};
-    constexpr auto        probdef_ctwrpr = util::ConstexprValue< problem_def >{};
-    static constexpr auto boundary_ids   = util::makeIotaArray< d_id_t, 6 >(1);
-    auto                  bc_def         = BCDefinition< problem_def.n_fields >{};
+    constexpr d_id_t domain_id    = 0;
+    constexpr auto   num_unknowns = 4;
+    const auto       problem_def  = ProblemDefinition< num_unknowns >{{domain_id}};
+    constexpr auto   boundary_ids = util::makeIotaArray< d_id_t, 6 >(1);
+    auto             bc_def       = BCDefinition< num_unknowns >{};
     bc_def.defineDirichlet(boundary_ids, {0});
 
-    const auto my_partition = makeMesh(*comm, probdef_ctwrpr);
+    const auto my_partition = makeMesh(*comm, problem_def);
 
-    constexpr auto field_inds  = util::makeIotaArray< size_t, problem_def.n_fields >();
+    constexpr auto field_inds  = util::makeIotaArray< size_t, num_unknowns >();
     constexpr auto T_inds      = std::array< size_t, 1 >{0};
     constexpr auto T_grad_inds = std::array< size_t, 3 >{1, 2, 3};
     constexpr auto dof_inds    = field_inds;
@@ -100,7 +105,7 @@ void solveDiffusion3DProblem()
 
     constexpr auto alg_params    = AlgebraicSystemParams{.eval_strategy = S, .cond_policy = CP};
     constexpr auto algpar_ctwrpr = L3STER_WRAP_CTVAL(alg_params);
-    auto           alg_system    = makeAlgebraicSystem(comm, my_partition, probdef_ctwrpr, bc_def, algpar_ctwrpr);
+    auto           alg_system    = makeAlgebraicSystem(comm, my_partition, problem_def, bc_def, algpar_ctwrpr);
     alg_system.beginAssembly();
     alg_system.assembleProblem(diffusion_kernel3d, {domain_id});
     alg_system.setDirichletBCValues(dirichlet_bc_kernel, boundary_ids, T_inds);
@@ -113,27 +118,28 @@ void solveDiffusion3DProblem()
     alg_system.solve(solver);
 
     L3STER_PROFILE_REGION_BEGIN("Solution management");
-    auto solution_manager = SolutionManager{*my_partition, problem_def.n_fields};
+    auto solution_manager = SolutionManager{*my_partition, num_unknowns};
     alg_system.updateSolution(dof_inds, solution_manager, field_inds);
     L3STER_PROFILE_REGION_END("Solution management");
 
     L3STER_PROFILE_REGION_BEGIN("Compute solution error");
-    const auto field_access = solution_manager.makeFieldValueGetter(field_inds);
+    const auto field_access = solution_manager.getFieldAccess(field_inds);
     const auto error        = computeNormL2(*comm, error_kernel, *my_partition, {domain_id}, field_access);
     L3STER_PROFILE_REGION_END("Compute solution error");
 
     if (comm->getRank() == 0)
-        std::cout << std::format("\nThe L2 error components are:\n  {:.3e}\n  {:.3e}\n  {:.3e}\n  {:.3e}\n\n",
-                                 error[0],
-                                 error[1],
-                                 error[2],
-                                 error[3]);
+        std::println("\nThe L2 error components are:\n  {:.3e}\n  {:.3e}\n  {:.3e}\n  {:.3e}\n",
+                     error[0],
+                     error[1],
+                     error[2],
+                     error[3]);
 
     L3STER_PROFILE_REGION_BEGIN("Export results to VTK");
-    auto           exporter    = PvtuExporter{comm, *my_partition};
-    const auto     export_inds = util::gatherAsCommon(T_inds, T_grad_inds);
-    constexpr auto field_names = std::array{"T"sv, "gradT"sv};
-    exporter.exportSolution("Cube_Diffusion.pvtu", solution_manager, field_names, export_inds);
+    auto exporter   = PvtuExporter{comm, *my_partition};
+    auto export_def = ExportDefinition{"Cube_Diffusion.pvtu"};
+    export_def.defineField("T", T_inds);
+    export_def.defineField("grad", T_grad_inds);
+    exporter.exportSolution(export_def, solution_manager);
     exporter.flushWriteQueue();
     L3STER_PROFILE_REGION_END("Export results to VTK");
 }

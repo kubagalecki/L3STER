@@ -6,6 +6,8 @@
 
 #include <numeric>
 
+#include <print>
+
 using namespace lstr;
 using namespace lstr::solvers;
 
@@ -111,7 +113,7 @@ auto diffMVNorm(const tpetra_multivector_t& v1, const tpetra_multivector_t& v2) 
 
 void printDirectHeader()
 {
-    std::cout << std::format("{:-^73}\n{:^15}{:^12}{:^10}\n", " DIRECT SOLVER TESTS ", "Name", "Error", "Status");
+    std::println("{:-^73}\n{:^15}{:^12}{:^10}", " DIRECT SOLVER TESTS ", "Name", "Error", "Status");
 }
 
 template < DirectSolver_c Solver >
@@ -127,7 +129,7 @@ bool runDirectTest(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
     const auto err_norm = diffMVNorm(*x, solution);
     const bool passed   = err_norm <= 1e-8;
     if (A->getComm()->getRank() == 0)
-        std::cout << std::format("{:<15}{:^12.3e}{:^10}\n", name, err_norm, passed ? "PASS" : "FAIL");
+        std::println("{:<15}{:^12.3e}{:^10}", name, err_norm, passed ? "PASS" : "FAIL");
     return passed;
 }
 
@@ -141,11 +143,11 @@ bool directSolverSuite(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
         printDirectHeader();
 
     if (A->getComm()->getSize() == 1) // KLU2 fails when nranks > 1 :(
-        passed &= runDirectTest< ::lstr::solvers::KLU2 >(A, x, b, solution, "Amesos2::KLU2");
-    passed &= runDirectTest< ::lstr::solvers::Lapack >(A, x, b, solution, "Amesos2::Lapack");
+        passed &= runDirectTest< Klu2 >(A, x, b, solution, "Amesos2::KLU2");
+    passed &= runDirectTest< Lapack >(A, x, b, solution, "Amesos2::Lapack");
 
     if (A->getComm()->getRank() == 0)
-        std::cout << std::endl;
+        std::println();
     return passed;
 }
 
@@ -162,8 +164,8 @@ bool directSolverSuite(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
 #ifdef L3STER_TRILINOS_HAS_BELOS
 void printIterHeader()
 {
-    std::cout << std::format(
-        "{:-^73}\n{:^35}{:^12}{:^16}{:^10}\n", " ITERATIVE SOLVER TESTS ", "Name", "Error", "Iterations", "Status");
+    std::println(
+        "{:-^73}\n{:^35}{:^12}{:^16}{:^10}", " ITERATIVE SOLVER TESTS ", "Name", "Error", "Iterations", "Status");
 }
 
 template < PreconditionerOptions_c Opts = NullPreconditioner::Options >
@@ -179,7 +181,7 @@ bool runIterTest(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
     const auto [err_norm, iters] = solver.solve(A, b, x);
     const bool passed            = err_norm <= IterSolverOpts{}.tol;
     if (A->getComm()->getRank() == 0)
-        std::cout << std::format("{:<35}{:^12.3e}{:^16}{:^10}\n", name, err_norm, iters, passed ? "PASS" : "FAIL");
+        std::println("{:<35}{:^12.3e}{:^16}{:^10}", name, err_norm, iters, passed ? "PASS" : "FAIL");
     return passed;
 }
 
@@ -202,7 +204,7 @@ bool iterativeSolverSuite(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
 #endif
 
     if (A->getComm()->getRank() == 0)
-        std::cout << std::endl;
+        std::println();
     return passed;
 }
 #else

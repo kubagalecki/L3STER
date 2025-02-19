@@ -47,9 +47,8 @@ public:
 
     [[nodiscard]] std::size_t count() const noexcept
     {
-        return std::transform_reduce(begin(m_data), end(m_data), std::size_t{0}, std::plus<>{}, [](unsigned long v) {
-            return std::popcount(v);
-        });
+        return std::transform_reduce(
+            begin(m_data), end(m_data), 0uz, std::plus<>{}, [](unsigned long v) { return std::popcount(v); });
     }
     [[nodiscard]] std::size_t size() const noexcept { return m_size; }
 
