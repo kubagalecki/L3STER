@@ -45,13 +45,15 @@ public:
     template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setDirichletBCValues(const Kernel&                                                 kernel,
                               const util::ArrayOwner< d_id_t >&                             domain_ids,
-                              const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                              const post::FieldAccess< n_fields >&                          field_access = {},
-                              val_t                                                         time         = 0.);
+                              const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds =
+                                  util::makeIotaArray< dofind_t, Kernel::parameters.n_equations >(),
+                              const post::FieldAccess< n_fields >& field_access = {},
+                              val_t                                time         = 0.);
     template < size_t n_vals, std::integral dofind_t = size_t >
-    void setDirichletBCValues(const std::array< val_t, n_vals >&    values,
-                              const util::ArrayOwner< d_id_t >&     domain_ids,
-                              const std::array< dofind_t, n_vals >& dof_inds)
+    void
+    setDirichletBCValues(const std::array< val_t, n_vals >&    values,
+                         const util::ArrayOwner< d_id_t >&     domain_ids,
+                         const std::array< dofind_t, n_vals >& dof_inds = util::makeIotaArray< dofind_t, n_vals >())
         requires(n_rhs == 1);
 
     template < solvers::DirectSolver_c Solver >

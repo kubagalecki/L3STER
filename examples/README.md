@@ -23,10 +23,23 @@ cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=mpic++ ..
 # Build
 cmake --build .
 
-# Set OpenMP thread-to-core binding via environment variables
-export OMP_PROC_BIND=spread
-export OMP_PLACES=threads
+# Due to mixing 2 different parallel runtimes (OpenMP & TBB), setting these environment variables is crucial for good performance
+export OMP_PROC_BIND=false     # Disable binding - let the system scheduler take care of the threads (also silences Kokkos warning)
+export OMP_WAIT_POLICY=PASSIVE # OpenMP threads should go to sleep immediately after parallel work completes. Important!
+export OMP_NUM_THREADS=[NHWT]  # NHWT=number of hardware threads (this is likely the default behavior, but it's best to make sure)
 
-# Run as MPI executable, use srun if running on a cluster managed by slurm
-mpirun -n X example-name
+# If you're just running the example on your local machine (which is entirely sufficient), simply run the produced executable
+./example-name
 ```
+
+### Index
+
+| \# | Name                | Description                                                | New topics covered                                                                                     |
+|:---|:--------------------|:-----------------------------------------------------------|:-------------------------------------------------------------------------------------------------------|
+| 1  | hello-world         | Library initialization                                     | scope guard, MPI communicator                                                                          |
+| 2  | diffusion-2D        | Solve 2D diffusion problem                                 | simple mesh generation, algebraic system, solution manager, equation kernel, direct solver, VTK export |
+| 3  | advection-2D        | Solve 2D advection problem on prescribed velocity field    | space-dependent kernels, time stepping, accessing field values in kernels, Dirichlet BCs               |
+| 4  | periodic-bc         | Solve 2D advection problem in periodic domain              | periodic BCs, setting the initial solution, higher order time-stepping                                 |
+| 5  | static-condensation | Case from example \#4 with static condensation             | static condensation                                                                                    |
+| 6  | matrix-free         | Case from example \#4 with matrix-free operator evaluation | matrix-free operator evaluation, iterative solvers, preconditioners                                    |
+| 7  | karman-2D           | Solve 2D incompressible flow problem                       | reading the mesh from a file, exporting vector fields to VTK                                           |

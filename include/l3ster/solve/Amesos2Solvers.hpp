@@ -6,7 +6,9 @@
 
 #ifdef L3STER_TRILINOS_HAS_AMESOS2
 
-namespace lstr::solvers
+namespace lstr
+{
+namespace solvers
 {
 class Amesos2SolverInterface
 {
@@ -33,18 +35,19 @@ private:
     Teuchos::RCP< Amesos2::Solver< tpetra_crsmatrix_t, tpetra_multivector_t > > m_solver;
     std::string                                                                 m_name;
 };
+} // namespace solvers
 
-class KLU2 : public Amesos2SolverInterface
+class Klu2 : public solvers::Amesos2SolverInterface
 {
 public:
-    KLU2() : Amesos2SolverInterface("KLU2") {}
+    Klu2() : Amesos2SolverInterface("KLU2") {}
 };
 
-class Lapack : public Amesos2SolverInterface
+class Lapack : public solvers::Amesos2SolverInterface
 {
 public:
     Lapack() : Amesos2SolverInterface("Lapack") {}
 };
-} // namespace lstr::solvers
+} // namespace lstr
 #endif // L3STER_TRILINOS_HAS_AMESOS2
 #endif // L3STER_AMESOS2SOLVERS_HPP

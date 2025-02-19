@@ -1,7 +1,7 @@
 # 2D flow past a cylinder in a channel
 
 *This example is somewhat advanced.*
-*If you are just starting out with L3STER, you may want to have a look at the advection example first.*
+*If you are just starting out with L3STER, you may want to have a look at the previous examples first.*
 
 - Fully coupled 2D Navier-Stokes equations in the velocity-vorticity-pressure formulation [1]
 - Momentum equation is scaled by the time step to improve mass conservation [2]
@@ -11,6 +11,7 @@
 - Implicit 2nd order time discretization scheme (BDF2)
 - Convective term linearized using Newton's method
 - Steady-state solution used as the initial condition
+- Algebraic system solved using a direct solver
 
 Note: the mesh file `karman.msh` is assumed to reside in the directory above the directory in which the program is run.
 If you'd like to use a different setup, pass the path to the mesh file as the first program argument.

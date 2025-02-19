@@ -1,0 +1,5 @@
+cmake_minimum_required( VERSION 3.24 )
+project( static-condensation )
+add_subdirectory( ../.. L3STER-bin )
+add_executable( static-condensation source.cpp )
+target_link_libraries( static-condensation L3STER )

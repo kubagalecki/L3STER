@@ -10,8 +10,8 @@ template < el_o_t... orders, size_t max_dofs_per_node, AlgebraicSystemParams alg
 auto makeAlgebraicSystem(std::shared_ptr< const MpiComm >                          comm,
                          std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
                          const ProblemDefinition< max_dofs_per_node >&             problem_def,
-                         const BCDefinition< max_dofs_per_node >&                  bc_def,
-                         util::ConstexprValue< algsys_params > = {})
+                         const BCDefinition< max_dofs_per_node >&                  bc_def = {},
+                         util::ConstexprValue< algsys_params >                            = {})
 {
     L3STER_PROFILE_FUNCTION;
     constexpr auto n_rhs = algsys_params.n_rhs;
@@ -35,7 +35,7 @@ template < el_o_t... orders, size_t max_dofs_per_node, AlgebraicSystemParams alg
 auto makeAlgebraicSystem(std::shared_ptr< const MpiComm >                    comm,
                          std::shared_ptr< mesh::MeshPartition< orders... > > mesh,
                          const ProblemDefinition< max_dofs_per_node >&       problem_def,
-                         const BCDefinition< max_dofs_per_node >&            bc_def,
+                         const BCDefinition< max_dofs_per_node >&            bc_def        = {},
                          util::ConstexprValue< algsys_params >               params_ctwrpr = {})
 {
     return makeAlgebraicSystem(std::move(comm),
@@ -51,7 +51,7 @@ template < el_o_t... orders,
            AlgebraicSystemParams algsys_params = {} >
 [[deprecated]] auto makeAlgebraicSystem(std::shared_ptr< const MpiComm >                          comm,
                                         std::shared_ptr< const mesh::MeshPartition< orders... > > mesh,
-                                        util::ConstexprValue< problem_def >                 = {},
+                                        util::ConstexprValue< problem_def >,
                                         util::ConstexprValue< dirichlet_def >               = {},
                                         util::ConstexprValue< algsys_params > params_ctwrpr = {})
 {

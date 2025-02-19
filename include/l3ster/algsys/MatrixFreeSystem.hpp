@@ -69,13 +69,15 @@ public:
     template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setDirichletBCValues(const Kernel&                                                 kernel,
                               const util::ArrayOwner< d_id_t >&                             domain_ids,
-                              const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds,
-                              const post::FieldAccess< n_fields >&                          field_access = {},
-                              val_t                                                         time         = 0.);
+                              const std::array< dofind_t, Kernel::parameters.n_equations >& dof_inds =
+                                  util::makeIotaArray< dofind_t, Kernel::parameters.n_equations >(),
+                              const post::FieldAccess< n_fields >& field_access = {},
+                              val_t                                time         = 0.);
     template < size_t n_vals, std::integral dofind_t = size_t >
-    void setDirichletBCValues(const std::array< val_t, n_vals >&    values,
-                              const util::ArrayOwner< d_id_t >&     domain_ids,
-                              const std::array< dofind_t, n_vals >& dof_inds)
+    void
+    setDirichletBCValues(const std::array< val_t, n_vals >&    values,
+                         const util::ArrayOwner< d_id_t >&     domain_ids,
+                         const std::array< dofind_t, n_vals >& dof_inds = util::makeIotaArray< dofind_t, n_vals >())
         requires(n_rhs == 1);
 
     template < solvers::IterativeSolver_c Solver >
@@ -710,34 +712,17 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::getSolution() cons
 
 namespace detail
 {
-template < CondensationPolicy CP, el_o_t... orders, size_t max_dofs_per_node >
+template < el_o_t... orders, size_t max_dofs_per_node >
 auto splitBorderAndInterior(const mesh::MeshPartition< orders... >&              mesh,
-                            const dofs::NodeToGlobalDofMap< max_dofs_per_node >& node2dofs,
-                            CondensationPolicyTag< CP > = {})
+                            const dofs::NodeToGlobalDofMap< max_dofs_per_node >& node2dofs)
 {
     const auto& ownership   = node2dofs.ownership();
     const auto  is_interior = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
-        auto valid_dofs = dofs::getPrimaryNodesView< CP >(element) | std::views::transform(std::cref(node2dofs)) |
-                          std::views::join | std::views::filter([](auto dof) { return dof != invalid_global_dof; });
+        auto valid_dofs = element.getNodes() | std::views::transform(std::cref(node2dofs)) | std::views::join |
+                          std::views::filter([](auto dof) { return dof != invalid_global_dof; });
         return std::ranges::all_of(valid_dofs, [&](auto dof) { return ownership.isOwned(dof); });
     };
     return mesh::splitMeshPartition(mesh, is_interior);
-}
-
-inline auto makeOperatorMap(const MpiComm& comm, std::span< const global_dof_t > dofs) -> Teuchos::RCP< tpetra_map_t >
-{
-    auto       teuchos_comm           = util::makeTeuchosRCP< const Teuchos::MpiComm< int > >(comm.get());
-    const auto auto_compute_global_sz = Teuchos::OrdinalTraits< Tpetra::global_size_t >::invalid();
-    const auto dofs_view              = Teuchos::ArrayView< const global_dof_t >(dofs.data(), std::ranges::ssize(dofs));
-    return util::makeTeuchosRCP< tpetra_map_t >(auto_compute_global_sz, dofs_view, 0, teuchos_comm);
-}
-
-inline auto makeOperatorMap(Teuchos::RCP< const Teuchos::Comm< int > > teuchos_comm,
-                            std::span< const global_dof_t >            dofs) -> Teuchos::RCP< tpetra_map_t >
-{
-    const auto auto_compute_global_sz = Teuchos::OrdinalTraits< Tpetra::global_size_t >::invalid();
-    const auto dofs_view              = Teuchos::ArrayView< const global_dof_t >(dofs.data(), std::ranges::ssize(dofs));
-    return util::makeTeuchosRCP< tpetra_map_t >(auto_compute_global_sz, dofs_view, 0, std::move(teuchos_comm));
 }
 } // namespace detail
 
@@ -749,10 +734,9 @@ MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::MatrixFreeSystem(
     const BCDefinition< max_dofs_per_node >&                  bc_def)
     : m_comm{std::move(comm)}, m_mesh{std::move(mesh)}, m_state{State::OpenForAssembly}
 {
-    constexpr auto cp_tag         = no_condensation_tag;
-    const auto     periodic_bc    = bcs::PeriodicBC{bc_def.getPeriodic(), *m_mesh, *m_comm};
-    const auto     node2dof       = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, problem_def, periodic_bc, cp_tag};
-    const auto [interior, border] = detail::splitBorderAndInterior(*m_mesh, node2dof, cp_tag);
+    const auto periodic_bc = bcs::PeriodicBC{bc_def.getPeriodic(), *m_mesh, *m_comm};
+    const auto node2dof    = dofs::NodeToGlobalDofMap{*m_comm, *m_mesh, problem_def, periodic_bc, no_condensation_tag};
+    const auto [interior, border] = detail::splitBorderAndInterior(*m_mesh, node2dof);
     m_interior_mesh               = mesh::LocalMeshView{interior, *m_mesh};
     m_border_mesh                 = mesh::LocalMeshView{border, *m_mesh};
     const auto& dof_ownership     = node2dof.ownership();

@@ -1,0 +1,5 @@
+cmake_minimum_required( VERSION 3.24 )
+project( periodic-bc )
+add_subdirectory( ../.. L3STER-bin )
+add_executable( periodic-bc source.cpp )
+target_link_libraries( periodic-bc L3STER )

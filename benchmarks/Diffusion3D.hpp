@@ -26,6 +26,11 @@ auto makeMesh(const lstr::MpiComm& comm, const auto& problem_def)
 template < CondensationPolicy CP, OperatorEvaluationStrategy S >
 void solveDiffusion3DProblem()
 {
+    std::cerr << std::format(
+        "*** Number of threads ***\nAccording to TBB: {}\nAccording to OpenMP: {}\nhwloc: {}\n\n",
+        oneapi::tbb::global_control::active_value(oneapi::tbb::global_control::max_allowed_parallelism),
+        omp_get_num_threads(),
+        util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNHwThreads());
     const auto comm = std::make_shared< MpiComm >(MPI_COMM_WORLD);
 
     constexpr d_id_t domain_id    = 0;

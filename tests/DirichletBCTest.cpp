@@ -108,7 +108,7 @@ void test()
     for (int i = 0; i < data_notransp.extent_int(0); ++i)
         REQUIRE(approx(data_notransp[i], data_transp[i]));
 
-    auto solver = solvers::KLU2{};
+    auto solver = Klu2{};
     solver.solve(matrix, rhs_vector, result_vector1);
 
     const auto solution_vals =

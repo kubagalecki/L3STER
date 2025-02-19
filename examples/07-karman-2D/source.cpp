@@ -175,9 +175,9 @@ int main(int argc, char* argv[])
     ////////// END KERNELS //////////
 
     // Set Dirichlet BC values
-    constexpr auto bc_inds = std::array{IU, IV}; // indices of DOFs for which we wish to prescribe a Dirichlet BC
-    constexpr auto u_wall  = std::array{0., 0.};
-    algebraic_system.setDirichletBCValues(u_wall, {wall}, bc_inds);
+    constexpr auto bc_inds       = std::array{IU, IV}; // indices of DOFs for which we wish to prescribe a Dirichlet BC
+    constexpr auto wall_velocity = std::array{0., 0.}; // no-slip condition
+    algebraic_system.setDirichletBCValues(wall_velocity, {wall}, bc_inds);
     algebraic_system.setDirichletBCValues(kernel_inlet, {inlet}, bc_inds);
 
     // Solution manager
@@ -191,7 +191,7 @@ int main(int argc, char* argv[])
     const auto p_inds    = std::array{5};    // Pressure
 
     // L3STER interface to KLU2 direct solver
-    auto solver = solvers::KLU2{};
+    auto solver = Klu2{};
 
     // Utility for printing the table of results
     const auto report_flowrate = [&](int iter, double in, double out) {
@@ -234,11 +234,11 @@ int main(int argc, char* argv[])
     auto exporter = PvtuExporter{comm, *mesh};
 
     // Export initial snapshot
-    auto export_def_init = ExportDefinition{"results/karman_000.pvtu"};
-    export_def_init.defineField("Velocity", vel_inds2);
-    export_def_init.defineField("Vorticity", vort_inds);
-    export_def_init.defineField("Pressure", p_inds);
-    exporter.exportSolution(export_def_init, solution_manager);
+    auto export_def = ExportDefinition{"results/karman_000.pvtu"};
+    export_def.defineField("Velocity", vel_inds2);
+    export_def.defineField("Vorticity", vort_inds);
+    export_def.defineField("Pressure", p_inds);
+    exporter.exportSolution(export_def, solution_manager);
 
     // Print flow rate info, note that the computed integrals are vectors of length 1, hence the "[0]"
     {
@@ -279,7 +279,7 @@ int main(int argc, char* argv[])
         report_flowrate(time_step, inflow_rate, outflow_rate);
 
         // Export snapshot
-        auto export_def = ExportDefinition{std::format("results/karman_{:03}.pvtu", time_step)};
+        export_def = ExportDefinition{std::format("results/karman_{:03}.pvtu", time_step)};
         export_def.defineField("Velocity", vel_inds2);
         export_def.defineField("Vorticity", vort_inds);
         export_def.defineField("Pressure", p_inds);

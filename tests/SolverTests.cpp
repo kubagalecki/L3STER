@@ -141,8 +141,8 @@ bool directSolverSuite(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
         printDirectHeader();
 
     if (A->getComm()->getSize() == 1) // KLU2 fails when nranks > 1 :(
-        passed &= runDirectTest< ::lstr::solvers::KLU2 >(A, x, b, solution, "Amesos2::KLU2");
-    passed &= runDirectTest< ::lstr::solvers::Lapack >(A, x, b, solution, "Amesos2::Lapack");
+        passed &= runDirectTest< Klu2 >(A, x, b, solution, "Amesos2::KLU2");
+    passed &= runDirectTest< Lapack >(A, x, b, solution, "Amesos2::Lapack");
 
     if (A->getComm()->getRank() == 0)
         std::cout << std::endl;

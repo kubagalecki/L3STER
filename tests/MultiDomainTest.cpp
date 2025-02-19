@@ -53,7 +53,7 @@ void test()
     assemble_problem_in_dom(util::ConstexprValue< 3 >{});
     alg_sys.endAssembly();
 
-    auto solver = solvers::Lapack{};
+    auto solver = Lapack{};
     alg_sys.solve(solver);
 
     auto solution_manager = SolutionManager{*mesh, domains.size() * 2};

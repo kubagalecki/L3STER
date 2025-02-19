@@ -36,7 +36,7 @@ public:
         : BorderAccessor(owned, shared, static_cast< local_dof_t >(owned.extent(0)))
     {}
 
-    decltype(auto) operator()(local_dof_t row, local_dof_t col) const
+    T& operator()(local_dof_t row, local_dof_t col) const
     {
         const auto is_owned = row < m_num_owned;
         const auto offset   = is_owned * row + not is_owned * (row - m_num_owned);
@@ -62,7 +62,7 @@ public:
     InteriorAccessor(const View& view) : m_data{view.data()}, m_stride{static_cast< local_dof_t >(view.stride(1))}
     {}
 
-    decltype(auto) operator()(local_dof_t row, local_dof_t col) const { return m_data[col * m_stride + row]; }
+    T& operator()(local_dof_t row, local_dof_t col) const { return m_data[col * m_stride + row]; }
 
 private:
     T*          m_data;

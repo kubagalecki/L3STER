@@ -267,43 +267,41 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
     const auto compute_elem_dof_info = [&dof_map]< mesh::ElementType ET, el_o_t EO >(
                                            const mesh::Element< ET, EO >& element) {
         // Bitmap is initially inverted, i.e., 0 implies that the dof is active (avoids awkward all-true construction)
-        using dof_bmp_t    = std::bitset< max_dofs_per_node >;
+        using dof_bmp_t                = std::bitset< max_dofs_per_node >;
+        const auto get_invalid_dof_bmp = [&](const std::array< local_dof_t, max_dofs_per_node >& dofs) {
+            auto retval = dof_bmp_t{};
+            for (auto&& [i, dof] : dofs | std::views::enumerate)
+                retval[i] = dof == invalid_local_dof;
+            return retval;
+        };
         auto dof_bmp_range = getBoundaryNodes(element) | std::views::transform(std::cref(dof_map)) | std::views::keys |
-                             std::views::transform([&](const std::array< local_dof_t, max_dofs_per_node >& dofs) {
-                                 auto retval = dof_bmp_t{};
-                                 for (auto&& [i, dof] : dofs | std::views::enumerate)
-                                     retval[i] = not dofs::NodeToLocalDofMap< max_dofs_per_node, 3 >::isValid(dof);
-                                 return retval;
-                             }) |
-                             std::views::common;
+                             std::views::transform(get_invalid_dof_bmp) | std::views::common;
         const auto [n_boundary_dofs, internal_dof_bmp] = std::transform_reduce(
             std::ranges::cbegin(dof_bmp_range),
             std::ranges::cend(dof_bmp_range),
-            std::make_pair(size_t{0}, dof_bmp_t{}),
+            std::make_pair(0uz, dof_bmp_t{}),
             [](const auto& p1, const auto& p2) { return std::make_pair(p1.first + p2.first, p1.second | p2.second); },
             [](const dof_bmp_t& dof_bmp) { return std::make_pair(dof_bmp.size() - dof_bmp.count(), dof_bmp); });
         return std::make_pair(n_boundary_dofs, ~internal_dof_bmp);
     };
-    mesh.visit(
-        [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
-            const auto [n_boundary_dofs, internal_dof_bmp] = compute_elem_dof_info(element);
-            const auto el_int_dofs_offs                    = m_internal_dof_inds.size();
-            const auto n_int_dofs_per_node                 = internal_dof_bmp.count();
-            for (std::uint8_t i = 0; i != internal_dof_bmp.size(); ++i)
-                if (internal_dof_bmp[i])
-                    m_internal_dof_inds.push_back(i);
-            const auto n_internal_dofs =
-                mesh::ElementTraits< mesh::Element< ET, EO > >::internal_node_inds.size() * n_int_dofs_per_node;
-            m_elem_data_map.emplace(element.getId(),
-                                    ElementCondData{.internal_dofs_offs{el_int_dofs_offs},
-                                                    .internal_dofs_size{n_int_dofs_per_node},
-                                                    .diag_block{n_internal_dofs, n_internal_dofs},
-                                                    .diag_block_inv{n_internal_dofs, n_internal_dofs},
-                                                    .upper_block{n_boundary_dofs, n_internal_dofs},
-                                                    .rhs{n_internal_dofs, n_rhs}});
-        },
-        problem_def | std::views::transform([](const auto& def) { return std::span{def.domains}; }) | std::views::join,
-        std::execution::seq);
+    const auto insert_elem_info = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
+        const auto [n_boundary_dofs, internal_dof_bmp] = compute_elem_dof_info(element);
+        const auto el_int_dofs_offs                    = m_internal_dof_inds.size();
+        const auto n_int_dofs_per_node                 = internal_dof_bmp.count();
+        for (std::uint8_t i = 0; i != internal_dof_bmp.size(); ++i)
+            if (internal_dof_bmp[i])
+                m_internal_dof_inds.push_back(i);
+        constexpr auto num_internal_nodes = mesh::ElementTraits< mesh::Element< ET, EO > >::internal_node_inds.size();
+        const auto     n_internal_dofs    = num_internal_nodes * n_int_dofs_per_node;
+        m_elem_data_map.emplace(element.getId(),
+                                ElementCondData{.internal_dofs_offs{el_int_dofs_offs},
+                                                .internal_dofs_size{n_int_dofs_per_node},
+                                                .diag_block{n_internal_dofs, n_internal_dofs},
+                                                .diag_block_inv{n_internal_dofs, n_internal_dofs},
+                                                .upper_block{n_boundary_dofs, n_internal_dofs},
+                                                .rhs{n_internal_dofs, n_rhs}});
+    };
+    mesh.visit(insert_elem_info, problem_def.getDomains(), std::execution::seq);
     m_internal_dof_inds.shrink_to_fit();
     m_element_ids.reserve(m_elem_data_map.size());
     std::ranges::transform(m_elem_data_map, std::back_inserter(m_element_ids), [](const auto& p) { return p.first; });

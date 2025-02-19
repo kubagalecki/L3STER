@@ -48,7 +48,7 @@ public:
     auto getOwnedInds() const -> IndSpan { return m_owned_inds(0, m_num_owned_nbrs); }
     auto getOwnedRange() const
     {
-        return std::views::iota(size_t{0}, m_num_owned_nbrs) |
+        return std::views::iota(0uz, m_num_owned_nbrs) |
                std::views::transform([this](size_t i) { return std::make_pair(m_nbrs.at(i), m_owned_inds(i)); });
     }
     auto getSharedNbrs() const -> NbrSpan { return {m_nbrs | std::views::drop(m_num_owned_nbrs)}; }
@@ -351,9 +351,9 @@ void Import< Scalar >::packSends()
         const auto pack_ind    = [&](size_t i) {
             dest_span[i] = src_span[owned_inds[i]];
         };
-        util::tbb::parallelFor(std::views::iota(size_t{0}, owned_inds.size()), pack_ind);
+        util::tbb::parallelFor(std::views::iota(0uz, owned_inds.size()), pack_ind);
     };
-    util::tbb::parallelFor(std::views::iota(size_t{0}, Base::m_num_vecs), pack_vec);
+    util::tbb::parallelFor(std::views::iota(0uz, Base::m_num_vecs), pack_vec);
 }
 
 template < Arithmetic_c Scalar >

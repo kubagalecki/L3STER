@@ -122,6 +122,15 @@ public:
     [[nodiscard]] auto size() const { return m_domain_defs.size(); }
     [[nodiscard]] bool empty() const { return m_domain_defs.empty(); }
 
+    [[nodiscard]] auto getDomains() const
+    {
+        auto retval = std::vector< d_id_t >{};
+        std::ranges::copy(*this | std::views::transform(&DomainDefinition::domains) | std::views::join,
+                          std::back_inserter(retval));
+        util::sortRemoveDup(retval);
+        return retval;
+    }
+
 private:
     std::vector< DomainDefinition > m_domain_defs;
 };
