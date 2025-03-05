@@ -1,5 +1,6 @@
 #include "Common.hpp"
 #include "l3ster/comm/ImportExport.hpp"
+#include "l3ster/util/Functional.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
 using namespace lstr;

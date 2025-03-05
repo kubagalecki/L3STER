@@ -7,6 +7,7 @@
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/mesh/NodeReferenceLocation.hpp"
 #include "l3ster/util/Caliper.hpp"
+#include "l3ster/util/Functional.hpp"
 #include "l3ster/util/IndexMap.hpp"
 #include "l3ster/util/SpatialHashTable.hpp"
 

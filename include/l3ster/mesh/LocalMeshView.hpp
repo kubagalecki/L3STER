@@ -4,6 +4,7 @@
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/util/CrsGraph.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
+#include "l3ster/util/Functional.hpp"
 #include "l3ster/util/StaticVector.hpp"
 #include "l3ster/util/TbbUtils.hpp"
 
