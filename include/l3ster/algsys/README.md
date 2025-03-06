@@ -1,6 +1,7 @@
 # `algsys`
 
-This directory contains facilities for assembling the sparse algebraic problems corresponding to the supplied PDEs and mesh.
+This directory contains facilities for assembling the sparse algebraic problems corresponding to the supplied PDEs and
+mesh.
 This includes:
 
 - creating the sparsity graph which describes the problem structure

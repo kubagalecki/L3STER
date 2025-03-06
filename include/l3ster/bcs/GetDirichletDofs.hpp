@@ -25,7 +25,7 @@ auto getDirichletDofs(const mesh::MeshPartition< orders... >&              mesh,
         for (const auto& [domains, dof_inds] : bc_def)
         {
             const auto process_element = [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >& element) {
-                for (auto dof : dofs::getDofsFromNodes(element.getNodes(), node_to_dof_map, dof_inds))
+                for (auto dof : dofs::getDofsFromNodes(element.nodes, node_to_dof_map, dof_inds))
                     dirichlet_dofs->replaceGlobalValue(dof, 0, 1.);
             };
             mesh.visit(process_element, domains);

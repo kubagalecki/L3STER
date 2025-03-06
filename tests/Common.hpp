@@ -80,10 +80,10 @@ void printMesh(const lstr::MpiComm& comm, const lstr::mesh::MeshPartition< order
                 mesh.visit(
                     []< lstr::mesh::ElementType ET, lstr::el_o_t EO >(const lstr::mesh::Element< ET, EO >& element) {
                         std::print("Element ID: {}, type: {}, order: {:d}, nodes: ",
-                                   element.getId(),
+                                   element.id,
                                    std::to_underlying(ET),
                                    EO);
-                        for (auto n : element.getNodes())
+                        for (auto n : element.nodes)
                             std::print("{} ", n);
                         std::println();
                     },

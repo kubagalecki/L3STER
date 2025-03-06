@@ -16,13 +16,13 @@ auto evalElementIntegral(
     const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,
     val_t time) -> KernelInterface< params >::Rhs
 {
-    const auto jacobi_gen          = map::getNatJacobiMatGenerator(element.getData());
+    const auto jacobi_gen          = map::getNatJacobiMatGenerator(element.data);
     const auto compute_value_at_qp = [&](ptrdiff_t qp_ind, const auto& ref_coords) -> KernelInterface< params >::Rhs {
         const auto& basis_vals           = basis_at_qps.basis.values[qp_ind];
         const auto& ref_ders             = basis_at_qps.basis.derivatives[qp_ind];
         const auto [phys_ders, jacobian] = map::mapDomain< ET, EO >(jacobi_gen, ref_coords, ref_ders);
         const auto kernel_result =
-            algsys::evalKernel(kernel, ref_coords, basis_vals, phys_ders, node_vals, element.getData(), time);
+            algsys::evalKernel(kernel, ref_coords, basis_vals, phys_ders, node_vals, element.data, time);
         return jacobian * kernel_result;
     };
     return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, detail::initResidualKernelResult< params >());
@@ -36,14 +36,14 @@ auto evalElementBoundaryIntegral(
     const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,
     val_t time) -> KernelInterface< params >::Rhs
 {
-    const auto jacobi_gen          = map::getNatJacobiMatGenerator(el_view->getData());
+    const auto jacobi_gen          = map::getNatJacobiMatGenerator(el_view->data);
     const auto compute_value_at_qp = [&](ptrdiff_t qp_ind, const auto& ref_coords) -> KernelInterface< params >::Rhs {
         const auto& basis_vals                   = basis_at_qps.basis.values[qp_ind];
         const auto& ref_ders                     = basis_at_qps.basis.derivatives[qp_ind];
         const auto  side                         = el_view.getSide();
         const auto [phys_ders, jacobian, normal] = map::mapBoundary< ET, EO >(jacobi_gen, ref_coords, ref_ders, side);
         const auto kernel_result =
-            algsys::evalKernel(kernel, ref_coords, basis_vals, phys_ders, node_vals, el_view->getData(), time, normal);
+            algsys::evalKernel(kernel, ref_coords, basis_vals, phys_ders, node_vals, el_view->data, time, normal);
         return jacobian * kernel_result;
     };
     return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, detail::initResidualKernelResult< params >());
@@ -64,7 +64,7 @@ auto evalLocalIntegral(const ResidualDomainKernel< Kernel, params >& kernel,
             constexpr auto BT         = options.basis_type;
             constexpr auto QT         = options.quad_type;
             constexpr auto QO         = options.order(EO);
-            const auto     field_vals = field_access.getGloballyIndexed(element.getNodes());
+            const auto     field_vals = field_access.getGloballyIndexed(element.nodes);
             const auto&    qbv        = basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
             return evalElementIntegral(kernel, element, field_vals, qbv, time);
         }
@@ -91,7 +91,7 @@ auto evalLocalIntegral(const ResidualBoundaryKernel< Kernel, params >& kernel,
             constexpr auto BT         = options.basis_type;
             constexpr auto QT         = options.quad_type;
             constexpr auto QO         = options.order(EO);
-            const auto     field_vals = field_access.getGloballyIndexed(el_view->getNodes());
+            const auto     field_vals = field_access.getGloballyIndexed(el_view->nodes);
             const auto&    qbv = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
             return evalElementBoundaryIntegral(kernel, el_view, field_vals, qbv, time);
         }

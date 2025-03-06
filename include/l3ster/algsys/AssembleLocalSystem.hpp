@@ -219,7 +219,7 @@ const auto& assembleLocalSystem(
 {
     L3STER_PROFILE_FUNCTION;
     static_assert(params.dimension == mesh::ElementTraits< mesh::Element< ET, EO > >::native_dim);
-    const auto& el_data              = element.getData();
+    const auto& el_data              = element.data;
     const auto  jacobi_gen           = map::getNatJacobiMatGenerator(el_data);
     auto&       local_system_manager = getLocalSystemManager< params, mesh::Element< ET, EO >::n_nodes >();
     const auto  process_qp = [&](const auto& point, val_t weight, const auto& basis_vals, const auto& ref_ders) {
@@ -243,7 +243,7 @@ const auto& assembleLocalSystem(
 {
     L3STER_PROFILE_FUNCTION;
     static_assert(params.dimension == mesh::ElementTraits< mesh::Element< ET, EO > >::native_dim);
-    const auto& el_data              = el_view->getData();
+    const auto& el_data              = el_view->data;
     const auto  jacobi_gen           = map::getNatJacobiMatGenerator(el_data);
     auto&       local_system_manager = getLocalSystemManager< params, mesh::Element< ET, EO >::n_nodes >();
     const auto  process_qp           = [&](auto point, val_t weight, const auto& basis_vals, const auto& ref_ders) {

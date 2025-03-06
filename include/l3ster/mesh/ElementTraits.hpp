@@ -12,7 +12,7 @@
 namespace lstr::mesh
 {
 template < ElementType ET, el_o_t EO >
-class Element;
+struct Element;
 
 template < typename >
 struct ElementTraits;

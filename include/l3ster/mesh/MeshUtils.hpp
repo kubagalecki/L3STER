@@ -12,7 +12,7 @@ auto findDomainElement(const MeshPartition< orders... >& mesh,
     -> std::optional< std::pair< element_cptr_variant_t< orders... >, el_side_t > >
 {
     auto       retval              = std::optional< std::pair< element_cptr_variant_t< orders... >, el_side_t > >{};
-    const auto bnd_el_nodes_sorted = util::getSortedArray(bnd_el.getNodes());
+    const auto bnd_el_nodes_sorted = util::getSortedArray(bnd_el.nodes);
     const auto match_domain_el     = [&]< ElementType DET, el_o_t DEO >(const Element< DET, DEO >& domain_el) {
         if constexpr (ElementTraits< Element< DET, DEO > >::native_dim ==
                       ElementTraits< Element< BET, BEO > >::native_dim + 1)
@@ -53,7 +53,7 @@ auto computeMeshDual(const MeshPartition< orders... >& mesh) -> util::metis::Gra
     const auto convert_topo_to_metis_format = [&]() {
         const auto topo_size = std::invoke([&mesh]() {
             size_t retval = 0;
-            mesh.visit([&retval](const auto& element) { retval += element.getNodes().size(); });
+            mesh.visit([&retval](const auto& element) { retval += element.nodes.size(); });
             return retval;
         });
         util::throwingAssert(static_cast< std::uintmax_t >(topo_size) <= max_metis_id, overflow_msg);
@@ -65,8 +65,8 @@ auto computeMeshDual(const MeshPartition< orders... >& mesh) -> util::metis::Gra
         eptr.push_back(0);
 
         const auto convert_element = [&]< ElementType T, el_o_t O >(const Element< T, O >* element) {
-            std::ranges::copy(element->getNodes(), std::back_inserter(eind));
-            eptr.push_back(static_cast< idx_t >(eptr.back() + element->getNodes().size()));
+            std::ranges::copy(element->nodes, std::back_inserter(eind));
+            eptr.push_back(static_cast< idx_t >(eptr.back() + element->nodes.size()));
         };
         for (el_id_t id = 0; id < mesh.getNElements(); ++id)
         {

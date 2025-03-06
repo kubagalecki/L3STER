@@ -69,7 +69,7 @@ static void BM_CopyElementNodes(benchmark::State& state)
     mesh.visit(element_op_counter, std::execution::par);
 
     const auto read_element = [&]< mesh::ElementType T, el_o_t O >(const mesh::Element< T, O >& el) {
-        const auto nodes = std::span{el.getNodes()};
+        const auto nodes = std::span{el.nodes};
         auto       hash  = robin_hood::hash_bytes(nodes.data(), nodes.size_bytes());
         benchmark::DoNotOptimize(hash);
     };

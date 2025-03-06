@@ -7,7 +7,7 @@ static void BM_PhysBasisDersComputation(benchmark::State& state)
     constexpr auto BT          = basis::BasisType::Lagrange;
     const auto     element     = getExampleHexElement< EO >();
     const auto&    ref_basis   = basis::getReferenceBasisAtDomainQuadrature< BT, mesh::ElementType::Hex, EO, QT, QO >();
-    const auto     jac_mat_gen = map::getNatJacobiMatGenerator(element.getData());
+    const auto     jac_mat_gen = map::getNatJacobiMatGenerator(element.data);
     for (auto _ : state)
         for (size_t qp_ind = 0; qp_ind < ref_basis.quadrature.size; ++qp_ind)
         {
@@ -188,7 +188,7 @@ static void BM_NS3DLocalEvaluation(benchmark::State& state)
     const auto element = getExampleHexElement< EO >();
     auto       dom_map = typename mesh::MeshPartition< EO >::domain_map_t{};
     mesh::pushToDomain(dom_map[0], element);
-    const auto mesh          = mesh::MeshPartition< EO >{dom_map, 0, element.getNodes().size(), {}};
+    const auto mesh          = mesh::MeshPartition< EO >{dom_map, 0, element.nodes.size(), {}};
     const auto local_element = mesh::LocalElementView{element, mesh, {}};
 
     constexpr size_t n_fields     = 7;
@@ -241,7 +241,7 @@ static void BM_DiffS3DLocalEvaluation(benchmark::State& state)
     const auto element = getExampleHexElement< EO >();
     auto       dom_map = typename mesh::MeshPartition< EO >::domain_map_t{};
     mesh::pushToDomain(dom_map[0], element);
-    const auto mesh               = mesh::MeshPartition< EO >{dom_map, 0, element.getNodes().size(), {}};
+    const auto mesh               = mesh::MeshPartition< EO >{dom_map, 0, element.nodes.size(), {}};
     const auto local_element      = mesh::LocalElementView{element, mesh, {}};
     using nodal_vals_t            = Eigen::Matrix< val_t, element.n_nodes, params.n_fields >;
     const nodal_vals_t nodal_vals = nodal_vals_t::Random();

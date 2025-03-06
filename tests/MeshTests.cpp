@@ -24,7 +24,7 @@ TEST_CASE("2D mesh import", "[mesh]")
     constexpr size_t expected_n_nodes = 121;
     size_t           max_node{};
     const auto       update_max_node = [&](const auto& el) {
-        const size_t max_el_node = *std::ranges::max_element(el.getNodes());
+        const size_t max_el_node = *std::ranges::max_element(el.nodes);
         if (max_el_node >= expected_n_nodes)
             throw std::invalid_argument{"max nodes exceeded"};
         max_node = std::max(max_node, max_el_node);
@@ -133,12 +133,12 @@ TEST_CASE("Element lookup", "[mesh]")
     constexpr auto fake_nodes     = std::array{153, 213, 372, 821};
 
     CHECK(mesh.find([&](const auto& element) {
-        auto element_nodes = element.getNodes();
+        auto element_nodes = element.nodes;
         std::ranges::sort(element_nodes);
         return std::ranges::equal(element_nodes, existing_nodes);
     }));
     CHECK_FALSE(mesh.find([&](const auto& element) {
-        auto element_nodes = element.getNodes();
+        auto element_nodes = element.nodes;
         std::ranges::sort(element_nodes);
         return std::ranges::equal(element_nodes, fake_nodes);
     }));
@@ -178,7 +178,7 @@ TEST_CASE("Element lookup by ID", "[mesh]")
     check_doesnt_contain(0);
 
     push_elem_id(0);
-    domain.elements.visitVectors([](auto& v) { std::ranges::sort(v, {}, [](const auto& el) { return el.getId(); }); });
+    domain.elements.visitVectors([](auto& v) { std::ranges::sort(v, {}, [](const auto& el) { return el.id; }); });
     check_contains(0);
 
     push_elem_id(id *= 2);
@@ -309,7 +309,7 @@ TEMPLATE_TEST_CASE("Local mesh view", "[mesh]", Order< 1 >, Order< 2 >, Order< 4
                 if constexpr (local_t::type == global_t::type and local_t::order == global_t::order)
                 {
                     const auto nodes = getGlobalNodes(local_element, global_mesh);
-                    return nodes == global_element.getNodes() and local_element.getData() == global_element.getData();
+                    return nodes == global_element.nodes and local_element.getData() == global_element.data;
                 }
                 return false;
             });
@@ -330,8 +330,8 @@ TEMPLATE_TEST_CASE("Local mesh view", "[mesh]", Order< 1 >, Order< 2 >, Order< 4
                         if (boundary == boundary_id)
                         {
                             const auto nodes = getGlobalNodes(local_element, global_mesh);
-                            if (nodes == global_boundary_view->getNodes() and
-                                local_element.getData() == global_boundary_view->getData() and
+                            if (nodes == global_boundary_view->nodes and
+                                local_element.getData() == global_boundary_view->data and
                                 side == global_boundary_view.getSide())
                                 return true;
                         }

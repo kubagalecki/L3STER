@@ -98,7 +98,7 @@ static auto makeSolution(const mesh::Element< ET, EO >& element)
 {
     // Analytical solution - phi(x) = x
     auto retval = Eigen::Matrix< val_t, mesh::Element< ET, EO >::n_nodes, params.n_rhs >{};
-    for (el_locind_t n = 0; n != element.getNodes().size(); ++n)
+    for (el_locind_t n = 0; n != element.nodes.size(); ++n)
     {
         const auto location = nodePhysicalLocation(element, n);
         retval(n, 0)        = location.x();
@@ -120,7 +120,7 @@ TEST_CASE("Local system assembly", "[local_asm]")
         auto [A, b]            = assembleDiffusionProblem2D< params >(element);
         applyDirichletBCs< ET, EO, params >(A, b, phi);
         const auto x = std::decay_t< decltype(b) >{A.llt().solve(b)};
-        for (el_locind_t node = 0; node != element.getNodes().size(); ++node)
+        for (el_locind_t node = 0; node != element.nodes.size(); ++node)
         {
             const auto dof = node * params.n_unknowns;
             for (Eigen::Index rhs = 0; rhs != params.n_rhs; ++rhs)

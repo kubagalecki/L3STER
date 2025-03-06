@@ -170,7 +170,7 @@ void MeshPartition< orders... >::reindexNodes(const Map& old_to_new)
     const auto new_begin       = old_owned.empty() ? 0uz : std::ranges::min(old_owned | std::views::transform(o2n));
     *m_node_ownership          = {new_begin, num_owned, m_node_ownership->shared() | std::views::transform(o2n)};
     const auto reindex_element = [&]< ElementType ET, el_o_t EO >(Element< ET, EO >& element) {
-        for (auto& node : element.getNodes())
+        for (auto& node : element.nodes)
             node = std::invoke(old_to_new, node);
     };
     visit(reindex_element, std::execution::par);
@@ -224,8 +224,8 @@ auto MeshPartition< orders... >::findImpl(el_id_t id, DomainMap&& domain_map)
             if (el_vec.empty())
                 return false;
 
-            const auto front_id = el_vec.front().getId();
-            const auto back_id  = el_vec.back().getId();
+            const auto front_id = el_vec.front().id;
+            const auto back_id  = el_vec.back().id;
 
             if (id < front_id or id > back_id)
                 return false;
@@ -238,8 +238,8 @@ auto MeshPartition< orders... >::findImpl(el_id_t id, DomainMap&& domain_map)
                 return true;
             }
 
-            const auto iter = std::ranges::lower_bound(el_vec, id, {}, [](const auto& el) { return el.getId(); });
-            if (iter == end(el_vec) or iter->getId() != id)
+            const auto iter = std::ranges::lower_bound(el_vec, id, {}, [](const auto& el) { return el.id; });
+            if (iter == end(el_vec) or iter->id != id)
                 return false;
 
             const auto ptr = std::addressof(*iter);
@@ -269,7 +269,7 @@ MeshPartition< orders... >::MeshPartition(MeshPartition< orders... >::domain_map
 {
     auto       nodes        = robin_hood::unordered_flat_set< n_id_t >{};
     const auto insert_nodes = [&](const auto& element) {
-        for (n_id_t node : element.getNodes())
+        for (n_id_t node : element.nodes)
             nodes.insert(node);
     };
     visit(insert_nodes);
@@ -289,7 +289,7 @@ MeshPartition< orders... >::MeshPartition(MeshPartition::domain_map_t       doma
     const auto owned_bound = owned_nodes_begin + n_owned_nodes;
     auto       ghost_set   = robin_hood::unordered_flat_set< n_id_t >{};
     visit([&](const auto& el) {
-        for (auto n : el.getNodes())
+        for (auto n : el.nodes)
             if (n < owned_nodes_begin or n >= owned_bound)
                 ghost_set.insert(n);
     });
@@ -505,7 +505,7 @@ constexpr bool doesSideMatch(const Element< ET, EO >& element, const std::array<
     if constexpr (n_side_nodes == N)
     {
         auto side_nodes = std::array< n_id_t, n_side_nodes >{};
-        std::ranges::copy(util::makeIndexedView(element.getNodes(), side_node_inds), side_nodes.begin());
+        std::ranges::copy(util::makeIndexedView(element.nodes, side_node_inds), side_nodes.begin());
         std::ranges::sort(side_nodes);
         return std::ranges::equal(side_nodes, sorted_boundary_nodes);
     }
@@ -565,7 +565,7 @@ auto MeshPartition< orders... >::makeBoundaryElementViews(const MeshPartition< o
     auto       error_flag = std::atomic_flag{};
     error_flag.clear();
     const auto put_bnd_el_view = [&]< ElementType BET, el_o_t BEO >(const Element< BET, BEO >& bnd_el) {
-        const auto bnd_el_nodes_sorted = util::getSortedArray(bnd_el.getNodes());
+        const auto bnd_el_nodes_sorted = util::getSortedArray(bnd_el.nodes);
         const auto match_dom_el        = [&]< ElementType DET, el_o_t DEO >(const Element< DET, DEO >& dom_el) {
             const auto matched_side_opt = detail::matchBoundaryNodesToElement(dom_el, bnd_el_nodes_sorted);
             if (matched_side_opt)

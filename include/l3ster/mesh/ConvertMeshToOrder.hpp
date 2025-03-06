@@ -26,7 +26,7 @@ inline auto makeNeighborInfoMap(const MeshPartition< 1 >& mesh)
     {
         const auto insert_el = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
             const auto map_entry = NeighborInfo{&element, domain_id};
-            retval.emplace(element.getId(), map_entry);
+            retval.emplace(element.id, map_entry);
         };
         mesh.visit(insert_el, std::views::single(domain_id));
     }
@@ -75,13 +75,13 @@ auto convertMeshToOrder(const MeshPartition< 1 >& mesh, std::integral_constant< 
                 const auto update_from_nbr           = [&]< ElementType T_Nbr >(const Element< T_Nbr, 1 >* nbr_ptr) {
                     const auto& univec        = new_domains.at(nbr_dom_id).elements;
                     const auto& nbr_vec       = univec.template getVector< Element< T_Nbr, OC > >();
-                    const auto  get_id        = &Element< T_Nbr, OC >::getId;
+                    const auto  get_id        = &Element< T_Nbr, OC >::id;
                     const auto& converted_nbr = *std::ranges::lower_bound(nbr_vec, nbr_id, {}, get_id);
                     updateMatchMask(*nbr_ptr, converted_nbr, el, mask, new_nodes);
                 };
                 std::visit(update_from_nbr, nbr_ptr_var);
             };
-            std::ranges::for_each(dual_graph.getElementAdjacent(el.getId()), match_nbr_nodes);
+            std::ranges::for_each(dual_graph.getElementAdjacent(el.id), match_nbr_nodes);
 
             for (auto i : ElementTraits< Element< T, OC > >::boundary_node_inds)
                 if (not mask[i])
@@ -91,8 +91,8 @@ auto convertMeshToOrder(const MeshPartition< 1 >& mesh, std::integral_constant< 
                     new_nodes[i] = max_node++;
 
             // This relies on the fact that we're iterating over domain elements of a given type in ascending ID order
-            emplaceInDomain< T, OC >(new_domain, new_nodes, ElementData< T, OC >{el.getData()}, el.getId());
-            converted.set(el.getId());
+            emplaceInDomain< T, OC >(new_domain, new_nodes, ElementData< T, OC >{el.data}, el.id);
+            converted.set(el.id);
         };
         old_domain.elements.visit(convert_element, std::execution::seq);
     };

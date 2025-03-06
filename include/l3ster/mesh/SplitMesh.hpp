@@ -18,7 +18,7 @@ void assignBoundaryElements(const MeshPartition< orders... >&                   
     for (auto boundary_id : mesh.getBoundaryIdsView())
     {
         const auto push_true_el_bnd_sz = [&]< ElementType ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el) {
-            if (true_el_ids.contains(el->getId()))
+            if (true_el_ids.contains(el->id))
                 boundary_element_sizes.push_back(getSideNodeIndices< ET, EO >(el.getSide()).size());
         };
         mesh.visitBoundaries(push_true_el_bnd_sz, {boundary_id}, std::execution::seq);
@@ -35,7 +35,7 @@ void assignBoundaryElements(const MeshPartition< orders... >&                   
     for (size_t i = 0; auto boundary_id : mesh.getBoundaryIdsView())
     {
         const auto put_bnd_nodes_in_set = [&]< ElementType ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el) {
-            if (true_el_ids.contains(el->getId()))
+            if (true_el_ids.contains(el->id))
             {
                 const auto dest = boundary_el_nodes(i++);
                 std::ranges::copy(el.getSideNodesView(), dest.begin());
@@ -48,7 +48,7 @@ void assignBoundaryElements(const MeshPartition< orders... >&                   
     for (auto boundary_id : mesh.getBoundaryIdsView())
     {
         const auto push_elem = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
-            auto nodes = element.getNodes();
+            auto nodes = element.nodes;
             std::ranges::sort(nodes);
             auto& dest = true_boundary_el_nodes_set.contains(std::span{nodes}) ? true_els : false_els;
             pushToDomain(dest[boundary_id], element);
@@ -71,7 +71,7 @@ auto makeDomainMaps(const MeshPartition< orders... >& mesh, ElementPredicate&& e
             if (std::invoke(element_predicate, element))
             {
                 mesh::pushToDomain(true_els[domain_id], element);
-                true_el_ids.insert(element.getId());
+                true_el_ids.insert(element.id);
             }
             else
                 mesh::pushToDomain(false_els[domain_id], element);
@@ -88,9 +88,8 @@ auto makeMesh(const MeshPartition< orders... >&                   parent_mesh,
 {
     auto       owned_nodes        = std::set< n_id_t >{};
     const auto insert_owned_nodes = [&](const auto& element) {
-        for (auto node : element.getNodes() | std::views::filter([&](n_id_t node) {
-                             return parent_mesh.getNodeOwnership().isOwned(node);
-                         }))
+        for (auto node : element.nodes | std::views::filter(
+                                             [&](n_id_t node) { return parent_mesh.getNodeOwnership().isOwned(node); }))
             owned_nodes.insert(node);
     };
     for (const auto& domain : dom_map | std::views::values)

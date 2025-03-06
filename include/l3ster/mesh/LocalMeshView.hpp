@@ -207,7 +207,7 @@ template < el_o_t... orders >
 LocalElementView< ET, EO >::LocalElementView(const Element< ET, EO >&          global_elem,
                                              const MeshPartition< orders... >& mesh,
                                              std::span< const bound_descr >    sides)
-    : m_data{global_elem.getData()}
+    : m_data{global_elem.data}
 {
     const auto g2l = [&](auto n) {
         return static_cast< n_loc_id_t >(mesh.getNodeOwnership().getLocalIndex(n));
@@ -222,7 +222,7 @@ LocalElementView< ET, EO >::LocalElementView(const Element< ET, EO >&          g
         m_nodes.back() = internal_nodes.front();
     }
     else
-        std::ranges::transform(global_elem.getNodes(), m_nodes.begin(), g2l);
+        std::ranges::transform(global_elem.nodes, m_nodes.begin(), g2l);
 
     m_sides.fill(invalid_domain_id);
     for (const auto& [side, boundary_id] : sides)
@@ -408,7 +408,7 @@ auto makeElementIdToSidesMap(const MeshPartition< orders... >& mesh)
     {
         const auto& boundary  = mesh.getBoundary(boundary_id);
         const auto  push_side = [&](const auto& bnd_el_view) {
-            const auto elem_id = bnd_el_view->getId();
+            const auto elem_id = bnd_el_view->id;
             const auto side    = bnd_el_view.getSide();
             retval[elem_id].emplace_back(side, boundary_id);
         };
@@ -464,7 +464,7 @@ LocalMeshView< orders... >::LocalMeshView(const MeshPartition< orders... >& part
     m_owned_limit               = owned_nodes.empty() ? 0u : (g2l(owned_nodes.back()) + 1u);
     const auto elem_side_map    = detail::makeElementIdToSidesMap(part);
     const auto element_to_local = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
-        const auto side_info = elem_side_map.find(element.getId());
+        const auto side_info = elem_side_map.find(element.id);
         return side_info != elem_side_map.end() ? LocalElementView{element, full, side_info->second}
                                                 : LocalElementView{element, full, {}};
     };
