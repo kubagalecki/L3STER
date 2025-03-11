@@ -329,5 +329,16 @@ inline auto merge(const MeshPartition< 1 >& mesh1, const MeshPartition< 1 >& mes
     std::ranges::set_intersection(boundary_ids, domains | std::views::keys, std::back_inserter(remaining_boundaries));
     return {domains, 0, num_nodes, remaining_boundaries};
 }
+
+template < Mapping_c< Point< 3 >, Point< 3 > > Deformation >
+auto deform(MeshPartition< 1 >& mesh, Deformation&& deform)
+{
+    mesh.visit(
+        [&]< ElementType ET, el_o_t EO >(Element< ET, EO >& element) {
+            for (auto& point : element.data.vertices)
+                point = std::invoke(deform, point);
+        },
+        std::execution::par);
+}
 } // namespace lstr::mesh
 #endif // L3STER_MESHUTILS_HPP
