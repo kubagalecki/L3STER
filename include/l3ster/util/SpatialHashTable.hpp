@@ -22,13 +22,12 @@ public:
     using point_type = std::array< val_t, dim >;
     using value_type = std::pair< const point_type, T >;
 
-    explicit SpatialHashTable(const point_type& dx, const point_type& origin = std::array< val_t, dim >{})
-        : m_origin{origin}, m_dx{dx}
+    explicit SpatialHashTable(const point_type& dx, const point_type& origin = {}) : m_origin{origin}, m_dx{dx}
     {
         for (auto& d : m_dx)
             d = std::max(std::fabs(d), minimum_dx);
     }
-    explicit SpatialHashTable(val_t dx = minimum_dx, const point_type& origin = std::array< val_t, dim >{})
+    explicit SpatialHashTable(val_t dx = minimum_dx, const point_type& origin = {})
         : SpatialHashTable(makeFilledArray< dim >(dx), origin)
     {}
 

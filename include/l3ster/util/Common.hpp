@@ -216,6 +216,25 @@ auto geomspace(T lo, T hi, size_t N) -> ArrayOwner< T >
     return retval;
 }
 
+template < std::floating_point T >
+auto geomSpaceProg(T lo, T hi, size_t N, T q) -> ArrayOwner< T >
+{
+    util::throwingAssert(N >= 2);
+    util::throwingAssert(q > 0.);
+    const auto lengths = std::views::iota(0uz, N - 1) |
+                         std::views::transform([q](auto i) { return std::pow(q, static_cast< T >(i)); }) |
+                         std::views::common;
+    auto retval = util::ArrayOwner< T >(N);
+    std::inclusive_scan(lengths.begin(), lengths.end(), std::next(retval.begin()));
+    const auto L     = hi - lo;
+    const auto scale = L / retval.back();
+    retval.front()   = lo;
+    for (auto& r : retval | std::views::drop(1) | std::views::take(N - 2))
+        r = r * scale + lo;
+    retval.back() = hi;
+    return retval;
+}
+
 template < size_t N, typename T >
 constexpr auto makeFilledArray(const T& value) -> std::array< T, N >
 {

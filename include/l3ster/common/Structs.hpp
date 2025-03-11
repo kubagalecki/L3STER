@@ -60,6 +60,12 @@ struct Point
         return coords[2];
     }
 
+    [[nodiscard]] constexpr auto begin() const { return coords.begin(); }
+    [[nodiscard]] constexpr auto end() const { return coords.end(); }
+    [[nodiscard]] constexpr auto begin() { return coords.begin(); }
+    [[nodiscard]] constexpr auto end() { return coords.end(); }
+    [[nodiscard]] constexpr auto size() const { return coords.size(); }
+
     friend constexpr bool operator==(const Point&, const Point&)  = default;
     friend constexpr auto operator<=>(const Point&, const Point&) = default;
 

@@ -363,3 +363,39 @@ TEMPLATE_TEST_CASE("Local mesh view", "[mesh]", Order< 1 >, Order< 2 >, Order< 4
         check_local_view(mesh);
     }
 }
+
+TEST_CASE("Merge meshes", "[mesh]")
+{
+    const auto square1 = makeSquareMesh(std::array{0., 1., 2.});
+    SECTION("Fully overlapping boundaries")
+    {
+        const auto square2 = makeSquareMesh(std::array{2., 3., 4.}, std::array{0., 1., 2.});
+        const auto merged  = merge(square1, square2);
+
+        CHECK(std::ranges::equal(merged.getDomainIds(), std::views::iota(0, 5)));
+        CHECK(std::ranges::equal(merged.getBoundaryIdsView(), std::views::iota(1, 5)));
+        CHECK(merged.getDomain(0).numElements() == 8);
+        CHECK(merged.getDomain(1).numElements() == 4);
+        CHECK(merged.getDomain(2).numElements() == 4);
+        CHECK(merged.getDomain(3).numElements() == 2);
+        CHECK(merged.getDomain(4).numElements() == 2);
+    }
+    SECTION("Partially overlapping boundaries")
+    {
+        const auto square2 = makeSquareMesh(
+            std::array{2., 3., 4.}, std::array{1., 2., 3.}, {.bottom = 5, .top = 6, .left = 7, .right = 8});
+        const auto merged = merge(square1, square2);
+
+        CHECK(std::ranges::equal(merged.getDomainIds(), std::views::iota(0, 9)));
+        CHECK(std::ranges::equal(merged.getBoundaryIdsView(), std::views::iota(1, 9)));
+        CHECK(merged.getDomain(0).numElements() == 8);
+        CHECK(merged.getDomain(1).numElements() == 2);
+        CHECK(merged.getDomain(2).numElements() == 2);
+        CHECK(merged.getDomain(3).numElements() == 2);
+        CHECK(merged.getDomain(4).numElements() == 1);
+        CHECK(merged.getDomain(5).numElements() == 2);
+        CHECK(merged.getDomain(6).numElements() == 2);
+        CHECK(merged.getDomain(7).numElements() == 1);
+        CHECK(merged.getDomain(8).numElements() == 2);
+    }
+}
