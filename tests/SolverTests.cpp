@@ -165,15 +165,15 @@ bool directSolverSuite(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
 void printIterHeader()
 {
     std::println(
-        "{:-^73}\n{:^35}{:^12}{:^16}{:^10}", " ITERATIVE SOLVER TESTS ", "Name", "Error", "Iterations", "Status");
+        "{:-^73}\n{:^37}{:^12}{:^16}{:^10}", " ITERATIVE SOLVER TESTS ", "Name", "Error", "Iterations", "Status");
 }
 
 template < PreconditionerOptions_c Opts = NullPreconditioner::Options >
-bool runIterTest(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
-                 const Teuchos::RCP< tpetra_multivector_t >&       x,
-                 const Teuchos::RCP< const tpetra_multivector_t >& b,
-                 std::string_view                                  name,
-                 const Opts&                                       precond_opts = {})
+bool runCGTest(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
+               const Teuchos::RCP< tpetra_multivector_t >&       x,
+               const Teuchos::RCP< const tpetra_multivector_t >& b,
+               std::string_view                                  name,
+               const Opts&                                       precond_opts = {})
 {
     const auto solver_opts = IterSolverOpts{.verbosity = {.summary = false}};
     auto       solver      = CG{solver_opts, precond_opts};
@@ -181,7 +181,24 @@ bool runIterTest(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
     const auto [err_norm, iters] = solver.solve(A, b, x);
     const bool passed            = err_norm <= IterSolverOpts{}.tol;
     if (A->getComm()->getRank() == 0)
-        std::println("{:<35}{:^12.3e}{:^16}{:^10}", name, err_norm, iters, passed ? "PASS" : "FAIL");
+        std::println("{:<37}{:^12.3e}{:^16}{:^10}", name, err_norm, iters, passed ? "PASS" : "FAIL");
+    return passed;
+}
+
+template < PreconditionerOptions_c Opts = NullPreconditioner::Options >
+bool runGMRESTest(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
+                  const Teuchos::RCP< tpetra_multivector_t >&       x,
+                  const Teuchos::RCP< const tpetra_multivector_t >& b,
+                  std::string_view                                  name,
+                  const Opts&                                       precond_opts = {})
+{
+    const auto solver_opts = IterSolverOpts{.verbosity = {.summary = false}};
+    auto       solver      = Gmres{solver_opts, precond_opts};
+    x->putScalar(0.);
+    const auto [err_norm, iters] = solver.solve(A, b, x);
+    const bool passed            = err_norm <= IterSolverOpts{}.tol;
+    if (A->getComm()->getRank() == 0)
+        std::println("{:<37}{:^12.3e}{:^16}{:^10}", name, err_norm, iters, passed ? "PASS" : "FAIL");
     return passed;
 }
 
@@ -192,15 +209,27 @@ bool iterativeSolverSuite(const Teuchos::RCP< const tpetra_crsmatrix_t >&   A,
     bool passed = true;
     if (A->getComm()->getRank() == 0)
         printIterHeader();
-    passed &= runIterTest(A, x, b, "CG without precond.");
-    passed &= runIterTest(A, x, b, "CG + native Richardson precond.", NativeRichardsonOpts{});
-    passed &= runIterTest(A, x, b, "CG + native Jacobi precond.", NativeJacobiOpts{});
+
+    passed &= runCGTest(A, x, b, "CG without precond.");
+    passed &= runCGTest(A, x, b, "CG + native Richardson precond.", NativeRichardsonOpts{});
+    passed &= runCGTest(A, x, b, "CG + native Jacobi precond.", NativeJacobiOpts{});
+
+    passed &= runCGTest(A, x, b, "GMRES without precond.");
+    passed &= runCGTest(A, x, b, "GMRES + native Richardson precond.", NativeRichardsonOpts{});
+    passed &= runCGTest(A, x, b, "GMRES + native Jacobi precond.", NativeJacobiOpts{});
 
 #ifdef L3STER_TRILINOS_HAS_IFPACK2
-    passed &= passed &= runIterTest(A, x, b, "CG + Ifpack2 Richardson precond.", Ifpack2RichardsonOpts{});
-    passed &= passed &= runIterTest(A, x, b, "CG + Ifpack2 Jacobi precond.", Ifpack2JacobiOpts{});
-    passed &= passed &= runIterTest(A, x, b, "CG + Ifpack2 SGS precond.", Ifpack2SGSOpts{});
-    passed &= passed &= runIterTest(A, x, b, "CG + Ifpack2 Chebyshev precond.", Ifpack2ChebyshevOpts{});
+    passed &= passed &= runCGTest(A, x, b, "CG + Ifpack2 Richardson precond.", Ifpack2RichardsonOpts{});
+    passed &= passed &= runCGTest(A, x, b, "CG + Ifpack2 Jacobi precond.", Ifpack2JacobiOpts{});
+    passed &= passed &= runCGTest(A, x, b, "CG + Ifpack2 SGS precond.", Ifpack2SGSOpts{});
+    passed &= passed &= runCGTest(A, x, b, "CG + Ifpack2 Chebyshev precond.", Ifpack2ChebyshevOpts{});
+
+    passed &= passed &= runGMRESTest(A, x, b, "GMRES + Ifpack2 Richardson precond.", Ifpack2RichardsonOpts{});
+    passed &= passed &= runGMRESTest(A, x, b, "GMRES + Ifpack2 Jacobi precond.", Ifpack2JacobiOpts{});
+    passed &= passed &= runGMRESTest(A, x, b, "GMRES + Ifpack2 SGS precond.", Ifpack2SGSOpts{});
+    passed &= passed &= runGMRESTest(A, x, b, "GMRES + Ifpack2 Chebyshev precond.", Ifpack2ChebyshevOpts{});
+    passed &= passed &= runGMRESTest(A, x, b, "GMRES + Ifpack2 ILUk precond.", Ifpack2IluKOpts{});
+    passed &= passed &= runGMRESTest(A, x, b, "GMRES + Ifpack2 ILUT precond.", Ifpack2IluTOpts{});
 #endif
 
     if (A->getComm()->getRank() == 0)
