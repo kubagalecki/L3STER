@@ -23,6 +23,7 @@ jobs:
           password: "${{ secrets.DOCKER_HUB_TOKEN }}"
           image_name: l3ster-ci
           dockerfile: scripts/ci/Dockerfile.base
+          build_extra_args: "--network=host"
 
   unit_tests_and_static_analysis:
     name: Static analysis and unit tests
