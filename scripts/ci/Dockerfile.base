@@ -3,7 +3,7 @@
 # This way dependencies don't need to be rebuilt every CI run.
 ###############################################################
 
-FROM ubuntu:rolling
+FROM ubuntu:oracular
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata && apt-get upgrade -y --fix-missing
 RUN apt-get install -y git curl tar python3 unzip xz-utils bzip2 lbzip2 patch binutils cmake make gcovr gpg gcc g++ gfortran
