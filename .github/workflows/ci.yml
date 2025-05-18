@@ -14,6 +14,7 @@ jobs:
   build_base_container:
     name: Build base container
     runs-on: self-hosted
+    container: ubuntu
     steps:
       - uses: actions/checkout@v4.2.2
       - uses: whoan/docker-build-with-cache-action@v8.1
