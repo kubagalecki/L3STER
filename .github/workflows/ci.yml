@@ -18,6 +18,9 @@ jobs:
       - uses: docker/setup-buildx-action@v3
         with:
           driver-opts: network=host
+          version: latest
+          endpoint: builders
+          buildkitd-flags: '--allow-insecure-entitlement network.host'
 
   build_base_container:
     name: Build base container
