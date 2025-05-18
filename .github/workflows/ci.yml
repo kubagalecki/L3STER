@@ -15,8 +15,8 @@ jobs:
     name: Build base container
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v4.2.0
-      - uses: whoan/docker-build-with-cache-action@v8.0.2
+      - uses: actions/checkout@v4.2.2
+      - uses: whoan/docker-build-with-cache-action@v8.1
         id: docker-base-cache
         with:
           username: "${{ secrets.DOCKER_HUB_USERNAME }}"
@@ -33,7 +33,7 @@ jobs:
       BUILD_TYPE: Release
       TOOLCHAIN_PATH: ../cmake/toolchains/StaticAnalysis.cmake
     steps:
-      - uses: actions/checkout@v4.2.0
+      - uses: actions/checkout@v4.2.2
       - name: Build and run tests
         run: scripts/ci/build-and-run-tests.sh
       - name: Cleanup
@@ -53,7 +53,7 @@ jobs:
         build_type: [ Debug, Release ]
         sanitizer: [ Address, UndefinedBehavior ] # Thread disabled, too many false positives with TBB
     steps:
-      - uses: actions/checkout@v4.2.0
+      - uses: actions/checkout@v4.2.2
       - name: Build and run tests
         run: scripts/ci/build-and-run-tests.sh
         continue-on-error: true # Allow sanitizers to fail
@@ -71,7 +71,7 @@ jobs:
       BUILD_TYPE: Release
       TOOLCHAIN_PATH: ../cmake/toolchains/StaticAnalysis.cmake
     steps:
-      - uses: actions/checkout@v4.2.0
+      - uses: actions/checkout@v4.2.2
       - name: Build and run tests
         run: scripts/ci/build-and-run-tests.sh
       - name: Cleanup
@@ -86,7 +86,7 @@ jobs:
     env:
       BUILD_TYPE: Release
     steps:
-      - uses: actions/checkout@v4.2.0
+      - uses: actions/checkout@v4.2.2
       - name: Build examples
         run: scripts/ci/build-examples.sh
       - name: Cleanup
@@ -102,7 +102,7 @@ jobs:
       BUILD_TYPE: Debug
       TOOLCHAIN_PATH: ../cmake/toolchains/Coverage.cmake
     steps:
-      - uses: actions/checkout@v4.2.0
+      - uses: actions/checkout@v4.2.2
       - name: Build and run tests
         run: scripts/ci/build-and-run-tests.sh
       - name: Gather coverage results via gcovr
@@ -115,7 +115,7 @@ jobs:
       - name: Cleanup
         if: always()
         run: rm -rf build/
-      - uses: codecov/codecov-action@v4.5.0
+      - uses: codecov/codecov-action@v5.4.3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
