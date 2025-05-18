@@ -16,20 +16,20 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: Set up Docker Buildx
-        id: buildx-setup
+        id: buildx
         uses: docker/setup-buildx-action@v3
         with:
           driver-opts: network=host
       - uses: actions/checkout@v4.2.2
       - name: Build dependencies
         uses: whoan/docker-build-with-cache-action@v8.1
-        id: docker-base-cache
+        if: steps.buildx.outcome == 'success'
         with:
           username: "${{ secrets.DOCKER_HUB_USERNAME }}"
           password: "${{ secrets.DOCKER_HUB_TOKEN }}"
           image_name: l3ster-ci
           dockerfile: scripts/ci/Dockerfile.base
-          build_extra_args: "--network=host"
+          build_extra_args: --network=host
 
   unit_tests_and_static_analysis:
     name: Static analysis and unit tests
