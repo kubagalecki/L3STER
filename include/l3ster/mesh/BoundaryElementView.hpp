@@ -31,7 +31,7 @@ private:
 template < ElementType ET, el_o_t EO >
 auto BoundaryElementView< ET, EO >::getSideNodesView() const
 {
-    return util::makeIndexedView(std::span{m_parent->getNodes()}, getSideNodeInds());
+    return util::makeIndexedView(std::span{m_parent->nodes}, getSideNodeInds());
 }
 
 template < ElementType ET, el_o_t EO >

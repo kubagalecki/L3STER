@@ -12,8 +12,8 @@
 using namespace lstr;
 using namespace lstr::mesh;
 
-const auto node_dist_x = util::linspaceVector(-.5, .5, 5);
-const auto node_dist_y = util::linspaceVector(0., .5, 4);
+const auto node_dist_x = util::linspace(-.5, .5, 5);
+const auto node_dist_y = util::linspace(0., .5, 4);
 const auto W           = node_dist_x.back() - node_dist_x.front();
 const auto H           = node_dist_y.back() - node_dist_y.front();
 

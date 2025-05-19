@@ -43,9 +43,12 @@ auto BelosSolverInterface::parseBelosOpts(const IterSolverOpts& opts) -> Teuchos
 {
     auto retval = util::makeTeuchosRCP< Teuchos::ParameterList >();
     retval->set("Maximum Iterations", opts.max_iters);
+    retval->set("Maximum Restarts", opts.max_restarts);
+    retval->set("Num Blocks", opts.restart_length);
     retval->set("Convergence Tolerance", opts.tol);
     retval->set("Output Frequency", opts.print_freq);
     retval->set("Block Size", opts.block_size);
+    retval->set("Deflation Quorum", -1);
 
     const auto verbosity_belos_format =
         static_cast< Belos::MsgType >((opts.verbosity.warnings ? Belos::MsgType::Warnings : 0) |
@@ -102,6 +105,14 @@ struct CG : public solvers::BelosSolverInterface
     template < solvers::PreconditionerOptions_c PrecondOpts = typename solvers::NullPreconditioner::Options >
     CG(const IterSolverOpts& solver_opts = {}, const PrecondOpts& precond_opts = {})
         : BelosSolverInterface("Block CG", solver_opts, precond_opts)
+    {}
+};
+
+struct Gmres : public solvers::BelosSolverInterface
+{
+    template < solvers::PreconditionerOptions_c PrecondOpts = typename solvers::NullPreconditioner::Options >
+    Gmres(const IterSolverOpts& solver_opts = {}, const PrecondOpts& precond_opts = {})
+        : BelosSolverInterface("Pseudoblock GMRES", solver_opts, precond_opts)
     {}
 };
 } // namespace lstr

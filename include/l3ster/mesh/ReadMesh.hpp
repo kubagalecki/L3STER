@@ -346,7 +346,7 @@ inline auto readMesh(std::string_view                  file_path,
             // Sort elements by ID
             for (auto& domain : domain_map | std::views::values)
                 domain.elements.visitVectors(
-                    [](auto& vec) { std::ranges::sort(vec, {}, [](const auto& el) { return el.getId(); }); });
+                    [](auto& vec) { std::ranges::sort(vec, {}, [](const auto& el) { return el.id; }); });
 
             return {std::move(domain_map), boundary_ids};
         };

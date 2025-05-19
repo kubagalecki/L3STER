@@ -34,7 +34,7 @@ auto computeNodeWeights(const MeshPartition< orders... >&             mesh,
     {
         const auto dom_dofs   = util::getTrueInds(dof_bmp);
         const auto do_element = [&](const auto& element) {
-            for (auto node : element.getNodes())
+            for (auto node : element.nodes)
             {
                 const auto begin_ind      = node * max_dofs_per_node;
                 const auto end_ind        = begin_ind + max_dofs_per_node;
@@ -258,7 +258,7 @@ auto getElementIds(const MeshPartition< orders... >& part,
 {
     auto   element_ids = util::ArrayOwner< el_id_t >(n_elements);
     size_t i           = 0;
-    part.visit([&](const auto& element) { element_ids[i++] = (element.getId()); }, domain_ids);
+    part.visit([&](const auto& element) { element_ids[i++] = (element.id); }, domain_ids);
     return element_ids;
 }
 
@@ -292,20 +292,20 @@ void assignBoundaryElements(const MeshPartition< orders... >&                   
         const auto& boundary = part.getDomain(boundary_id);
         n_boundary_elements.fetch_add(boundary.elements.size(), std::memory_order_relaxed);
         const auto assign_from_domain = [&](d_id_t domain_id) {
-            const auto assign_boundary_els = [&]< ElementType ET, el_o_t EO >(
-                                                 const Element< ET, EO >& boundary_element) {
-                const auto dom_el_opt = findDomainElement(part, boundary_element, std::views::single(domain_id));
-                if (dom_el_opt)
-                {
-                    n_assigned.fetch_add(1, std::memory_order_relaxed);
-                    const auto dom_el_id = std::visit([](const auto& el) { return el->getId(); }, dom_el_opt->first);
-                    const auto domain_element_partition = lookup_el_part(dom_el_id);
+            const auto assign_boundary_els =
+                [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& boundary_element) {
+                    const auto dom_el_opt = findDomainElement(part, boundary_element, std::views::single(domain_id));
+                    if (dom_el_opt)
+                    {
+                        n_assigned.fetch_add(1, std::memory_order_relaxed);
+                        const auto dom_el_id = std::visit([](const auto& el) { return el->id; }, dom_el_opt->first);
+                        const auto domain_element_partition = lookup_el_part(dom_el_id);
 
-                    const auto lock   = std::lock_guard{insertion_mutex};
-                    auto&      domain = new_domain_maps[domain_element_partition][boundary_id];
-                    pushToDomain(domain, boundary_element);
-                }
-            };
+                        const auto lock   = std::lock_guard{insertion_mutex};
+                        auto&      domain = new_domain_maps[domain_element_partition][boundary_id];
+                        pushToDomain(domain, boundary_element);
+                    }
+                };
             part.visit(assign_boundary_els, std::views::single(boundary_id));
         };
         const auto& potential_dom_ids = dim_dom_map.at(boundary.dim + 1);
@@ -361,7 +361,7 @@ auto assignNodes(idx_t                                                          
         {
             domain.elements.visit(
                 [&](const auto& element) {
-                    for (auto node : element.getNodes())
+                    for (auto node : element.nodes)
                         if (npart[node] == part_ind)
                             owned_nodes.insert(static_cast< idx_t >(node));
                         else
@@ -427,7 +427,7 @@ void renumberNodes(util::ArrayOwner< std::map< d_id_t, Domain< orders... > > >& 
         std::ranges::sort(ghost);
     }
     const auto update_element = [&]< ElementType ET, el_o_t EO >(Element< ET, EO >& element) {
-        std::ranges::for_each(element.getNodes(), update_id);
+        std::ranges::for_each(element.nodes, update_id);
     };
     for (auto& map : dom_maps)
         for (auto& map_entry : map)

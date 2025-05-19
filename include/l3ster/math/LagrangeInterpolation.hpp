@@ -20,21 +20,21 @@ constexpr Polynomial< T, N - 1 > lagrangeInterp(const std::array< T, N >& x, con
     // meant for.
 
     std::array< T, N > lag_coefs{};
-    for (auto i : std::views::iota(0, ptrdiff_t{N}))
+    for (size_t i = 0; i != N; ++i)
     {
         std::array< T, N - 1 > roots;
         std::copy_n(begin(x), i, roots.begin());
         std::ranges::copy(x | std::views::drop(i + 1), begin(roots) + i);
         std::array< T, N > l_i{};
         l_i.front() = 1.;
-        for (auto j : std::views::iota(0, ptrdiff_t{N - 1}))
+        for (size_t j = 0; j != N - 1; ++j)
         {
-            for (ptrdiff_t k = j + 1; k > 0; --k)
+            for (size_t k = j + 1; k > 0; --k)
                 l_i[k] -= l_i[k - 1] * roots[j];
         }
         const PolynomialView root_poly{l_i};
         const T              s = y[i] / root_poly.evaluate(x[i]);
-        for (auto j : std::views::iota(0, ptrdiff_t{N}))
+        for (size_t j = 0; j != N; ++j)
             lag_coefs[j] += s * l_i[j];
     }
     return Polynomial{lag_coefs};

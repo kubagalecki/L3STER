@@ -98,7 +98,7 @@ void zeroOut(const mesh::MeshPartition< orders... >&                       mesh,
 {
     const auto num_rhs         = values_out.extent(1);
     const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
-        for (auto node : element.getNodes())
+        for (auto node : element.nodes)
             for (auto&& [dof_ind, dof] : detail::getNodeDofsAtInds(dof_map, dof_inds, node) | std::views::enumerate)
                 for (size_t rhs = 0; rhs != num_rhs; ++rhs)
                 {
@@ -225,7 +225,7 @@ void computeValuesAtNodes(const mesh::MeshPartition< orders... >&               
     L3STER_PROFILE_FUNCTION;
     util::throwingAssert(values_out.extent(1) == n_rhs);
     const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
-        for (auto node : element.getNodes())
+        for (auto node : element.nodes)
             for (auto&& [dof_ind, dof] : detail::getNodeDofsAtInds(dof_map, dof_inds, node) | std::views::enumerate)
             {
                 std::atomic_ref{num_contribs(dof, 0)}.store(1., std::memory_order_relaxed);
@@ -338,8 +338,8 @@ void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&         
     const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
         if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
         {
-            const auto& el_nodes       = element.getNodes();
-            const auto& el_data        = element.getData();
+            const auto& el_nodes       = element.nodes;
+            const auto& el_data        = element.data;
             const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
             const auto& node_locations = mesh::getNodeLocations< ET, EO >();
             const auto  node_vals      = field_access.getGloballyIndexed(el_nodes);
@@ -416,14 +416,14 @@ void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&     kern
             const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
             const auto& node_locations = mesh::getNodeLocations< ET, EO >();
             const auto  node_vals      = field_access.getLocallyIndexed(el_nodes);
-            const auto  jacobi_gen     = map::getNatJacobiMatGenerator(element.getData());
+            const auto  jacobi_gen     = map::getNatJacobiMatGenerator(element.data);
             for (auto&& [node_ind, node] : el_nodes | std::views::enumerate)
             {
                 const auto& ref_coords    = node_locations[node_ind];
                 const auto& ref_ders      = basis_at_nodes.derivatives[node_ind];
                 const auto [phys_ders, _] = map::mapDomain< ET, EO >(jacobi_gen, ref_coords, ref_ders);
                 const auto ker_res        = evalKernel(
-                    kernel, ref_coords, basis_at_nodes.values[node_ind], phys_ders, node_vals, element.getData(), time);
+                    kernel, ref_coords, basis_at_nodes.values[node_ind], phys_ders, node_vals, element.data, time);
                 for (auto&& [dof_ind, dof] : detail::getNodeDofsAtInds(dof_map, dof_inds, node) | std::views::enumerate)
                     for (size_t rhs_ind = 0; rhs_ind != n_rhs; ++rhs_ind)
                     {
@@ -473,11 +473,11 @@ void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&       
     const auto process_el_view = [&]< mesh::ElementType ET, el_o_t EO >(mesh::BoundaryElementView< ET, EO > el_view) {
         if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
         {
-            const auto& el_nodes       = el_view->getNodes();
+            const auto& el_nodes       = el_view->nodes;
             const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
             const auto& node_locations = mesh::getNodeLocations< ET, EO >();
             const auto  node_vals      = field_access.getGloballyIndexed(el_nodes);
-            const auto& el_data        = el_view->getData();
+            const auto& el_data        = el_view->data;
             const auto  jacobi_gen     = map::getNatJacobiMatGenerator(el_data);
             const auto  side           = el_view.getSide();
             const auto  process_node   = [&](size_t node_ind) {
@@ -618,14 +618,14 @@ void computeValuesAtNodes(const MpiComm&                                     com
     const auto new_vals_alloc = std::make_unique< val_t[] >(num_all * num_inds);
     const auto new_vals       = view_t(new_vals_alloc.get(), num_all, num_inds);
     const auto zero_el        = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
-        for (auto lid : element.getNodes() | std::views::transform([&](auto n) { return ownership.getLocalIndex(n); }))
+        for (auto lid : element.nodes | std::views::transform([&](auto n) { return ownership.getLocalIndex(n); }))
             std::atomic_ref{num_contribs.at(lid)}.fetch_add(1, std::memory_order_relaxed);
     };
     const auto set_el_vals = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
         if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
         {
-            const auto& el_nodes       = element.getNodes();
-            const auto& el_data        = element.getData();
+            const auto& el_nodes       = element.nodes;
+            const auto& el_data        = element.data;
             const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
             const auto& node_locations = mesh::getNodeLocations< ET, EO >();
             const auto  node_vals      = field_access.getGloballyIndexed(el_nodes);
@@ -687,11 +687,11 @@ void computeValuesAtNodes(const MpiComm&                                     com
                                  const mesh::BoundaryElementView< ET, EO >& el_view) {
         if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
         {
-            const auto& el_nodes       = el_view->getNodes();
+            const auto& el_nodes       = el_view->nodes;
             const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
             const auto& node_locations = mesh::getNodeLocations< ET, EO >();
             const auto  node_vals      = field_access.getGloballyIndexed(el_nodes);
-            const auto& el_data        = el_view->getData();
+            const auto& el_data        = el_view->data;
             const auto  jacobi_gen     = map::getNatJacobiMatGenerator(el_data);
             const auto  side           = el_view.getSide();
             const auto  process_node   = [&](size_t node_ind) {

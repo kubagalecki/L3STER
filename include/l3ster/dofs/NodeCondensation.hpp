@@ -25,7 +25,7 @@ template < CondensationPolicy CP, mesh::ElementType ET, el_o_t EO >
 constexpr decltype(auto) getPrimaryNodesView(const mesh::Element< ET, EO >& element, CondensationPolicyTag< CP > = {})
 {
     if constexpr (CP == CondensationPolicy::None)
-        return element.getNodes();
+        return element.nodes;
     else if constexpr (CP == CondensationPolicy::ElementBoundary)
         return getBoundaryNodes(element);
 }
@@ -34,7 +34,7 @@ template < CondensationPolicy CP, mesh::ElementType ET, el_o_t EO >
 constexpr decltype(auto) getPrimaryNodesArray(const mesh::Element< ET, EO >& element, CondensationPolicyTag< CP > = {})
 {
     if constexpr (CP == CondensationPolicy::None)
-        return element.getNodes();
+        return element.nodes;
     else if constexpr (CP == CondensationPolicy::ElementBoundary)
     {
         std::array< n_id_t, mesh::ElementTraits< mesh::Element< ET, EO > >::boundary_node_inds.size() > retval;

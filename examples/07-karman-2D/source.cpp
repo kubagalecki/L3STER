@@ -138,7 +138,7 @@ int main(int argc, char* argv[])
     // Outlet BC - this kernel operates only on the velocity components and the pressure
     constexpr auto outlet_dofs          = std::array< size_t, 3 >{IU, IV, IP};
     constexpr auto outdof_ctval         = L3STER_WRAP_CTVAL(outlet_dofs);
-    constexpr auto kernel_params_outlet = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3};
+    constexpr auto kernel_params_outlet = KernelParams{.dimension = 2, .n_equations = 2, .n_unknowns = 3};
     const auto     kernel_outlet = wrapBoundaryEquationKernel< kernel_params_outlet >([&](const auto& in, auto& out) {
         const double nx        = in.normal[0];
         const double ny        = in.normal[1];

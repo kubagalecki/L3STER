@@ -719,7 +719,7 @@ auto splitBorderAndInterior(const mesh::MeshPartition< orders... >&             
 {
     const auto& ownership   = node2dofs.ownership();
     const auto  is_interior = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
-        auto valid_dofs = element.getNodes() | std::views::transform(std::cref(node2dofs)) | std::views::join |
+        auto valid_dofs = element.nodes | std::views::transform(std::cref(node2dofs)) | std::views::join |
                           std::views::filter([](auto dof) { return dof != invalid_global_dof; });
         return std::ranges::all_of(valid_dofs, [&](auto dof) { return ownership.isOwned(dof); });
     };

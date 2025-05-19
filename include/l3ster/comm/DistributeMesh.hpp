@@ -38,7 +38,7 @@ auto makeGhostToWgtMap(const mesh::MeshPartition< orders... >&       mesh,
         for (const auto& [domains, dof_bmp] : problem_def)
         {
             const auto visit_elem = [&](const auto& element) {
-                for (auto node : element.getNodes() | std::views::filter(is_ghost_node))
+                for (auto node : element.nodes | std::views::filter(is_ghost_node))
                     dof_map[node] |= dof_bmp;
             };
             mesh.visit(visit_elem, domains);

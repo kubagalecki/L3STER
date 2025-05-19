@@ -130,11 +130,11 @@ auto elementIntersectionSpansAtDim(const Element< T1, 1 >& el1, const Element< T
     // This gets a bit ugly since indices need to be deduced for std::get<i>, as opposed to passed to operator[i]
     const auto fold_f1 = [&]< size_t... I1 >(std::index_sequence< I1... >) {
         const auto f1_iteration = [&]< size_t Ind1 >(std::integral_constant< size_t, Ind1 >) {
-            auto nodes1 = util::arrayAtInds(el1.getNodes(), std::get< Ind1 >(f1_o1));
+            auto nodes1 = util::arrayAtInds(el1.nodes, std::get< Ind1 >(f1_o1));
             std::ranges::sort(nodes1);
             const auto fold_f2 = [&]< size_t... I2 >(std::index_sequence< I2... >) {
                 const auto f2_iteration = [&]< size_t Ind2 >(std::integral_constant< size_t, Ind2 >) {
-                    auto nodes2 = util::arrayAtInds(el2.getNodes(), std::get< Ind2 >(f2_o1));
+                    auto nodes2 = util::arrayAtInds(el2.nodes, std::get< Ind2 >(f2_o1));
                     std::ranges::sort(nodes2);
                     const bool is_matched = std::ranges::equal(nodes1, nodes2);
                     if (is_matched)
@@ -193,13 +193,13 @@ constexpr void updateMatchMask(const Element< T, 1 >&                   el_o1,
                                typename Element< T, O >::node_array_t&  nodes)
 {
     const auto el_o1_nodelocs = nodePhysicalLocation(el_o1);
-    const auto el_oN_nodelocs = nodePhysicalLocation(Element< T, O >{{}, el_o1.getData(), 0});
+    const auto el_oN_nodelocs = nodePhysicalLocation(Element< T, O >{{}, el_o1.data, 0});
     std::array< size_t, std::tuple_size_v< decltype(el_o1_nodelocs) > > matched_inds;
     util::matchingPermutation(el_oN_nodelocs, el_o1_nodelocs, begin(matched_inds), detail::getPointMatcher());
     for (size_t i = 0; auto ind : matched_inds)
     {
         mask.set(ind);
-        nodes[ind] = el_o1.getNodes()[i++];
+        nodes[ind] = el_o1.nodes[i++];
     }
 }
 
@@ -212,7 +212,7 @@ constexpr void updateMatchMask(const Element< T_converted, 1 >&                 
 {
     const auto [pattern_inds, match_inds] = detail::elementIntersection< O >(pattern_o1_el, match_o1_el);
     std::array< size_t, std::tuple_size_v< std::decay_t< decltype(nodes) > > > match_buffer;
-    const Element< T_converting, O > match_oN_el{{}, match_o1_el.getData(), {}};
+    const Element< T_converting, O >                                           match_oN_el{{}, match_o1_el.data, {}};
     auto filtered_match_inds = match_inds | std::views::filter([&](auto ind) { return not mask.test(ind); });
 
     util::matchingPermutation(
@@ -224,7 +224,7 @@ constexpr void updateMatchMask(const Element< T_converted, 1 >&                 
     for (size_t i = 0u; auto m_ind : filtered_match_inds)
     {
         mask.set(m_ind);
-        nodes[m_ind] = pattern_oN_el.getNodes()[pattern_inds[match_buffer[i++]]];
+        nodes[m_ind] = pattern_oN_el.nodes[pattern_inds[match_buffer[i++]]];
     }
 }
 } // namespace lstr::mesh

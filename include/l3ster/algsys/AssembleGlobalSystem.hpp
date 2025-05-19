@@ -1,12 +1,12 @@
 #ifndef L3STER_ALGSYS_ASSEMBLEGLOBALSYSTEM_HPP
 #define L3STER_ALGSYS_ASSEMBLEGLOBALSYSTEM_HPP
 
+#include "l3ster/algsys/OperatorUtils.hpp"
 #include "l3ster/algsys/StaticCondensationManager.hpp"
 #include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
 #include "l3ster/mesh/BoundaryView.hpp"
 #include "l3ster/post/FieldAccess.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
-#include "l3ster/algsys/OperatorUtils.hpp"
 
 namespace lstr::algsys
 {
@@ -40,7 +40,7 @@ void assembleGlobalSystem(const DomainEquationKernel< Kernel, params >&         
             constexpr auto  BT             = asm_opts.basis_type;
             constexpr auto  QT             = asm_opts.quad_type;
             constexpr q_o_t QO             = 2 * asm_opts.order(EO);
-            const auto      field_vals     = field_access.getGloballyIndexed(element.getNodes());
+            const auto      field_vals     = field_access.getGloballyIndexed(element.nodes);
             const auto&     rbq            = basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
             const auto& [loc_mat, loc_rhs] = assembleLocalSystem(kernel, element, field_vals, rbq, time);
             condensation_manager.condenseSystem(
@@ -83,7 +83,7 @@ void assembleGlobalSystem(const BoundaryEquationKernel< Kernel, params >&       
                 constexpr auto  BT         = asm_opts.basis_type;
                 constexpr auto  QT         = asm_opts.quad_type;
                 constexpr q_o_t QO         = 2 * asm_opts.order(EO);
-                const auto      field_vals = field_access.getGloballyIndexed(el_view->getNodes());
+                const auto      field_vals = field_access.getGloballyIndexed(el_view->nodes);
                 const auto& qbv = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
                 const auto& [loc_mat, loc_rhs] = assembleLocalSystem(kernel, el_view, field_vals, qbv, time);
                 condensation_manager.condenseSystem(

@@ -36,7 +36,7 @@ TEST_CASE("Solution Manager", "[sol_man]")
         const auto  field_access = sm.getFieldAccess(field_inds);
         const auto& part         = partitions.at(static_cast< size_t >(i));
         const auto  check_el     = [&](const auto& element) {
-            const auto vals = field_access.getGloballyIndexed(element.getNodes());
+            const auto vals = field_access.getGloballyIndexed(element.nodes);
             for (int r = 0; r != vals.rows(); ++r)
                 for (int c = 0; c != vals.cols(); ++c)
                     CHECK(vals(r, c) == static_cast< val_t >(i));
@@ -52,7 +52,7 @@ TEST_CASE("Solution Manager", "[sol_man]")
         const auto  field_access = sm.getFieldAccess(field_inds);
         const auto& part         = partitions.at(static_cast< size_t >(i));
         const auto  check_el     = [&](const auto& element) {
-            const auto vals = field_access.getGloballyIndexed(element.getNodes());
+            const auto vals = field_access.getGloballyIndexed(element.nodes);
             for (int r = 0; r != vals.rows(); ++r)
                 for (int c = 0; c != vals.cols(); ++c)
                     CHECK(vals(r, c) == 42.);

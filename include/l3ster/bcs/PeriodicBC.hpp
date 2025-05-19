@@ -7,6 +7,7 @@
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/mesh/NodeReferenceLocation.hpp"
 #include "l3ster/util/Caliper.hpp"
+#include "l3ster/util/Functional.hpp"
 #include "l3ster/util/IndexMap.hpp"
 #include "l3ster/util/SpatialHashTable.hpp"
 
@@ -90,10 +91,10 @@ auto getNodeLocationData(const mesh::MeshPartition< orders... >& mesh, const uti
     auto       node_to_loc    = robin_hood::unordered_flat_map< n_id_t, std::array< val_t, 3 > >{};
     const auto write_node_loc = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::BoundaryElementView< ET, EO >& bv) {
         const auto& ref_x   = mesh::getNodeLocations< ET, EO >();
-        const auto& el_data = bv->getData();
+        const auto& el_data = bv->data;
         for (auto i : bv.getSideNodeInds())
         {
-            const auto node_id = bv->getNodes()[i];
+            const auto node_id = bv->nodes[i];
             if (node_to_loc.contains(node_id))
                 continue;
             const auto& ref_location  = ref_x[i];

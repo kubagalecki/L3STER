@@ -116,7 +116,7 @@ public:
                             util::ConstexprValue< field_inds >                             field_inds_ctwrpr)
     {
         const auto [row_dofs, col_dofs, rhs_dofs] =
-            dofs::getDofsFromNodes(element.getNodes(), node_dof_map, field_inds_ctwrpr);
+            dofs::getDofsFromNodes(element.nodes, node_dof_map, field_inds_ctwrpr);
         scatterLocalSystem(local_mat, local_rhs, global_mat, global_rhs, row_dofs, col_dofs, rhs_dofs);
     }
     template < el_o_t... orders, size_t max_dofs_per_node, size_t n_rhs >
@@ -293,7 +293,7 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
                 m_internal_dof_inds.push_back(i);
         constexpr auto num_internal_nodes = mesh::ElementTraits< mesh::Element< ET, EO > >::internal_node_inds.size();
         const auto     n_internal_dofs    = num_internal_nodes * n_int_dofs_per_node;
-        m_elem_data_map.emplace(element.getId(),
+        m_elem_data_map.emplace(element.id,
                                 ElementCondData{.internal_dofs_offs{el_int_dofs_offs},
                                                 .internal_dofs_size{n_int_dofs_per_node},
                                                 .diag_block{n_internal_dofs, n_internal_dofs},
@@ -360,7 +360,7 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::condenseS
     util::ConstexprValue< field_inds >                                   field_inds_ctwrpr)
 {
     L3STER_PROFILE_FUNCTION;
-    auto&      elem_data = m_elem_data_map.at(element.getId());
+    auto&      elem_data = m_elem_data_map.at(element.id);
     const auto dof_inds  = computeLocalDofInds(element, node_dof_map, elem_data, field_inds_ctwrpr);
     const auto [row_dofs, col_dofs, rhs_dofs] = dofs::getDofsFromNodes(
         dofs::getPrimaryNodesArray< CondensationPolicy::ElementBoundary >(element), node_dof_map, field_inds_ctwrpr);
@@ -499,7 +499,7 @@ auto StaticCondensationManager< CondensationPolicy::ElementBoundary >::computeLo
     size_t        primary_write_ind = 0, cond_write_ind = 0;
     std::uint32_t local_system_ind = 0, primary_ind = 0, cond_ind = 0;
     auto          boundary_ind_iter = mesh::ElementTraits< mesh::Element< ET, EO > >::boundary_node_inds.cbegin();
-    for (el_locind_t node_ind = 0; auto node : element.getNodes())
+    for (el_locind_t node_ind = 0; auto node : element.nodes)
     {
         if (*boundary_ind_iter == node_ind++)
         {

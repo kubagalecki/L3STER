@@ -237,7 +237,7 @@ consteval unsigned char subelCellType()
 template < mesh::ElementType ET, el_o_t EO >
 auto serializeElementSubtopo(const mesh::Element< ET, EO >& element)
 {
-    const auto&                                            nodes = element.getNodes();
+    const auto&                                            nodes = element.nodes;
     std::array< n_id_t, numSerialTopoEntries< ET, EO >() > retval;
     auto                                                   out_topo = retval.begin();
     if constexpr (ET == mesh::ElementType::Line)
@@ -378,7 +378,7 @@ std::string makeCoordsSerialized(const mesh::MeshPartition< orders... >& mesh)
         const auto node_coords = nodePhysicalLocation(element);
         for (auto&& [i, point] : node_coords | std::views::enumerate)
         {
-            const auto local_node_ind = mesh.getNodeOwnership().getLocalIndex(element.getNodes()[i]);
+            const auto local_node_ind = mesh.getNodeOwnership().getLocalIndex(element.nodes[i]);
             std::atomic_ref{coords[local_node_ind * space_dim]}.store(point.x(), std::memory_order_relaxed);
             std::atomic_ref{coords[local_node_ind * space_dim + 1]}.store(point.y(), std::memory_order_relaxed);
             std::atomic_ref{coords[local_node_ind * space_dim + 2]}.store(point.z(), std::memory_order_relaxed);
