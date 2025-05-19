@@ -40,7 +40,7 @@ jobs:
     name: Static analysis and unit tests
     needs: build_base_container
     runs-on: self-hosted
-    container: ${{ secrets.DOCKER_HUB_USERNAME }}/l3ster-ci:latest
+    container: kubagalecki/l3ster-ci:latest
     env:
       BUILD_TYPE: Release
       TOOLCHAIN_PATH: ../cmake/toolchains/StaticAnalysis.cmake
