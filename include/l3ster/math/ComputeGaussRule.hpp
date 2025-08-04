@@ -26,7 +26,8 @@ template < size_t order, Mapping_c< size_t, val_t > A, Mapping_c< size_t, val_t 
 auto computeGaussRule(A&& a, B&& b, C&& c, std::integral_constant< size_t, order > = {})
 {
     static_assert(order > 0u);
-    using matrix_t = Eigen::Matrix< val_t, order, order >;
+    using compute_t = long double; // Perform computation in extended precision and cast result to double
+    using matrix_t  = Eigen::Matrix< compute_t, order, order >;
 
     // Note: variable names follow the reference
     matrix_t J = matrix_t::Zero();
@@ -52,8 +53,8 @@ auto computeGaussRule(A&& a, B&& b, C&& c, std::integral_constant< size_t, order
 
     for (size_t i = 0; i < order; ++i)
     {
-        points[i]  = eig_vals[i];
-        weights[i] = 2. * eig_vecs(0, i) * eig_vecs(0, i);
+        points[i]  = static_cast< val_t >(eig_vals[i]);
+        weights[i] = static_cast< val_t >(2. * eig_vecs(0, i) * eig_vecs(0, i));
     }
 
     return std::make_pair(points, weights);

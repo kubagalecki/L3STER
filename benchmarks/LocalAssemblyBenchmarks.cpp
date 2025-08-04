@@ -216,6 +216,7 @@ static void BM_NS3DLocalEvaluation(benchmark::State& state)
 
     const auto flops_per_qp = /* physical basis derivative computation */ n_nodes * 3 * 3 * 2 +
                               /* field value computation */ n_fields * n_nodes * 2 * 4 +
+                              /* fill H */ params.n_equations * n_nodes * params.n_unknowns * 7 +
                               /* operator evaluation */ params.n_equations * (n_nodes * params.n_unknowns * 4 + 2);
     const auto n_qp           = ref_bas_at_quad.quadrature.size;
     state.counters["DPFlops"] = benchmark::Counter{static_cast< double >(state.iterations()) * n_qp * flops_per_qp,
@@ -228,7 +229,7 @@ static void BM_NS3DLocalEvaluation(benchmark::State& state)
         ->Unit(benchmark::k##UNIT);
 NS3D_EVAL_BENCH(2, Microsecond);
 NS3D_EVAL_BENCH(4, Millisecond);
-NS3D_EVAL_BENCH(6, Second);
+NS3D_EVAL_BENCH(6, Millisecond);
 
 template < el_o_t EO >
 static void BM_DiffS3DLocalEvaluation(benchmark::State& state)
@@ -263,6 +264,7 @@ static void BM_DiffS3DLocalEvaluation(benchmark::State& state)
 
     const auto flops_per_qp = /* physical basis derivative computation */ n_nodes * 3 * 3 * 2 +
                               /* field value computation */ params.n_fields * n_nodes * 2 * 4 +
+                              /* fill H */ params.n_equations * n_nodes * params.n_unknowns * 7 +
                               /* operator evaluation */ params.n_equations * (n_nodes * params.n_unknowns * 4 + 2);
     const auto n_qp           = ref_bas_at_quad.quadrature.size;
     state.counters["DPFlops"] = benchmark::Counter{static_cast< double >(state.iterations()) * n_qp * flops_per_qp,

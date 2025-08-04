@@ -20,7 +20,7 @@ public:
                      const mesh::LocalMeshView< orders... >&                   border_mesh,
                      const MpiComm&                                            comm,
                      const std::shared_ptr< const comm::ImportExportContext >& comm_context,
-                     const bcs::DirichletBCDefinition< max_dofs_per_node >&    bc_def);
+                     const DirichletBCDefinition< max_dofs_per_node >&         bc_def);
 
     bool isEmpty() const { return m_dofs_set.empty(); }
     bool isDirichletDof(local_dof_t dof) const { return m_dofs_set.contains(dof); }
@@ -37,7 +37,7 @@ LocalDirichletBC::LocalDirichletBC(const dofs::LocalDofMap< max_dofs_per_node >&
                                    const mesh::LocalMeshView< orders... >&                   border_mesh,
                                    const MpiComm&                                            comm,
                                    const std::shared_ptr< const comm::ImportExportContext >& comm_context,
-                                   const bcs::DirichletBCDefinition< max_dofs_per_node >&    bc_def)
+                                   const DirichletBCDefinition< max_dofs_per_node >&         bc_def)
 {
     if (bc_def.empty())
         return;
