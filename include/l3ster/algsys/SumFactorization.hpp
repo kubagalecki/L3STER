@@ -503,11 +503,11 @@ void sumFactForwardHex(typename SumFactBufferHelper< basis_params, num_fields, 3
 }
 
 template < typename Kernel,
-           KernelParams                                 params,
-           el_o_t                                       EO,
-           AssemblyOptions                              asm_opts,
-           std::invocable< std::span< val_t > >         Fill,
-           std::invocable< std::span< val_t >, size_t > YScatter >
+           KernelParams                         params,
+           el_o_t                               EO,
+           AssemblyOptions                      asm_opts,
+           std::invocable< std::span< val_t > > Fill,
+           std::invocable< std::span< val_t > > YScatter >
 void sumFactImpl(const DomainEquationKernel< Kernel, params >&           kernel,
                  const mesh::ElementData< mesh::ElementType::Quad, EO >& element_data,
                  Fill&&                                                  fill,
@@ -524,15 +524,15 @@ void sumFactImpl(const DomainEquationKernel< Kernel, params >&           kernel,
     sumFactForwardQuad< basis_params, num_operands >(forward_bufs, back_bufs.front()); // use second argument as temp
     util::requestStackSize< 2 * (sizeof back_bufs + sizeof forward_bufs) >();          // this works backwards in time
 
-    std::invoke(y_scatter, std::span< val_t >{forward_bufs.front()}, num_operands);
+    std::invoke(y_scatter, std::span< val_t >{forward_bufs.front()});
 }
 
 template < typename Kernel,
-           KernelParams                                 params,
-           el_o_t                                       EO,
-           AssemblyOptions                              asm_opts,
-           std::invocable< std::span< val_t > >         Fill,
-           std::invocable< std::span< val_t >, size_t > YScatter >
+           KernelParams                         params,
+           el_o_t                               EO,
+           AssemblyOptions                      asm_opts,
+           std::invocable< std::span< val_t > > Fill,
+           std::invocable< std::span< val_t > > YScatter >
 void sumFactImpl(const DomainEquationKernel< Kernel, params >&          kernel,
                  const mesh::ElementData< mesh::ElementType::Hex, EO >& element_data,
                  Fill&&                                                 fill,
@@ -549,7 +549,7 @@ void sumFactImpl(const DomainEquationKernel< Kernel, params >&          kernel,
     sumFactForwardHex< basis_params, num_operands >(forward_bufs, back_bufs.front()); // use second argument as temp
     util::requestStackSize< 2 * (sizeof back_bufs + sizeof forward_bufs) >();         // this works backwards in time
 
-    std::invoke(y_scatter, std::span< val_t >{forward_bufs.front()}, num_operands);
+    std::invoke(y_scatter, std::span< val_t >{forward_bufs.front()});
 }
 } // namespace detail
 
@@ -563,12 +563,12 @@ void sumFactImpl(const DomainEquationKernel< Kernel, params >&          kernel,
 /// evaluation result, and a stride defining the spacing between entries corresponding to a given node
 /// \param time Time instance passed to the kernel
 template < typename Kernel,
-           KernelParams                                 params,
-           mesh::ElementType                            ET,
-           el_o_t                                       EO,
-           AssemblyOptions                              asm_opts = {},
-           std::invocable< std::span< val_t >, size_t > XGather,
-           std::invocable< std::span< val_t >, size_t > YScatter >
+           KernelParams                         params,
+           mesh::ElementType                    ET,
+           el_o_t                               EO,
+           AssemblyOptions                      asm_opts = {},
+           std::invocable< std::span< val_t > > XGather,
+           std::invocable< std::span< val_t > > YScatter >
 void evalLocalOperatorSumFact(const DomainEquationKernel< Kernel, params >& kernel,
                               const mesh::LocalElementView< ET, EO >&       element,
                               XGather&&                                     x_gather,
@@ -581,7 +581,7 @@ void evalLocalOperatorSumFact(const DomainEquationKernel< Kernel, params >& kern
         constexpr int num_fields_total = params.n_unknowns * params.n_rhs + params.n_fields;
         constexpr int num_nodes        = mesh::Element< ET, EO >::n_nodes;
         using field_map_t              = Eigen::Map< Eigen::Matrix< val_t, num_nodes, num_fields_total > >;
-        std::invoke(std::forward< XGather >(x_gather), to_fill, num_fields_total);
+        std::invoke(std::forward< XGather >(x_gather), to_fill);
         if constexpr (params.n_fields > 0)
             field_access.fill(field_map_t{to_fill.data()}.template rightCols< params.n_fields >(),
                               element.getLocalNodes());

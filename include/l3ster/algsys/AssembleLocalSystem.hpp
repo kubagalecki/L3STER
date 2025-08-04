@@ -17,7 +17,8 @@ enum struct LocalEvalStrategy
 {
     Auto,
     LocalElement,
-    SumFactorization
+    SumFactorization,
+    SumFactorizationOddEvenDecomposition
 };
 
 struct AssemblyOptions
@@ -31,6 +32,13 @@ struct AssemblyOptions
     [[nodiscard]] constexpr q_o_t order(el_o_t elem_order) const
     {
         return static_cast< q_o_t >(value_order * elem_order + derivative_order * (elem_order - 1));
+    }
+    [[nodiscard]] constexpr bool useSumFactorization(mesh::ElementType             ET,
+                                                     [[maybe_unused]] el_o_t       EO,
+                                                     [[maybe_unused]] KernelParams kernel_params) const
+    {
+        using enum mesh::ElementType;
+        return eval_strategy != LocalEvalStrategy::LocalElement and (ET == Quad or ET == Hex);
     }
 };
 } // namespace lstr

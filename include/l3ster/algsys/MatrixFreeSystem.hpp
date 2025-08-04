@@ -1,6 +1,7 @@
 #ifndef L3STER_ALGSYS_MATRIXFREESYSTEM_HPP
 #define L3STER_ALGSYS_MATRIXFREESYSTEM_HPP
 
+#include "SumFactorization.hpp"
 #include "l3ster/algsys/ComputeValuesAtNodes.hpp"
 #include "l3ster/algsys/EvaluateLocalOperator.hpp"
 #include "l3ster/algsys/SparsityGraph.hpp"
@@ -294,6 +295,43 @@ auto getDirichletDofInds(const std::array< local_dof_t, num_dofs >&    dofs,
     return retval;
 }
 
+/// CRS graph of nodes to indices of Dirichlet DOFs
+template < size_t n_nodes, size_t dofs_per_node >
+struct DirichletInfoSumFact
+{
+    using index_t  = util::smallest_integral_t< dofs_per_node >;
+    using offset_t = util::smallest_integral_t< dofs_per_node * n_nodes >;
+
+    std::array< index_t, dofs_per_node * n_nodes > dof_local_inds;
+    std::array< offset_t, n_nodes + 1 >            offsets;
+};
+
+template < size_t dofs_per_node, size_t num_dofs >
+auto getDirichletIndsSumFact(const std::array< local_dof_t, num_dofs >&    dofs,
+                             const std::optional< bcs::LocalDirichletBC >& bcs)
+    -> DirichletInfoSumFact< num_dofs / dofs_per_node, dofs_per_node >
+{
+    static_assert(num_dofs % dofs_per_node == 0);
+    constexpr size_t n_nodes = num_dofs / dofs_per_node;
+    using retval_t           = DirichletInfoSumFact< n_nodes, dofs_per_node >;
+    retval_t retval;
+    auto& [dof_local_inds, offsets] = retval;
+    if (not bcs.has_value())
+    {
+        offsets.fill(0);
+        return retval;
+    }
+    offsets.front() = 0;
+    for (typename retval_t::offset_t i = 0, node = 0; node != n_nodes; ++node)
+    {
+        for (typename retval_t::index_t local_ind = 0; local_ind != dofs_per_node; ++local_ind)
+            if (bcs->isDirichletDof(dofs[node * dofs_per_node + local_ind]))
+                dof_local_inds[i++] = local_ind;
+        offsets[node + 1] = i;
+    }
+    return retval;
+}
+
 template < mesh::ElementType ET, el_o_t EO, KernelParams params, size_t num_dofs, util::KokkosView_c Vals >
 auto gatherDirichletVals(
     const std::array< local_dof_t, num_dofs >&                                   dofs,
@@ -322,6 +360,7 @@ void scatterInit(const std::array< local_dof_t, num_dofs >& dofs,
     }
 }
 
+/// ordering: dofs, nodes, rhs
 template < local_dof_t num_rhs, size_t num_dofs, typename Access >
 auto gather(Access&&                                      from_access,
             const std::array< local_dof_t, num_dofs >&    dofs,
@@ -348,6 +387,54 @@ auto gather(Access&&                                      from_access,
     return retval;
 }
 
+/// ordering: nodes. dofs, rhs
+template < size_t n_nodes, size_t dofs_per_node, size_t n_rhs, typename Access >
+void gatherSumFact(Access&&                                                  from_access,
+                   const std::array< local_dof_t, n_nodes * dofs_per_node >& dofs,
+                   const DirichletInfoSumFact< n_nodes, dofs_per_node >&     dirichlet_info,
+                   std::span< val_t >                                        dest)
+{
+    L3STER_PROFILE_FUNCTION;
+    constexpr auto compute_dest_ind = [](size_t node, size_t dof, size_t rhs) {
+        return rhs * (dofs_per_node * n_nodes) + dof * n_nodes + node;
+    };
+    const auto gather_dof = [&](size_t node, size_t dof) {
+        const auto src_row_ind = static_cast< local_dof_t >(dofs[node * dofs_per_node + dof]);
+        for (size_t rhs = 0; rhs != n_rhs; ++rhs)
+        {
+            const size_t dest_ind = compute_dest_ind(node, dof, rhs);
+            dest[dest_ind]        = from_access(src_row_ind, static_cast< local_dof_t >(rhs));
+        }
+    };
+
+    if (dirichlet_info.offsets.back() == 0) // No Dirichlet DOFs present
+    {
+        for (size_t node = 0; node != n_nodes; ++node)
+            for (size_t dof = 0; dof != dofs_per_node; ++dof)
+                gather_dof(node, dof);
+        return;
+    }
+
+    const auto& [local_dirichlet_inds, offsets] = dirichlet_info;
+    for (size_t node = 0; node != n_nodes; ++node)
+    {
+        const auto begin              = offsets[node];
+        const auto end                = offsets[node + 1];
+        const auto dirichlet_dofs     = std::span{local_dirichlet_inds}.subspan(begin, end - begin);
+        auto       non_dirichlet_dofs = util::StaticVector< size_t, dofs_per_node >{};
+        std::ranges::set_difference(
+            std::views::iota(0uz, dofs_per_node), dirichlet_dofs, std::back_inserter(non_dirichlet_dofs));
+        for (auto dof : non_dirichlet_dofs)
+            gather_dof(node, dof);
+        for (size_t dof : dirichlet_dofs)
+            for (size_t rhs = 0; rhs != n_rhs; ++rhs)
+            {
+                const size_t dest_ind = compute_dest_ind(node, dof, rhs);
+                dest[dest_ind]        = 0.;
+            }
+    }
+}
+
 template < int num_dofs, int num_rhs, typename Access >
 void scatter(const Eigen::Matrix< val_t, num_dofs, num_rhs >&                  from,
              Access&&                                                          to_access,
@@ -370,6 +457,50 @@ void scatter(const Eigen::Matrix< val_t, num_dofs, num_rhs >&                  f
     else
         for (auto&& [i, dof] : dofs | std::views::enumerate)
             scatter_dof(i, dof);
+}
+
+template < size_t n_nodes, size_t dofs_per_node, size_t n_rhs, typename Access >
+void scatterSumFact(Access&&                                                  to_access,
+                    const std::array< local_dof_t, n_nodes * dofs_per_node >& dofs,
+                    const DirichletInfoSumFact< n_nodes, dofs_per_node >&     dirichlet_info,
+                    std::span< val_t >                                        from,
+                    val_t                                                     scale)
+{
+    L3STER_PROFILE_FUNCTION;
+    constexpr auto compute_src_ind = [](size_t node, size_t dof, size_t rhs) {
+        return node * (dofs_per_node * n_rhs) + rhs * dofs_per_node + dof;
+    };
+    const auto scatter_dof = [&](size_t node, size_t dof) {
+        const auto dest_row_ind = static_cast< local_dof_t >(dofs[node * dofs_per_node + dof]);
+        for (size_t rhs = 0; rhs != n_rhs; ++rhs)
+        {
+            const size_t src_ind  = compute_src_ind(node, dof, rhs);
+            const auto   dest_inc = from[src_ind] * scale;
+            const auto   rhs_ind  = static_cast< local_dof_t >(rhs);
+            std::atomic_ref{to_access(dest_row_ind, rhs_ind)}.fetch_add(dest_inc, std::memory_order_relaxed);
+        }
+    };
+
+    if (dirichlet_info.offsets.back() == 0) // No Dirichlet DOFs present
+    {
+        for (size_t dof = 0; dof != dofs_per_node; ++dof)
+            for (size_t node = 0; node != n_nodes; ++node)
+                scatter_dof(node, dof);
+        return;
+    }
+
+    const auto& [local_dirichlet_inds, offsets] = dirichlet_info;
+    for (size_t node = 0; node != n_nodes; ++node)
+    {
+        const auto begin              = offsets[node];
+        const auto end                = offsets[node + 1];
+        const auto dirichlet_dofs     = std::span{local_dirichlet_inds}.subspan(begin, end - begin);
+        auto       non_dirichlet_dofs = util::StaticVector< size_t, dofs_per_node >{};
+        std::ranges::set_difference(
+            std::views::iota(0uz, dofs_per_node), dirichlet_dofs, std::back_inserter(non_dirichlet_dofs));
+        for (auto dof : non_dirichlet_dofs)
+            scatter_dof(node, dof);
+    }
 }
 
 template < mesh::ElementType ET, el_o_t EO, typename KernelPtr, typename KernelMap, typename... Args >
@@ -478,8 +609,8 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeEvalKernel(
     YAccessGenerator&&                   y_access_generator,
     const Kernel&                        kernel,
     const post::FieldAccess< n_fields >& field_access,
-    util::ConstexprValue< field_inds >,
-    util::ConstexprValue< asm_opts >,
+    util::ConstexprValue< field_inds >   field_inds_ctwrpr,
+    util::ConstexprValue< asm_opts >     asm_opts_ctval,
     val_t time) -> std::conditional_t< DomainKernel_c< Kernel >, DomainEvaluatorOverload, BoundaryEvaluatorOverload >
 {
     static constexpr auto params = Kernel::parameters;
@@ -489,29 +620,48 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeEvalKernel(
         constexpr auto ET         = std::decay_t< decltype(element) >::type;
         constexpr auto EO         = std::decay_t< decltype(element) >::order;
         using CommonData          = detail::CommonElemData< field_inds, params, n_fields, max_dofs_per_node, ET, EO >;
-        static constexpr q_o_t QO = 2 * asm_opts.order(EO);
-        constexpr bool is_domain  = std::same_as< std::decay_t< decltype(element) >, mesh::LocalElementView< ET, EO > >;
+        constexpr q_o_t QO        = 2 * asm_opts.order(EO);
+        constexpr bool  is_domain = std::same_as< std::decay_t< decltype(element) >, mesh::LocalElementView< ET, EO > >;
+        constexpr bool  use_sum_factorization = asm_opts.useSumFactorization(ET, EO, params);
         if constexpr (mesh::Element< ET, EO >::native_dim == params.dimension)
         {
-            const auto get_reference_basis = [&element] -> const auto& {
-                if constexpr (is_domain)
-                    return basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
-                else
-                    return basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(element.getSide());
-            };
-            const auto get_data = [&] -> CommonData {
-                if constexpr (is_domain)
-                    return {element, field_access, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
-                else
-                    return {*element, field_access, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
-            };
-            const auto [node_vals, dofs, dir_dof_inds, dir_vals] = get_data();
-            const auto& rbq                                      = get_reference_basis();
-            const auto  x_access                                 = x_access_generator(x);
-            const auto  y_access                                 = y_access_generator(y);
-            const auto  x_local = detail::gather< params.n_rhs >(x_access, dofs, m_dirichlet_bc);
-            const auto  y_local = evaluateLocalOperator(kernel, element, node_vals, rbq, time, x_local);
-            detail::scatter(y_local, y_access, dofs, m_dirichlet_bc, alpha);
+            const auto x_access = x_access_generator(x);
+            const auto y_access = y_access_generator(y);
+            if constexpr (is_domain and use_sum_factorization)
+            {
+                constexpr auto n_nodes        = mesh::Element< ET, EO >::n_nodes;
+                constexpr auto dofs_per_node  = params.n_unknowns;
+                const auto&    el_nodes       = element.getLocalNodes();
+                const auto     dofs           = detail::getDofs(el_nodes, m_node_dof_map, field_inds_ctwrpr);
+                const auto     dirichlet_info = detail::getDirichletIndsSumFact< dofs_per_node >(dofs, m_dirichlet_bc);
+                const auto     x_gather       = [&](std::span< val_t > X) {
+                    detail::gatherSumFact< n_nodes, dofs_per_node, n_rhs >(x_access, dofs, dirichlet_info, X);
+                };
+                const auto y_scatter = [&](std::span< val_t > Y) {
+                    detail::scatterSumFact< n_nodes, dofs_per_node, n_rhs >(y_access, dofs, dirichlet_info, Y, alpha);
+                };
+                evalLocalOperatorSumFact(kernel, element, x_gather, field_access, y_scatter, asm_opts_ctval, time);
+            }
+            else
+            {
+                const auto get_reference_basis = [&element] -> const auto& {
+                    if constexpr (is_domain)
+                        return basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
+                    else
+                        return basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(element.getSide());
+                };
+                const auto get_data = [&] -> CommonData {
+                    if constexpr (is_domain)
+                        return {element, field_access, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
+                    else
+                        return {*element, field_access, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
+                };
+                const auto [node_vals, dofs, dir_dof_inds, dir_vals] = get_data();
+                const auto& rbq                                      = get_reference_basis();
+                const auto  x_local = detail::gather< params.n_rhs >(x_access, dofs, m_dirichlet_bc);
+                const auto  y_local = evaluateLocalOperator(kernel, element, node_vals, rbq, time, x_local);
+                detail::scatter(y_local, y_access, dofs, m_dirichlet_bc, alpha);
+            }
         }
     };
 }

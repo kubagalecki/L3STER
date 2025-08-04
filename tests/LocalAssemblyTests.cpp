@@ -152,15 +152,13 @@ static auto evalDiffusionOperatorSumFact(const mesh::LocalElementView< ET, EO >&
     constexpr auto            n_nodes = mesh::Element< ET, EO >::n_nodes;
     constexpr Eigen::Index    nukn    = params.n_unknowns;
     Operand< ET, EO, params > y;
-    const auto                x_fill = [&x](std::span< val_t > to_fill, size_t stride) {
-        util::throwingAssert(stride == params.n_unknowns * params.n_rhs);
+    const auto                x_fill = [&x](std::span< val_t > to_fill) {
         using map_t = Eigen::Map< Eigen::Matrix< val_t, n_nodes, params.n_unknowns * params.n_rhs > >;
         auto to_fill_map = map_t{to_fill.data()};
         for (Eigen::Index i = 0; i != n_nodes; ++i)
             to_fill_map.row(i) = x.template middleRows< nukn >(i * nukn).reshaped().transpose();
     };
-    const auto y_fill = [&y](std::span< val_t > result, size_t stride) {
-        util::throwingAssert(stride == params.n_unknowns * params.n_rhs);
+    const auto y_fill = [&y](std::span< val_t > result) {
         using map_t = Eigen::Map< util::eigen::RowMajorMatrix< val_t, n_nodes, params.n_unknowns * params.n_rhs > >;
         const auto result_map = map_t{result.data()};
         for (Eigen::Index i = 0; i != n_nodes; ++i)
