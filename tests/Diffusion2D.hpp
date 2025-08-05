@@ -20,7 +20,7 @@ auto makeMesh(const MpiComm& comm, const auto& problem_def)
     return generateAndDistributeMesh< mesh_order >(comm, [&] { return makeSquareMesh(node_dist); }, {}, problem_def);
 }
 
-template < CondensationPolicy CP, OperatorEvaluationStrategy S >
+template < CondensationPolicy CP, OperatorEvaluationStrategy S, LocalEvalStrategy LEV = LocalEvalStrategy::Auto >
 void test()
 {
     const auto comm = std::make_shared< MpiComm >(MPI_COMM_WORLD);
@@ -68,8 +68,11 @@ void test()
     constexpr auto dirichlet_bc_kernel = wrapBoundaryResidualKernel< dirbc_params >(
         [](const auto& in, auto& out) { out[0] = in.point.space.x() / node_dist.back(); });
 
+    constexpr auto asm_opts        = AssemblyOptions{.value_order = 1, .derivative_order = 0, .eval_strategy = LEV};
+    constexpr auto asm_opts_ctwrpr = util::ConstexprValue< asm_opts >{};
+
     const auto assembleDomainProblem = [&] {
-        alg_sys.assembleProblem(diffusion_kernel2d, std::views::single(domain_id));
+        alg_sys.assembleProblem(diffusion_kernel2d, std::views::single(domain_id), {}, {}, asm_opts_ctwrpr);
     };
     const auto assembleBoundaryProblem = [&] {
         alg_sys.assembleProblem(neumann_bc_kernel, adiabatic_bound_ids);
@@ -108,9 +111,11 @@ void test()
     constexpr auto bnd_error_kernel = wrapBoundaryResidualKernel< params >(compute_error);
     const auto     field_access     = solution_manager.getFieldAccess(dof_inds);
 
-    const auto error = computeNormL2(*comm, dom_error_kernel, *mesh, std::views::single(domain_id), field_access);
+    const auto error =
+        computeNormL2< asm_opts >(*comm, dom_error_kernel, *mesh, std::views::single(domain_id), field_access);
     const auto boundary_error = computeNormL2(*comm, bnd_error_kernel, *mesh, boundary_ids, field_access);
     if (comm->getRank() == 0)
+    {
         std::println("L2 error components:\n{:<15}{}\n{:<15}{}\n{:<15}{}",
                      "value:",
                      error[0],
@@ -118,6 +123,14 @@ void test()
                      error[1],
                      "y derivative:",
                      error[2]);
+        std::println("L2 boundary error components:\n{:<15}{}\n{:<15}{}\n{:<15}{}",
+                     "value:",
+                     boundary_error[0],
+                     "x derivative:",
+                     boundary_error[1],
+                     "y derivative:",
+                     boundary_error[2]);
+    }
     comm->barrier();
     constexpr auto eps = 1.e-8;
     REQUIRE(error.norm() < eps);

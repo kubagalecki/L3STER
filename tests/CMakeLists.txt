@@ -98,6 +98,7 @@ add_mpi_test( AdvectionPeriodic2DAssembled.cpp Solve_2D_periodic_advection_probl
 add_mpi_test( AdvectionPeriodic2DMF.cpp Solve_2D_periodic_advection_problem_matrix_free "1;2;4" )
 add_mpi_test( Diffusion2DAssembledTest.cpp Solve_2D_diffusion_problem_assembled "1;2;4" )
 add_mpi_test( Diffusion2DMF.cpp Solve_2D_diffusion_problem_matrix_free "1;2;4" )
+add_mpi_test( Diffusion2DMFSF.cpp Solve_2D_diffusion_problem_sum_factorization "1;2;4" )
 add_mpi_test( DirichletBCTest.cpp Dirichlet_BC_Application "1;2;4" )
 add_mpi_test( PeriodicBCTest.cpp Periodic_BC_test "1;2;4;16" )
 add_mpi_test( EmptyPartitionTest.cpp Handle_Empty_Partition "4" )

@@ -577,6 +577,8 @@ void evalLocalOperatorSumFact(const DomainEquationKernel< Kernel, params >& kern
                               util::ConstexprValue< asm_opts >              asm_opts_ctwrpr = {},
                               val_t                                         time            = 0.)
 {
+    // Profiling at a finer granularity induces massive overhead (why?), so we only profile the top-level function
+    L3STER_PROFILE_FUNCTION;
     const auto fill = [&](std::span< val_t > to_fill) {
         constexpr int num_fields_total = params.n_unknowns * params.n_rhs + params.n_fields;
         constexpr int num_nodes        = mesh::Element< ET, EO >::n_nodes;

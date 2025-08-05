@@ -4,6 +4,7 @@ include( CTest )
 add_executable( Non_MPI_benchmarks BenchmarksMain.cpp
                 ElementBenchmarks.cpp
                 LocalAssemblyBenchmarks.cpp
+                LocalOperatorEvaluationBenchmarks.cpp
                 MeshBenchmarks.cpp
                 UtilBenchmarks.cpp
                 )
