@@ -339,62 +339,68 @@ TEMPLATE_TEST_CASE("Odd-even decomposition",
                    (wrap_test_params< 33, 4, 3 >),
                    (wrap_test_params< 33, 4, 4 >))
 {
-    constexpr auto params       = TestType::value;
-    constexpr auto size         = params[0];
-    constexpr auto EO           = static_cast< el_o_t >(params[1]);
-    constexpr auto QO           = static_cast< q_o_t >(params[2]);
-    constexpr auto basis_params = BasisParams{.basis_order = EO,
-                                              .quad_order  = QO,
-                                              .basis_type  = basis::BasisType::Lagrange,
-                                              .quad_type   = quad::QuadratureType::GaussLegendre};
+    constexpr auto params             = TestType::value;
+    constexpr auto size               = params[0];
+    constexpr auto EO                 = static_cast< el_o_t >(params[1]);
+    constexpr auto QO                 = static_cast< q_o_t >(params[2]);
+    constexpr auto sum_fact_params_sf = SumFactParams{.basis_order  = EO,
+                                                      .quad_order   = QO,
+                                                      .basis_type   = basis::BasisType::Lagrange,
+                                                      .quad_type    = quad::QuadratureType::GaussLegendre,
+                                                      .use_odd_even = false};
+    constexpr auto sum_fact_params_oe = SumFactParams{.basis_order  = EO,
+                                                      .quad_order   = QO,
+                                                      .basis_type   = basis::BasisType::Lagrange,
+                                                      .quad_type    = quad::QuadratureType::GaussLegendre,
+                                                      .use_odd_even = true};
 
     SECTION("Sweep back interp")
     {
-        using x_t       = Eigen::Matrix< val_t, basis_params.n_bases1d(), size >;
-        using y_t       = Eigen::Matrix< val_t, size, basis_params.n_qps1d() >;
+        using x_t       = Eigen::Matrix< val_t, sum_fact_params_sf.n_bases1d(), size >;
+        using y_t       = Eigen::Matrix< val_t, size, sum_fact_params_sf.n_qps1d() >;
         const auto x    = x_t::Random().eval();
         auto       y_sf = y_t{};
         auto       y_oe = y_t{};
-        algsys::detail::sumFactSweepBackInterp< basis_params >(x, y_sf);
-        algsys::detail::sumFactSweepBackInterpOddEven< basis_params >(x, y_oe);
+        algsys::detail::sumFactSweepBackInterp< sum_fact_params_sf >(x, y_sf);
+        algsys::detail::sumFactSweepBackInterp< sum_fact_params_oe >(x, y_oe);
         CHECK((y_sf - y_oe).norm() < 1e-8);
     }
 
     SECTION("Sweep back der")
     {
-        using x_t       = Eigen::Matrix< val_t, basis_params.n_bases1d(), size >;
-        using y_t       = Eigen::Matrix< val_t, size, basis_params.n_qps1d() >;
+        using x_t       = Eigen::Matrix< val_t, sum_fact_params_sf.n_bases1d(), size >;
+        using y_t       = Eigen::Matrix< val_t, size, sum_fact_params_sf.n_qps1d() >;
         const auto x    = x_t::Random().eval();
         auto       y_sf = y_t{};
         auto       y_oe = y_t{};
-        algsys::detail::sumFactSweepBackDer< basis_params >(x, y_sf);
-        algsys::detail::sumFactSweepBackDerOddEven< basis_params >(x, y_oe);
+        algsys::detail::sumFactSweepBackDer< sum_fact_params_sf >(x, y_sf);
+        algsys::detail::sumFactSweepBackDer< sum_fact_params_oe >(x, y_oe);
         CHECK((y_sf - y_oe).norm() < 1e-8);
     }
 
     SECTION("Sweep forward interp assign")
     {
-        using x_t       = Eigen::Matrix< val_t, basis_params.n_qps1d(), size >;
-        using y_t       = Eigen::Matrix< val_t, size, basis_params.n_bases1d() >;
+        using x_t       = Eigen::Matrix< val_t, sum_fact_params_sf.n_qps1d(), size >;
+        using y_t       = Eigen::Matrix< val_t, size, sum_fact_params_sf.n_bases1d() >;
         const auto x    = x_t::Random().eval();
         auto       y_sf = y_t{};
         auto       y_oe = y_t{};
-        algsys::detail::sumFactSweepForwardInterpAssign< basis_params >(x, y_sf);
-        algsys::detail::sumFactSweepForwardInterpAssignOddEven< basis_params >(x, y_oe);
+        algsys::detail::sumFactSweepForwardInterpAssign< sum_fact_params_sf >(x, y_sf);
+        algsys::detail::sumFactSweepForwardInterpAssign< sum_fact_params_oe >(x, y_oe);
         CHECK((y_sf - y_oe).norm() < 1e-8);
     }
 
     SECTION("Sweep forward der accumulate")
     {
-        using x_t       = Eigen::Matrix< val_t, basis_params.n_qps1d(), size >;
-        using y_t       = Eigen::Matrix< val_t, size, basis_params.n_bases1d() >;
+        using x_t       = Eigen::Matrix< val_t, sum_fact_params_sf.n_qps1d(), size >;
+        using y_t       = Eigen::Matrix< val_t, size, sum_fact_params_sf.n_bases1d() >;
         const auto x    = x_t::Random().eval();
         auto       y_sf = y_t{};
         auto       y_oe = y_t{};
         y_sf.setRandom();
         y_oe = y_sf;
-        algsys::detail::sumFactSweepForwardDerAccumulate< basis_params >(x, y_sf);
-        algsys::detail::sumFactSweepForwardDerAccumulateOddEven< basis_params >(x, y_oe);
+        algsys::detail::sumFactSweepForwardDerAccumulate< sum_fact_params_sf >(x, y_sf);
+        algsys::detail::sumFactSweepForwardDerAccumulate< sum_fact_params_oe >(x, y_oe);
         CHECK((y_sf - y_oe).norm() < 1e-8);
     }
 }

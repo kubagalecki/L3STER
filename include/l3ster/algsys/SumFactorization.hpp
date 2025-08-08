@@ -8,12 +8,13 @@
 
 namespace lstr::algsys
 {
-struct BasisParams
+struct SumFactParams
 {
     el_o_t               basis_order;
     q_o_t                quad_order;
     basis::BasisType     basis_type;
     quad::QuadratureType quad_type;
+    bool                 use_odd_even;
 
     consteval int n_bases1d() const { return basis_order + 1; }
     consteval int n_qps1d() const { return static_cast< int >(quad::getRefQuadSize(quad_type, quad_order)); }
@@ -21,7 +22,7 @@ struct BasisParams
 
 namespace detail
 {
-template < BasisParams basis_params >
+template < SumFactParams basis_params >
 auto makeInterpolationMatrix()
 {
     const auto& [qps, _]    = quad::getReferenceQuadrature< basis_params.quad_type, basis_params.quad_order >();
@@ -34,7 +35,7 @@ auto makeInterpolationMatrix()
     return retval;
 }
 
-template < BasisParams basis_params >
+template < SumFactParams basis_params >
 auto makeDerivativeMatrix()
 {
     const auto& [qps, _]    = quad::getReferenceQuadrature< basis_params.quad_type, basis_params.quad_order >();
@@ -54,32 +55,32 @@ auto makeTransposed(const Matrix& matrix)
     return return_t{matrix.transpose()};
 }
 
-template < BasisParams basis_params >
+template < SumFactParams basis_params >
 inline const auto interpolation_matrix = makeInterpolationMatrix< basis_params >();
-template < BasisParams basis_params >
+template < SumFactParams basis_params >
 inline const auto derivative_matrix = makeDerivativeMatrix< basis_params >();
-template < BasisParams basis_params >
+template < SumFactParams basis_params >
 inline const auto interpolation_matrix_trans = makeTransposed(interpolation_matrix< basis_params >);
-template < BasisParams basis_params >
+template < SumFactParams basis_params >
 inline const auto derivative_matrix_trans = makeTransposed(derivative_matrix< basis_params >);
 
-template < BasisParams basis_params, typename EigenMapIn, typename EigenMapOut >
-void sumFactSweepBackInterp(EigenMapIn&& in, EigenMapOut&& out)
+template < SumFactParams basis_params, typename EigenMapIn, typename EigenMapOut >
+void sumFactSweepBackInterpStandard(EigenMapIn&& in, EigenMapOut&& out)
 {
     out.noalias() = in.transpose() * interpolation_matrix< basis_params >;
 }
-template < BasisParams basis_params, typename EigenMapIn, typename EigenMapOut >
-void sumFactSweepBackDer(EigenMapIn&& in, EigenMapOut&& out)
+template < SumFactParams basis_params, typename EigenMapIn, typename EigenMapOut >
+void sumFactSweepBackDerStandard(EigenMapIn&& in, EigenMapOut&& out)
 {
     out.noalias() = in.transpose() * derivative_matrix< basis_params >;
 }
-template < BasisParams basis_params, typename EigenMapIn, typename EigenMapOut >
-void sumFactSweepForwardInterpAssign(EigenMapIn&& in, EigenMapOut&& out)
+template < SumFactParams basis_params, typename EigenMapIn, typename EigenMapOut >
+void sumFactSweepForwardInterpAssignStandard(EigenMapIn&& in, EigenMapOut&& out)
 {
     out.noalias() = in.transpose() * interpolation_matrix_trans< basis_params >;
 }
-template < BasisParams basis_params, typename EigenMapIn, typename EigenMapOut >
-void sumFactSweepForwardDerAccumulate(EigenMapIn&& in, EigenMapOut&& out)
+template < SumFactParams basis_params, typename EigenMapIn, typename EigenMapOut >
+void sumFactSweepForwardDerAccumulateStandard(EigenMapIn&& in, EigenMapOut&& out)
 {
     out.noalias() += in.transpose() * derivative_matrix_trans< basis_params >;
 }
@@ -138,21 +139,21 @@ auto makePsiMinusDer(const Eigen::Matrix< val_t, rows, cols, params... >& mat)
     return makePsiMinusImpl< ret_rows, ret_cols >(mat);
 }
 
-template < BasisParams basis_params >
+template < SumFactParams basis_params >
 inline const auto psi_plus_interp_back = makePsiPlusInterp(interpolation_matrix< basis_params >);
-template < BasisParams basis_params >
+template < SumFactParams basis_params >
 inline const auto psi_minus_interp_back = makePsiMinusInterp(interpolation_matrix< basis_params >);
-template < BasisParams basis_params >
+template < SumFactParams basis_params >
 inline const auto psi_plus_interp_forward = makePsiPlusInterp(interpolation_matrix_trans< basis_params >);
-template < BasisParams basis_params >
+template < SumFactParams basis_params >
 inline const auto psi_minus_interp_forward = makePsiMinusInterp(interpolation_matrix_trans< basis_params >);
-template < BasisParams basis_params >
+template < SumFactParams basis_params >
 inline const auto psi_plus_der_back = makePsiPlusDer(derivative_matrix< basis_params >);
-template < BasisParams basis_params >
+template < SumFactParams basis_params >
 inline const auto psi_minus_der_back = makePsiMinusDer(derivative_matrix< basis_params >);
-template < BasisParams basis_params >
+template < SumFactParams basis_params >
 inline const auto psi_plus_der_forward = makePsiPlusDer(derivative_matrix_trans< basis_params >);
-template < BasisParams basis_params >
+template < SumFactParams basis_params >
 inline const auto psi_minus_der_forward = makePsiMinusDer(derivative_matrix_trans< basis_params >);
 
 template < int full_rows, int psi_p_rows, int psi_m_rows, typename EigenMap >
@@ -256,7 +257,7 @@ void sumFactSweepDerAccumulateOddEvenBlock(EigenMapIn&&    in,
         });
 }
 
-template < BasisParams basis_params, typename EigenMapIn, typename EigenMapOut >
+template < SumFactParams basis_params, typename EigenMapIn, typename EigenMapOut >
 void sumFactSweepBackInterpOddEven(EigenMapIn&& in, EigenMapOut&& out)
 {
     constexpr int in_cols        = std::remove_cvref_t< decltype(in) >::ColsAtCompileTime;
@@ -277,7 +278,7 @@ void sumFactSweepBackInterpOddEven(EigenMapIn&& in, EigenMapOut&& out)
                                                    psi_minus_interp_back< basis_params >);
 }
 
-template < BasisParams basis_params, typename EigenMapIn, typename EigenMapOut >
+template < SumFactParams basis_params, typename EigenMapIn, typename EigenMapOut >
 void sumFactSweepForwardInterpAssignOddEven(EigenMapIn&& in, EigenMapOut&& out)
 {
     constexpr int in_cols        = std::remove_cvref_t< decltype(in) >::ColsAtCompileTime;
@@ -298,7 +299,7 @@ void sumFactSweepForwardInterpAssignOddEven(EigenMapIn&& in, EigenMapOut&& out)
                                                    psi_minus_interp_forward< basis_params >);
 }
 
-template < BasisParams basis_params, typename EigenMapIn, typename EigenMapOut >
+template < SumFactParams basis_params, typename EigenMapIn, typename EigenMapOut >
 void sumFactSweepBackDerOddEven(EigenMapIn&& in, EigenMapOut&& out)
 {
     constexpr int in_cols        = std::remove_cvref_t< decltype(in) >::ColsAtCompileTime;
@@ -319,7 +320,7 @@ void sumFactSweepBackDerOddEven(EigenMapIn&& in, EigenMapOut&& out)
                                                       psi_minus_der_back< basis_params >);
 }
 
-template < BasisParams basis_params, typename EigenMapIn, typename EigenMapOut >
+template < SumFactParams basis_params, typename EigenMapIn, typename EigenMapOut >
 void sumFactSweepForwardDerAccumulateOddEven(EigenMapIn&& in, EigenMapOut&& out)
 {
     constexpr int in_cols        = std::remove_cvref_t< decltype(in) >::ColsAtCompileTime;
@@ -340,7 +341,48 @@ void sumFactSweepForwardDerAccumulateOddEven(EigenMapIn&& in, EigenMapOut&& out)
                                                           psi_minus_der_forward< basis_params >);
 }
 
-template < BasisParams basis_params, size_t num_fields, size_t dim >
+template < SumFactParams basis_params, typename EigenMapIn, typename EigenMapOut >
+void sumFactSweepBackInterp(EigenMapIn&& in, EigenMapOut&& out)
+{
+    if constexpr (basis_params.use_odd_even)
+        sumFactSweepBackInterpOddEven< basis_params >(std::forward< EigenMapIn >(in), std::forward< EigenMapOut >(out));
+    else
+        sumFactSweepBackInterpStandard< basis_params >(std::forward< EigenMapIn >(in),
+                                                       std::forward< EigenMapOut >(out));
+}
+
+template < SumFactParams basis_params, typename EigenMapIn, typename EigenMapOut >
+void sumFactSweepBackDer(EigenMapIn&& in, EigenMapOut&& out)
+{
+    if constexpr (basis_params.use_odd_even)
+        sumFactSweepBackDerOddEven< basis_params >(std::forward< EigenMapIn >(in), std::forward< EigenMapOut >(out));
+    else
+        sumFactSweepBackDerStandard< basis_params >(std::forward< EigenMapIn >(in), std::forward< EigenMapOut >(out));
+}
+
+template < SumFactParams basis_params, typename EigenMapIn, typename EigenMapOut >
+void sumFactSweepForwardInterpAssign(EigenMapIn&& in, EigenMapOut&& out)
+{
+    if constexpr (basis_params.use_odd_even)
+        sumFactSweepForwardInterpAssignOddEven< basis_params >(std::forward< EigenMapIn >(in),
+                                                               std::forward< EigenMapOut >(out));
+    else
+        sumFactSweepForwardInterpAssignStandard< basis_params >(std::forward< EigenMapIn >(in),
+                                                                std::forward< EigenMapOut >(out));
+}
+
+template < SumFactParams basis_params, typename EigenMapIn, typename EigenMapOut >
+void sumFactSweepForwardDerAccumulate(EigenMapIn&& in, EigenMapOut&& out)
+{
+    if constexpr (basis_params.use_odd_even)
+        sumFactSweepForwardDerAccumulateOddEven< basis_params >(std::forward< EigenMapIn >(in),
+                                                                std::forward< EigenMapOut >(out));
+    else
+        sumFactSweepForwardDerAccumulateStandard< basis_params >(std::forward< EigenMapIn >(in),
+                                                                 std::forward< EigenMapOut >(out));
+}
+
+template < SumFactParams basis_params, size_t num_fields, size_t dim >
     requires(dim == 2 or dim == 3)
 class SumFactBufferHelper
 {
@@ -381,17 +423,19 @@ public:
 };
 
 template < KernelParams params, AssemblyOptions asm_opts, el_o_t EO >
-inline constexpr auto make_basis_params = BasisParams{.basis_order = EO,
-                                                      .quad_order  = 2 * asm_opts.order(EO),
-                                                      .basis_type  = asm_opts.basis_type,
-                                                      .quad_type   = asm_opts.quad_type};
+inline constexpr auto make_basis_params = SumFactParams{.basis_order  = EO,
+                                                        .quad_order   = 2 * asm_opts.order(EO),
+                                                        .basis_type   = asm_opts.basis_type,
+                                                        .quad_type    = asm_opts.quad_type,
+                                                        .use_odd_even = asm_opts.useOddEven(EO)};
 template < KernelParams params, AssemblyOptions asm_opts, el_o_t EO >
-inline constexpr auto make_geom_basis_params = BasisParams{.basis_order = 1,
-                                                           .quad_order  = 2 * asm_opts.order(EO),
-                                                           .basis_type  = basis::BasisType::Lagrange,
-                                                           .quad_type   = asm_opts.quad_type};
+inline constexpr auto make_geom_basis_params = SumFactParams{.basis_order  = 1,
+                                                             .quad_order   = 2 * asm_opts.order(EO),
+                                                             .basis_type   = basis::BasisType::Lagrange,
+                                                             .quad_type    = asm_opts.quad_type,
+                                                             .use_odd_even = asm_opts.useOddEven(EO)};
 
-template < BasisParams basis_params, size_t num_fields, std::invocable< std::span< val_t > > Fill >
+template < SumFactParams basis_params, size_t num_fields, std::invocable< std::span< val_t > > Fill >
 auto sumFactBackQuad(Fill&& fill) -> SumFactBufferHelper< basis_params, num_fields, 2 >::buf_array_t
 {
     L3STER_PROFILE_FUNCTION;
@@ -413,16 +457,16 @@ auto sumFactBackQuad(Fill&& fill) -> SumFactBufferHelper< basis_params, num_fiel
     std::invoke(std::forward< Fill >(fill), std::span< val_t >{r1});
 
     // Sum-factorization sweeps, note the buffer reuse pattern
-    sumFactSweepBackInterp< basis_params >(x0_t{r1.data()}, y0_t{temp.data()});
-    sumFactSweepBackDer< basis_params >(x1_t{temp.data()}, y1_t{r2.data()});
-    sumFactSweepBackInterp< basis_params >(x1_t{temp.data()}, y1_t{r0.data()});
-    sumFactSweepBackDer< basis_params >(x0_t{r1.data()}, y0_t{temp.data()});
-    sumFactSweepBackInterp< basis_params >(x1_t{temp.data()}, y1_t{r1.data()});
+    sumFactSweepBackInterpStandard< basis_params >(x0_t{r1.data()}, y0_t{temp.data()});
+    sumFactSweepBackDerStandard< basis_params >(x1_t{temp.data()}, y1_t{r2.data()});
+    sumFactSweepBackInterpStandard< basis_params >(x1_t{temp.data()}, y1_t{r0.data()});
+    sumFactSweepBackDerStandard< basis_params >(x0_t{r1.data()}, y0_t{temp.data()});
+    sumFactSweepBackInterpStandard< basis_params >(x1_t{temp.data()}, y1_t{r1.data()});
 
     return retval;
 }
 
-template < BasisParams basis_params, size_t num_fields, std::invocable< std::span< val_t > > Fill >
+template < SumFactParams basis_params, size_t num_fields, std::invocable< std::span< val_t > > Fill >
 auto sumFactBackHex(Fill&& fill) -> SumFactBufferHelper< basis_params, num_fields, 3 >::buf_array_t
 {
     L3STER_PROFILE_FUNCTION;
@@ -446,20 +490,20 @@ auto sumFactBackHex(Fill&& fill) -> SumFactBufferHelper< basis_params, num_field
     std::invoke(std::forward< Fill >(fill), std::span< val_t >{r3});
 
     // Sum-factorization sweeps, note the buffer reuse pattern
-    sumFactSweepBackInterp< basis_params >(x0_t{r3.data()}, y0_t{r0.data()});
-    sumFactSweepBackDer< basis_params >(x0_t{r3.data()}, y0_t{r1.data()});
-    sumFactSweepBackInterp< basis_params >(x1_t{r1.data()}, y1_t{r3.data()});
-    sumFactSweepBackInterp< basis_params >(x2_t{r3.data()}, y2_t{r1.data()});
-    sumFactSweepBackDer< basis_params >(x1_t{r0.data()}, y1_t{r3.data()});
-    sumFactSweepBackInterp< basis_params >(x2_t{r3.data()}, y2_t{r2.data()});
-    sumFactSweepBackInterp< basis_params >(x1_t{r0.data()}, y1_t{temp.data()});
-    sumFactSweepBackInterp< basis_params >(x2_t{temp.data()}, y2_t{r0.data()});
-    sumFactSweepBackDer< basis_params >(x2_t{temp.data()}, y2_t{r3.data()});
+    sumFactSweepBackInterpStandard< basis_params >(x0_t{r3.data()}, y0_t{r0.data()});
+    sumFactSweepBackDerStandard< basis_params >(x0_t{r3.data()}, y0_t{r1.data()});
+    sumFactSweepBackInterpStandard< basis_params >(x1_t{r1.data()}, y1_t{r3.data()});
+    sumFactSweepBackInterpStandard< basis_params >(x2_t{r3.data()}, y2_t{r1.data()});
+    sumFactSweepBackDerStandard< basis_params >(x1_t{r0.data()}, y1_t{r3.data()});
+    sumFactSweepBackInterpStandard< basis_params >(x2_t{r3.data()}, y2_t{r2.data()});
+    sumFactSweepBackInterpStandard< basis_params >(x1_t{r0.data()}, y1_t{temp.data()});
+    sumFactSweepBackInterpStandard< basis_params >(x2_t{temp.data()}, y2_t{r0.data()});
+    sumFactSweepBackDerStandard< basis_params >(x2_t{temp.data()}, y2_t{r3.data()});
 
     return retval;
 }
 
-template < BasisParams basis_params, el_o_t EO >
+template < SumFactParams basis_params, el_o_t EO >
 auto computeGeomDataLin(const mesh::ElementData< mesh::ElementType::Quad, EO >& el_data)
 {
     L3STER_PROFILE_FUNCTION;
@@ -475,7 +519,7 @@ auto computeGeomDataLin(const mesh::ElementData< mesh::ElementType::Quad, EO >& 
     return sumFactBackQuad< basis_params, 2 >(fill_coords);
 }
 
-template < BasisParams basis_params, el_o_t EO >
+template < SumFactParams basis_params, el_o_t EO >
 auto computeGeomDataLin(const mesh::ElementData< mesh::ElementType::Hex, EO >& el_data)
 {
     L3STER_PROFILE_FUNCTION;
@@ -709,7 +753,7 @@ auto evalAtHexQPs(typename SumFactBufferHelper< make_basis_params< params, asm_o
     return retval;
 }
 
-template < BasisParams basis_params, size_t num_fields, size_t N >
+template < SumFactParams basis_params, size_t num_fields, size_t N >
 void sumFactForwardQuad(typename SumFactBufferHelper< basis_params, num_fields, 2 >::buf_array_t& ts,
                         std::array< val_t, N >&                                                   temp)
 {
@@ -728,14 +772,14 @@ void sumFactForwardQuad(typename SumFactBufferHelper< basis_params, num_fields, 
 
     // Sum-factorization sweeps, note the result is written to t0
     auto& [t0, t1, t2] = ts;
-    sumFactSweepForwardInterpAssign< basis_params >(x0_t{t0.data()}, y0_t{temp.data()});
-    sumFactSweepForwardDerAccumulate< basis_params >(x0_t{t1.data()}, y0_t{temp.data()});
-    sumFactSweepForwardInterpAssign< basis_params >(x1_t{temp.data()}, y1_t{t0.data()});
-    sumFactSweepForwardInterpAssign< basis_params >(x0_t{t2.data()}, y0_t{temp.data()});
-    sumFactSweepForwardDerAccumulate< basis_params >(x1_t{temp.data()}, y1_t{t0.data()});
+    sumFactSweepForwardInterpAssignStandard< basis_params >(x0_t{t0.data()}, y0_t{temp.data()});
+    sumFactSweepForwardDerAccumulateStandard< basis_params >(x0_t{t1.data()}, y0_t{temp.data()});
+    sumFactSweepForwardInterpAssignStandard< basis_params >(x1_t{temp.data()}, y1_t{t0.data()});
+    sumFactSweepForwardInterpAssignStandard< basis_params >(x0_t{t2.data()}, y0_t{temp.data()});
+    sumFactSweepForwardDerAccumulateStandard< basis_params >(x1_t{temp.data()}, y1_t{t0.data()});
 }
 
-template < BasisParams basis_params, size_t num_fields, size_t N >
+template < SumFactParams basis_params, size_t num_fields, size_t N >
 void sumFactForwardHex(typename SumFactBufferHelper< basis_params, num_fields, 3 >::buf_array_t& ts,
                        std::array< val_t, N >&                                                   temp)
 {
@@ -756,15 +800,15 @@ void sumFactForwardHex(typename SumFactBufferHelper< basis_params, num_fields, 3
 
     // Sum-factorization sweeps, note the result is written to t0
     auto& [t0, t1, t2, t3] = ts;
-    sumFactSweepForwardInterpAssign< basis_params >(x0_t{t0.data()}, y0_t{temp.data()});
-    sumFactSweepForwardDerAccumulate< basis_params >(x0_t{t1.data()}, y0_t{temp.data()});
-    sumFactSweepForwardInterpAssign< basis_params >(x1_t{temp.data()}, y1_t{t1.data()});
-    sumFactSweepForwardInterpAssign< basis_params >(x0_t{t2.data()}, y0_t{temp.data()});
-    sumFactSweepForwardDerAccumulate< basis_params >(x1_t{temp.data()}, y1_t{t1.data()});
-    sumFactSweepForwardInterpAssign< basis_params >(x2_t{t1.data()}, y2_t{t0.data()});
-    sumFactSweepForwardInterpAssign< basis_params >(x0_t{t3.data()}, y0_t{t1.data()});
-    sumFactSweepForwardInterpAssign< basis_params >(x1_t{t1.data()}, y1_t{t3.data()});
-    sumFactSweepForwardDerAccumulate< basis_params >(x2_t{t3.data()}, y2_t{t0.data()});
+    sumFactSweepForwardInterpAssignStandard< basis_params >(x0_t{t0.data()}, y0_t{temp.data()});
+    sumFactSweepForwardDerAccumulateStandard< basis_params >(x0_t{t1.data()}, y0_t{temp.data()});
+    sumFactSweepForwardInterpAssignStandard< basis_params >(x1_t{temp.data()}, y1_t{t1.data()});
+    sumFactSweepForwardInterpAssignStandard< basis_params >(x0_t{t2.data()}, y0_t{temp.data()});
+    sumFactSweepForwardDerAccumulateStandard< basis_params >(x1_t{temp.data()}, y1_t{t1.data()});
+    sumFactSweepForwardInterpAssignStandard< basis_params >(x2_t{t1.data()}, y2_t{t0.data()});
+    sumFactSweepForwardInterpAssignStandard< basis_params >(x0_t{t3.data()}, y0_t{t1.data()});
+    sumFactSweepForwardInterpAssignStandard< basis_params >(x1_t{t1.data()}, y1_t{t3.data()});
+    sumFactSweepForwardDerAccumulateStandard< basis_params >(x2_t{t3.data()}, y2_t{t0.data()});
 }
 
 template < typename Kernel,
