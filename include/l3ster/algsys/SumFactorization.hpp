@@ -4,6 +4,7 @@
 #include "l3ster/algsys/EvaluateLocalOperator.hpp"
 #include "l3ster/mesh/LocalMeshView.hpp"
 #include "l3ster/post/FieldAccess.hpp"
+#include "l3ster/util/Simd.hpp"
 
 namespace lstr::algsys
 {
@@ -83,6 +84,262 @@ void sumFactSweepForwardDerAccumulate(EigenMapIn&& in, EigenMapOut&& out)
     out.noalias() += in.transpose() * derivative_matrix_trans< basis_params >;
 }
 
+template < int ret_rows, int ret_cols, int rows, int cols, int... params >
+auto makePsiPlusImpl(const Eigen::Matrix< val_t, rows, cols, params... >& mat)
+{
+    auto retval = util::eigen::RowMajorMatrix< val_t, ret_rows, ret_cols >{};
+    for (int r = 0; r != rows / 2; ++r)
+        for (int c = 0; c != ret_cols; ++c)
+            retval(r, c) = mat(r, c) + mat(rows - r - 1, c);
+    if constexpr (rows % 2)
+        retval.template bottomRows< 1 >() = mat.template block< 1, ret_cols >(rows / 2, 0);
+    return retval;
+}
+
+template < int ret_rows, int ret_cols, int rows, int cols, int... params >
+auto makePsiMinusImpl(const Eigen::Matrix< val_t, rows, cols, params... >& mat)
+{
+    auto retval = util::eigen::RowMajorMatrix< val_t, ret_rows, ret_cols >{};
+    for (int r = 0; r != ret_rows; ++r)
+        for (int c = 0; c != ret_cols; ++c)
+            retval(r, c) = mat(r, c) - mat(rows - r - 1, c);
+    return retval;
+}
+
+template < int rows, int cols, int... params >
+auto makePsiPlusInterp(const Eigen::Matrix< val_t, rows, cols, params... >& mat)
+{
+    constexpr int ret_rows = (rows + 1) / 2;
+    constexpr int ret_cols = (cols + 1) / 2;
+    return makePsiPlusImpl< ret_rows, ret_cols >(mat);
+}
+
+template < int rows, int cols, int... params >
+auto makePsiMinusInterp(const Eigen::Matrix< val_t, rows, cols, params... >& mat)
+{
+    constexpr int ret_rows = rows / 2;
+    constexpr int ret_cols = cols / 2;
+    return makePsiMinusImpl< ret_rows, ret_cols >(mat);
+}
+
+template < int rows, int cols, int... params >
+auto makePsiPlusDer(const Eigen::Matrix< val_t, rows, cols, params... >& mat)
+{
+    constexpr int ret_rows = (rows + 1) / 2;
+    constexpr int ret_cols = cols / 2;
+    return makePsiPlusImpl< ret_rows, ret_cols >(mat);
+}
+
+template < int rows, int cols, int... params >
+auto makePsiMinusDer(const Eigen::Matrix< val_t, rows, cols, params... >& mat)
+{
+    constexpr int ret_rows = rows / 2;
+    constexpr int ret_cols = (cols + 1) / 2;
+    return makePsiMinusImpl< ret_rows, ret_cols >(mat);
+}
+
+template < BasisParams basis_params >
+inline const auto psi_plus_interp_back = makePsiPlusInterp(interpolation_matrix< basis_params >);
+template < BasisParams basis_params >
+inline const auto psi_minus_interp_back = makePsiMinusInterp(interpolation_matrix< basis_params >);
+template < BasisParams basis_params >
+inline const auto psi_plus_interp_forward = makePsiPlusInterp(interpolation_matrix_trans< basis_params >);
+template < BasisParams basis_params >
+inline const auto psi_minus_interp_forward = makePsiMinusInterp(interpolation_matrix_trans< basis_params >);
+template < BasisParams basis_params >
+inline const auto psi_plus_der_back = makePsiPlusDer(derivative_matrix< basis_params >);
+template < BasisParams basis_params >
+inline const auto psi_minus_der_back = makePsiMinusDer(derivative_matrix< basis_params >);
+template < BasisParams basis_params >
+inline const auto psi_plus_der_forward = makePsiPlusDer(derivative_matrix_trans< basis_params >);
+template < BasisParams basis_params >
+inline const auto psi_minus_der_forward = makePsiMinusDer(derivative_matrix_trans< basis_params >);
+
+template < int full_rows, int psi_p_rows, int psi_m_rows, typename EigenMap >
+auto makeEO(EigenMap&& in)
+{
+    constexpr int in_cols = std::remove_cvref_t< EigenMap >::ColsAtCompileTime;
+    using e_t             = Eigen::Matrix< val_t, psi_p_rows, in_cols >;
+    using o_t             = Eigen::Matrix< val_t, psi_m_rows, in_cols >;
+    auto retval           = std::pair< e_t, o_t >{};
+    auto& [e, o]          = retval;
+    for (int c = 0; c != in_cols; ++c)
+    {
+        for (int r = 0; r != psi_m_rows; ++r)
+        {
+            const int   ri = full_rows - r - 1;
+            const val_t v1 = in(r, c);
+            const val_t v2 = in(ri, c);
+            e(r, c)        = .5 * (v1 + v2);
+            o(r, c)        = .5 * (v1 - v2);
+        }
+        if constexpr (psi_m_rows < psi_p_rows)
+            e(psi_m_rows, c) = in(psi_m_rows, c);
+    }
+    return retval;
+}
+
+template < typename EigenMap, int in_cols, int e_prime_cols, int o_prime_cols, typename Combine >
+void reconstructOddEven(EigenMap&&                                           out,
+                        const Eigen::Matrix< val_t, in_cols, e_prime_cols >& e_prime,
+                        const Eigen::Matrix< val_t, in_cols, o_prime_cols >& o_prime,
+                        Combine&&                                            combine)
+{
+    constexpr int full_cols = e_prime_cols + o_prime_cols;
+    for (int c = 0; c != o_prime_cols; ++c)
+    {
+        const int ci = full_cols - c - 1;
+        for (int r = 0; r != in_cols; ++r)
+        {
+            const val_t v1 = e_prime(r, c);
+            const val_t v2 = o_prime(r, c);
+            combine(out(r, c), v1 + v2);
+            combine(out(r, ci), v1 - v2);
+        }
+    }
+    if constexpr (e_prime_cols > o_prime_cols)
+        combine(out.col(o_prime_cols), e_prime.template rightCols< 1 >());
+}
+
+template < int full_rows, typename EigenMapIn, typename EigenMapOut, typename PsiPlus, typename PsiMinus >
+void sumFactSweepInterpOddEvenBlock(EigenMapIn&&    in,
+                                    EigenMapOut&&   out,
+                                    const PsiPlus&  psi_plus,
+                                    const PsiMinus& psi_minus)
+{
+    constexpr int psi_p_rows = PsiPlus::RowsAtCompileTime;
+    constexpr int psi_m_rows = PsiMinus::RowsAtCompileTime;
+    const auto [e, o]        = makeEO< full_rows, psi_p_rows, psi_m_rows >(std::forward< EigenMapIn >(in));
+    const auto e_prime       = (e.transpose() * psi_plus).eval();
+    const auto o_prime       = (o.transpose() * psi_minus).eval();
+    reconstructOddEven(std::forward< EigenMapOut >(out), e_prime, o_prime, [](auto&& a, auto&& b) { a = b; });
+}
+
+template < int full_rows,
+           typename EigenMapIn,
+           typename EigenMapOut,
+           typename PsiPlus,
+           typename PsiMinus,
+           typename Combine >
+void sumFactSweepDerOddEvenBlockImpl(
+    EigenMapIn&& in, EigenMapOut&& out, const PsiPlus& psi_plus, const PsiMinus& psi_minus, Combine&& combine)
+{
+    constexpr int psi_p_rows = PsiPlus::RowsAtCompileTime;
+    constexpr int psi_m_rows = PsiMinus::RowsAtCompileTime;
+    const auto [e, o]        = makeEO< full_rows, psi_p_rows, psi_m_rows >(std::forward< EigenMapIn >(in));
+    const auto e_prime       = (e.transpose() * psi_plus).eval();
+    const auto o_prime       = (o.transpose() * psi_minus).eval();
+    reconstructOddEven(std::forward< EigenMapOut >(out), o_prime, e_prime, std::forward< Combine >(combine));
+}
+
+template < int full_rows, typename EigenMapIn, typename EigenMapOut, typename PsiPlus, typename PsiMinus >
+void sumFactSweepDerAssignOddEvenBlock(EigenMapIn&&    in,
+                                       EigenMapOut&&   out,
+                                       const PsiPlus&  psi_plus,
+                                       const PsiMinus& psi_minus)
+{
+    sumFactSweepDerOddEvenBlockImpl< full_rows >(
+        std::forward< EigenMapIn >(in), std::forward< EigenMapOut >(out), psi_plus, psi_minus, [](auto&& a, auto&& b) {
+            a = b;
+        });
+}
+
+template < int full_rows, typename EigenMapIn, typename EigenMapOut, typename PsiPlus, typename PsiMinus >
+void sumFactSweepDerAccumulateOddEvenBlock(EigenMapIn&&    in,
+                                           EigenMapOut&&   out,
+                                           const PsiPlus&  psi_plus,
+                                           const PsiMinus& psi_minus)
+{
+    sumFactSweepDerOddEvenBlockImpl< full_rows >(
+        std::forward< EigenMapIn >(in), std::forward< EigenMapOut >(out), psi_plus, psi_minus, [](auto&& a, auto&& b) {
+            a += b;
+        });
+}
+
+template < BasisParams basis_params, typename EigenMapIn, typename EigenMapOut >
+void sumFactSweepBackInterpOddEven(EigenMapIn&& in, EigenMapOut&& out)
+{
+    constexpr int in_cols        = std::remove_cvref_t< decltype(in) >::ColsAtCompileTime;
+    constexpr int block_size     = util::simd_width / 2;
+    constexpr int num_blocks     = in_cols / block_size;
+    constexpr int remainder_size = in_cols % block_size;
+    constexpr int psi_rows       = basis_params.n_bases1d();
+
+    for (int block = 0; block != num_blocks; ++block)
+        sumFactSweepInterpOddEvenBlock< psi_rows >(in.template middleCols< block_size >(block * block_size),
+                                                   out.template middleRows< block_size >(block * block_size),
+                                                   psi_plus_interp_back< basis_params >,
+                                                   psi_minus_interp_back< basis_params >);
+    if constexpr (remainder_size > 0)
+        sumFactSweepInterpOddEvenBlock< psi_rows >(in.template rightCols< remainder_size >(),
+                                                   out.template bottomRows< remainder_size >(),
+                                                   psi_plus_interp_back< basis_params >,
+                                                   psi_minus_interp_back< basis_params >);
+}
+
+template < BasisParams basis_params, typename EigenMapIn, typename EigenMapOut >
+void sumFactSweepForwardInterpAssignOddEven(EigenMapIn&& in, EigenMapOut&& out)
+{
+    constexpr int in_cols        = std::remove_cvref_t< decltype(in) >::ColsAtCompileTime;
+    constexpr int block_size     = util::simd_width / 2;
+    constexpr int num_blocks     = in_cols / block_size;
+    constexpr int remainder_size = in_cols % block_size;
+    constexpr int psi_rows       = basis_params.n_qps1d();
+
+    for (int block = 0; block != num_blocks; ++block)
+        sumFactSweepInterpOddEvenBlock< psi_rows >(in.template middleCols< block_size >(block * block_size),
+                                                   out.template middleRows< block_size >(block * block_size),
+                                                   psi_plus_interp_forward< basis_params >,
+                                                   psi_minus_interp_forward< basis_params >);
+    if constexpr (remainder_size > 0)
+        sumFactSweepInterpOddEvenBlock< psi_rows >(in.template rightCols< remainder_size >(),
+                                                   out.template bottomRows< remainder_size >(),
+                                                   psi_plus_interp_forward< basis_params >,
+                                                   psi_minus_interp_forward< basis_params >);
+}
+
+template < BasisParams basis_params, typename EigenMapIn, typename EigenMapOut >
+void sumFactSweepBackDerOddEven(EigenMapIn&& in, EigenMapOut&& out)
+{
+    constexpr int in_cols        = std::remove_cvref_t< decltype(in) >::ColsAtCompileTime;
+    constexpr int block_size     = util::simd_width / 2;
+    constexpr int num_blocks     = in_cols / block_size;
+    constexpr int remainder_size = in_cols % block_size;
+    constexpr int psi_rows       = basis_params.n_bases1d();
+
+    for (int block = 0; block != num_blocks; ++block)
+        sumFactSweepDerAssignOddEvenBlock< psi_rows >(in.template middleCols< block_size >(block * block_size),
+                                                      out.template middleRows< block_size >(block * block_size),
+                                                      psi_plus_der_back< basis_params >,
+                                                      psi_minus_der_back< basis_params >);
+    if constexpr (remainder_size > 0)
+        sumFactSweepDerAssignOddEvenBlock< psi_rows >(in.template rightCols< remainder_size >(),
+                                                      out.template bottomRows< remainder_size >(),
+                                                      psi_plus_der_back< basis_params >,
+                                                      psi_minus_der_back< basis_params >);
+}
+
+template < BasisParams basis_params, typename EigenMapIn, typename EigenMapOut >
+void sumFactSweepForwardDerAccumulateOddEven(EigenMapIn&& in, EigenMapOut&& out)
+{
+    constexpr int in_cols        = std::remove_cvref_t< decltype(in) >::ColsAtCompileTime;
+    constexpr int block_size     = util::simd_width / 2;
+    constexpr int num_blocks     = in_cols / block_size;
+    constexpr int remainder_size = in_cols % block_size;
+    constexpr int psi_rows       = basis_params.n_qps1d();
+
+    for (int block = 0; block != num_blocks; ++block)
+        sumFactSweepDerAccumulateOddEvenBlock< psi_rows >(in.template middleCols< block_size >(block * block_size),
+                                                          out.template middleRows< block_size >(block * block_size),
+                                                          psi_plus_der_forward< basis_params >,
+                                                          psi_minus_der_forward< basis_params >);
+    if constexpr (remainder_size > 0)
+        sumFactSweepDerAccumulateOddEvenBlock< psi_rows >(in.template rightCols< remainder_size >(),
+                                                          out.template bottomRows< remainder_size >(),
+                                                          psi_plus_der_forward< basis_params >,
+                                                          psi_minus_der_forward< basis_params >);
+}
+
 template < BasisParams basis_params, size_t num_fields, size_t dim >
     requires(dim == 2 or dim == 3)
 class SumFactBufferHelper
@@ -137,6 +394,7 @@ inline constexpr auto make_geom_basis_params = BasisParams{.basis_order = 1,
 template < BasisParams basis_params, size_t num_fields, std::invocable< std::span< val_t > > Fill >
 auto sumFactBackQuad(Fill&& fill) -> SumFactBufferHelper< basis_params, num_fields, 2 >::buf_array_t
 {
+    L3STER_PROFILE_FUNCTION;
     constexpr int n_bases = basis_params.n_bases1d();
     constexpr int n_quads = basis_params.n_qps1d();
 
@@ -167,6 +425,7 @@ auto sumFactBackQuad(Fill&& fill) -> SumFactBufferHelper< basis_params, num_fiel
 template < BasisParams basis_params, size_t num_fields, std::invocable< std::span< val_t > > Fill >
 auto sumFactBackHex(Fill&& fill) -> SumFactBufferHelper< basis_params, num_fields, 3 >::buf_array_t
 {
+    L3STER_PROFILE_FUNCTION;
     constexpr int n_bases = basis_params.n_bases1d();
     constexpr int n_quads = basis_params.n_qps1d();
 
@@ -203,6 +462,7 @@ auto sumFactBackHex(Fill&& fill) -> SumFactBufferHelper< basis_params, num_field
 template < BasisParams basis_params, el_o_t EO >
 auto computeGeomDataLin(const mesh::ElementData< mesh::ElementType::Quad, EO >& el_data)
 {
+    L3STER_PROFILE_FUNCTION;
     const auto fill_coords = [&](std::span< val_t > to_fill) {
         constexpr size_t num_verts = 4;
         for (auto&& [ind, vertex] : el_data.vertices | std::views::enumerate)
@@ -218,6 +478,7 @@ auto computeGeomDataLin(const mesh::ElementData< mesh::ElementType::Quad, EO >& 
 template < BasisParams basis_params, el_o_t EO >
 auto computeGeomDataLin(const mesh::ElementData< mesh::ElementType::Hex, EO >& el_data)
 {
+    L3STER_PROFILE_FUNCTION;
     const auto fill_coords = [&](std::span< val_t > to_fill) {
         constexpr size_t num_verts = 8;
         for (auto&& [ind, vertex] : el_data.vertices | std::views::enumerate)
@@ -315,6 +576,7 @@ auto evalAtQuadQPs(typename SumFactBufferHelper< make_basis_params< params, asm_
                    val_t                                                   time,
                    util::ConstexprValue< asm_opts >)
 {
+    L3STER_PROFILE_FUNCTION;
     constexpr auto basis_params     = make_basis_params< params, asm_opts, EO >;
     constexpr auto num_operands     = params.n_unknowns * params.n_rhs;
     constexpr int  num_fields_total = num_operands + params.n_fields;
@@ -377,6 +639,7 @@ auto evalAtHexQPs(typename SumFactBufferHelper< make_basis_params< params, asm_o
                   val_t                                                  time,
                   util::ConstexprValue< asm_opts >)
 {
+    L3STER_PROFILE_FUNCTION;
     constexpr auto basis_params            = make_basis_params< params, asm_opts, EO >;
     constexpr auto num_operands            = params.n_unknowns * params.n_rhs;
     constexpr int  num_fields_total        = num_operands + params.n_fields;
@@ -450,6 +713,7 @@ template < BasisParams basis_params, size_t num_fields, size_t N >
 void sumFactForwardQuad(typename SumFactBufferHelper< basis_params, num_fields, 2 >::buf_array_t& ts,
                         std::array< val_t, N >&                                                   temp)
 {
+    L3STER_PROFILE_FUNCTION;
     constexpr int n_bases = basis_params.n_bases1d();
     constexpr int n_quads = basis_params.n_qps1d();
 
@@ -475,6 +739,7 @@ template < BasisParams basis_params, size_t num_fields, size_t N >
 void sumFactForwardHex(typename SumFactBufferHelper< basis_params, num_fields, 3 >::buf_array_t& ts,
                        std::array< val_t, N >&                                                   temp)
 {
+    L3STER_PROFILE_FUNCTION;
     constexpr int n_bases = basis_params.n_bases1d();
     constexpr int n_quads = basis_params.n_qps1d();
 
@@ -577,7 +842,6 @@ void evalLocalOperatorSumFact(const DomainEquationKernel< Kernel, params >& kern
                               util::ConstexprValue< asm_opts >              asm_opts_ctwrpr = {},
                               val_t                                         time            = 0.)
 {
-    // Profiling at a finer granularity induces massive overhead (why?), so we only profile the top-level function
     L3STER_PROFILE_FUNCTION;
     const auto fill = [&](std::span< val_t > to_fill) {
         constexpr int num_fields_total = params.n_unknowns * params.n_rhs + params.n_fields;

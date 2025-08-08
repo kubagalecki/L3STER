@@ -154,7 +154,7 @@ inline auto makeNodeSpacemap(const util::ArrayOwner< NodeLocationData >& node_da
     };
     const auto [min, max] = std::transform_reduce(coords.begin(), coords.end(), reduce_init, reduce, transform);
     const auto x_span     = util::elwise(max, min, std::minus{});
-    const auto is_planar  = std::ranges::any_of(x_span, [](val_t d) { return d < 1.e-15; });
+    const auto is_planar  = std::ranges::any_of(x_span, [](val_t d) { return d < 1e-15; });
     const auto sz_fp      = static_cast< val_t >(node_data.size());
     const auto grid_divs  = std::round(is_planar ? std::sqrt(sz_fp) : std::cbrt(sz_fp)) * 10.;
     const auto dx         = util::elwise(x_span, util::makeFilledArray< 3 >(grid_divs), std::divides{});

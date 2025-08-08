@@ -456,7 +456,7 @@ TEST_CASE("Reference basis at boundary QPs", "[mapping]")
             const auto& ref_q =
                 basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide()).quadrature;
             for (auto qp : ref_q.points)
-                CHECK(mapToPhysicalSpace(el_view->data, qp)[space_ind] == Approx{offs}.margin(1.e-15));
+                CHECK(mapToPhysicalSpace(el_view->data, qp)[space_ind] == Approx{offs}.margin(1e-15));
         };
         view.element_views.visit(element_checker, std::execution::seq);
     };

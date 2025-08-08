@@ -132,7 +132,7 @@ void test()
                      boundary_error[2]);
     }
     comm->barrier();
-    constexpr auto eps = 1.e-8;
+    constexpr auto eps = 1e-8;
     REQUIRE(error.norm() < eps);
     REQUIRE(boundary_error.norm() < eps);
 

@@ -91,9 +91,9 @@ static constexpr auto makeHexElement()
                                                    Point{1., 3., 0.},
                                                    Point{3., 4., 0.},
                                                    Point{1., 1., 1.},
-                                                   Point{2., 1., 1.},
-                                                   Point{1., 3., 1.},
-                                                   Point{3., 4., 1.}}};
+                                                   Point{2., 1., 1.5},
+                                                   Point{1., 3., 2.},
+                                                   Point{3., 4., 3.5}}};
 
     return mesh::Element{el_nodes, data, 0};
 }
@@ -227,7 +227,7 @@ TEST_CASE("Local system assembly", "[local_asm]")
         {
             const auto dof = node * params.n_unknowns;
             for (Eigen::Index rhs = 0; rhs != params.n_rhs; ++rhs)
-                CHECK(x(dof, rhs) == Approx{phi(node, rhs)}.epsilon(1.e-6));
+                CHECK(x(dof, rhs) == Approx{phi(node, rhs)}.epsilon(1e-6));
         }
     }
 }
@@ -281,7 +281,7 @@ TEST_CASE("Local operator evaluation", "[local_asm]")
     }
 }
 
-TEST_CASE("Sum-factorization", "[local_asm]")
+TEST_CASE("Sum-factorized evaluation", "[local_asm]")
 {
     // Compare results between the local element approach and the sum-factorization technique
     SECTION("Diffusion 2D")
@@ -326,5 +326,75 @@ TEST_CASE("Sum-factorization", "[local_asm]")
 
         constexpr auto eps = 1e-8;
         CHECK((y_local_element - y_sum_fact).norm() < eps);
+    }
+}
+
+template < int size, int EO, int QO >
+using wrap_test_params = util::ConstexprValue< std::array{size, EO, QO} >;
+
+TEMPLATE_TEST_CASE("Odd-even decomposition",
+                   "[local_asm]",
+                   (wrap_test_params< 33, 3, 3 >),
+                   (wrap_test_params< 33, 3, 4 >),
+                   (wrap_test_params< 33, 4, 3 >),
+                   (wrap_test_params< 33, 4, 4 >))
+{
+    constexpr auto params       = TestType::value;
+    constexpr auto size         = params[0];
+    constexpr auto EO           = static_cast< el_o_t >(params[1]);
+    constexpr auto QO           = static_cast< q_o_t >(params[2]);
+    constexpr auto basis_params = BasisParams{.basis_order = EO,
+                                              .quad_order  = QO,
+                                              .basis_type  = basis::BasisType::Lagrange,
+                                              .quad_type   = quad::QuadratureType::GaussLegendre};
+
+    SECTION("Sweep back interp")
+    {
+        using x_t       = Eigen::Matrix< val_t, basis_params.n_bases1d(), size >;
+        using y_t       = Eigen::Matrix< val_t, size, basis_params.n_qps1d() >;
+        const auto x    = x_t::Random().eval();
+        auto       y_sf = y_t{};
+        auto       y_oe = y_t{};
+        algsys::detail::sumFactSweepBackInterp< basis_params >(x, y_sf);
+        algsys::detail::sumFactSweepBackInterpOddEven< basis_params >(x, y_oe);
+        CHECK((y_sf - y_oe).norm() < 1e-8);
+    }
+
+    SECTION("Sweep back der")
+    {
+        using x_t       = Eigen::Matrix< val_t, basis_params.n_bases1d(), size >;
+        using y_t       = Eigen::Matrix< val_t, size, basis_params.n_qps1d() >;
+        const auto x    = x_t::Random().eval();
+        auto       y_sf = y_t{};
+        auto       y_oe = y_t{};
+        algsys::detail::sumFactSweepBackDer< basis_params >(x, y_sf);
+        algsys::detail::sumFactSweepBackDerOddEven< basis_params >(x, y_oe);
+        CHECK((y_sf - y_oe).norm() < 1e-8);
+    }
+
+    SECTION("Sweep forward interp assign")
+    {
+        using x_t       = Eigen::Matrix< val_t, basis_params.n_qps1d(), size >;
+        using y_t       = Eigen::Matrix< val_t, size, basis_params.n_bases1d() >;
+        const auto x    = x_t::Random().eval();
+        auto       y_sf = y_t{};
+        auto       y_oe = y_t{};
+        algsys::detail::sumFactSweepForwardInterpAssign< basis_params >(x, y_sf);
+        algsys::detail::sumFactSweepForwardInterpAssignOddEven< basis_params >(x, y_oe);
+        CHECK((y_sf - y_oe).norm() < 1e-8);
+    }
+
+    SECTION("Sweep forward der accumulate")
+    {
+        using x_t       = Eigen::Matrix< val_t, basis_params.n_qps1d(), size >;
+        using y_t       = Eigen::Matrix< val_t, size, basis_params.n_bases1d() >;
+        const auto x    = x_t::Random().eval();
+        auto       y_sf = y_t{};
+        auto       y_oe = y_t{};
+        y_sf.setRandom();
+        y_oe = y_sf;
+        algsys::detail::sumFactSweepForwardDerAccumulate< basis_params >(x, y_sf);
+        algsys::detail::sumFactSweepForwardDerAccumulateOddEven< basis_params >(x, y_oe);
+        CHECK((y_sf - y_oe).norm() < 1e-8);
     }
 }
