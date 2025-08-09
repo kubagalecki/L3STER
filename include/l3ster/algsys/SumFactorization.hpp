@@ -644,16 +644,16 @@ auto evalAtQuadQPs(typename SumFactBufferHelper< make_basis_params< params, asm_
         const auto wy = weights[qy];
         for (int qx = 0; qx != n_qps1d; ++qx)
         {
-            const auto qi           = qy * n_qps1d + qx;
-            const auto jacobian_mat = makeJacobianMat(dx_dxi(qi, 0), dx_deta(qi, 0), dx_dxi(qi, 1), dx_deta(qi, 1));
-            const auto jac_inv      = jacobian_mat.inverse().eval();
-            const auto kernel_input = typename KernelInterface< params >::DomainInput{
-                .field_vals = evalFieldVals< params >(vals.template rightCols< params.n_fields >(), qi),
-                .field_ders = evalFieldDers< params >(dv_dxi.template rightCols< params.n_fields >(),
-                                                      dv_deta.template rightCols< params.n_fields >(),
-                                                      jac_inv,
-                                                      qi),
-                .point      = SpaceTimePoint{Point< 3 >{x(qi, 0), x(qi, 1), 0.}, time}};
+            const auto qi            = qy * n_qps1d + qx;
+            const auto jacobian_mat  = makeJacobianMat(dx_dxi(qi, 0), dx_deta(qi, 0), dx_dxi(qi, 1), dx_deta(qi, 1));
+            const auto jac_inv       = jacobian_mat.inverse().eval();
+            const auto field_vals    = evalFieldVals< params >(vals.template rightCols< params.n_fields >(), qi);
+            const auto field_ders    = evalFieldDers< params >(dv_dxi.template rightCols< params.n_fields >(),
+                                                            dv_deta.template rightCols< params.n_fields >(),
+                                                            jac_inv,
+                                                            qi);
+            const auto point         = SpaceTimePoint{Point< 3 >{x(qi, 0), x(qi, 1), 0.}, time};
+            const auto kernel_input  = typename KernelInterface< params >::DomainInput{field_vals, field_ders, point};
             const auto kernel_result = std::invoke(kernel, kernel_input);
             const auto& [A0, A1, A2] = kernel_result.operators;
             const auto D1            = (A1 * jac_inv(0, 0) + A2 * jac_inv(0, 1)).eval();
@@ -721,15 +721,15 @@ auto evalAtHexQPs(typename SumFactBufferHelper< make_basis_params< params, asm_o
                                                           dx_deta(qi, 2),
                                                           dx_dzeta(qi, 2));
                 const auto jac_inv      = jacobian_mat.inverse().eval();
-                const auto kernel_input = typename KernelInterface< params >::DomainInput{
-                    .field_vals = evalFieldVals< params >(vals.template rightCols< params.n_fields >(), qi),
-                    .field_ders = evalFieldDers< params >(dv_dxi.template rightCols< params.n_fields >(),
-                                                          dv_deta.template rightCols< params.n_fields >(),
-                                                          dv_dzeta.template rightCols< params.n_fields >(),
-                                                          jac_inv,
-                                                          qi),
-                    .point      = SpaceTimePoint{Point< 3 >{x(qi, 0), x(qi, 1), x(qi, 2)}, time}};
-                const auto kernel_result     = std::invoke(kernel, kernel_input);
+                const auto field_vals   = evalFieldVals< params >(vals.template rightCols< params.n_fields >(), qi);
+                const auto field_ders   = evalFieldDers< params >(dv_dxi.template rightCols< params.n_fields >(),
+                                                                dv_deta.template rightCols< params.n_fields >(),
+                                                                dv_dzeta.template rightCols< params.n_fields >(),
+                                                                jac_inv,
+                                                                qi);
+                const auto point        = SpaceTimePoint{Point< 3 >{x(qi, 0), x(qi, 1), 0.}, time};
+                const auto ker_input = typename KernelInterface< params >::DomainInput{field_vals, field_ders, point};
+                const auto kernel_result     = std::invoke(kernel, ker_input);
                 const auto& [A0, A1, A2, A3] = kernel_result.operators;
                 const auto D1                = (A1 * jac_inv(0, 0) + A2 * jac_inv(0, 1) + A3 * jac_inv(0, 2)).eval();
                 const auto D2                = (A1 * jac_inv(1, 0) + A2 * jac_inv(1, 1) + A3 * jac_inv(1, 2)).eval();
