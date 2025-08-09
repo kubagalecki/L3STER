@@ -10,20 +10,20 @@ using namespace lstr::algsys;
 
 inline constexpr auto diffusion_kernel_2D = [](const auto&, auto& out) noexcept {
     auto& [operators, rhs] = out;
-    auto& [A0, A1, A2]     = operators;
+    auto& [A0, Ax, Ay]     = operators;
 
     constexpr double lambda = 1.;
 
     A0(1, 1) = -1.;
     A0(2, 2) = -1.;
 
-    A1(0, 1) = -lambda;
-    A1(1, 0) = 1.;
-    A1(3, 2) = 1.;
+    Ax(0, 1) = -lambda;
+    Ax(1, 0) = 1.;
+    Ax(3, 2) = 1.;
 
-    A2(0, 2) = -lambda;
-    A2(2, 0) = 1.;
-    A2(3, 1) = -1.;
+    Ay(0, 2) = -lambda;
+    Ay(2, 0) = 1.;
+    Ay(3, 1) = -1.;
 };
 
 inline constexpr auto diffusion_kernel_3D = [](const auto&, auto& out) noexcept {

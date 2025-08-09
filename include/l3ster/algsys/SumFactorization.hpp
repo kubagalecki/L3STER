@@ -457,11 +457,11 @@ auto sumFactBackQuad(Fill&& fill) -> SumFactBufferHelper< basis_params, num_fiel
     std::invoke(std::forward< Fill >(fill), std::span< val_t >{r1});
 
     // Sum-factorization sweeps, note the buffer reuse pattern
-    sumFactSweepBackInterpStandard< basis_params >(x0_t{r1.data()}, y0_t{temp.data()});
-    sumFactSweepBackDerStandard< basis_params >(x1_t{temp.data()}, y1_t{r2.data()});
-    sumFactSweepBackInterpStandard< basis_params >(x1_t{temp.data()}, y1_t{r0.data()});
-    sumFactSweepBackDerStandard< basis_params >(x0_t{r1.data()}, y0_t{temp.data()});
-    sumFactSweepBackInterpStandard< basis_params >(x1_t{temp.data()}, y1_t{r1.data()});
+    sumFactSweepBackInterp< basis_params >(x0_t{r1.data()}, y0_t{temp.data()});
+    sumFactSweepBackDer< basis_params >(x1_t{temp.data()}, y1_t{r2.data()});
+    sumFactSweepBackInterp< basis_params >(x1_t{temp.data()}, y1_t{r0.data()});
+    sumFactSweepBackDer< basis_params >(x0_t{r1.data()}, y0_t{temp.data()});
+    sumFactSweepBackInterp< basis_params >(x1_t{temp.data()}, y1_t{r1.data()});
 
     return retval;
 }
@@ -490,15 +490,15 @@ auto sumFactBackHex(Fill&& fill) -> SumFactBufferHelper< basis_params, num_field
     std::invoke(std::forward< Fill >(fill), std::span< val_t >{r3});
 
     // Sum-factorization sweeps, note the buffer reuse pattern
-    sumFactSweepBackInterpStandard< basis_params >(x0_t{r3.data()}, y0_t{r0.data()});
-    sumFactSweepBackDerStandard< basis_params >(x0_t{r3.data()}, y0_t{r1.data()});
-    sumFactSweepBackInterpStandard< basis_params >(x1_t{r1.data()}, y1_t{r3.data()});
-    sumFactSweepBackInterpStandard< basis_params >(x2_t{r3.data()}, y2_t{r1.data()});
-    sumFactSweepBackDerStandard< basis_params >(x1_t{r0.data()}, y1_t{r3.data()});
-    sumFactSweepBackInterpStandard< basis_params >(x2_t{r3.data()}, y2_t{r2.data()});
-    sumFactSweepBackInterpStandard< basis_params >(x1_t{r0.data()}, y1_t{temp.data()});
-    sumFactSweepBackInterpStandard< basis_params >(x2_t{temp.data()}, y2_t{r0.data()});
-    sumFactSweepBackDerStandard< basis_params >(x2_t{temp.data()}, y2_t{r3.data()});
+    sumFactSweepBackInterp< basis_params >(x0_t{r3.data()}, y0_t{r0.data()});
+    sumFactSweepBackDer< basis_params >(x0_t{r3.data()}, y0_t{r1.data()});
+    sumFactSweepBackInterp< basis_params >(x1_t{r1.data()}, y1_t{r3.data()});
+    sumFactSweepBackInterp< basis_params >(x2_t{r3.data()}, y2_t{r1.data()});
+    sumFactSweepBackDer< basis_params >(x1_t{r0.data()}, y1_t{r3.data()});
+    sumFactSweepBackInterp< basis_params >(x2_t{r3.data()}, y2_t{r2.data()});
+    sumFactSweepBackInterp< basis_params >(x1_t{r0.data()}, y1_t{temp.data()});
+    sumFactSweepBackInterp< basis_params >(x2_t{temp.data()}, y2_t{r0.data()});
+    sumFactSweepBackDer< basis_params >(x2_t{temp.data()}, y2_t{r3.data()});
 
     return retval;
 }
@@ -772,11 +772,11 @@ void sumFactForwardQuad(typename SumFactBufferHelper< basis_params, num_fields, 
 
     // Sum-factorization sweeps, note the result is written to t0
     auto& [t0, t1, t2] = ts;
-    sumFactSweepForwardInterpAssignStandard< basis_params >(x0_t{t0.data()}, y0_t{temp.data()});
-    sumFactSweepForwardDerAccumulateStandard< basis_params >(x0_t{t1.data()}, y0_t{temp.data()});
-    sumFactSweepForwardInterpAssignStandard< basis_params >(x1_t{temp.data()}, y1_t{t0.data()});
-    sumFactSweepForwardInterpAssignStandard< basis_params >(x0_t{t2.data()}, y0_t{temp.data()});
-    sumFactSweepForwardDerAccumulateStandard< basis_params >(x1_t{temp.data()}, y1_t{t0.data()});
+    sumFactSweepForwardInterpAssign< basis_params >(x0_t{t0.data()}, y0_t{temp.data()});
+    sumFactSweepForwardDerAccumulate< basis_params >(x0_t{t1.data()}, y0_t{temp.data()});
+    sumFactSweepForwardInterpAssign< basis_params >(x1_t{temp.data()}, y1_t{t0.data()});
+    sumFactSweepForwardInterpAssign< basis_params >(x0_t{t2.data()}, y0_t{temp.data()});
+    sumFactSweepForwardDerAccumulate< basis_params >(x1_t{temp.data()}, y1_t{t0.data()});
 }
 
 template < SumFactParams basis_params, size_t num_fields, size_t N >
@@ -800,15 +800,15 @@ void sumFactForwardHex(typename SumFactBufferHelper< basis_params, num_fields, 3
 
     // Sum-factorization sweeps, note the result is written to t0
     auto& [t0, t1, t2, t3] = ts;
-    sumFactSweepForwardInterpAssignStandard< basis_params >(x0_t{t0.data()}, y0_t{temp.data()});
-    sumFactSweepForwardDerAccumulateStandard< basis_params >(x0_t{t1.data()}, y0_t{temp.data()});
-    sumFactSweepForwardInterpAssignStandard< basis_params >(x1_t{temp.data()}, y1_t{t1.data()});
-    sumFactSweepForwardInterpAssignStandard< basis_params >(x0_t{t2.data()}, y0_t{temp.data()});
-    sumFactSweepForwardDerAccumulateStandard< basis_params >(x1_t{temp.data()}, y1_t{t1.data()});
-    sumFactSweepForwardInterpAssignStandard< basis_params >(x2_t{t1.data()}, y2_t{t0.data()});
-    sumFactSweepForwardInterpAssignStandard< basis_params >(x0_t{t3.data()}, y0_t{t1.data()});
-    sumFactSweepForwardInterpAssignStandard< basis_params >(x1_t{t1.data()}, y1_t{t3.data()});
-    sumFactSweepForwardDerAccumulateStandard< basis_params >(x2_t{t3.data()}, y2_t{t0.data()});
+    sumFactSweepForwardInterpAssign< basis_params >(x0_t{t0.data()}, y0_t{temp.data()});
+    sumFactSweepForwardDerAccumulate< basis_params >(x0_t{t1.data()}, y0_t{temp.data()});
+    sumFactSweepForwardInterpAssign< basis_params >(x1_t{temp.data()}, y1_t{t1.data()});
+    sumFactSweepForwardInterpAssign< basis_params >(x0_t{t2.data()}, y0_t{temp.data()});
+    sumFactSweepForwardDerAccumulate< basis_params >(x1_t{temp.data()}, y1_t{t1.data()});
+    sumFactSweepForwardInterpAssign< basis_params >(x2_t{t1.data()}, y2_t{t0.data()});
+    sumFactSweepForwardInterpAssign< basis_params >(x0_t{t3.data()}, y0_t{t1.data()});
+    sumFactSweepForwardInterpAssign< basis_params >(x1_t{t1.data()}, y1_t{t3.data()});
+    sumFactSweepForwardDerAccumulate< basis_params >(x2_t{t3.data()}, y2_t{t0.data()});
 }
 
 template < typename Kernel,

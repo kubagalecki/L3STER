@@ -64,6 +64,24 @@ inline constexpr auto ns3d_kernel = [](const auto& in, auto& out) {
     rhs[2] = u * wx + v * wy + w * wz;
 };
 
+inline constexpr auto diff2d_kernel = [](const auto&, auto& out) noexcept {
+    auto& [operators, rhs] = out;
+    auto& [A0, Ax, Ay]     = operators;
+
+    constexpr double lambda = 1.;
+
+    A0(1, 1) = -1.;
+    A0(2, 2) = -1.;
+
+    Ax(0, 1) = -lambda;
+    Ax(1, 0) = 1.;
+    Ax(3, 2) = 1.;
+
+    Ay(0, 2) = -lambda;
+    Ay(2, 0) = 1.;
+    Ay(3, 1) = -1.;
+};
+
 inline constexpr auto diff3d_kernel = [](const auto&, auto& out) {
     auto& [operators, rhs] = out;
     auto& [A0, Ax, Ay, Az] = operators;

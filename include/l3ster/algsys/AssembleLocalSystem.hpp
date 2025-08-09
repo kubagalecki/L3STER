@@ -40,8 +40,10 @@ struct AssemblyOptions
         using enum mesh::ElementType;
         return eval_strategy != LocalEvalStrategy::LocalElement and (ET == Quad or ET == Hex);
     }
-    [[nodiscard]] constexpr bool useOddEven(el_o_t) const
+    [[nodiscard]] constexpr bool useOddEven(el_o_t EO) const
     {
+        if (eval_strategy == LocalEvalStrategy::Auto)
+            return EO >= 2 && EO <= 6;
         return eval_strategy != LocalEvalStrategy::SumFactorization;
     }
 };
