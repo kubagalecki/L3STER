@@ -4,9 +4,9 @@
 #include "l3ster/post/NormL2.hpp"
 #include "l3ster/solve/BelosSolvers.hpp"
 #include "l3ster/solve/NativePreconditioners.hpp"
-#include "l3ster/util/ScopeGuards.hpp"
 
 #include "Common.hpp"
+#include "Kernels.hpp"
 
 using namespace lstr;
 using namespace lstr::algsys;
@@ -40,29 +40,10 @@ void test()
     constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
     auto           alg_sys          = makeAlgebraicSystem(comm, mesh, problem_def, bc_def, algparams_ctwrpr);
 
-    constexpr auto diff_params = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3};
-    constexpr auto diffusion_kernel2d =
-        wrapDomainEquationKernel< diff_params >([]([[maybe_unused]] const auto& in, auto& out) {
-            auto& [operators, rhs] = out;
-            auto& [A0, A1, A2]     = operators;
-            constexpr double k     = 1.; // diffusivity
-            A0(1, 1)               = -1.;
-            A0(2, 2)               = -1.;
-            A1(0, 1)               = k;
-            A1(1, 0)               = 1.;
-            A1(3, 2)               = 1.;
-            A2(0, 2)               = k;
-            A2(2, 0)               = 1.;
-            A2(3, 1)               = -1.;
-        });
-    constexpr auto neubc_params      = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 3};
-    constexpr auto neumann_bc_kernel = wrapBoundaryEquationKernel< neubc_params >([](const auto& in, auto& out) {
-        const auto& [vals, ders, point, normal] = in;
-        auto& [operators, rhs]                  = out;
-        auto& [A0, A1, A2]                      = operators;
-        A0(0, 1)                                = normal[0];
-        A0(0, 2)                                = normal[1];
-    });
+    constexpr auto diff_params        = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3};
+    constexpr auto diffusion_kernel2d = wrapDomainEquationKernel< diff_params >(diffusion_kernel_2D);
+    constexpr auto neubc_params       = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 3};
+    constexpr auto neumann_bc_kernel  = wrapBoundaryEquationKernel< neubc_params >(adiabatic_bc_2D);
 
     constexpr auto dirbc_params        = KernelParams{.dimension = 2, .n_equations = 1};
     constexpr auto dirichlet_bc_kernel = wrapBoundaryResidualKernel< dirbc_params >(

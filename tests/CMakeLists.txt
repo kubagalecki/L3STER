@@ -28,11 +28,13 @@ include( Catch )
 
 add_executable( L3STER_tests TestsMain.cpp
                 LocalAssemblyTests.cpp
+                LocalOperatorTests.cpp
                 MappingTests.cpp
                 MathTests.cpp
                 MeshTests.cpp
                 QuadratureTests.cpp
                 SolutionManagerTest.cpp
+                SumFactorizationTests.cpp
                 UtilTests.cpp
                 )
 target_include_directories( L3STER_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR} )
