@@ -66,6 +66,27 @@ public:
                          util::ConstexprValue< asm_opts >     asm_options       = {},
                          val_t                                time              = 0.)
         requires(Kernel::parameters.n_rhs == n_rhs);
+    template < EquationKernel_c         Kernel,
+               ArrayOf_c< size_t > auto field_inds = util::makeIotaArray< size_t, max_dofs_per_node >(),
+               size_t                   n_fields   = 0,
+               AssemblyOptions          asm_opts   = AssemblyOptions{} >
+    void initProblem(const Kernel&                        kernel,
+                     const util::ArrayOwner< d_id_t >&    domain_ids,
+                     const post::FieldAccess< n_fields >& field_access      = {},
+                     util::ConstexprValue< field_inds >   field_inds_ctwrpr = {},
+                     util::ConstexprValue< asm_opts >     asm_options       = {},
+                     val_t                                time              = 0.)
+        requires(Kernel::parameters.n_rhs == n_rhs);
+    template < EquationKernel_c         Kernel,
+               ArrayOf_c< size_t > auto field_inds = util::makeIotaArray< size_t, max_dofs_per_node >(),
+               size_t                   n_fields   = 0,
+               AssemblyOptions          asm_opts   = AssemblyOptions{} >
+    void defineOperator(const Kernel&                        kernel,
+                        const util::ArrayOwner< d_id_t >&    domain_ids,
+                        const post::FieldAccess< n_fields >& field_access      = {},
+                        util::ConstexprValue< field_inds >   field_inds_ctwrpr = {},
+                        util::ConstexprValue< asm_opts >     asm_options       = {},
+                        val_t                                time              = 0.);
 
     template < ResidualKernel_c Kernel, std::integral dofind_t = size_t, size_t n_fields = 0 >
     void setDirichletBCValues(const Kernel&                                                 kernel,
@@ -169,12 +190,19 @@ private:
     inline void zeroExportBuf() const;
 
     template < EquationKernel_c Kernel, auto field_inds, size_t n_fields, AssemblyOptions asm_opts >
-    void pushKernel(const Kernel&                        kernel,
-                    const util::ArrayOwner< d_id_t >&    domain_ids,
-                    const post::FieldAccess< n_fields >& field_access,
-                    util::ConstexprValue< field_inds >   field_inds_ctwrpr,
-                    util::ConstexprValue< asm_opts >,
-                    val_t time);
+    void pushInitKernel(const Kernel&                        kernel,
+                        const util::ArrayOwner< d_id_t >&    domain_ids,
+                        const post::FieldAccess< n_fields >& field_access,
+                        util::ConstexprValue< field_inds >   field_inds_ctwrpr,
+                        util::ConstexprValue< asm_opts >,
+                        val_t time);
+    template < EquationKernel_c Kernel, auto field_inds, size_t n_fields, AssemblyOptions asm_opts >
+    void pushEvalKernel(const Kernel&                        kernel,
+                        const util::ArrayOwner< d_id_t >&    domain_ids,
+                        const post::FieldAccess< n_fields >& field_access,
+                        util::ConstexprValue< field_inds >   field_inds_ctwrpr,
+                        util::ConstexprValue< asm_opts >,
+                        val_t time);
     template < typename AccessGenerator,
                EquationKernel_c Kernel,
                auto             field_inds,
@@ -668,7 +696,43 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeEvalKernel(
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
 template < EquationKernel_c Kernel, auto field_inds, size_t n_fields, AssemblyOptions asm_opts >
-void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::pushKernel(
+void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::pushInitKernel(
+    const Kernel&                        kernel,
+    const util::ArrayOwner< d_id_t >&    domain_ids,
+    const post::FieldAccess< n_fields >& field_access,
+    util::ConstexprValue< field_inds >   field_inds_ctwrpr,
+    util::ConstexprValue< asm_opts >     asm_options,
+    val_t                                time)
+{
+    constexpr auto int_gen = [](const auto& view) {
+        return InteriorAccessor{view};
+    };
+    const auto exp_gen = [this](const view_t& y) {
+        return BorderAccessor{y, m_export_shared_buf};
+    };
+
+    for (d_id_t domain : domain_ids)
+    {
+        auto iinit = makeInitKernel(int_gen, kernel, field_access, field_inds_ctwrpr, asm_options, time);
+        auto binit = makeInitKernel(exp_gen, kernel, field_access, field_inds_ctwrpr, asm_options, time);
+
+        if constexpr (BoundaryKernel_c< Kernel >)
+        {
+            auto init_kernels = BoundaryInitKernels{.interior = std::move(iinit), .border = std::move(binit)};
+            m_kernel_maps.boundary_init[domain].push_back(std::move(init_kernels));
+        }
+        else
+        {
+            static_assert(DomainKernel_c< Kernel >);
+            auto init_kernels = DomainInitKernels{.interior = std::move(iinit), .border = std::move(binit)};
+            m_kernel_maps.domain_init[domain].push_back(std::move(init_kernels));
+        }
+    }
+}
+
+template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
+template < EquationKernel_c Kernel, auto field_inds, size_t n_fields, AssemblyOptions asm_opts >
+void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::pushEvalKernel(
     const Kernel&                        kernel,
     const util::ArrayOwner< d_id_t >&    domain_ids,
     const post::FieldAccess< n_fields >& field_access,
@@ -688,24 +752,18 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::pushKernel(
 
     for (d_id_t domain : domain_ids)
     {
-        auto iinit = makeInitKernel(int_gen, kernel, field_access, field_inds_ctwrpr, asm_options, time);
-        auto binit = makeInitKernel(exp_gen, kernel, field_access, field_inds_ctwrpr, asm_options, time);
         auto ieval = makeEvalKernel(int_gen, int_gen, kernel, field_access, field_inds_ctwrpr, asm_options, time);
         auto beval = makeEvalKernel(imp_gen, exp_gen, kernel, field_access, field_inds_ctwrpr, asm_options, time);
 
         if constexpr (BoundaryKernel_c< Kernel >)
         {
-            auto init_kernels = BoundaryInitKernels{.interior = std::move(iinit), .border = std::move(binit)};
             auto eval_kernels = BoundaryEvalKernels{.interior = std::move(ieval), .border = std::move(beval)};
-            m_kernel_maps.boundary_init[domain].push_back(std::move(init_kernels));
             m_kernel_maps.boundary_eval[domain].push_back(std::move(eval_kernels));
         }
         else
         {
             static_assert(DomainKernel_c< Kernel >);
-            auto init_kernels = DomainInitKernels{.interior = std::move(iinit), .border = std::move(binit)};
             auto eval_kernels = DomainEvalKernels{.interior = std::move(ieval), .border = std::move(beval)};
-            m_kernel_maps.domain_init[domain].push_back(std::move(init_kernels));
             m_kernel_maps.domain_eval[domain].push_back(std::move(eval_kernels));
         }
     }
@@ -722,7 +780,35 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::assembleProblem(
     val_t                                time)
     requires(Kernel::parameters.n_rhs == n_rhs)
 {
-    pushKernel(kernel, domain_ids, field_access, field_inds_ctwrpr, asm_options, time);
+    pushInitKernel(kernel, domain_ids, field_access, field_inds_ctwrpr, asm_options, time);
+    pushEvalKernel(kernel, domain_ids, field_access, field_inds_ctwrpr, asm_options, time);
+}
+
+template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
+template < EquationKernel_c Kernel, ArrayOf_c< size_t > auto field_inds, size_t n_fields, AssemblyOptions asm_opts >
+void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::initProblem(
+    const Kernel&                        kernel,
+    const util::ArrayOwner< d_id_t >&    domain_ids,
+    const post::FieldAccess< n_fields >& field_access,
+    util::ConstexprValue< field_inds >   field_inds_ctwrpr,
+    util::ConstexprValue< asm_opts >     asm_options,
+    val_t                                time)
+    requires(Kernel::parameters.n_rhs == n_rhs)
+{
+    pushInitKernel(kernel, domain_ids, field_access, field_inds_ctwrpr, asm_options, time);
+}
+
+template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
+template < EquationKernel_c Kernel, ArrayOf_c< size_t > auto field_inds, size_t n_fields, AssemblyOptions asm_opts >
+void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::defineOperator(
+    const Kernel&                        kernel,
+    const util::ArrayOwner< d_id_t >&    domain_ids,
+    const post::FieldAccess< n_fields >& field_access,
+    util::ConstexprValue< field_inds >   field_inds_ctwrpr,
+    util::ConstexprValue< asm_opts >     asm_options,
+    val_t                                time)
+{
+    pushEvalKernel(kernel, domain_ids, field_access, field_inds_ctwrpr, asm_options, time);
 }
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
