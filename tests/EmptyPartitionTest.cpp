@@ -30,6 +30,15 @@ void test()
     alg_sys.assembleProblem(dummy_kernel, std::views::single(domain_id));
     alg_sys.endAssembly();
     alg_sys.describe();
+
+    // Force evaluation to actually test that everything works
+    if constexpr (S == OperatorEvaluationStrategy::MatrixFree)
+    {
+        const auto op  = alg_sys.getOperator();
+        const auto sol = alg_sys.getSolution();
+        const auto rhs = alg_sys.getRhs();
+        op->apply(*rhs, *sol);
+    }
 }
 
 int main(int argc, char* argv[])
