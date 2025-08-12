@@ -57,7 +57,7 @@ void solveAdvection2D()
     constexpr double u = 1., v = 0.;
     constexpr double dt       = .05;
     constexpr auto adv_params = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1, .n_fields = time_order};
-    const auto     advection_kernel2d = wrapDomainEquationKernel< adv_params >([&](const auto& in, auto& out) {
+    const auto     advection_kernel2d_init = wrapDomainEquationKernel< adv_params >([&](const auto& in, auto& out) {
         const auto& [field_vals, field_ders, point] = in;
         auto& [operators, rhs]                      = out;
         auto& [A0, A1, A2]                          = operators;
@@ -65,6 +65,14 @@ void solveAdvection2D()
         A1(0, 0)                                    = u * dt;
         A2(0, 0)                                    = v * dt;
         rhs(0, 0) = std::transform_reduce(field_vals.begin(), field_vals.end(), bdf_coefs.begin(), 0.); // inner product
+    });
+    constexpr auto adv_params_eval         = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1};
+    const auto     advection_kernel2d_eval = wrapDomainEquationKernel< adv_params_eval >([&](const auto&, auto& out) {
+        auto& [operators, _] = out;
+        auto& [A0, A1, A2]   = operators;
+        A0(0, 0)             = bdf_leading;
+        A1(0, 0)             = u * dt;
+        A2(0, 0)             = v * dt;
     });
 
     constexpr auto anal_sol = [](const auto& in, auto& out) {
@@ -99,7 +107,14 @@ void solveAdvection2D()
         const auto time = static_cast< double >(time_step) * dt;
         alg_sys.setDirichletBCValues(solution_kernel_bc, {bot_bound, top_bound}, i0, {}, time);
         alg_sys.beginAssembly();
-        alg_sys.assembleProblem(advection_kernel2d, {domain_id}, solution_manager.getFieldAccess(time_hist_inds));
+        if constexpr (S == OperatorEvaluationStrategy::GlobalAssembly)
+            alg_sys.assembleProblem(
+                advection_kernel2d_init, {domain_id}, solution_manager.getFieldAccess(time_hist_inds));
+        else // Don't recompute RHS during every kernel evaluation
+        {
+            alg_sys.initProblem(advection_kernel2d_init, {domain_id}, solution_manager.getFieldAccess(time_hist_inds));
+            alg_sys.defineOperator(advection_kernel2d_eval, {domain_id});
+        }
         alg_sys.endAssembly();
         alg_sys.solve(solver);
         const auto last_ind = time_hist_inds.back();
