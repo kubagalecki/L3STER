@@ -8,7 +8,7 @@
 
 using namespace lstr;
 
-template < CondensationPolicy CP >
+template < OperatorEvaluationStrategy S, CondensationPolicy CP = {} >
 void test()
 {
     constexpr d_id_t domain_id   = 0;
@@ -19,7 +19,7 @@ void test()
     const auto     mesh       = generateAndDistributeMesh< mesh_order >(
         *comm, [&] { return mesh::makeSquareMesh(std::array{0., 1.}); }, {}, problem_def);
 
-    constexpr auto alg_params       = AlgebraicSystemParams{.cond_policy = CP};
+    constexpr auto alg_params       = AlgebraicSystemParams{.eval_strategy = S, .cond_policy = CP};
     constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
     auto           alg_sys          = makeAlgebraicSystem(comm, mesh, problem_def, {}, algparams_ctwrpr);
     alg_sys.describe();
@@ -30,12 +30,22 @@ void test()
     alg_sys.assembleProblem(dummy_kernel, std::views::single(domain_id));
     alg_sys.endAssembly();
     alg_sys.describe();
+
+    // Force evaluation to actually test that everything works
+    if constexpr (S == OperatorEvaluationStrategy::MatrixFree)
+    {
+        const auto op  = alg_sys.getOperator();
+        const auto sol = alg_sys.getSolution();
+        const auto rhs = alg_sys.getRhs();
+        op->apply(*rhs, *sol);
+    }
 }
 
 int main(int argc, char* argv[])
 {
     const auto max_par_guard = util::MaxParallelismGuard{4};
     const auto scope_guard   = L3sterScopeGuard{argc, argv};
-    test< CondensationPolicy::None >();
-    test< CondensationPolicy::ElementBoundary >();
+    test< OperatorEvaluationStrategy::GlobalAssembly, CondensationPolicy::None >();
+    test< OperatorEvaluationStrategy::GlobalAssembly, CondensationPolicy::ElementBoundary >();
+    test< OperatorEvaluationStrategy::MatrixFree >();
 }

@@ -28,11 +28,13 @@ include( Catch )
 
 add_executable( L3STER_tests TestsMain.cpp
                 LocalAssemblyTests.cpp
+                LocalOperatorTests.cpp
                 MappingTests.cpp
                 MathTests.cpp
                 MeshTests.cpp
                 QuadratureTests.cpp
                 SolutionManagerTest.cpp
+                SumFactorizationTests.cpp
                 UtilTests.cpp
                 )
 target_include_directories( L3STER_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR} )
@@ -98,6 +100,7 @@ add_mpi_test( AdvectionPeriodic2DAssembled.cpp Solve_2D_periodic_advection_probl
 add_mpi_test( AdvectionPeriodic2DMF.cpp Solve_2D_periodic_advection_problem_matrix_free "1;2;4" )
 add_mpi_test( Diffusion2DAssembledTest.cpp Solve_2D_diffusion_problem_assembled "1;2;4" )
 add_mpi_test( Diffusion2DMF.cpp Solve_2D_diffusion_problem_matrix_free "1;2;4" )
+add_mpi_test( Diffusion2DMFSF.cpp Solve_2D_diffusion_problem_sum_factorization "1;2;4" )
 add_mpi_test( DirichletBCTest.cpp Dirichlet_BC_Application "1;2;4" )
 add_mpi_test( PeriodicBCTest.cpp Periodic_BC_test "1;2;4;16" )
 add_mpi_test( EmptyPartitionTest.cpp Handle_Empty_Partition "4" )

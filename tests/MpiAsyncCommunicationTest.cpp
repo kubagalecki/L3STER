@@ -2,7 +2,7 @@
 #include "l3ster/util/ScopeGuards.hpp"
 
 #include <algorithm>
-#include <iostream>
+#include <print>
 #include <span>
 
 template < typename T >
@@ -62,7 +62,7 @@ int main(int argc, char* argv[])
     }
     catch (const std::exception& e)
     {
-        std::cerr << e.what();
+        std::println(stderr, "{}", e.what());
         comm.abort();
         return EXIT_FAILURE;
     }

@@ -44,7 +44,7 @@ class PeriodicBCDefinition
     };
 
 public:
-    val_t tolerance = 1.e-12;
+    val_t tolerance = 1e-12;
 
     void definePeriodicBoundary(util::ArrayOwner< d_id_t >        boundaries_src,
                                 util::ArrayOwner< d_id_t >        boundaries_dest,

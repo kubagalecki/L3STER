@@ -13,16 +13,38 @@
 
 namespace lstr
 {
+enum struct LocalEvalStrategy
+{
+    Auto,
+    LocalElement,
+    SumFactorization,
+    SumFactorizationOddEvenDecomposition
+};
+
 struct AssemblyOptions
 {
     q_o_t                value_order      = 1;
     q_o_t                derivative_order = 0;
     basis::BasisType     basis_type       = basis::BasisType::Lagrange;
     quad::QuadratureType quad_type        = quad::QuadratureType::GaussLegendre;
+    LocalEvalStrategy    eval_strategy    = LocalEvalStrategy::Auto;
 
     [[nodiscard]] constexpr q_o_t order(el_o_t elem_order) const
     {
         return static_cast< q_o_t >(value_order * elem_order + derivative_order * (elem_order - 1));
+    }
+    [[nodiscard]] constexpr bool useSumFactorization(mesh::ElementType             ET,
+                                                     [[maybe_unused]] el_o_t       EO,
+                                                     [[maybe_unused]] KernelParams kernel_params) const
+    {
+        using enum mesh::ElementType;
+        return eval_strategy != LocalEvalStrategy::LocalElement and (ET == Quad or ET == Hex);
+    }
+    [[nodiscard]] constexpr bool useOddEven(el_o_t EO) const
+    {
+        if (eval_strategy == LocalEvalStrategy::Auto)
+            return EO >= 2 && EO <= 6;
+        return eval_strategy != LocalEvalStrategy::SumFactorization;
     }
 };
 } // namespace lstr

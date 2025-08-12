@@ -5,5 +5,5 @@ int main(int argc, char* argv[])
 {
     const auto max_par_guard = util::MaxParallelismGuard{4};
     const auto scope_guard   = L3sterScopeGuard{argc, argv};
-    test< CondensationPolicy::None, OperatorEvaluationStrategy::MatrixFree, LocalEvalStrategy::LocalElement >();
+    test< CondensationPolicy::None, OperatorEvaluationStrategy::MatrixFree, LocalEvalStrategy::SumFactorization >();
 }

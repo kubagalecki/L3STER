@@ -136,7 +136,7 @@ int main(int argc, char* argv[])
 
     // Iterative solver options - defaults are usually ok, here we change them for demonstration purposes
     constexpr auto solver_opts = IterSolverOpts{
-        .tol = 1.e-4, .max_iters = 1000, .verbosity = {.summary = true, .iter_details = true, .timing = true}};
+        .tol = 1e-4, .max_iters = 1000, .verbosity = {.summary = true, .iter_details = true, .timing = true}};
 
     // Conjugate gradients solver - the preconditioner type is deduced based on the type of precond_opts
     auto solver = CG{solver_opts, precond_opts};

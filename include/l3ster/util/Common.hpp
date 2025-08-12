@@ -77,6 +77,15 @@ To exactIntegerCast(From from, std::source_location loc = std::source_location::
     return static_cast< To >(from);
 }
 
+template < std::integral Base, std::unsigned_integral Exponent >
+constexpr auto integralPower(Base base, Exponent exponent)
+{
+    auto retval = Base{1};
+    for (Exponent e = 0; e != exponent; ++e)
+        retval *= base;
+    return retval;
+}
+
 namespace detail
 {
 template < std::uintmax_t max_representable, std::intmax_t min_representable >
@@ -134,7 +143,7 @@ public:
     const T* operator->() const noexcept { return std::addressof(m_value); }
 
 private:
-    static constexpr size_t cacheline_size = 64;
+    static constexpr size_t cacheline_size = std::hardware_destructive_interference_size;
     static constexpr size_t alignment      = std::max(alignof(T), cacheline_size);
 
     alignas(alignment) T m_value;
