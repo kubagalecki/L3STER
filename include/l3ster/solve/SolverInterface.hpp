@@ -15,16 +15,25 @@ struct SolverVerbosity
     bool timing       = false;
 };
 
+enum struct ResidualScaling
+{
+    None                   = 0, // Absolute residual value
+    InitialResidual        = 1, // Divide by norm of initial residual
+    InitialResidualPrecond = 2, // Divide by norm of preconditioned initial residual
+    Rhs                    = 3  // Divide by norm of RHS
+};
+
 struct IterSolverOpts
 {
-    double          tol            = 1e-6;   // Iterative solver tolerance
-    int             max_iters      = 10'000; // Max number of iterations
-    int             max_restarts   = 39;     // Max number of restarts (relevant for GMRES)
-    int             restart_length = 250;    // Number of iterations before restart (relevant for GMRES)
-    bool            throw_on_fail  = true;   // Whether to throw if convergence exceeds the tolerance
-    SolverVerbosity verbosity      = {};     // Verbosity level (see above)
-    int             print_freq     = 10;     // How often to print the convergence information
-    int             block_size     = 1;      // Block size is currently always 1, this is future-proofing
+    double          tol              = 1e-6;   // Iterative solver tolerance
+    int             max_iters        = 10'000; // Max number of iterations
+    ResidualScaling residual_scaling = {};     // How to scale the residual before convergence check
+    int             max_restarts     = 39;     // Max number of restarts (relevant for GMRES)
+    int             restart_length   = 250;    // Number of iterations before restart (relevant for GMRES)
+    bool            throw_on_fail    = true;   // Whether to throw if convergence exceeds the tolerance
+    SolverVerbosity verbosity        = {};     // Verbosity level (see above)
+    int             print_freq       = 10;     // How often to print the convergence information
+    int             block_size       = 1;      // Block size is currently always 1, this is future-proofing
 };
 
 struct IterSolveResult

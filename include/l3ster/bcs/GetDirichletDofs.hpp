@@ -13,14 +13,46 @@ struct DirichletDofs
 };
 
 template < el_o_t... orders, size_t max_dofs_per_node >
-auto getDirichletDofs(const mesh::MeshPartition< orders... >&              mesh,
+auto getDirichletDofs(const MpiComm&                                       comm,
+                      const mesh::MeshPartition< orders... >&              mesh,
                       const Teuchos::RCP< const tpetra_fecrsgraph_t >&     sparsity_graph,
                       const dofs::NodeToGlobalDofMap< max_dofs_per_node >& node_to_dof_map,
                       const DirichletBCDefinition< max_dofs_per_node >&    bc_def) -> DirichletDofs
 {
+    const auto get_normalization_dofs = [&] -> util::StaticVector< global_dof_t, max_dofs_per_node > {
+        using svec_t         = util::StaticVector< global_dof_t, max_dofs_per_node >;
+        const auto norm_inds = bc_def.getNormalized();
+        if (norm_inds.empty())
+            return {};
+
+        const auto  is_valid       = &dofs::NodeToGlobalDofMap< max_dofs_per_node >::isValid;
+        const auto& node_ownership = mesh.getNodeOwnership();
+        auto        my_norm_dofs   = svec_t{std::views::repeat(invalid_global_dof, norm_inds.size())};
+        for (const auto& [node, dofs] : node_to_dof_map.map())
+            if (node_ownership.isOwned(node))
+                for (auto&& [current, examined] : std::views::zip(my_norm_dofs, util::makeIndexedView(dofs, norm_inds)))
+                {
+                    if (not is_valid(examined))
+                        continue;
+                    if (not is_valid(current))
+                        current = examined;
+                    else
+                        current = std::min(current, examined);
+                }
+        std::ranges::replace(my_norm_dofs, invalid_global_dof, std::numeric_limits< global_dof_t >::max());
+        auto norm_dofs = my_norm_dofs;
+        comm.allReduce(my_norm_dofs, norm_dofs.begin(), MPI_MIN);
+        for (auto&& [my, global] : std::views::zip(my_norm_dofs, norm_dofs))
+            if (my != global)
+                my = invalid_global_dof;
+        auto retval = svec_t{};
+        std::ranges::copy_if(my_norm_dofs, std::back_inserter(retval), is_valid);
+        return retval;
+    };
     const auto mark_owned_dirichlet_dofs = [&] {
         const auto dirichlet_dofs = util::makeTeuchosRCP< tpetra_femultivector_t >(
             sparsity_graph->getColMap(), sparsity_graph->getImporter(), 1u);
+        const auto norm_dofs = get_normalization_dofs();
         dirichlet_dofs->beginAssembly();
         for (const auto& [domains, dof_inds] : bc_def)
         {
@@ -30,6 +62,8 @@ auto getDirichletDofs(const mesh::MeshPartition< orders... >&              mesh,
             };
             mesh.visit(process_element, domains);
         }
+        for (auto dof : norm_dofs)
+            dirichlet_dofs->replaceGlobalValue(dof, 0, 1.);
         dirichlet_dofs->endAssembly();
         return dirichlet_dofs;
     };

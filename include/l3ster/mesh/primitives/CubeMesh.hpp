@@ -65,7 +65,7 @@ auto makeCubeMesh(Rx&& distx, Ry&& disty, Rz&& distz, const CubeMeshIds& ids = {
     }
 
     // z = const faces
-    for (auto iy : std::views::iota(0u, e_dx))
+    for (auto iy : std::views::iota(0u, e_dy))
     {
         for (auto ix : std::views::iota(0u, e_dx))
         {

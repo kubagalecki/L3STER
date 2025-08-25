@@ -23,14 +23,18 @@ public:
         util::throwingAssert(std::ranges::all_of(dof_inds, [](auto i) { return i < max_dofs_per_node; }));
         m_defs.push_back(Def{util::getUniqueCopy(std::move(domains)), util::getUniqueCopy(std::move(dof_inds))});
     }
+    void normalize(size_t dof_ind) { m_to_normalize.set(dof_ind); }
 
     auto begin() const { return m_defs.begin(); }
     auto end() const { return m_defs.end(); }
     auto size() const { return m_defs.size(); }
     bool empty() const { return m_defs.empty(); }
 
+    auto getNormalized() const { return util::getTrueInds(m_to_normalize); }
+
 private:
-    std::vector< Def > m_defs;
+    std::vector< Def >               m_defs;
+    std::bitset< max_dofs_per_node > m_to_normalize;
 };
 
 template < size_t max_dofs_per_node >
@@ -98,6 +102,16 @@ public:
 
     /// Condition for matching nodes: |src + translation - dest| < tolerance. Default value is 1e-12.
     void setPeriodicMatchTolerance(val_t tolerance) { m_periodic.tolerance = tolerance; }
+
+    /// Normalize the value of the specified unknowns in the domain, equivalent to homogeneous Dirichlet BC for one
+    /// arbitrarily chosen node
+    void normalize(const util::ArrayOwner< size_t >& dof_inds)
+    {
+        constexpr auto less_than_max = std::bind_back(std::less{}, max_dofs_per_node);
+        util::throwingAssert(std::ranges::all_of(dof_inds, less_than_max));
+        for (auto i : dof_inds)
+            m_dirichlet.normalize(i);
+    }
 
     auto getDirichlet() const -> const auto& { return m_dirichlet; }
     auto getPeriodic() const -> const auto& { return m_periodic; }

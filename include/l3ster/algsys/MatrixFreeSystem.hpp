@@ -992,7 +992,7 @@ MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::MatrixFreeSystem(
     m_export_shared_buf           = view_t("export buf", dof_ownership.shared().size(), n_rhs);
     initKernelMaps();
     const auto& dirichlet = bc_def.getDirichlet();
-    if (not dirichlet.empty())
+    if (not dirichlet.empty() or not dirichlet.getNormalized().empty())
     {
         m_dirichlet_bc.emplace(m_node_dof_map, m_interior_mesh, m_border_mesh, *m_comm, context, dirichlet);
         if (not m_dirichlet_bc->isEmpty()) // Skip allocation if no BC DOFs present in partition

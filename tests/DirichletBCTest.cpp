@@ -34,7 +34,7 @@ void test()
     const auto     sparsity_graph = makeSparsityGraph(comm, *my_partition, global_node_dof_map, problem_def, cp_tag);
 
     const auto [owned_bcdofs, shared_bcdofs] =
-        getDirichletDofs(*my_partition, sparsity_graph, global_node_dof_map, dirichlet_def);
+        getDirichletDofs(comm, *my_partition, sparsity_graph, global_node_dof_map, dirichlet_def);
     const auto dirichlet_bc = DirichletBCAlgebraic{sparsity_graph, owned_bcdofs, shared_bcdofs};
 
     auto matrix         = util::makeTeuchosRCP< tpetra_fecrsmatrix_t >(sparsity_graph);
