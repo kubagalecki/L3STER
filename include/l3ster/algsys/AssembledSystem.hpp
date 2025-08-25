@@ -344,11 +344,11 @@ AssembledSystem< max_dofs_per_node, CP, n_rhs, orders... >::AssembledSystem(
     m_condensation_manager.beginAssembly();
 
     const auto& dirichlet = bc_def.getDirichlet();
-    if (not dirichlet.empty())
+    if (not dirichlet.empty() or not dirichlet.getNormalized().empty())
     {
         L3STER_PROFILE_REGION_BEGIN("Dirichlet BCs");
         auto [owned_bcdofs, shared_bcdofs] =
-            bcs::getDirichletDofs(*m_mesh, m_sparsity_graph, node_global_dof_map, dirichlet);
+            bcs::getDirichletDofs(*m_comm, *m_mesh, m_sparsity_graph, node_global_dof_map, dirichlet);
         m_dirichlet_bcs.emplace(m_sparsity_graph, std::move(owned_bcdofs), std::move(shared_bcdofs));
         L3STER_PROFILE_REGION_END("Dirichlet BCs");
     }

@@ -52,6 +52,7 @@ public:
     constexpr const T& back() const { return m_data[m_size - 1]; }
 
     [[nodiscard]] constexpr std::size_t size() const { return m_size; }
+    [[nodiscard]] constexpr bool        empty() const { return m_size == 0; }
 
     constexpr void resize(std::size_t size, const T& val = T{})
     {

@@ -216,6 +216,8 @@ public:
     void reduceInPlace(Data&& data, int root, MPI_Op op) const;
     template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
     void allReduce(Data&& data, It out_it, MPI_Op op) const;
+    template < comm::MpiBuf_c Data >
+    void allReduceInPlace(Data&& data, MPI_Op op) const;
     template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
     void gather(Data&& data, It out_it, int root) const;
     template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
@@ -466,6 +468,13 @@ void MpiComm::allReduce(Data&& data, It out_it, MPI_Op op) const
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
     L3STER_INVOKE_MPI(MPI_Allreduce, buf_begin, std::addressof(*out_it), buf_size, datatype, op, m_comm);
+}
+
+template < comm::MpiBuf_c Data >
+void MpiComm::allReduceInPlace(Data&& data, MPI_Op op) const
+{
+    const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
+    L3STER_INVOKE_MPI(MPI_Allreduce, MPI_IN_PLACE, buf_begin, buf_size, datatype, op, m_comm);
 }
 
 template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >

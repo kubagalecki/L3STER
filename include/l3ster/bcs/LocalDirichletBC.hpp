@@ -31,6 +31,47 @@ private:
     util::ArrayOwner< local_dof_t >               m_dofs_sorted;
 };
 
+namespace detail
+{
+template < size_t max_dofs_per_node >
+auto getNormalizationDofs(const dofs::LocalDofMap< max_dofs_per_node >&     node_dof_map,
+                          size_t                                            num_owned_nodes,
+                          const MpiComm&                                    comm,
+                          const DirichletBCDefinition< max_dofs_per_node >& bc_def)
+    -> util::StaticVector< local_dof_t, max_dofs_per_node >
+{
+    const auto norm_inds = bc_def.getNormalized();
+    if (norm_inds.empty())
+        return {};
+
+    constexpr auto is_valid = &dofs::LocalDofMap< max_dofs_per_node >::isValid;
+    using svec_t            = util::StaticVector< local_dof_t, max_dofs_per_node >;
+    auto my_norm_dofs       = svec_t{std::views::repeat(invalid_local_dof, norm_inds.size())};
+    for (const auto& dofs : node_dof_map | std::views::take(num_owned_nodes))
+        for (auto&& [current, examined] : std::views::zip(my_norm_dofs, util::makeIndexedView(dofs, norm_inds)))
+        {
+            if (not is_valid(examined))
+                continue;
+            if (not is_valid(current))
+                current = examined;
+            else
+                current = std::min(current, examined);
+        }
+    auto      min_ranks = util::StaticVector< int, max_dofs_per_node >{};
+    const int my_rank   = comm.getRank();
+    std::ranges::transform(my_norm_dofs, std::back_inserter(min_ranks), [&](auto dof) {
+        return is_valid(dof) ? my_rank : std::numeric_limits< int >::max();
+    });
+    comm.allReduceInPlace(min_ranks, MPI_MIN);
+    util::throwingAssert(std::ranges::count(min_ranks, std::numeric_limits< int >::max()) == 0);
+    auto retval = svec_t{};
+    for (auto&& [min_rank, dof] : std::views::zip(min_ranks, my_norm_dofs))
+        if (min_rank == my_rank)
+            retval.push_back(dof);
+    return retval;
+}
+} // namespace detail
+
 template < size_t max_dofs_per_node, el_o_t... orders >
 LocalDirichletBC::LocalDirichletBC(const dofs::LocalDofMap< max_dofs_per_node >&             node_dof_map,
                                    const mesh::LocalMeshView< orders... >&                   interior_mesh,
@@ -39,9 +80,6 @@ LocalDirichletBC::LocalDirichletBC(const dofs::LocalDofMap< max_dofs_per_node >&
                                    const std::shared_ptr< const comm::ImportExportContext >& comm_context,
                                    const DirichletBCDefinition< max_dofs_per_node >&         bc_def)
 {
-    if (bc_def.empty())
-        return;
-
     const auto num_dofs_owned     = node_dof_map.getNumOwnedDofs();
     const auto num_dofs_total     = node_dof_map.getNumTotalDofs();
     auto       dirichlet_dofs_bmp = util::ArrayOwner< char >(num_dofs_total, false);
@@ -69,6 +107,10 @@ LocalDirichletBC::LocalDirichletBC(const dofs::LocalDofMap< max_dofs_per_node >&
         for (const auto& [_, domain] : mesh.getDomains())
             domain.elements.visit(mark_side_dofs, std::execution::par);
     };
+
+    const auto norm_dofs = detail::getNormalizationDofs(node_dof_map, num_dofs_owned, comm, bc_def);
+    for (auto dof : norm_dofs)
+        dirichlet_dofs_bmp.at(dof) = true;
 
     auto importer = comm::Import< char >{comm_context, 1};
     auto exporter = comm::Export< char >{comm_context, 1};
