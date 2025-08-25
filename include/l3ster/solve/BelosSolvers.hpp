@@ -50,6 +50,19 @@ auto BelosSolverInterface::parseBelosOpts(const IterSolverOpts& opts) -> Teuchos
     retval->set("Block Size", opts.block_size);
     retval->set("Deflation Quorum", -1);
 
+    constexpr auto get_res_scale = [](ResidualScaling rs) {
+        using enum ResidualScaling;
+        static const auto res_scale_map = std::map< ResidualScaling, const char* >{
+            {None, "None"},
+            {InitialResidual, "Norm of Initial Residual"},
+            {InitialResidualPrecond, "Norm of Preconditioned Initial Residual"},
+            {Rhs, "Norm of RHS"}};
+        return res_scale_map.at(rs);
+    };
+    const char* res_scale = get_res_scale(opts.residual_scaling);
+    retval->set("Implicit Residual Scaling", res_scale);
+    retval->set("Explicit Residual Scaling", res_scale);
+
     const auto verbosity_belos_format =
         static_cast< Belos::MsgType >((opts.verbosity.warnings ? Belos::MsgType::Warnings : 0) |
                                       (opts.verbosity.summary ? Belos::MsgType::FinalSummary : 0) |
