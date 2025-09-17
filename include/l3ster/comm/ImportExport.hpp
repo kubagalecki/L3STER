@@ -82,7 +82,13 @@ class ImportExportBase
     static constexpr int   lo_mask    = -1 >> half_bits;
 
 public:
-    auto getContext() const { return m_context; }
+    auto                 getContext() const { return m_context; }
+    [[nodiscard]] size_t getNumVecs() const { return m_num_vecs; }
+    void                 setNumVecs(size_t num_vecs)
+    {
+        util::throwingAssert(num_vecs <= m_num_vecs_max);
+        m_num_vecs = num_vecs;
+    }
 
 protected:
     int makeTag(int tag) { return (tag & lo_mask) | std::bit_cast< int >(m_id << half_bits); }
@@ -92,6 +98,7 @@ protected:
     ImportExportBase(context_shared_ptr_t context, size_t num_vecs)
         : m_context{std::move(context)},
           m_num_vecs{num_vecs},
+          m_num_vecs_max{num_vecs},
           m_requests(num_vecs * m_context->getNumNbrs()),
           m_pack_buf(num_vecs * m_context->getOwnedInds().size()),
           m_max_owned{m_context->getOwnedInds().empty() ? -1 : std::ranges::max(m_context->getOwnedInds())},
@@ -103,6 +110,7 @@ protected:
 
     std::shared_ptr< const ImportExportContext > m_context{};
     size_t                                       m_num_vecs{};
+    size_t                                       m_num_vecs_max{};
     util::ArrayOwner< MpiComm::Request >         m_requests;
     util::ArrayOwner< Scalar >                   m_pack_buf;
     size_t                                       m_owned_stride{}, m_shared_stride{};
