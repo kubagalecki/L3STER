@@ -187,7 +187,7 @@ private:
                             std::source_location src_loc = std::source_location::current()) const;
     inline void importDirichletBCs();
     inline void initKernelMaps();
-    inline void zeroExportBuf() const;
+    inline void zeroExportBuf(size_t num_rhs = n_rhs) const;
 
     template < EquationKernel_c Kernel, auto field_inds, size_t n_fields, AssemblyOptions asm_opts >
     void pushInitKernel(const Kernel&                        kernel,
@@ -249,12 +249,13 @@ private:
 };
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
-void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::zeroExportBuf() const
+void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::zeroExportBuf(size_t num_rhs) const
 {
-    util::tbb::parallelFor(std::views::iota(0uz, n_rhs), [this](size_t rhs) {
+    const auto zero_rhs = [this](size_t rhs) {
         util::tbb::parallelFor(std::views::iota(0uz, m_node_dof_map.getNumSharedDofs()),
                                [this, rhs](size_t i) { m_export_shared_buf(i, rhs) = 0.; });
-    });
+    };
+    util::tbb::parallelFor(std::views::iota(0uz, num_rhs), zero_rhs);
 }
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
@@ -392,13 +393,14 @@ void scatterInit(const std::array< local_dof_t, num_dofs >& dofs,
 template < local_dof_t num_rhs, size_t num_dofs, typename Access >
 auto gather(Access&&                                      from_access,
             const std::array< local_dof_t, num_dofs >&    dofs,
-            const std::optional< bcs::LocalDirichletBC >& bcs) -> Eigen::Matrix< val_t, num_dofs, num_rhs >
+            const std::optional< bcs::LocalDirichletBC >& bcs,
+            local_dof_t                                   num_rhs_actual = num_rhs)
 {
     L3STER_PROFILE_FUNCTION;
     const bool dirichlet_bcs_exist = bcs.has_value() and not bcs->isEmpty();
-    auto       retval              = Eigen::Matrix< val_t, num_dofs, num_rhs >{};
+    auto       retval              = util::eigen::MatrixMaxCol_t< val_t, num_dofs, num_rhs >{num_dofs, num_rhs_actual};
     const auto gather_dof          = [&](auto i, local_dof_t dof) {
-        for (local_dof_t rhs = 0; rhs != num_rhs; ++rhs)
+        for (local_dof_t rhs = 0; rhs != num_rhs_actual; ++rhs)
             retval(i, rhs) = from_access(dof, rhs);
     };
     if (dirichlet_bcs_exist)
@@ -416,11 +418,12 @@ auto gather(Access&&                                      from_access,
 }
 
 /// ordering: nodes. dofs, rhs
-template < size_t n_nodes, size_t dofs_per_node, size_t n_rhs, typename Access >
+template < size_t n_nodes, size_t dofs_per_node, typename Access >
 void gatherSumFact(Access&&                                                  from_access,
                    const std::array< local_dof_t, n_nodes * dofs_per_node >& dofs,
                    const DirichletInfoSumFact< n_nodes, dofs_per_node >&     dirichlet_info,
-                   std::span< val_t >                                        dest)
+                   std::span< val_t >                                        dest,
+                   size_t                                                    n_rhs)
 {
     L3STER_PROFILE_FUNCTION;
     constexpr auto compute_dest_ind = [](size_t node, size_t dof, size_t rhs) {
@@ -464,16 +467,17 @@ void gatherSumFact(Access&&                                                  fro
 }
 
 template < int num_dofs, int num_rhs, typename Access >
-void scatter(const Eigen::Matrix< val_t, num_dofs, num_rhs >&                  from,
-             Access&&                                                          to_access,
-             const std::array< local_dof_t, static_cast< size_t >(num_dofs) >& dofs,
-             const std::optional< bcs::LocalDirichletBC >&                     bcs,
-             val_t                                                             scale)
+void scatter(const Eigen::Matrix< val_t, num_dofs, Eigen::Dynamic, Eigen::ColMajor, num_dofs, num_rhs >& from,
+             Access&&                                                                                    to_access,
+             const std::array< local_dof_t, static_cast< size_t >(num_dofs) >&                           dofs,
+             const std::optional< bcs::LocalDirichletBC >&                                               bcs,
+             val_t                                                                                       scale)
 {
     L3STER_PROFILE_FUNCTION;
     const bool dirichlet_bcs_exist = bcs.has_value() and not bcs->isEmpty();
+    const auto num_rhs_actual      = from.cols();
     const auto scatter_dof         = [&](auto i, local_dof_t dof) {
-        for (local_dof_t rhs = 0; rhs != num_rhs; ++rhs)
+        for (local_dof_t rhs = 0; rhs != num_rhs_actual; ++rhs)
             std::atomic_ref{to_access(dof, rhs)}.fetch_add(from(i, rhs) * scale, std::memory_order_relaxed);
     };
     if (dirichlet_bcs_exist)
@@ -487,15 +491,16 @@ void scatter(const Eigen::Matrix< val_t, num_dofs, num_rhs >&                  f
             scatter_dof(i, dof);
 }
 
-template < size_t n_nodes, size_t dofs_per_node, size_t n_rhs, typename Access >
+template < size_t n_nodes, size_t dofs_per_node, typename Access >
 void scatterSumFact(Access&&                                                  to_access,
                     const std::array< local_dof_t, n_nodes * dofs_per_node >& dofs,
                     const DirichletInfoSumFact< n_nodes, dofs_per_node >&     dirichlet_info,
                     std::span< val_t >                                        from,
-                    val_t                                                     scale)
+                    val_t                                                     scale,
+                    size_t                                                    n_rhs)
 {
     L3STER_PROFILE_FUNCTION;
-    constexpr auto compute_src_ind = [](size_t node, size_t dof, size_t rhs) {
+    const auto compute_src_ind = [&](size_t node, size_t dof, size_t rhs) {
         return node * (dofs_per_node * n_rhs) + rhs * dofs_per_node + dof;
     };
     const auto scatter_dof = [&](size_t node, size_t dof) {
@@ -662,13 +667,25 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeEvalKernel(
                 const auto&    el_nodes       = element.getLocalNodes();
                 const auto     dofs           = detail::getDofs(el_nodes, m_node_dof_map, field_inds_ctwrpr);
                 const auto     dirichlet_info = detail::getDirichletIndsSumFact< dofs_per_node >(dofs, m_dirichlet_bc);
+                const auto     n_rhs_actual   = x.extent(1);
                 const auto     x_gather       = [&](std::span< val_t > X) {
-                    detail::gatherSumFact< n_nodes, dofs_per_node, n_rhs >(x_access, dofs, dirichlet_info, X);
+                    detail::gatherSumFact< n_nodes, dofs_per_node >(x_access, dofs, dirichlet_info, X, n_rhs_actual);
                 };
                 const auto y_scatter = [&](std::span< val_t > Y) {
-                    detail::scatterSumFact< n_nodes, dofs_per_node, n_rhs >(y_access, dofs, dirichlet_info, Y, alpha);
+                    detail::scatterSumFact< n_nodes, dofs_per_node >(
+                        y_access, dofs, dirichlet_info, Y, alpha, n_rhs_actual);
                 };
-                evalLocalOperatorSumFact(kernel, element, x_gather, field_access, y_scatter, asm_opts_ctval, time);
+                if (n_rhs_actual == n_rhs)
+                    evalLocalOperatorSumFact(kernel, element, x_gather, field_access, y_scatter, asm_opts_ctval, time);
+                else
+                    evalLocalOperatorSumFact(kernel,
+                                             element,
+                                             x_gather,
+                                             field_access,
+                                             y_scatter,
+                                             asm_opts_ctval,
+                                             time,
+                                             util::ConstexprValue< 1uz >{});
             }
             else
             {
@@ -686,7 +703,7 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeEvalKernel(
                 };
                 const auto [node_vals, dofs, dir_dof_inds, dir_vals] = get_data();
                 const auto& rbq                                      = get_reference_basis();
-                const auto  x_local = detail::gather< params.n_rhs >(x_access, dofs, m_dirichlet_bc);
+                const auto  x_local = detail::gather< params.n_rhs >(x_access, dofs, m_dirichlet_bc, x.extent_int(1));
                 const auto  y_local = evaluateLocalOperator(kernel, element, node_vals, rbq, time, x_local);
                 detail::scatter(y_local, y_access, dofs, m_dirichlet_bc, alpha);
             }
@@ -1014,27 +1031,32 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::applyImpl(const tp
     // don't need to wait for the border to actually finish.
 
     L3STER_PROFILE_REGION_BEGIN("Evaluate matrix-free operator");
-    util::throwingAssert(x.getNumVectors() == n_rhs);
-    util::throwingAssert(y.getNumVectors() == n_rhs);
+    const auto x_num_cols = x.getNumVectors();
+    const auto y_num_cols = y.getNumVectors();
+    util::throwingAssert(x_num_cols == y_num_cols);
+    util::throwingAssert(x_num_cols <= n_rhs);
+    util::throwingAssert(y_num_cols <= n_rhs);
     beta == 0. ? y.putScalar(0.) : y.scale(beta);
-    const auto x_view  = x.getLocalViewHost(Tpetra::Access::ReadOnly);
-    const auto y_view  = y.getLocalViewHost(Tpetra::Access::ReadWrite);
     const auto domains = util::ArrayOwner{m_mesh->getDomainIds()};
-
-    zeroExportBuf();
-    m_import->setOwned(x_view);
-    m_import->setShared(m_import_shared_buf);
-    m_export->setOwned(y_view);
-    m_export->setShared(m_export_shared_buf);
-    m_import->postComms(*m_comm);
-    m_export->postRecvs(*m_comm);
 
     const auto n_cores       = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNCores();
     const auto max_par_guard = util::MaxParallelismGuard{n_cores};
     oneapi::tbb::task_arena hp_arena{oneapi::tbb::task_arena::automatic, 1, oneapi::tbb::task_arena::priority::high};
     oneapi::tbb::task_group interior_tasks, border_tasks;
 
-    const auto apply_border = [&] {
+    const auto setup_import_export = [&](const auto& x_view, const auto& y_view) {
+        const auto num_cols = x_view.extent(1);
+        zeroExportBuf(num_cols);
+        m_import->setNumVecs(num_cols);
+        m_import->setOwned(x_view);
+        m_import->setShared(m_import_shared_buf);
+        m_export->setNumVecs(num_cols);
+        m_export->setOwned(y_view);
+        m_export->setShared(m_export_shared_buf);
+        m_import->postComms(*m_comm);
+        m_export->postRecvs(*m_comm);
+    };
+    const auto apply_border = [&](const auto& x_view, const auto& y_view) {
         const auto visit_border_domain = [&](d_id_t domain) {
             const auto& dom_kernels = m_kernel_maps.domain_eval.at(domain);
             const auto  eval_border =
@@ -1049,7 +1071,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::applyImpl(const tp
         util::tbb::parallelFor(domains, visit_border_domain);
         m_export->postSends(*m_comm);
     };
-    const auto apply_interior = [&] {
+    const auto apply_interior = [&](const auto& x_view, const auto& y_view) {
         const auto visit_interior_domain = [&](d_id_t domain) {
             const auto& dom_kernels = m_kernel_maps.domain_eval.at(domain);
             const auto  eval_interior =
@@ -1059,15 +1081,15 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::applyImpl(const tp
                     detail::invokeBoundaryKernels(
                         element, &BoundaryEvalKernels::interior, m_kernel_maps.boundary_eval, x_view, y_view, alpha);
                     if (not m_import->testReceive() and m_import->tryReceive())
-                        hp_arena.execute([&] { border_tasks.run_and_wait([&] { apply_border(); }); });
+                        hp_arena.execute([&] { border_tasks.run_and_wait([&] { apply_border(x_view, y_view); }); });
                 };
             m_interior_mesh.visit(eval_interior, std::views::single(domain), std::execution::par);
         };
         const auto handle_dirichlet_dof = [&](local_dof_t dof) {
-            for (local_dof_t rhs = 0; rhs != n_rhs; ++rhs)
+            for (size_t rhs = 0; rhs != x_view.extent(1); ++rhs)
             {
-                // Export can update Dirichlet DOFs (so we need atomic access), but it will only ever contribute zeros
-                // Atomic load -> regular add -> atomic store is faster than CAS loop, the result is preserved
+                // Export can update Dirichlet DOFs (so we need atomic access), but it will only ever contribute
+                // zeros Atomic load -> regular add -> atomic store is faster than CAS loop, the result is preserved
                 auto       dest      = std::atomic_ref{y_view(dof, rhs)};
                 const auto old_value = dest.load(std::memory_order_relaxed);
                 const auto increment = x_view(dof, rhs) * alpha;
@@ -1082,16 +1104,39 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::applyImpl(const tp
             util::tbb::parallelFor(m_dirichlet_bc->getOwnedDirichletDofs(), handle_dirichlet_dof);
         L3STER_PROFILE_REGION_END("Impose Dirichlet BCs");
     };
-    interior_tasks.run_and_wait([&] { apply_interior(); });
-    hp_arena.execute([&] { border_tasks.wait(); });
-    if (not m_import->testReceive())
-    {
-        m_import->waitReceive();
-        apply_border();
-    }
+    const auto finalize_import_export = [&] {
+        m_export->wait(util::AtomicSumInto{});
+        m_import->wait();
+        m_import->setNumVecs(n_rhs);
+        m_export->setNumVecs(n_rhs);
+    };
+    const auto evaluate = [&](const auto& x_view, const auto& y_view) {
+        setup_import_export(x_view, y_view);
+        interior_tasks.run_and_wait([&] { apply_interior(x_view, y_view); });
+        hp_arena.execute([&] { border_tasks.wait(); });
+        if (not m_import->testReceive())
+        {
+            m_import->waitReceive();
+            apply_border(x_view, y_view);
+        }
+        finalize_import_export();
+    };
 
-    m_export->wait(util::AtomicSumInto{});
-    m_import->wait();
+    if (x_num_cols == n_rhs)
+    {
+        const auto x_view = x.getLocalViewHost(Tpetra::Access::ReadOnly);
+        const auto y_view = y.getLocalViewHost(Tpetra::Access::ReadWrite);
+        evaluate(x_view, y_view);
+    }
+    else
+        for (size_t rhs = 0; rhs != x_num_cols; ++rhs)
+        {
+            const auto x_col  = x.getVector(rhs);
+            const auto y_col  = y.getVectorNonConst(rhs);
+            const auto x_view = x_col->getLocalViewHost(Tpetra::Access::ReadOnly);
+            const auto y_view = y_col->getLocalViewHost(Tpetra::Access::ReadWrite);
+            evaluate(x_view, y_view);
+        }
     L3STER_PROFILE_REGION_END("Evaluate matrix-free operator");
 }
 

@@ -145,18 +145,22 @@ auto evalDiffusionVarOperatorSumFact(const mesh::LocalElementView< ET, EO >& ele
     });
     constexpr auto            n_nodes = mesh::Element< ET, EO >::n_nodes;
     constexpr Eigen::Index    nukn    = params.n_unknowns;
-    Operand< ET, EO, params > y;
+    Operand< ET, EO, params > y{x.rows(), x.cols()};
     const auto                x_fill = [&x](std::span< val_t > to_fill) {
         using map_t = Eigen::Map< Eigen::Matrix< val_t, n_nodes, params.n_unknowns * params.n_rhs > >;
         auto to_fill_map = map_t{to_fill.data()};
-        for (Eigen::Index i = 0; i != n_nodes; ++i)
-            to_fill_map.row(i) = x.template middleRows< nukn >(i * nukn).reshaped().transpose();
+        for (Eigen::Index n = 0; n != n_nodes; ++n)
+            for (Eigen::Index rhs = 0; rhs != params.n_rhs; ++rhs)
+                for (Eigen::Index u = 0; u != nukn; ++u)
+                    to_fill_map(n, rhs * nukn + u) = x(n * nukn + u, rhs);
     };
     const auto y_fill = [&y](std::span< val_t > result) {
         using map_t = Eigen::Map< util::eigen::RowMajorMatrix< val_t, n_nodes, params.n_unknowns * params.n_rhs > >;
         const auto result_map = map_t{result.data()};
-        for (Eigen::Index i = 0; i != n_nodes; ++i)
-            y.template middleRows< nukn >(i * nukn).reshaped().transpose() = result_map.row(i);
+        for (Eigen::Index n = 0; n != n_nodes; ++n)
+            for (Eigen::Index rhs = 0; rhs != params.n_rhs; ++rhs)
+                for (Eigen::Index u = 0; u != nukn; ++u)
+                    y(n * nukn + u, rhs) = result_map(n, rhs * nukn + u);
     };
     constexpr auto asm_opts_ctwrpr = util::ConstexprValue< asm_opts >{};
     evalLocalOperatorSumFact(kernel, element, x_fill, sol_man.getFieldAccess(std::array{0}), y_fill, asm_opts_ctwrpr);

@@ -2,7 +2,7 @@
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 #include "l3ster/post/NormL2.hpp"
-#include "l3ster/solve/Amesos2Solvers.hpp"
+#include "l3ster/solve/BelosSolvers.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
 #include "Common.hpp"
@@ -11,7 +11,7 @@
 using namespace lstr;
 using namespace lstr::algsys;
 
-template < CondensationPolicy CP >
+template < CondensationPolicy CP, OperatorEvaluationStrategy GES, LocalEvalStrategy LES = LocalEvalStrategy::Auto >
 void test()
 {
     constexpr auto domains     = std::array< d_id_t, 4 >{13, 14, 15, 16};
@@ -23,27 +23,34 @@ void test()
     const auto mesh = readAndDistributeMesh< 2 >(
         *comm, L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square_multidom.msh), mesh::gmsh_tag, {}, {}, problem_def);
 
-    constexpr auto alg_params       = AlgebraicSystemParams{.cond_policy = CP, .n_rhs = 2};
+    printMesh(*comm, *mesh);
+
+    constexpr auto alg_params       = AlgebraicSystemParams{.eval_strategy = GES, .cond_policy = CP, .n_rhs = 2};
     constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
     auto           alg_sys          = makeAlgebraicSystem(comm, mesh, problem_def, {}, algparams_ctwrpr);
 
     constexpr auto   ker_params = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1, .n_rhs = 2};
     constexpr double inc        = 1000.;
-    double           set_value  = 1.;
-    const auto       const_kernel =
-        wrapDomainEquationKernel< ker_params >([&set_value]([[maybe_unused]] const auto& in, auto& out) {
+
+    const auto make_kernel = [](double set_value) {
+        return wrapDomainEquationKernel< ker_params >([set_value](const auto&, auto& out) {
             auto& [operators, rhs] = out;
             auto& [A0, A1, A2]     = operators;
             A0(0, 0)               = 1.;
             rhs(0, 0)              = set_value;
             rhs(0, 1)              = set_value + inc;
         });
+    };
 
     const auto assemble_problem_in_dom = [&]< int dom_ind >(util::ConstexprValue< dom_ind >) {
-        set_value                 = static_cast< double >(dom_ind + 1);
+        const auto     set_value  = static_cast< double >(dom_ind + 1);
         constexpr auto field_inds = std::array{size_t{dom_ind}};
         constexpr auto dom_ids    = std::array{domains[dom_ind]};
-        alg_sys.assembleProblem(const_kernel, dom_ids, {}, util::ConstexprValue< field_inds >{});
+        alg_sys.assembleProblem(make_kernel(set_value),
+                                dom_ids,
+                                {},
+                                util::ConstexprValue< field_inds >{},
+                                L3STER_WRAP_CTVAL(AssemblyOptions{.eval_strategy = LES}));
     };
 
     alg_sys.beginAssembly();
@@ -53,7 +60,8 @@ void test()
     assemble_problem_in_dom(util::ConstexprValue< 3 >{});
     alg_sys.endAssembly();
 
-    auto solver = Lapack{};
+    constexpr auto opts   = IterSolverOpts{.tol = 1e-10};
+    auto           solver = CG{opts};
     alg_sys.solve(solver);
 
     auto solution_manager = SolutionManager{*mesh, domains.size() * 2};
@@ -66,7 +74,7 @@ void test()
     constexpr auto sol_man_inds = util::makeIotaArray< size_t, domains.size() * 2 >();
     alg_sys.updateSolution(dof_inds, solution_manager, sol_man_inds);
 
-    constexpr double eps = 1e-8;
+    constexpr double eps = 1e-6;
     for (size_t i = 0; i != domains.size(); ++i)
     {
         const auto field_vals1 = solution_manager.getFieldView(2 * i);
@@ -89,6 +97,8 @@ int main(int argc, char* argv[])
 {
     const auto max_par_guard = util::MaxParallelismGuard{4};
     const auto scope_guard   = L3sterScopeGuard{argc, argv};
-    test< CondensationPolicy::None >();
-    test< CondensationPolicy::ElementBoundary >();
+    test< CondensationPolicy::None, OperatorEvaluationStrategy::GlobalAssembly >();
+    test< CondensationPolicy::None, OperatorEvaluationStrategy::GlobalAssembly >();
+    test< CondensationPolicy::None, OperatorEvaluationStrategy::MatrixFree, LocalEvalStrategy::LocalElement >();
+    test< CondensationPolicy::None, OperatorEvaluationStrategy::MatrixFree, LocalEvalStrategy::SumFactorization >();
 }

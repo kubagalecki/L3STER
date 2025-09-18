@@ -17,7 +17,7 @@ TEST_CASE("Sum-factorized evaluation", "[local_asm]")
         const auto local_element = mesh::LocalElementView{element, global_mesh, {}};
         const auto sol_man       = makeRandomlyFilledSolutiondManager(global_mesh, 1);
 
-        auto x = Operand< ET, EO, params >{};
+        auto x = Operand< ET, EO, params >{operand_size< ET, EO, params >, params.n_rhs};
         x.setRandom();
 
         const auto y_local_element = evalDiffusionOperator2DVar< params >(local_element, x, sol_man);
@@ -41,7 +41,7 @@ TEST_CASE("Sum-factorized evaluation", "[local_asm]")
         const auto local_element = mesh::LocalElementView{element, global_mesh, {}};
         const auto sol_man       = makeRandomlyFilledSolutiondManager(global_mesh, 1);
 
-        auto x = Operand< ET, EO, params >{};
+        auto x = Operand< ET, EO, params >{operand_size< ET, EO, params >, params.n_rhs};
         x.setRandom();
 
         const auto y_local_element = evalDiffusionOperator3DVar< params >(local_element, x, sol_man);

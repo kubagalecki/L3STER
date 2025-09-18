@@ -12,18 +12,22 @@ static auto evalDiffusionOperatorSumFact(const mesh::LocalElementView< ET, EO >&
     });
     constexpr auto                    n_nodes = mesh::Element< ET, EO >::n_nodes;
     constexpr Eigen::Index            nukn    = params.n_unknowns;
-    algsys::Operand< ET, EO, params > y;
+    algsys::Operand< ET, EO, params > y{x.rows(), x.cols()};
     const auto                        x_fill = [&x](std::span< val_t > to_fill) {
         using map_t = Eigen::Map< Eigen::Matrix< val_t, n_nodes, params.n_unknowns * params.n_rhs > >;
         auto to_fill_map = map_t{to_fill.data()};
-        for (Eigen::Index i = 0; i != n_nodes; ++i)
-            to_fill_map.row(i) = x.template middleRows< nukn >(i * nukn).reshaped().transpose();
+        for (Eigen::Index n = 0; n != n_nodes; ++n)
+            for (Eigen::Index rhs = 0; rhs != params.n_rhs; ++rhs)
+                for (Eigen::Index u = 0; u != nukn; ++u)
+                    to_fill_map(n, rhs * nukn + u) = x(n * nukn + u, rhs);
     };
     const auto y_fill = [&y](std::span< val_t > result) {
         using map_t = Eigen::Map< util::eigen::RowMajorMatrix< val_t, n_nodes, params.n_unknowns * params.n_rhs > >;
         const auto result_map = map_t{result.data()};
-        for (Eigen::Index i = 0; i != n_nodes; ++i)
-            y.template middleRows< nukn >(i * nukn).reshaped().transpose() = result_map.row(i);
+        for (Eigen::Index n = 0; n != n_nodes; ++n)
+            for (Eigen::Index rhs = 0; rhs != params.n_rhs; ++rhs)
+                for (Eigen::Index u = 0; u != nukn; ++u)
+                    y(n * nukn + u, rhs) = result_map(n, rhs * nukn + u);
     };
     constexpr auto asm_opts        = AssemblyOptions{.value_order = 2, .eval_strategy = LES};
     constexpr auto asm_opts_ctwrpr = util::ConstexprValue< asm_opts >{};
@@ -52,8 +56,10 @@ static void BM_SumFactQuadDiff(benchmark::State& state)
     const auto local_element = mesh::LocalElementView{element, global_mesh, {}};
 
     constexpr auto params = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3};
-    const auto     x      = algsys::Operand< ET, EO, params >::Random().eval();
-    auto           y      = algsys::Operand< ET, EO, params >{};
+    auto           x      = algsys::Operand< ET, EO, params >{algsys::operand_size< ET, EO, params >, params.n_rhs};
+    auto           y      = algsys::Operand< ET, EO, params >{algsys::operand_size< ET, EO, params >, params.n_rhs};
+    x.setRandom();
+    y.setZero();
 
     for (auto _ : state)
     {
