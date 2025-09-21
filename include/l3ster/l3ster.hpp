@@ -6,7 +6,7 @@
 #include "l3ster/algsys/MakeAlgebraicSystem.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
-#include "l3ster/mesh/primitives/SquareMesh.hpp"
+#include "l3ster/mesh/primitives/CylinderInChannel3D.hpp"
 #include "l3ster/post/NormL2.hpp"
 #include "l3ster/post/VtkExport.hpp"
 #include "l3ster/solve/Amesos2Solvers.hpp"
