@@ -100,6 +100,18 @@ auto parseMpiBuf(Buffer&& buf)
             return parseMpiBuf(std::as_writable_bytes(std::span{buf}));
     }
 }
+
+inline int getMaxMpiTag()
+{
+    // Static local variable ensures delayed initialization - we need to be mindful of MPI_Init
+    static const int max_tag = std::invoke([] {
+        int  has_value{};
+        int* ptr{};
+        L3STER_INVOKE_MPI(MPI_Comm_get_attr, MPI_COMM_WORLD, MPI_TAG_UB, &ptr, &has_value);
+        return *ptr;
+    });
+    return max_tag;
+}
 } // namespace comm
 
 class MpiComm

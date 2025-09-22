@@ -91,7 +91,13 @@ public:
     }
 
 protected:
-    int makeTag(int tag) { return (tag & lo_mask) | std::bit_cast< int >(m_id << half_bits); }
+    int makeTag(int tag) const
+    {
+        const auto retval = (tag & lo_mask) | std::bit_cast< int >(m_id << half_bits);
+        util::throwingAssert(retval >= 0);
+        util::throwingAssert(retval < comm::getMaxMpiTag());
+        return retval;
+    }
 
     using context_shared_ptr_t = std::shared_ptr< const ImportExportContext >;
 
