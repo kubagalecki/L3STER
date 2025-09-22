@@ -1012,8 +1012,7 @@ MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::MatrixFreeSystem(
     if (not dirichlet.empty() or not dirichlet.getNormalized().empty())
     {
         m_dirichlet_bc.emplace(m_node_dof_map, m_interior_mesh, m_border_mesh, *m_comm, context, dirichlet);
-        if (not m_dirichlet_bc->isEmpty()) // Skip allocation if no BC DOFs present in partition
-            m_dirichlet_values = view_t("Dirichlet values", dof_ownership.localSize(), n_rhs);
+        m_dirichlet_values = view_t("Dirichlet values", dof_ownership.localSize(), n_rhs);
     }
 }
 
@@ -1191,22 +1190,19 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::setDirichletBCValu
     val_t                                                         time)
 {
     util::throwingAssert(m_dirichlet_bc.has_value(), "`setDirichletBCValues` called but no Dirichlet BCs were defined");
-    if (not m_dirichlet_bc->isEmpty())
-    {
-        const auto owned_range = std::pair< size_t, size_t >{0, m_operator_map->getLocalNumElements()};
-        computeValuesAtNodes(kernel,
-                             *m_comm,
-                             m_interior_mesh,
-                             m_border_mesh,
-                             *m_export,
-                             domain_ids,
-                             m_node_dof_map,
-                             dof_inds,
-                             field_access,
-                             Kokkos::subview(m_dirichlet_values, owned_range, Kokkos::ALL),
-                             time);
-        m_bcs_need_import = true;
-    }
+    const auto owned_range = std::pair< size_t, size_t >{0, m_operator_map->getLocalNumElements()};
+    computeValuesAtNodes(kernel,
+                         *m_comm,
+                         m_interior_mesh,
+                         m_border_mesh,
+                         *m_export,
+                         domain_ids,
+                         m_node_dof_map,
+                         dof_inds,
+                         field_access,
+                         Kokkos::subview(m_dirichlet_values, owned_range, Kokkos::ALL),
+                         time);
+    m_bcs_need_import = true;
 }
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
@@ -1218,21 +1214,18 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::setDirichletBCValu
     requires(n_rhs == 1)
 {
     util::throwingAssert(m_dirichlet_bc.has_value(), "`setDirichletBCValues` called but no Dirichlet BCs were defined");
-    if (not m_dirichlet_bc->isEmpty())
-    {
-        const auto vals_to_set = std::array{std::span{values}};
-        const auto owned_range = std::pair< size_t, size_t >{0, m_operator_map->getLocalNumElements()};
-        computeValuesAtNodes(*m_comm,
-                             m_interior_mesh,
-                             m_border_mesh,
-                             *m_export,
-                             domain_ids,
-                             m_node_dof_map,
-                             dof_inds,
-                             vals_to_set,
-                             Kokkos::subview(m_dirichlet_values, owned_range, Kokkos::ALL));
-        m_bcs_need_import = true;
-    }
+    const auto vals_to_set = std::array{std::span{values}};
+    const auto owned_range = std::pair< size_t, size_t >{0, m_operator_map->getLocalNumElements()};
+    computeValuesAtNodes(*m_comm,
+                         m_interior_mesh,
+                         m_border_mesh,
+                         *m_export,
+                         domain_ids,
+                         m_node_dof_map,
+                         dof_inds,
+                         vals_to_set,
+                         Kokkos::subview(m_dirichlet_values, owned_range, Kokkos::ALL));
+    m_bcs_need_import = true;
 }
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
