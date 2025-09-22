@@ -77,9 +77,13 @@ class ImportExportBase
     using LocalIndex = local_dof_t;
 
     // Each import/export object has a unique ID, which is used to deconflict comms from different objects
-    inline static unsigned id_counter = 0;
-    static constexpr int   half_bits  = sizeof(int) * CHAR_BIT / 2;
-    static constexpr int   lo_mask    = -1 >> half_bits;
+    inline static unsigned short id_counter   = 1;
+    static constexpr size_t      tag_bits     = 12;
+    static constexpr size_t      id_bits      = 8;
+    static constexpr size_t      max_num_vecs = 1uz << tag_bits;
+    static constexpr int         int_bits     = sizeof(int) * CHAR_BIT;
+    static constexpr int         tag_mask     = -1u >> (int_bits - tag_bits);
+    static constexpr int         id_mask      = -1u >> (int_bits - id_bits);
 
 public:
     auto                 getContext() const { return m_context; }
@@ -91,13 +95,7 @@ public:
     }
 
 protected:
-    int makeTag(int tag) const
-    {
-        const auto retval = (tag & lo_mask) | std::bit_cast< int >(m_id << half_bits);
-        util::throwingAssert(retval >= 0);
-        util::throwingAssert(retval < comm::getMaxMpiTag());
-        return retval;
-    }
+    [[nodiscard]] int makeTag(int tag) const { return (tag & tag_mask) | std::bit_cast< int >(m_id); }
 
     using context_shared_ptr_t = std::shared_ptr< const ImportExportContext >;
 
@@ -108,8 +106,11 @@ protected:
           m_requests(num_vecs * m_context->getNumNbrs()),
           m_pack_buf(num_vecs * m_context->getOwnedInds().size()),
           m_max_owned{m_context->getOwnedInds().empty() ? -1 : std::ranges::max(m_context->getOwnedInds())},
-          m_id{id_counter++ & (-1u >> 1)} // make sure the highest bit is always 0
-    {}
+          m_id{(id_mask & id_counter++) << tag_bits}
+    {
+        util::throwingAssert(num_vecs < max_num_vecs);
+        util::throwingAssert(makeTag(-1) <= getMaxMpiTag(), "MPI_TAG_UB value too low");
+    }
 
     bool isOwnedSizeSufficient(size_t size) const;
     bool isSharedSizeSufficient(size_t size) const;
@@ -121,7 +122,7 @@ protected:
     util::ArrayOwner< Scalar >                   m_pack_buf;
     size_t                                       m_owned_stride{}, m_shared_stride{};
     LocalIndex                                   m_max_owned{};
-    const unsigned                               m_id;
+    const int                                    m_id;
 };
 
 /// Performs import, i.e., data at shared indices is received from owning ranks
