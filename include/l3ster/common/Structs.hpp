@@ -14,7 +14,7 @@ struct Point
     constexpr Point() = default;
     constexpr Point(const std::array< val_t, DIM >& coords_) : coords{coords_} {}
     template < std::same_as< val_t >... Coord >
-    constexpr explicit Point(Coord... coords_)
+    constexpr explicit(DIM == 1) Point(Coord... coords_)
         requires(sizeof...(Coord) == DIM)
         : coords{coords_...}
     {}

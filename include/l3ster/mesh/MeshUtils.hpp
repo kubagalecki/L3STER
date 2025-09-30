@@ -2,6 +2,7 @@
 #define L3STER_MESHUTILS_HPP
 
 #include "l3ster/mesh/MeshPartition.hpp"
+#include "l3ster/mesh/NodePhysicalLocation.hpp"
 #include "l3ster/util/Functional.hpp"
 #include "l3ster/util/SpatialHashTable.hpp"
 
@@ -339,6 +340,74 @@ auto deform(MeshPartition< 1 >& mesh, Deformation&& deform)
                 point = std::invoke(deform, point);
         },
         std::execution::par);
+}
+
+template < std::ranges::random_access_range R >
+auto extrude(const MeshPartition< 1 >& mesh, R&& zdist, d_id_t id_back, d_id_t id_front) -> MeshPartition< 1 >
+    requires std::convertible_to< std::ranges::range_value_t< std::decay_t< R > >, val_t >
+{
+    const auto n_layers = std::ranges::distance(zdist);
+    util::throwingAssert(n_layers > 1);
+    auto       domains3d       = MeshPartition< 1 >::domain_map_t{};
+    const auto nodes_per_layer = mesh.getNNodes();
+    const auto z_min           = *std::ranges::begin(zdist);
+    const auto z_max           = *std::ranges::begin(zdist | std::views::reverse);
+    auto       element_id      = el_id_t{0};
+
+    const auto extrude_element = [&]< ElementType ET >(const Element< ET, 1 >&               element,
+                                                       std::reference_wrapper< Domain< 1 > > domain) {
+        util::throwingAssert(Element< ET, 1 >::native_dim < 3, "Cannot extrude 3D mesh");
+        if constexpr (ET == ElementType::Line or ET == ElementType::Quad)
+        {
+            constexpr auto   ET_extruded = ET == ElementType::Line ? ElementType::Quad : ElementType::Hex;
+            constexpr size_t n_verts2d   = ElementData< ET, 1 >::n_verts;
+            constexpr size_t n_nodes2d   = Element< ET, 1 >::n_nodes;
+            auto             data        = ElementData< ET_extruded, 1 >{};
+            std::ranges::copy(element.data.vertices, data.vertices.begin());
+            std::ranges::copy(element.data.vertices, std::next(data.vertices.begin(), n_verts2d));
+            for (auto&& [layer, zs] : zdist | std::views::adjacent< 2 > | std::views::enumerate)
+            {
+                const auto& [z_lo, z_hi] = zs;
+                for (auto& vertex : data.vertices | std::views::take(n_verts2d))
+                    vertex.z() = z_lo;
+                for (auto& vertex : data.vertices | std::views::drop(n_verts2d))
+                    vertex.z() = z_hi;
+                auto nodes = typename Element< ET_extruded, 1 >::node_array_t{};
+                std::ranges::transform(
+                    element.nodes, nodes.begin(), std::bind_back(std::plus{}, layer * nodes_per_layer));
+                std::ranges::transform(nodes | std::views::take(n_nodes2d),
+                                       std::next(nodes.begin(), n_nodes2d),
+                                       std::bind_back(std::plus{}, nodes_per_layer));
+                auto el_extruded = Element< ET_extruded, 1 >{nodes, data, element_id++};
+                pushToDomain(domain.get(), std::move(el_extruded));
+            }
+        }
+    };
+    const auto make_back_front_elems = [&]< ElementType ET >(const Element< ET, 1 >& element) {
+        if constexpr (ET != ElementType::Line)
+        {
+            const auto make_face = [&](val_t z, d_id_t domain_id, n_id_t node_offs) {
+                auto face = element;
+                for (auto& n : face.nodes)
+                    n += node_offs;
+                for (auto& vertex : face.data.vertices)
+                    vertex.z() = z;
+                face.id = element_id++;
+                pushToDomain(domains3d[domain_id], face);
+            };
+            make_face(z_min, id_back, 0);
+            make_face(z_max, id_front, nodes_per_layer * (n_layers - 1u));
+        }
+    };
+
+    for (auto domain_id : mesh.getDomainIds())
+    {
+        auto domain_ref = std::ref(domains3d[domain_id]);
+        mesh.visit(std::bind_back(extrude_element, domain_ref), domain_id);
+        mesh.visit(make_back_front_elems, domain_id);
+    }
+
+    return {domains3d, util::concatRanges(mesh.getBoundaryIdsView(), std::array{id_back, id_front})};
 }
 } // namespace lstr::mesh
 #endif // L3STER_MESHUTILS_HPP

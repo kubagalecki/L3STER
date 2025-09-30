@@ -48,12 +48,13 @@ L3STER_MPI_TYPE_MAPPING_STRUCT(long double, MPI_LONG_DOUBLE)               // NO
 L3STER_MPI_TYPE_MAPPING_STRUCT(std::byte, MPI_BYTE)                        // NOLINT
 
 inline void
-handleMPIError(int error, std::string_view err_msg, std::source_location src_loc = std::source_location::current())
+handleMPIError(int error, std::string_view fun_name, std::source_location src_loc = std::source_location::current())
 {
+    const auto err_msg = std::format("MPI error: call to {} failed with error code {}", fun_name, error);
     util::throwingAssert(not error, err_msg, src_loc);
 }
 
-#define L3STER_INVOKE_MPI(fun__, ...) comm::handleMPIError(fun__(__VA_ARGS__), "Call to " #fun__ " failed")
+#define L3STER_INVOKE_MPI(fun__, ...) comm::handleMPIError(fun__(__VA_ARGS__), #fun__)
 
 template < typename T >
 concept MpiBuiltinType_c = requires { MpiType< std::remove_cvref_t< T > >::value(); };
@@ -98,6 +99,18 @@ auto parseMpiBuf(Buffer&& buf)
         else
             return parseMpiBuf(std::as_writable_bytes(std::span{buf}));
     }
+}
+
+inline int getMaxMpiTag()
+{
+    // Static local variable ensures delayed initialization - we need to be mindful of MPI_Init
+    static const int max_tag = std::invoke([] {
+        int  has_value{};
+        int* ptr{};
+        L3STER_INVOKE_MPI(MPI_Comm_get_attr, MPI_COMM_WORLD, MPI_TAG_UB, &ptr, &has_value);
+        return *ptr;
+    });
+    return max_tag;
 }
 } // namespace comm
 

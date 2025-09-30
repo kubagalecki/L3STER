@@ -60,7 +60,7 @@ class OperatorEvaluationManager
     static constexpr size_t updates_per_batch = batchSizeHeuristic();
     static constexpr size_t batch_update_size = update_size * updates_per_batch;
     using batch_update_matrix_t = Eigen::Matrix< val_t, operator_size, batch_update_size, Eigen::ColMajor >;
-    using operand_t             = Eigen::Matrix< val_t, operator_size, n_rhs, Eigen::ColMajor >;
+    using operand_t             = util::eigen::MatrixMaxCol_t< val_t, operator_size, n_rhs >;
 
 public:
     template < int n_unknowns, int n_bases, int dim >
@@ -135,13 +135,12 @@ void OperatorEvaluationManager< operator_size, update_size, n_rhs >::flushImpl(
     using A_times_x_t               = Eigen::Matrix< val_t, intermediate_size, 1, Eigen::ColMajor, batch_update_size >;
 
     // Multiple gemv calls are more efficient than 1 "thin" gemm call
-    for (int rhs = 0; rhs != n_rhs; ++rhs)
+    for (int rhs = 0; rhs != x.cols(); ++rhs)
     {
-        auto xcol       = x.template block< operator_size, 1 >(0, rhs);
-        auto At_times_x = A_times_x_t{update_block.transpose() * xcol};
+        auto At_times_x = A_times_x_t{update_block.transpose() * x.col(rhs)};
         for (int i = 0; i != At_times_x.rows(); ++i)
             At_times_x[i] *= m_weights[i];
-        y.template block< operator_size, 1 >(0, rhs) += update_block * At_times_x;
+        y.col(rhs) += update_block * At_times_x;
     }
     m_filled_cols = 0;
 }
@@ -149,7 +148,7 @@ void OperatorEvaluationManager< operator_size, update_size, n_rhs >::flushImpl(
 template < mesh::ElementType ET, el_o_t EO, KernelParams params >
 inline constexpr size_t operand_size = mesh::Element< ET, EO >::n_nodes * params.n_unknowns;
 template < mesh::ElementType ET, el_o_t EO, KernelParams params >
-using Operand = Eigen::Matrix< val_t, operand_size< ET, EO, params >, params.n_rhs >;
+using Operand = util::eigen::MatrixMaxCol_t< val_t, operand_size< ET, EO, params >, params.n_rhs >;
 template < mesh::ElementType ET, el_o_t EO, KernelParams params >
 using DirichletInds = std::span< const util::smallest_integral_t< operand_size< ET, EO, params > > >;
 template < mesh::ElementType ET, el_o_t EO, KernelParams params >
@@ -159,7 +158,8 @@ using DirichletVals =
 template < mesh::ElementType ET, el_o_t EO, KernelParams params >
 auto& getLocalOperatorEvalManager()
 {
-    constexpr auto operand_size  = static_cast< size_t >(Operand< ET, EO, params >::RowsAtCompileTime);
+    constexpr auto operand_size = static_cast< size_t >(Operand< ET, EO, params >::RowsAtCompileTime);
+    static_assert(operand_size > 0);
     constexpr auto num_equations = params.n_equations;
     constexpr auto num_rhs       = params.n_rhs;
     using eval_manager_t         = OperatorEvaluationManager< operand_size, num_equations, num_rhs >;
@@ -184,7 +184,7 @@ void precomputeDiagRhsImpl(const typename KernelInterface< params >::Result&    
     const auto     ops_trans    = detail::transposeOperators(kernel_result.operators);
     const auto     update_block = [&](const auto& At, int basis) {
         diagonal.template segment< nukn >(basis * nukn) += At.rowwise().squaredNorm() * weight;
-        rhs.template block< nukn, params.n_rhs >(basis * nukn, 0) += At * kernel_result.rhs * weight;
+        rhs.template middleRows< nukn >(basis * nukn) += At * kernel_result.rhs * weight;
     };
     if (dirichlet_inds.empty())
         for (int basis = 0; basis != n_bases; ++basis)
@@ -219,7 +219,7 @@ auto evaluateLocalOperator(
 {
     L3STER_PROFILE_FUNCTION;
     static_assert(params.dimension == mesh::ElementTraits< mesh::Element< ET, EO > >::native_dim);
-    Operand< ET, EO, params > y                    = Operand< ET, EO, params >::Zero();
+    Operand< ET, EO, params > y(x.rows(), x.cols());
     const auto&               el_data              = element.getData();
     const auto                jacobi_mat_generator = map::getNatJacobiMatGenerator(el_data);
     auto&                     eval_manager         = getLocalOperatorEvalManager< ET, EO, params >();
@@ -229,6 +229,7 @@ auto evaluateLocalOperator(
         util::throwingAssert(jacobian > 0., "Encountered degenerate element ( |J| <= 0 )");
         eval_manager.update(A, basis_vals, phys_ders, jacobian * weight, x, y);
     };
+    y.setZero();
     basis_at_qps.forEach(process_qp);
     eval_manager.finalize(x, y);
     return y;
@@ -245,7 +246,7 @@ auto evaluateLocalOperator(
 {
     L3STER_PROFILE_FUNCTION;
     static_assert(params.dimension == mesh::ElementTraits< mesh::Element< ET, EO > >::native_dim);
-    Operand< ET, EO, params > y            = Operand< ET, EO, params >::Zero();
+    Operand< ET, EO, params > y(x.rows(), x.cols());
     const auto                el_data      = el_view->getData();
     const auto                jacobi_gen   = map::getNatJacobiMatGenerator(el_data);
     auto&                     eval_manager = getLocalOperatorEvalManager< ET, EO, params >();
@@ -255,6 +256,7 @@ auto evaluateLocalOperator(
         const auto [A, _] = evalKernel(kernel, point, basis_vals, phys_ders, node_vals, el_data, time, normal);
         eval_manager.update(A, basis_vals, phys_ders, jacobian * weight, x, y);
     };
+    y.setZero();
     basis_at_qps.forEach(process_qp);
     eval_manager.finalize(x, y);
     return y;
@@ -263,10 +265,12 @@ auto evaluateLocalOperator(
 template < KernelParams params, mesh::ElementType ET, el_o_t EO >
 struct InitResult
 {
-    using diagonal_t = Eigen::Vector< val_t, mesh::Element< ET, EO >::n_nodes * params.n_unknowns >;
+    static constexpr size_t size = mesh::Element< ET, EO >::n_nodes * params.n_unknowns;
+    using diagonal_t             = Eigen::Vector< val_t, size >;
+    using rhs_t                  = Eigen::Matrix< val_t, size, params.n_rhs >;
 
-    diagonal_t                diagonal = diagonal_t::Zero();
-    Operand< ET, EO, params > rhs      = Operand< ET, EO, params >::Zero();
+    diagonal_t diagonal = diagonal_t::Zero();
+    rhs_t      rhs      = rhs_t::Zero();
 };
 
 template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >

@@ -99,8 +99,16 @@ int main(int argc, char* argv[])
 
     const auto ownership = util::SegmentedOwnership{first_ind, owned_inds.size(), shared_inds};
     auto       context   = std::make_shared< const ImportExportContext >(comm, ownership);
-    auto       importer  = Import< Scalar >{context, mv_cols};
-    auto       exporter  = Export< Scalar >{std::move(context), mv_cols};
+    auto       importer  = Import< Scalar >{context, 2 * mv_cols};
+    auto       exporter  = Export< Scalar >{std::move(context), 2 * mv_cols};
+    REQUIRE(importer.getNumVecs() == 2 * mv_cols);
+    REQUIRE(exporter.getNumVecs() == 2 * mv_cols);
+    importer.setNumVecs(mv_cols);
+    exporter.setNumVecs(mv_cols);
+    REQUIRE(importer.getNumVecs() == mv_cols);
+    REQUIRE(exporter.getNumVecs() == mv_cols);
+    CHECK_THROWS(importer.setNumVecs(3 * mv_cols));
+    CHECK_THROWS(exporter.setNumVecs(3 * mv_cols));
     importer.setOwned(x, all_inds_sz);
     importer.setShared(std::span{x}.subspan(owned_inds.size()), all_inds_sz);
     exporter.setOwned(y, all_inds_sz);

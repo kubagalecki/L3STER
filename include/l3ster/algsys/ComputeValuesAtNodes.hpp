@@ -416,14 +416,14 @@ void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&     kern
             const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
             const auto& node_locations = mesh::getNodeLocations< ET, EO >();
             const auto  node_vals      = field_access.getLocallyIndexed(el_nodes);
-            const auto  jacobi_gen     = map::getNatJacobiMatGenerator(element.data);
+            const auto  jacobi_gen     = map::getNatJacobiMatGenerator(element.getData());
             for (auto&& [node_ind, node] : el_nodes | std::views::enumerate)
             {
                 const auto& ref_coords    = node_locations[node_ind];
                 const auto& ref_ders      = basis_at_nodes.derivatives[node_ind];
                 const auto [phys_ders, _] = map::mapDomain< ET, EO >(jacobi_gen, ref_coords, ref_ders);
                 const auto ker_res        = evalKernel(
-                    kernel, ref_coords, basis_at_nodes.values[node_ind], phys_ders, node_vals, element.data, time);
+                    kernel, ref_coords, basis_at_nodes.values[node_ind], phys_ders, node_vals, element.getData(), time);
                 for (auto&& [dof_ind, dof] : detail::getNodeDofsAtInds(dof_map, dof_inds, node) | std::views::enumerate)
                     for (size_t rhs_ind = 0; rhs_ind != n_rhs; ++rhs_ind)
                     {

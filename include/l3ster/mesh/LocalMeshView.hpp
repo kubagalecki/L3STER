@@ -359,8 +359,12 @@ void reorderByAdjacency(std::vector< LocalElementView< ET, EO > >& elements, Nod
     auto       hot_elems          = robin_hood::unordered_flat_map< el_loc_id_t, NodeCacheHotnessModel::hotness_t >{};
     const auto populate_hot_elems = [&] {
         for (const auto& [node, hotness] : cache.getActiveNodes())
+        {
+            if (node >= nodes_to_elems.getNRows()) // Nodes not from the current domain may be present in the cache
+                continue;
             for (auto elem : nodes_to_elems(node) | std::views::filter([&](auto e) { return not done_elems.test(e); }))
                 hot_elems[elem] += hotness;
+        }
     };
     constexpr auto max_unsigned   = std::numeric_limits< unsigned >::max();
     const auto     get_el_connect = [&](el_loc_id_t el) -> unsigned {

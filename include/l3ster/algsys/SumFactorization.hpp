@@ -611,18 +611,19 @@ auto evalFieldDers(
     return retval;
 }
 
-template < typename Kernel, KernelParams params, el_o_t EO, AssemblyOptions asm_opts >
+template < typename Kernel, KernelParams params, el_o_t EO, AssemblyOptions asm_opts, size_t n_rhs_actual >
 auto evalAtQuadQPs(typename SumFactBufferHelper< make_basis_params< params, asm_opts, EO >,
-                                                 params.n_unknowns * params.n_rhs + params.n_fields,
+                                                 params.n_unknowns * n_rhs_actual + params.n_fields,
                                                  2 >::buf_array_t&         back_trans_result,
                    const DomainEquationKernel< Kernel, params >&           kernel,
                    const mesh::ElementData< mesh::ElementType::Quad, EO >& element_data,
                    val_t                                                   time,
-                   util::ConstexprValue< asm_opts >)
+                   util::ConstexprValue< asm_opts >,
+                   util::ConstexprValue< n_rhs_actual >)
 {
     L3STER_PROFILE_FUNCTION;
     constexpr auto basis_params     = make_basis_params< params, asm_opts, EO >;
-    constexpr auto num_operands     = params.n_unknowns * params.n_rhs;
+    constexpr auto num_operands     = params.n_unknowns * n_rhs_actual;
     constexpr int  num_fields_total = num_operands + params.n_fields;
     using basis_helper_t            = SumFactBufferHelper< basis_params, num_fields_total, 2 >;
     auto [vals, dv_dxi, dv_deta]    = basis_helper_t::makeBufferViewsAtQuadsRowMajor(back_trans_result);
@@ -636,7 +637,7 @@ auto evalAtQuadQPs(typename SumFactBufferHelper< make_basis_params< params, asm_
     typename return_helper_t::buf_array_t retval;
     auto [r0, r1, r2] = return_helper_t::makeBufferViewsAtQuadsColMajor(retval);
 
-    using operand_map_t    = Eigen::Map< Eigen::Matrix< val_t, params.n_unknowns, params.n_rhs > >;
+    using operand_map_t    = Eigen::Map< Eigen::Matrix< val_t, params.n_unknowns, n_rhs_actual > >;
     const auto&    weights = quad::getReferenceQuadrature< basis_params.quad_type, basis_params.quad_order >().weights;
     constexpr auto n_qps1d = basis_params.n_qps1d();
     for (int qy = 0; qy != n_qps1d; ++qy)
@@ -674,18 +675,19 @@ auto evalAtQuadQPs(typename SumFactBufferHelper< make_basis_params< params, asm_
     return retval;
 }
 
-template < typename Kernel, KernelParams params, el_o_t EO, AssemblyOptions asm_opts >
+template < typename Kernel, KernelParams params, el_o_t EO, AssemblyOptions asm_opts, size_t n_rhs_actual >
 auto evalAtHexQPs(typename SumFactBufferHelper< make_basis_params< params, asm_opts, EO >,
-                                                params.n_unknowns * params.n_rhs + params.n_fields,
+                                                params.n_unknowns * n_rhs_actual + params.n_fields,
                                                 3 >::buf_array_t&        back_trans_result,
                   const DomainEquationKernel< Kernel, params >&          kernel,
                   const mesh::ElementData< mesh::ElementType::Hex, EO >& element_data,
                   val_t                                                  time,
-                  util::ConstexprValue< asm_opts >)
+                  util::ConstexprValue< asm_opts >,
+                  util::ConstexprValue< n_rhs_actual >)
 {
     L3STER_PROFILE_FUNCTION;
     constexpr auto basis_params            = make_basis_params< params, asm_opts, EO >;
-    constexpr auto num_operands            = params.n_unknowns * params.n_rhs;
+    constexpr auto num_operands            = params.n_unknowns * n_rhs_actual;
     constexpr int  num_fields_total        = num_operands + params.n_fields;
     using basis_helper_t                   = SumFactBufferHelper< basis_params, num_fields_total, 3 >;
     auto [vals, dv_dxi, dv_deta, dv_dzeta] = basis_helper_t::makeBufferViewsAtQuadsRowMajor(back_trans_result);
@@ -699,7 +701,7 @@ auto evalAtHexQPs(typename SumFactBufferHelper< make_basis_params< params, asm_o
     typename return_helper_t::buf_array_t retval;
     auto [r0, r1, r2, r3] = return_helper_t::makeBufferViewsAtQuadsColMajor(retval);
 
-    using operand_map_t    = Eigen::Map< Eigen::Matrix< val_t, params.n_unknowns, params.n_rhs > >;
+    using operand_map_t    = Eigen::Map< Eigen::Matrix< val_t, params.n_unknowns, n_rhs_actual > >;
     const auto&    weights = quad::getReferenceQuadrature< basis_params.quad_type, basis_params.quad_order >().weights;
     constexpr auto n_qps1d = basis_params.n_qps1d();
     for (int qz = 0; qz != n_qps1d; ++qz)
@@ -816,20 +818,22 @@ template < typename Kernel,
            el_o_t                               EO,
            AssemblyOptions                      asm_opts,
            std::invocable< std::span< val_t > > Fill,
-           std::invocable< std::span< val_t > > YScatter >
+           std::invocable< std::span< val_t > > YScatter,
+           size_t                               n_rhs_actual >
 void sumFactImpl(const DomainEquationKernel< Kernel, params >&           kernel,
                  const mesh::ElementData< mesh::ElementType::Quad, EO >& element_data,
                  Fill&&                                                  fill,
                  YScatter&&                                              y_scatter,
                  val_t                                                   time,
-                 util::ConstexprValue< asm_opts >                        asm_opts_ctwrpr)
+                 util::ConstexprValue< asm_opts >                        asm_opts_ctwrpr,
+                 util::ConstexprValue< n_rhs_actual >                    rhs_actual_ctwrpr)
 {
     constexpr auto basis_params     = make_basis_params< params, asm_opts, EO >;
-    constexpr auto num_operands     = params.n_unknowns * params.n_rhs;
+    constexpr auto num_operands     = params.n_unknowns * n_rhs_actual;
     constexpr int  num_fields_total = num_operands + params.n_fields;
 
     auto back_bufs    = sumFactBackQuad< basis_params, num_fields_total >(std::forward< Fill >(fill));
-    auto forward_bufs = evalAtQuadQPs(back_bufs, kernel, element_data, time, asm_opts_ctwrpr);
+    auto forward_bufs = evalAtQuadQPs(back_bufs, kernel, element_data, time, asm_opts_ctwrpr, rhs_actual_ctwrpr);
     sumFactForwardQuad< basis_params, num_operands >(forward_bufs, back_bufs.front()); // use second argument as temp
     util::requestStackSize< 2 * (sizeof back_bufs + sizeof forward_bufs) >();          // this works backwards in time
 
@@ -841,20 +845,22 @@ template < typename Kernel,
            el_o_t                               EO,
            AssemblyOptions                      asm_opts,
            std::invocable< std::span< val_t > > Fill,
-           std::invocable< std::span< val_t > > YScatter >
+           std::invocable< std::span< val_t > > YScatter,
+           size_t                               n_rhs_actual >
 void sumFactImpl(const DomainEquationKernel< Kernel, params >&          kernel,
                  const mesh::ElementData< mesh::ElementType::Hex, EO >& element_data,
                  Fill&&                                                 fill,
                  YScatter&&                                             y_scatter,
                  val_t                                                  time,
-                 util::ConstexprValue< asm_opts >                       asm_opts_ctwrpr)
+                 util::ConstexprValue< asm_opts >                       asm_opts_ctwrpr,
+                 util::ConstexprValue< n_rhs_actual >                   rhs_actual_ctwrpr)
 {
     constexpr auto basis_params     = make_basis_params< params, asm_opts, EO >;
-    constexpr auto num_operands     = params.n_unknowns * params.n_rhs;
+    constexpr auto num_operands     = params.n_unknowns * n_rhs_actual;
     constexpr int  num_fields_total = num_operands + params.n_fields;
 
     auto back_bufs    = sumFactBackHex< basis_params, num_fields_total >(std::forward< Fill >(fill));
-    auto forward_bufs = evalAtHexQPs(back_bufs, kernel, element_data, time, asm_opts_ctwrpr);
+    auto forward_bufs = evalAtHexQPs(back_bufs, kernel, element_data, time, asm_opts_ctwrpr, rhs_actual_ctwrpr);
     sumFactForwardHex< basis_params, num_operands >(forward_bufs, back_bufs.front()); // use second argument as temp
     util::requestStackSize< 2 * (sizeof back_bufs + sizeof forward_bufs) >();         // this works backwards in time
 
@@ -870,25 +876,30 @@ void sumFactImpl(const DomainEquationKernel< Kernel, params >&          kernel,
 /// \param field_access FieldAccess object used to read the external fields needed by the kernel
 /// \param y_scatter Callable used to scatter the result into the destination (multi)vector. Takes a span containing the
 /// evaluation result, and a stride defining the spacing between entries corresponding to a given node
+/// \param asm_opts_ctwrpr Compile-time-wrapped assembly options struct
 /// \param time Time instance passed to the kernel
+/// \param rhs_actual_ctwrpr Compile-time-wrapped number of RHS (must not exceed params.n_rhs)
 template < typename Kernel,
            KernelParams                         params,
            mesh::ElementType                    ET,
            el_o_t                               EO,
            AssemblyOptions                      asm_opts = {},
            std::invocable< std::span< val_t > > XGather,
-           std::invocable< std::span< val_t > > YScatter >
+           std::invocable< std::span< val_t > > YScatter,
+           size_t                               n_rhs_actual = params.n_rhs >
 void evalLocalOperatorSumFact(const DomainEquationKernel< Kernel, params >& kernel,
                               const mesh::LocalElementView< ET, EO >&       element,
                               XGather&&                                     x_gather,
                               const post::FieldAccess< params.n_fields >&   field_access,
                               YScatter&&                                    y_scatter,
-                              util::ConstexprValue< asm_opts >              asm_opts_ctwrpr = {},
-                              val_t                                         time            = 0.)
+                              util::ConstexprValue< asm_opts >              asm_opts_ctwrpr   = {},
+                              val_t                                         time              = 0.,
+                              util::ConstexprValue< n_rhs_actual >          rhs_actual_ctwrpr = {})
 {
     L3STER_PROFILE_FUNCTION;
-    const auto fill = [&](std::span< val_t > to_fill) {
-        constexpr int num_fields_total = params.n_unknowns * params.n_rhs + params.n_fields;
+    static_assert(n_rhs_actual <= params.n_rhs);
+    const auto do_fill = [&](std::span< val_t > to_fill) {
+        constexpr int num_fields_total = params.n_unknowns * n_rhs_actual + params.n_fields;
         constexpr int num_nodes        = mesh::Element< ET, EO >::n_nodes;
         using field_map_t              = Eigen::Map< Eigen::Matrix< val_t, num_nodes, num_fields_total > >;
         std::invoke(std::forward< XGather >(x_gather), to_fill);
@@ -896,7 +907,13 @@ void evalLocalOperatorSumFact(const DomainEquationKernel< Kernel, params >& kern
             field_access.fill(field_map_t{to_fill.data()}.template rightCols< params.n_fields >(),
                               element.getLocalNodes());
     };
-    detail::sumFactImpl(kernel, element.getData(), fill, std::forward< YScatter >(y_scatter), time, asm_opts_ctwrpr);
+    detail::sumFactImpl(kernel,
+                        element.getData(),
+                        do_fill,
+                        std::forward< YScatter >(y_scatter),
+                        time,
+                        asm_opts_ctwrpr,
+                        rhs_actual_ctwrpr);
 }
 } // namespace lstr::algsys
 #endif // L3STER_ALGSYS_SUMFACTORIZATION_HPP

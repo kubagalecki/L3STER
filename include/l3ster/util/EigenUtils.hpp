@@ -51,6 +51,9 @@ template < std::floating_point T, int RCMaj = Eigen::RowMajor >
 using DynamicallySizedMatrix =
     Eigen::Matrix< T, Eigen::Dynamic, Eigen::Dynamic, RCMaj, Eigen::Dynamic, Eigen::Dynamic >;
 
+template < std::floating_point T, int rows, int cols, int RCMaj = Eigen::ColMajor >
+using MatrixMaxCol_t = Eigen::Matrix< T, rows, Eigen::Dynamic, RCMaj, rows, cols >;
+
 template < typename T >
 concept StaticallySizedMatrix_c = Matrix_c< T > and detail::is_statically_sized_martix< T >;
 } // namespace lstr::util::eigen
