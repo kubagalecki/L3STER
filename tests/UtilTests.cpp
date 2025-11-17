@@ -10,6 +10,7 @@
 #include "l3ster/util/Meta.hpp"
 #include "l3ster/util/MetisUtils.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
+#include "l3ster/util/Serialization.hpp"
 #include "l3ster/util/SetStackSize.hpp"
 #include "l3ster/util/SpatialHashTable.hpp"
 #include "l3ster/util/StaticVector.hpp"
@@ -474,6 +475,59 @@ TEST_CASE("Base64 encoding", "[util]")
     const auto lp             = util::b64::encB64SerialImpl(long_byte_span, seq_ptr);
     util::b64::encB64Remainder(long_byte_span.subspan(lp), seq_ptr);
     CHECK(long_text_b64_seq == long_text_b64_par);
+}
+
+TEST_CASE("Serialization", "[util]")
+{
+    SECTION("Value")
+    {
+        constexpr int data = 42;
+        std::string   result;
+        util::serialize(data, std::back_inserter(result));
+        REQUIRE(result.size() == sizeof data);
+        const auto deserialized = util::deserialize< int >(result);
+        CHECK(data == deserialized);
+    }
+
+    SECTION("Text")
+    {
+        constexpr auto text = std::string_view{"This is some sample text."};
+        std::string    result;
+        util::serialize(text, std::back_inserter(result));
+
+        constexpr auto szsz = sizeof(size_t);
+        REQUIRE(result.size() == text.size() + szsz);
+        const auto     result_view = std::string_view{result};
+        constexpr auto size        = text.size();
+        CHECK(std::ranges::equal(std::span{reinterpret_cast< const char* >(&size), szsz}, result_view.substr(0, szsz)));
+        CHECK(result_view.substr(sizeof(size_t)) == text);
+    }
+
+    SECTION("Nested ranges")
+    {
+        const auto  data = std::vector< std::string >{"This ", "is ", "some ", "sample ", "text."};
+        std::string result;
+        util::serialize(data, std::back_inserter(result));
+        const auto deserialized = util::deserialize< std::vector< std::string > >(result);
+        CHECK(data == deserialized);
+    }
+
+    SECTION("Complex nested types")
+    {
+        const auto  data = std::map< std::string, std::string >{{"KEY 1", "VAL 1"},
+                                                                {"KEY 2", "VAL 2"},
+                                                                {"KEY 3", "VAL 3"},
+                                                                {"KEY 4", "VAL 4"},
+                                                                {"KEY 5", "VAL 5"},
+                                                                {"KEY 6", "VAL 6"}};
+        std::string result;
+        util::serialize(data, std::back_inserter(result));
+
+        const auto deserialized = util::deserialize< std::vector< std::array< std::string, 2 > > >(result);
+        CHECK(std::ranges::equal(data, deserialized, [](const auto& pair, const auto& array) {
+            return pair.first == array[0] and pair.second == array[1];
+        }));
+    }
 }
 
 TEST_CASE("StaticVector", "[util]")
