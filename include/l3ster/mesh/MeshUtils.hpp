@@ -135,12 +135,11 @@ inline auto initSpaceHashTable(const robin_hood::unordered_flat_map< n_id_t, Poi
         const auto& [b1, b2] = b;
         return elem_t{elwise(a1, b1, util::Min{}), elwise(a2, b2, util::Min{})};
     };
-    const auto coords_view = node_to_coord | std::views::transform([](const auto& p) {
+    const auto coords_view    = node_to_coord | std::views::transform([](const auto& p) {
                                  const auto coord_array = static_cast< elem1_t >(p.second);
                                  return elem_t{coord_array, elwise(coord_array, std::negate{})};
-                             }) |
-                             std::views::common;
-    const auto [min, neg_max] = std::reduce(coords_view.begin(), coords_view.end(), init, reduce);
+                             });
+    const auto [min, neg_max] = std::ranges::fold_left(coords_view, init, reduce);
     const auto max            = elwise(neg_max, std::negate{});
     const auto bb             = elwise(max, min, std::minus{});
     const bool is_2d          = bb.back() <= std::numeric_limits< val_t >::epsilon();

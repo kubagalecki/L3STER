@@ -3,7 +3,6 @@
 #include "l3ster/mesh/primitives/CylinderInChannel2D.hpp"
 #include "l3ster/post/NormL2.hpp"
 #include "l3ster/post/SaveLoad.hpp"
-#include "l3ster/post/VtkExport.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
 int main(int argc, char* argv[])
