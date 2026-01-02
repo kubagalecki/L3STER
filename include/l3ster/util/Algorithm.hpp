@@ -88,7 +88,7 @@ constexpr auto makeTupleIf(T&&... arg)
 
 template < typename Tup, typename F >
 constexpr void forEachTuple(Tup&& t, F&& f)
-    requires tuple_like< std::remove_cvref_t< Tup > > and tuple_invocable< F, std::remove_cvref_t< Tup > >
+    requires TupleLike_c< std::remove_cvref_t< Tup > > and tuple_invocable< F, std::remove_cvref_t< Tup > >
 {
     const auto visit_inds = [&]< size_t... I >(std::index_sequence< I... >) {
         (std::invoke(f, std::get< I >(t)), ...);
@@ -277,6 +277,16 @@ void staggeredAllGather(const MpiComm& comm, std::span< const T > my_data, Proce
     }
     finish_broadcasting();
     do_processing(comm_size - 1);
+}
+
+template < typename T >
+auto invertMap(const robin_hood::unordered_flat_map< T, T >& map)
+{
+    auto retval = robin_hood::unordered_flat_map< T, T >{};
+    retval.reserve(map.size());
+    for (const auto& [key, val] : map)
+        retval.insert({val, key});
+    return retval;
 }
 
 // CRS graph algorithms

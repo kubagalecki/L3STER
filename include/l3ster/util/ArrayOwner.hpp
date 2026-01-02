@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <concepts>
 #include <cstdint>
+#include <iterator>
 #include <memory>
 
 namespace lstr::util
@@ -32,6 +33,11 @@ public:
     template < std::convertible_to< T > Vals >
     ArrayOwner(std::initializer_list< Vals > vals);
     ArrayOwner(size_type size, const T& init) : ArrayOwner(size) { std::ranges::fill(*this, init); }
+    template < std::forward_iterator Iterator, std::sentinel_for< Iterator > Sentinel >
+    ArrayOwner(Iterator i, Sentinel s)
+        requires std::convertible_to< std::iter_value_t< Iterator >, T >
+        : ArrayOwner(std::ranges::subrange(i, s))
+    {}
 
     T*       begin() { return m_data.get(); }
     const T* begin() const { return m_data.get(); }

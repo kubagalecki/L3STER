@@ -54,7 +54,6 @@ public:
     using node_ownership_sp_t       = std::shared_ptr< node_ownership_t >;
     using const_node_ownership_sp_t = std::shared_ptr< const node_ownership_t >;
 
-    friend struct SerializedPartition;
     template < el_o_t... O >
     friend auto copy(const MeshPartition< O... >&) -> MeshPartition< O... >;
 

@@ -4,6 +4,7 @@
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/mesh/NodePhysicalLocation.hpp"
 #include "l3ster/util/Functional.hpp"
+#include "l3ster/util/Serialization.hpp"
 #include "l3ster/util/SpatialHashTable.hpp"
 
 namespace lstr::mesh
@@ -305,7 +306,57 @@ auto translateElement(const Element< ET, EO >&                                el
     std::ranges::transform(element.nodes, new_nodes.begin(), new_node_id);
     return {new_nodes, element.data, element.id + num_existing_els};
 }
+
+template < el_o_t... EO >
+using tuple_of_elarrays_t = std::invoke_result_t< decltype([]< typename... Ts >(const util::UniVector< Ts... >&) {
+                                                      return std::tuple< util::ArrayOwner< Ts >... >{};
+                                                  }),
+                                                  typename Domain< EO... >::el_univec_t >;
 } // namespace detail
+
+template < el_o_t... EO >
+auto serializeMesh(const MeshPartition< EO... >& mesh) -> std::string
+{
+    const auto  domain_ids      = mesh.getDomainIds();
+    const auto  elem_data       = domain_ids | std::views::transform([&](auto d_id) {
+                               const auto el_spans = getSpans(mesh.getDomain(d_id).elements);
+                               return std::make_pair(d_id, el_spans);
+                           });
+    const auto  num_owned_nodes = mesh.getNodeOwnership().owned().size();
+    const auto  nodes_begin     = num_owned_nodes ? mesh.getNodeOwnership().owned().front() : n_id_t{0};
+    const auto  bnd_ids         = mesh.getBoundaryIdsView();
+    std::string retval;
+    util::serialize(std::make_tuple(elem_data, nodes_begin, num_owned_nodes, bnd_ids), std::back_inserter(retval));
+    return retval;
+}
+
+template < el_o_t... EO >
+auto deserializeMesh(std::string_view serial) -> MeshPartition< EO... >
+{
+    using domain_descr_t = std::pair< d_id_t, detail::tuple_of_elarrays_t< EO... > >;
+    using elem_data_t    = util::ArrayOwner< domain_descr_t >;
+    using deserial_t     = std::tuple< elem_data_t, n_id_t, size_t, util::ArrayOwner< d_id_t > >;
+    const auto [elem_data, nodes_begin, num_owned_nodes, bnd_ids] = util::deserialize< deserial_t >(serial);
+
+    constexpr auto make_domain = [](const domain_descr_t& dom_descr) {
+        auto       domain        = Domain< EO... >{};
+        const auto copy_elements = [&]< typename... elem_ts >(const util::ArrayOwner< elem_ts >&... elem_arrays) {
+            const auto sizes = std::array{elem_arrays.size()...};
+            domain.elements.reserve(sizes);
+            const auto copy_elems = [&]< typename el_t >(const util::ArrayOwner< el_t >& elem_array) {
+                for (const auto& el : elem_array)
+                    pushToDomain(domain, el);
+            };
+            (copy_elems(elem_arrays), ...);
+        };
+        std::apply(copy_elements, dom_descr.second);
+        return std::make_pair(dom_descr.first, std::move(domain));
+    };
+    using dom_map_t = MeshPartition< EO... >::domain_map_t;
+    auto domain_map = elem_data | std::views::transform(make_domain) | std::ranges::to< dom_map_t >();
+
+    return {std::move(domain_map), nodes_begin, num_owned_nodes, bnd_ids};
+}
 
 inline auto merge(const MeshPartition< 1 >& mesh1, const MeshPartition< 1 >& mesh2) -> MeshPartition< 1 >
 {

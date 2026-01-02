@@ -528,6 +528,23 @@ TEST_CASE("Serialization", "[util]")
             return pair.first == array[0] and pair.second == array[1];
         }));
     }
+
+    SECTION("References and views")
+    {
+        auto        inds = std::vector< std::vector< size_t > >{{1, 0}, {0, 1}};
+        auto        strs = std::vector< std::string >{"abc", "def"};
+        std::string result;
+
+        auto view = inds | std::views::join | std::views::transform([&](auto& i) { return std::tie(i, strs[i]); });
+        util::serialize(view, std::back_inserter(result));
+
+        const auto deserialized = util::deserialize< std::vector< std::pair< size_t, std::string > > >(result);
+        REQUIRE(deserialized.size() == static_cast< size_t >(std::ranges::distance(view)));
+        CHECK(deserialized[0] == std::make_pair(1, "def"));
+        CHECK(deserialized[1] == std::make_pair(0, "abc"));
+        CHECK(deserialized[2] == std::make_pair(0, "abc"));
+        CHECK(deserialized[3] == std::make_pair(1, "def"));
+    }
 }
 
 TEST_CASE("StaticVector", "[util]")

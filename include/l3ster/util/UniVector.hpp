@@ -81,6 +81,12 @@ private:
 };
 
 template < typename... Ts >
+auto getSpans(const UniVector< Ts... >& uv) -> std::tuple< std::span< const Ts >... >
+{
+    return {std::span{uv.template getVector< Ts >()}...};
+}
+
+template < typename... Ts >
 template < typename Fun, SimpleExecutionPolicy_c ExecPolicy >
 void UniVector< Ts... >::visit(Fun&& fun, ExecPolicy&&)
     requires(std::invocable< Fun, std::add_lvalue_reference_t< Ts > > and ...)

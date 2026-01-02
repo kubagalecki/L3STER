@@ -85,7 +85,7 @@ struct fold_tuple_gettable< T, std::index_sequence< I... > >
 } // namespace detail
 
 template < typename T >
-concept tuple_like = requires {
+concept TupleLike_c = requires {
     std::tuple_size< T >::value;
     std::tuple_size_v< T >;
     { std::tuple_size_v< T > } -> std::convertible_to< std::size_t >;
@@ -98,7 +98,7 @@ template < typename T, typename tuple_t >
 struct is_tuple_invocable : std::false_type
 {};
 
-template < typename T, tuple_like tuple_t >
+template < typename T, TupleLike_c tuple_t >
 struct is_tuple_invocable< T, tuple_t > :
     std::conditional_t< std::invoke(
                             []< size_t... I >(std::index_sequence< I... >) {
@@ -113,7 +113,7 @@ template < typename R, typename T, typename tuple_t >
 struct is_tuple_r_invocable : std::false_type
 {};
 
-template < typename R, typename T, tuple_like tuple_t >
+template < typename R, typename T, TupleLike_c tuple_t >
 struct is_tuple_r_invocable< R, T, tuple_t > :
     std::conditional_t< std::invoke(
                             []< size_t... I >(std::index_sequence< I... >) {

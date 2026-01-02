@@ -364,6 +364,18 @@ TEMPLATE_TEST_CASE("Local mesh view", "[mesh]", Order< 1 >, Order< 2 >, Order< 4
     }
 }
 
+TEST_CASE("Serialize/Deserialize mesh", "[mesh]")
+{
+    constexpr el_o_t order        = 2;
+    const auto       mesh         = convertMeshToOrder< order >(makeSquareMesh(std::array{0., 1., 2.}));
+    const auto       serial       = serializeMesh(mesh);
+    const auto       deserialized = deserializeMesh< order >(serial);
+
+    CHECK(mesh.getNElements() == deserialized.getNElements());
+    CHECK(std::ranges::equal(mesh.getNodeOwnership().owned(), deserialized.getNodeOwnership().owned()));
+    CHECK(std::ranges::equal(mesh.getNodeOwnership().shared(), deserialized.getNodeOwnership().shared()));
+}
+
 TEST_CASE("Merge meshes", "[mesh]")
 {
     const auto square1 = makeSquareMesh(std::array{0., 1., 2.});
