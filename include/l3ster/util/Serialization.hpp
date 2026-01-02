@@ -98,10 +98,9 @@ struct Deserializer< T >
         size_t size{};
         std::memcpy(&size, serial_data.data(), szsz);
         serial_data.remove_prefix(szsz);
-        auto ctor_range = std::views::iota(0uz, size) |
-                          std::views::transform([&](size_t) { return Deserializer< range_value_t >{}(serial_data); }) |
-                          std::views::common;
-        return T{ctor_range.begin(), ctor_range.end()};
+        return std::views::iota(0uz, size) |
+               std::views::transform([&](size_t) { return Deserializer< range_value_t >{}(serial_data); }) |
+               std::ranges::to< T >();
     }
 };
 
