@@ -235,9 +235,10 @@ public:
         bool optimize    = false;
     };
 
-    Loader(std::filesystem::path mesh_path, Opts opts = {}) : m_path{std::move(mesh_path)}, m_opts{opts} {} // NOLINT
+    Loader(std::filesystem::path mesh_path, const Opts& opts = {})
+        : m_path{std::move(mesh_path)}, m_opts{opts} {} // NOLINT
 
-    auto loadMesh(const MpiComm& comm, const Opts& opts = {}) -> std::shared_ptr< mesh::MeshPartition< orders... > >;
+    auto loadMesh(const MpiComm& comm) -> std::shared_ptr< mesh::MeshPartition< orders... > >;
     void loadResults(const std::filesystem::path&      results_file,
                      const util::ArrayOwner< size_t >& results_inds,
                      SolutionManager&                  solution_manager,
@@ -271,10 +272,9 @@ private:
 };
 
 template < el_id_t... orders >
-auto Loader< orders... >::loadMesh(const MpiComm& comm, const Opts& opts)
-    -> std::shared_ptr< mesh::MeshPartition< orders... > >
+auto Loader< orders... >::loadMesh(const MpiComm& comm) -> std::shared_ptr< mesh::MeshPartition< orders... > >
 {
-    return m_opts.repartition ? loadMeshRepart(comm, opts) : loadMeshDirect(comm, opts);
+    return m_opts.repartition ? loadMeshRepart(comm, m_opts) : loadMeshDirect(comm, m_opts);
 }
 
 template < el_id_t... orders >
