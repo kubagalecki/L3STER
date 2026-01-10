@@ -17,12 +17,6 @@ const auto node_dist_y = util::linspace(0., .5, 4);
 const auto W           = node_dist_x.back() - node_dist_x.front();
 const auto H           = node_dist_y.back() - node_dist_y.front();
 
-template < el_o_t mesh_order = 1 >
-auto makeMesh2D(const MpiComm& comm, auto probdef_ctwrpr, const std::vector< double >& nd = node_dist_x)
-{
-    return generateAndDistributeMesh< mesh_order >(comm, [&] { return makeSquareMesh(nd); }, {}, probdef_ctwrpr);
-}
-
 template < OperatorEvaluationStrategy S, CondensationPolicy CP >
 void solveAdvection2D()
 {
@@ -37,7 +31,6 @@ void solveAdvection2D()
     const auto     comm       = std::make_shared< MpiComm >(MPI_COMM_WORLD);
     const auto     mesh       = generateAndDistributeMesh< mesh_order >(
         *comm, [&] { return makeSquareMesh(node_dist_x, node_dist_y); }, {}, problem_def);
-    summarizeMesh(*comm, *mesh);
 
     constexpr auto alg_params       = AlgebraicSystemParams{.eval_strategy = S, .cond_policy = CP};
     constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};

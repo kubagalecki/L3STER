@@ -237,6 +237,8 @@ auto getValuesAtInds(const std::array< T, N >& array, ConstexprValue< inds > ind
     return retval;
 }
 
+// MPI algos
+
 template < typename T, typename Process >
 void staggeredAllGather(const MpiComm& comm, std::span< const T > my_data, Process&& process_received)
     requires std::invocable< Process, std::span< const T >, int >
@@ -277,6 +279,17 @@ void staggeredAllGather(const MpiComm& comm, std::span< const T > my_data, Proce
     }
     finish_broadcasting();
     do_processing(comm_size - 1);
+}
+
+template < typename T >
+auto shift(const MpiComm& comm, std::span< const T > data, int to, int from = MPI_ANY_SOURCE, int tag = 0)
+    -> ArrayOwner< T >
+{
+    const auto send_req = comm.sendAsync(data, to, tag);
+    const auto recv_sz  = comm.probe(from, tag).numElems< T >();
+    auto       retval   = ArrayOwner< T >(recv_sz);
+    comm.receive(retval, from, tag);
+    return retval;
 }
 
 template < typename T >

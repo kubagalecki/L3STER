@@ -88,12 +88,17 @@ int main(int argc, char* argv[])
     const auto comm_self   = MpiComm{MPI_COMM_SELF};
     const auto comm_world  = MpiComm{MPI_COMM_WORLD};
 
-    saveResults(comm_self, "serial");
     saveResults(comm_world, "parallel");
+    if (comm_world.getRank() == 0)
+        saveResults(comm_self, "serial");
+
+    comm_world.barrier();
 
     checkResults(comm_self, "parallel", {.repartition = true});
-    checkResults(comm_world, "serial", {.repartition = true});
-    checkResults(comm_world, "parallel", {.repartition = false});
+    checkResults(comm_world, "serial", {.repartition = true, .optimize = false});
+    checkResults(comm_world, "serial", {.repartition = true, .optimize = true});
+    checkResults(comm_world, "parallel", {.repartition = false, .optimize = false});
+    checkResults(comm_world, "parallel", {.repartition = false, .optimize = true});
     if (comm_world.getSize() > 1)
     {
         CHECK_THROWS(checkResults(comm_world, "serial", {.repartition = false}););

@@ -310,13 +310,15 @@ auto Loader< orders... >::loadMeshRepart(const MpiComm& comm, const Opts& opts)
 }
 
 template < el_id_t... orders >
-auto Loader< orders... >::loadMeshDirect(const MpiComm& comm, [[maybe_unused]] const Opts& opts)
+auto Loader< orders... >::loadMeshDirect(const MpiComm& comm, const Opts& opts)
     -> std::shared_ptr< mesh::MeshPartition< orders... > >
 {
     auto part               = post::detail::loadPartitionedMesh< orders... >(m_path, comm);
     m_old_nodes             = util::ArrayOwner< n_id_t >(part.getNodeOwnership().localSize());
     const auto shared_begin = std::ranges::copy(part.getNodeOwnership().owned(), m_old_nodes.begin()).out;
     std::ranges::copy(part.getNodeOwnership().shared(), shared_begin);
+    if (opts.optimize)
+        std::tie(part, m_old_nodes) = comm::optimizeMeshDistribution(comm, part, std::span{std::as_const(m_old_nodes)});
     m_max_old_node = m_old_nodes.empty() ? n_id_t{0} : std::ranges::max(m_old_nodes);
     return std::make_shared< mesh::MeshPartition< orders... > >(std::move(part));
 }

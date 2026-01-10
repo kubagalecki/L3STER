@@ -2,13 +2,11 @@
 #define L3STER_COMM_DISTRIBUTEMESH_HPP
 
 #include "l3ster/comm/GatherNodeThroughputs.hpp"
+#include "l3ster/comm/ImportExport.hpp"
 #include "l3ster/mesh/ConvertMeshToOrder.hpp"
 #include "l3ster/mesh/MeshUtils.hpp"
 #include "l3ster/mesh/PartitionMesh.hpp"
 #include "l3ster/mesh/ReadMesh.hpp"
-#include "l3ster/util/IndexMap.hpp"
-
-#include <iterator>
 
 namespace lstr
 {
@@ -21,140 +19,109 @@ namespace comm
 {
 namespace detail
 {
-template < el_o_t... orders, size_t max_dofs_per_node >
-auto makeGhostToWgtMap(const mesh::MeshPartition< orders... >&       mesh,
-                       const ProblemDefinition< max_dofs_per_node >& problem_def)
-    -> robin_hood::unordered_flat_map< n_id_t, int >
+inline int invertPermutation(const MpiComm& comm, int dest_rank)
 {
-    auto retval = robin_hood::unordered_flat_map< n_id_t, int >(mesh.getNodeOwnership().shared().size());
-    if constexpr (max_dofs_per_node == 0)
-        for (auto n : mesh.getNodeOwnership().shared())
-            retval[n] = 1;
-    else
-    {
-        const auto is_ghost_node = [&](n_id_t node) {
-            return not mesh.getNodeOwnership().isOwned(node);
-        };
-        auto dof_map = robin_hood::unordered_flat_map< n_id_t, std::bitset< max_dofs_per_node > >{retval.size()};
-        for (const auto& [domains, dof_bmp] : problem_def)
-        {
-            const auto visit_elem = [&](const auto& element) {
-                for (auto node : element.nodes | std::views::filter(is_ghost_node))
-                    dof_map[node] |= dof_bmp;
-            };
-            mesh.visit(visit_elem, domains);
-        }
-        for (auto&& [n, b] : dof_map)
-            retval[n] = static_cast< int >(b.count());
-    }
-    return retval;
+    constexpr int  tag      = 101;
+    constexpr auto ping     = std::array{'\0'};
+    const auto     send_req = comm.sendAsync(ping, dest_rank, tag);
+    const auto     src_rank = comm.probe(MPI_ANY_SOURCE, tag).getSource();
+    auto           _        = ping;
+    comm.receive(_, src_rank, tag);
+    return src_rank;
 }
 
 template < el_o_t... orders >
-auto makeNodeDist(const util::ArrayOwner< mesh::MeshPartition< orders... > >& mesh_parts) -> util::ArrayOwner< n_id_t >
+auto getCommGraph(const MpiComm& comm, const mesh::MeshPartition< orders... >& mesh)
+    -> std::array< util::CrsGraph< int >, 2 >
 {
-    auto retval = util::ArrayOwner< n_id_t >(mesh_parts.size());
-    std::transform_inclusive_scan(
-        mesh_parts.begin(),
-        mesh_parts.end(),
-        retval.begin(),
-        std::plus{},
-        [](const mesh::MeshPartition< orders... >& part) { return part.getNodeOwnership().owned().size(); });
-    return retval;
+    const auto            node_dist    = mesh.getNodeOwnership().getOwnershipDist(comm);
+    const auto            out_nbr_info = mesh.getNodeOwnership().computeOutNbrInfo(node_dist);
+    const auto            num_out_nbrs = out_nbr_info.size();
+    const auto            sizes        = std::views::single(num_out_nbrs);
+    util::CrsGraph< int > out_graph{sizes}, out_wgt{sizes};
+    std::ranges::copy(out_nbr_info | std::views::keys, out_graph(0).begin());
+    std::ranges::transform(out_nbr_info | std::views::values, out_wgt(0).begin(), &std::vector< n_id_t >::size);
+    return {std::move(out_graph), std::move(out_wgt)};
 }
 
-struct CommVolumeInfo
+template < el_o_t... orders >
+int computeOptimizedRank(const MpiComm& comm, const mesh::MeshPartition< orders... >& mesh)
 {
-    std::vector< int > sources, degrees, destinations, weights;
-};
-template < el_o_t... orders, size_t max_dofs_per_node >
-auto makeCommVolumeInfo(const util::ArrayOwner< mesh::MeshPartition< orders... > >& mesh_parts,
-                        const ProblemDefinition< max_dofs_per_node >&               problem_def) -> CommVolumeInfo
+    const auto [nbrs, wgts] = getCommGraph(comm, mesh);
+    const int my_rank       = comm.getRank();
+    return comm.distGraphCreate(std::span{&my_rank, 1}, nbrs, wgts, true).getRank();
+}
+
+template < el_o_t... orders >
+auto sendRecvMesh(const MpiComm& comm, const mesh::MeshPartition< orders... >& mesh, int dest_rank)
+    -> std::pair< int, mesh::MeshPartition< orders... > >
 {
-    const auto get_node_owner = [node_dist = makeNodeDist(mesh_parts)](n_id_t node) {
-        const auto lb_iter = std::ranges::upper_bound(node_dist, node);
-        return std::distance(node_dist.begin(), lb_iter);
+    constexpr int tag         = 0;
+    const auto    serial_send = mesh::serializeMesh(mesh);
+    const auto    send_req    = comm.sendAsync(serial_send, dest_rank, tag);
+    const auto    recv_status = comm.probe(MPI_ANY_SOURCE, tag);
+    const auto    recv_rank   = recv_status.getSource();
+    const auto    recv_sz     = recv_status.numElems< char >();
+    auto          seral_recv  = util::ArrayOwner< char >(static_cast< size_t >(recv_sz));
+    comm.receive(seral_recv, recv_rank, tag);
+    return std::make_pair(recv_rank, mesh::deserializeMesh< orders... >(std::string_view{seral_recv}));
+}
+
+template < el_o_t... orders >
+auto establishNewNodeIds(const MpiComm&                          comm,
+                         const mesh::MeshPartition< orders... >& old_mesh,
+                         int                                     dest_rank,
+                         const mesh::MeshPartition< orders... >& new_mesh,
+                         int                                     src_rank) -> util::SegmentedOwnership< n_id_t >
+{
+    constexpr int tag                              = 1;
+    const auto&   new_own                          = new_mesh.getNodeOwnership();
+    const auto    new_num_owned                    = new_own.owned().size();
+    const auto [new_begin, new_begin_of_old_nodes] = std::invoke([&] {
+        n_id_t nb{new_num_owned}, nbon{};
+        comm.exclusiveScanInPlace(std::span{&nb, 1}, MPI_SUM);
+        nb       = comm.getRank() == 0 ? 0 : nb;
+        auto req = comm.receiveAsync(std::span{&nbon, 1}, dest_rank, tag);
+        comm.send(std::span{&nb, 1}, src_rank, tag);
+        req.wait();
+        return std::make_pair(nb, nbon);
+    });
+
+    const auto& old_own              = old_mesh.getNodeOwnership();
+    const auto  old_num_owned        = old_own.owned().size();
+    const auto  context_old          = std::make_shared< ImportExportContext >(comm, old_own);
+    auto        importer             = Import< n_id_t >{context_old, 1};
+    auto        new_ids_of_old_nodes = util::ArrayOwner< n_id_t >(old_own.localSize());
+    std::ranges::iota(new_ids_of_old_nodes | std::views::take(old_num_owned), new_begin_of_old_nodes);
+    importer.setOwned(new_ids_of_old_nodes, new_ids_of_old_nodes.size());
+    importer.setShared(new_ids_of_old_nodes | std::views::drop(old_num_owned), new_ids_of_old_nodes.size());
+    importer.doBlockingImport(comm);
+
+    auto new_shared = util::ArrayOwner< n_id_t >(new_own.shared().size());
+    auto req        = comm.receiveAsync(new_shared, src_rank, tag);
+    comm.send(new_ids_of_old_nodes | std::views::drop(old_num_owned), dest_rank, tag);
+    req.wait();
+    return {new_begin, new_num_owned, new_shared};
+}
+
+template < el_o_t... orders >
+auto permuteMesh(const MpiComm& comm, const mesh::MeshPartition< orders... >& mesh, int dest_rank)
+    -> mesh::MeshPartition< orders... >
+{
+    auto [src_rank, new_mesh] = sendRecvMesh(comm, mesh, dest_rank);
+    const auto new_own        = establishNewNodeIds(comm, mesh, dest_rank, new_mesh, src_rank);
+    const auto old_own        = copy(new_mesh.getNodeOwnership());
+    const auto old2new        = [&](n_id_t node) {
+        const auto old_local = old_own.getLocalIndex(node);
+        return new_own.getGlobalIndex(old_local);
     };
-    auto retval    = CommVolumeInfo{};
-    auto dest_wgts = util::ArrayOwner< int >(mesh_parts.size(), 0);
-    for (auto&& [part_ind, part] : mesh_parts | std::views::enumerate)
-    {
-        const auto ghost_to_wgt_map = makeGhostToWgtMap(part, problem_def);
-        std::ranges::fill(dest_wgts, 0);
-        for (auto node : part.getNodeOwnership().shared())
-            if (const auto dof_it = ghost_to_wgt_map.find(node); dof_it != ghost_to_wgt_map.end())
-            {
-                const auto owner = get_node_owner(node);
-                dest_wgts.at(owner) += dof_it->second;
-            }
-        if (const auto n_dests = std::ranges::count_if(dest_wgts, [](auto wgt) { return wgt > 0; }); n_dests > 0)
-        {
-            retval.sources.push_back(static_cast< int >(part_ind));
-            retval.degrees.push_back(static_cast< int >(n_dests));
-            for (auto&& [dest_ind, dest_wgt] : dest_wgts | std::views::enumerate)
-                if (dest_wgt > 0)
-                {
-                    retval.destinations.push_back(static_cast< int >(dest_ind));
-                    retval.weights.push_back(dest_wgt);
-                }
-        }
-    }
-    return retval;
-}
-
-template < el_o_t... orders, size_t max_dofs_per_node >
-auto computeOptimizedRankPermutation(const MpiComm&                                              comm,
-                                     const util::ArrayOwner< mesh::MeshPartition< orders... > >& mesh_parts,
-                                     const ProblemDefinition< max_dofs_per_node >&               problem_def)
-    -> util::ArrayOwner< int >
-{
-    const auto& [sources, degrees, dests, wgts] = makeCommVolumeInfo(mesh_parts, problem_def);
-    MPI_Comm new_comm                           = MPI_COMM_NULL;
-    L3STER_INVOKE_MPI(MPI_Dist_graph_create,
-                      comm.get(),
-                      static_cast< int >(sources.size()),
-                      sources.data(),
-                      degrees.data(),
-                      dests.data(),
-                      wgts.empty() ? MPI_WEIGHTS_EMPTY : wgts.data(),
-                      MPI_INFO_NULL,
-                      true,
-                      &new_comm);
-    util::throwingAssert(new_comm != MPI_COMM_NULL);
-    int new_rank;
-    L3STER_INVOKE_MPI(MPI_Comm_rank, new_comm, &new_rank);
-    L3STER_INVOKE_MPI(MPI_Comm_free, &new_comm);
-    util::throwingAssert(new_rank >= 0 and new_rank < comm.getSize());
-    auto retval = util::ArrayOwner< int >(mesh_parts.size());
-    comm.gather(std::views::single(new_rank), retval.begin(), 0);
-    return retval;
-}
-
-template < el_o_t... orders, size_t max_dofs_per_node >
-auto permuteMesh(const MpiComm&                                       comm,
-                 util::ArrayOwner< mesh::MeshPartition< orders... > > mesh_parts,
-                 const ProblemDefinition< max_dofs_per_node >&        problem_def,
-                 const MeshDistOpts& opts) -> util::ArrayOwner< mesh::MeshPartition< orders... > >
-{
-    if (opts.optimize == false)
-        return mesh_parts;
-    const auto opt_permutation = computeOptimizedRankPermutation(comm, mesh_parts, problem_def);
-    if (mesh_parts.empty())
-        return {}; // All ranks need to participate in computing the permutation, but only rank 0 actually performs it
-    auto retval = util::ArrayOwner< mesh::MeshPartition< orders... > >(mesh_parts.size());
-    for (auto&& [old_ind, new_ind] : opt_permutation | std::views::enumerate)
-        retval[new_ind] = std::move(mesh_parts[old_ind]);
-    const auto node_reorder_map = util::IndexMap< n_id_t, n_id_t >{
-        retval | std::views::transform([](const auto& mesh) { return mesh.getNodeOwnership().owned(); }) |
-        std::views::join};
-    for (auto& part : retval)
-        part.reindexNodes(node_reorder_map);
-    return retval;
+    new_mesh.reindexNodes(old2new);
+    return std::move(new_mesh);
 }
 
 template < el_o_t... orders >
 auto getOldNodeIds(const mesh::MeshPartition< orders... >&                 mesh_parts,
-                   const robin_hood::unordered_flat_map< n_id_t, n_id_t >& new_to_old)
+                   const robin_hood::unordered_flat_map< n_id_t, n_id_t >& new_to_old) -> util::ArrayOwner< n_id_t >
 {
     const auto& node_own = mesh_parts.getNodeOwnership();
     const auto  to_old   = [&](n_id_t new_id) {
@@ -168,19 +135,95 @@ auto getOldNodeIds(const mesh::MeshPartition< orders... >&                 mesh_
 } // namespace detail
 
 template < el_o_t... orders >
-auto receiveMesh(const MpiComm& comm, int src_rank, int tag = 0) -> mesh::MeshPartition< orders... >
+auto receiveMesh(const MpiComm& comm, int src_rank, int tag) -> mesh::MeshPartition< orders... >
 {
     const auto size       = static_cast< size_t >(comm.probe(src_rank, tag).numElems< char >());
     auto       recv_alloc = util::ArrayOwner< char >(size);
-    comm.receive(recv_alloc, src_rank, 0);
+    comm.receive(recv_alloc, src_rank, tag);
     return mesh::deserializeMesh< orders... >(std::string_view{recv_alloc});
 }
 
 template < el_o_t... orders >
-auto receiveMesh(const MpiComm& comm, int src_rank, util::TypePack< mesh::MeshPartition< orders... > >)
+auto receiveMesh(const MpiComm& comm, int src_rank, int tag, util::TypePack< mesh::MeshPartition< orders... > >)
     -> mesh::MeshPartition< orders... >
 {
-    return receiveMesh< orders... >(comm, src_rank);
+    return receiveMesh< orders... >(comm, src_rank, tag);
+}
+
+namespace detail
+{
+template < el_o_t... orders >
+auto scatterParts(const MpiComm& comm, std::span< mesh::MeshPartition< orders... > > mesh_parts)
+    -> mesh::MeshPartition< orders... >
+{
+    constexpr auto tag = 0;
+    if (comm.getRank() == 0)
+    {
+        util::throwingAssert(mesh_parts.size() == comm.getSizeUz());
+        auto serial = util::ArrayOwner< std::string >(comm.getSizeUz() - 1);
+        util::tbb::parallelTransform(mesh_parts | std::views::drop(1), serial.begin(), [](const auto& part) {
+            return mesh::serializeMesh(part);
+        });
+        const auto send_serial = [&](const std::string& serial_part, int dest) {
+            return comm.sendAsync(serial_part, dest, tag);
+        };
+        auto reqs = std::views::zip_transform(send_serial, serial, std::views::iota(1, comm.getSize())) |
+                    std::ranges::to< util::ArrayOwner >();
+        MpiComm::Request::waitAll(reqs);
+        return std::move(mesh_parts.front());
+    }
+    return receiveMesh(comm, 0, tag, util::TypePack< mesh::MeshPartition< orders... > >{});
+}
+
+template < el_o_t... orders >
+auto scatterNodes(const MpiComm&                                          comm,
+                  std::span< const mesh::MeshPartition< orders... > >     mesh_parts,
+                  const robin_hood::unordered_flat_map< n_id_t, n_id_t >& node_map)
+{
+    constexpr auto tag              = 1;
+    const auto     node_throughputs = gatherNodeThroughputs(comm);
+    if (comm.getRank() == 0)
+    {
+        util::throwingAssert(mesh_parts.size() == comm.getSizeUz());
+        auto old_ids = util::ArrayOwner< util::ArrayOwner< n_id_t > >(comm.getSizeUz());
+        util::tbb::parallelTransform(
+            mesh_parts, old_ids.begin(), [&](const auto& part) { return detail::getOldNodeIds(part, node_map); });
+        auto reqs =
+            std::views::zip_transform([&](const auto& nodes, int dest) { return comm.sendAsync(nodes, dest, tag); },
+                                      old_ids | std::views::drop(1),
+                                      std::views::iota(1, comm.getSize())) |
+            std::ranges::to< util::ArrayOwner >();
+        MpiComm::Request::waitAll(reqs);
+        return old_ids.front();
+    }
+
+    const auto num_nodes = static_cast< size_t >(comm.probe(0, tag).numElems< n_id_t >());
+    auto       retval    = util::ArrayOwner< n_id_t >(num_nodes);
+    comm.receive(retval, 0, tag);
+    return retval;
+}
+} // namespace detail
+
+template < el_o_t... orders >
+auto optimizeMeshDistribution(const MpiComm& comm, const mesh::MeshPartition< orders... >& mesh)
+    -> mesh::MeshPartition< orders... >
+{
+    const auto dest_rank = detail::invertPermutation(comm, detail::computeOptimizedRank(comm, mesh));
+    return detail::permuteMesh(comm, mesh, dest_rank);
+}
+
+template < el_o_t... orders >
+auto optimizeMeshDistribution(const MpiComm&                          comm,
+                              const mesh::MeshPartition< orders... >& mesh,
+                              std::span< const n_id_t >               nodes)
+    -> std::pair< mesh::MeshPartition< orders... >, util::ArrayOwner< n_id_t > >
+{
+    constexpr int tag       = 2;
+    const auto    src_rank  = detail::computeOptimizedRank(comm, mesh);
+    const auto    dest_rank = detail::invertPermutation(comm, src_rank);
+    auto          new_mesh  = detail::permuteMesh(comm, mesh, dest_rank);
+    auto          new_nodes = util::shift(comm, nodes, dest_rank, src_rank, tag);
+    return std::make_pair(std::move(new_mesh), std::move(new_nodes));
 }
 
 template < typename MeshGenerator, size_t max_dofs_per_node = 0 >
@@ -191,31 +234,17 @@ auto distributeMesh(const MpiComm&                                comm,
 {
     L3STER_PROFILE_FUNCTION;
     using partition_t = std::remove_cvref_t< decltype(std::invoke(mesh_generator)) >;
+
     if (comm.getSize() == 1)
         return std::make_shared< partition_t >(std::invoke(mesh_generator));
 
-    const auto node_throughputs = comm::gatherNodeThroughputs(comm);
-    const auto mesh             = comm.getRank() == 0 ? std::invoke(mesh_generator) : partition_t{};
-    auto       mesh_parted = comm.getRank() == 0 ? partitionMesh(mesh, comm.getSize(), node_throughputs, problem_def)
-                                                 : util::ArrayOwner< partition_t >{};
-    mesh_parted            = detail::permuteMesh(comm, std::move(mesh_parted), problem_def, opts);
-
-    if (comm.getRank() == 0)
-    {
-        auto serial_meshes = util::ArrayOwner< std::string >(comm.getSizeUz() - 1);
-        util::tbb::parallelTransform(mesh_parted | std::views::drop(1), serial_meshes.begin(), [](const auto& part) {
-            return mesh::serializeMesh(part);
-        });
-        auto reqs = std::views::zip_transform(
-                        [&](const std::string& serial, int dest) { return comm.sendAsync(serial, dest, 0); },
-                        serial_meshes,
-                        std::views::iota(1, comm.getSize())) |
-                    std::ranges::to< util::ArrayOwner >();
-        MpiComm::Request::waitAll(reqs);
-        return std::make_shared< partition_t >(std::move(mesh_parted.front()));
-    }
-    else
-        return std::make_shared< partition_t >(comm::receiveMesh(comm, 0, util::TypePack< partition_t >{}));
+    const auto node_tp = gatherNodeThroughputs(comm);
+    auto parted = comm.getRank() == 0 ? partitionMesh(std::invoke(mesh_generator), comm.getSize(), node_tp, problem_def)
+                                      : util::ArrayOwner< partition_t >{};
+    auto my_partition = detail::scatterParts(comm, std::span{parted});
+    if (opts.optimize)
+        my_partition = optimizeMeshDistribution(comm, my_partition);
+    return std::make_shared< partition_t >(std::move(my_partition));
 }
 
 template < typename MeshGenerator, size_t max_dofs_per_node = 0 >
@@ -226,55 +255,29 @@ auto distributeMeshAndNodeMap(const MpiComm&                                comm
 {
     L3STER_PROFILE_FUNCTION;
     using partition_t = std::remove_cvref_t< decltype(std::invoke(mesh_generator)) >;
+
     if (comm.getSize() == 1)
     {
         auto       mesh_ptr  = std::make_shared< partition_t >(std::invoke(mesh_generator));
         const auto num_nodes = static_cast< n_id_t >(mesh_ptr->getNodeOwnership().owned().size());
-        auto       node_map  = util::ArrayOwner< n_id_t >{std::views::iota(n_id_t{0}, num_nodes)};
-        return std::make_pair(std::move(mesh_ptr), std::move(node_map));
+        return std::make_pair(std::move(mesh_ptr),
+                              std::views::iota(n_id_t{0}, num_nodes) | std::ranges::to< util::ArrayOwner >());
     }
 
-    const auto node_throughputs = gatherNodeThroughputs(comm);
-    const auto mesh             = comm.getRank() == 0 ? std::invoke(mesh_generator) : partition_t{};
-    auto       node_map         = robin_hood::unordered_flat_map< n_id_t, n_id_t >{};
-    auto       mesh_parted      = comm.getRank() == 0
-                                    ? partitionMesh(mesh, comm.getSize(), node_map, node_throughputs, problem_def)
-                                    : util::ArrayOwner< partition_t >{};
-    node_map                    = util::invertMap(node_map);
-    mesh_parted                 = detail::permuteMesh(comm, std::move(mesh_parted), problem_def, opts);
+    const auto node_tp  = gatherNodeThroughputs(comm);
+    auto       node_map = robin_hood::unordered_flat_map< n_id_t, n_id_t >{};
+    auto       parted   = comm.getRank() == 0
+                            ? partitionMesh(std::invoke(mesh_generator), comm.getSize(), node_map, node_tp, problem_def)
+                            : util::ArrayOwner< partition_t >{};
+    node_map            = util::invertMap(node_map);
+    auto old_nodes      = detail::scatterNodes(comm, std::span{std::as_const(parted)}, node_map);
+    auto my_partition   = detail::scatterParts(comm, std::span{parted});
 
-    if (comm.getRank() == 0)
-    {
-        auto serial_meshes = util::ArrayOwner< std::string >(comm.getSizeUz() - 1);
-        auto old_ids       = util::ArrayOwner< util::ArrayOwner< n_id_t > >(comm.getSizeUz());
-        util::tbb::parallelTransform(mesh_parted | std::views::drop(1), serial_meshes.begin(), [](const auto& part) {
-            return mesh::serializeMesh(part);
-        });
-        util::tbb::parallelTransform(
-            mesh_parted, old_ids.begin(), [&](const auto& part) { return detail::getOldNodeIds(part, node_map); });
-        auto mesh_reqs = std::views::zip_transform(
-                             [&](std::string_view serial, int dest) { return comm.sendAsync(serial, dest, 0); },
-                             serial_meshes,
-                             std::views::iota(1, comm.getSize())) |
-                         std::ranges::to< util::ArrayOwner >();
-        auto node_reqs =
-            std::views::zip_transform([&](const auto& nodes, int dest) { return comm.sendAsync(nodes, dest, 1); },
-                                      old_ids | std::views::drop(1),
-                                      std::views::iota(1, comm.getSize())) |
-            std::ranges::to< util::ArrayOwner >();
-        MpiComm::Request::waitAll(mesh_reqs);
-        MpiComm::Request::waitAll(node_reqs);
-        return std::make_pair(std::make_shared< partition_t >(std::move(mesh_parted.front())),
-                              std::move(old_ids.front()));
-    }
-    else
-    {
-        auto       part      = comm::receiveMesh(comm, 0, util::TypePack< partition_t >{});
-        const auto num_nodes = part.getNodeOwnership().localSize();
-        auto       old_ids   = util::ArrayOwner< n_id_t >(num_nodes);
-        comm.receive(old_ids, 0, 1);
-        return std::make_pair(std::make_shared< partition_t >(std::move(part)), std::move(old_ids));
-    }
+    if (opts.optimize)
+        std::tie(my_partition, old_nodes) =
+            optimizeMeshDistribution(comm, my_partition, std::span{std::as_const(old_nodes)});
+
+    return std::make_pair(std::make_shared< partition_t >(std::move(my_partition)), std::move(old_nodes));
 }
 } // namespace comm
 

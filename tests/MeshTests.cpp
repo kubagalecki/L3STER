@@ -366,14 +366,27 @@ TEMPLATE_TEST_CASE("Local mesh view", "[mesh]", Order< 1 >, Order< 2 >, Order< 4
 
 TEST_CASE("Serialize/Deserialize mesh", "[mesh]")
 {
-    constexpr el_o_t order        = 2;
-    const auto       mesh         = convertMeshToOrder< order >(makeSquareMesh(std::array{0., 1., 2.}));
+    constexpr el_o_t order        = 4;
+    const auto       mesh         = convertMeshToOrder< order >(makeSquareMesh(std::array{0., 1., 2., 3.}));
     const auto       serial       = serializeMesh(mesh);
     const auto       deserialized = deserializeMesh< order >(serial);
 
-    CHECK(mesh.getNElements() == deserialized.getNElements());
-    CHECK(std::ranges::equal(mesh.getNodeOwnership().owned(), deserialized.getNodeOwnership().owned()));
-    CHECK(std::ranges::equal(mesh.getNodeOwnership().shared(), deserialized.getNodeOwnership().shared()));
+    const auto contains_elem = [&]< ElementType T, el_o_t O >(d_id_t dom, const Element< T, O >& element) {
+        const auto predicate = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& other_element) {
+            if constexpr (ET == T and EO == O)
+                return element == other_element;
+            else
+                return false;
+        };
+        return deserialized.find(predicate, {dom}).has_value();
+    };
+
+    REQUIRE(mesh.getNElements() == deserialized.getNElements());
+    REQUIRE(std::ranges::equal(mesh.getBoundaryIdsView(), deserialized.getBoundaryIdsView()));
+    REQUIRE(std::ranges::equal(mesh.getNodeOwnership().owned(), deserialized.getNodeOwnership().owned()));
+    REQUIRE(std::ranges::equal(mesh.getNodeOwnership().shared(), deserialized.getNodeOwnership().shared()));
+    for (auto dom : mesh.getDomainIds())
+        mesh.visit([&](const auto& element) { CHECK(contains_elem(dom, element)); }, dom);
 }
 
 TEST_CASE("Merge meshes", "[mesh]")

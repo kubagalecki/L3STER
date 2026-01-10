@@ -1,8 +1,8 @@
 #ifndef L3STER_COMM_MPICOMM_HPP
 #define L3STER_COMM_MPICOMM_HPP
 
-#include "l3ster/util/ArrayOwner.hpp"
 #include "l3ster/util/Common.hpp"
+#include "l3ster/util/CrsGraph.hpp"
 
 extern "C"
 {
@@ -257,12 +257,10 @@ public:
     [[nodiscard]] MPI_Comm   get() const { return m_comm; }
 
     // topology-related
-    template < ContiguousSizedRangeOf< int > Src,
-               ContiguousSizedRangeOf< int > Deg,
-               ContiguousSizedRangeOf< int > Dest,
-               ContiguousSizedRangeOf< int > Wgts >
-    [[nodiscard]] MpiComm
-    distGraphCreate(Src&& sources, Deg&& degrees, Dest&& destinations, Wgts&& weights, bool reorder) const;
+    [[nodiscard]] inline MpiComm distGraphCreate(std::span< const int >       sources,
+                                                 const util::CrsGraph< int >& destinations,
+                                                 const util::CrsGraph< int >& weights,
+                                                 bool                         reorder) const;
 
     // misc
     inline FileHandle openFile(const char* file_name, int amode, MPI_Info info = MPI_INFO_NULL) const;
@@ -574,22 +572,30 @@ auto MpiComm::allToAllAsync(SendBuf&& send_buf, RecvBuf&& recv_buf) const -> Mpi
     return request;
 }
 
-template < ContiguousSizedRangeOf< int > Src,
-           ContiguousSizedRangeOf< int > Deg,
-           ContiguousSizedRangeOf< int > Dest,
-           ContiguousSizedRangeOf< int > Wgts >
-MpiComm MpiComm::distGraphCreate(Src&& sources, Deg&& degrees, Dest&& destinations, Wgts&& weights, bool reorder) const
+MpiComm MpiComm::distGraphCreate(std::span< const int >       sources,
+                                 const util::CrsGraph< int >& destinations,
+                                 const util::CrsGraph< int >& weights,
+                                 bool                         reorder) const
 {
+    util::throwingAssert(sources.size() == destinations.getNRows());
+    util::throwingAssert(sources.size() == weights.getNRows());
+    util::throwingAssert(destinations.getRawEntries().size() == weights.getRawEntries().size());
+
+    const auto n_nodes     = util::exactIntegerCast< int >(sources.size());
+    const int  reorder_int = reorder;
+    const auto degrees     = std::views::iota(0uz, sources.size()) |
+                         std::views::transform([&](size_t i) { return static_cast< int >(destinations(i).size()); }) |
+                         std::ranges::to< util::ArrayOwner >();
     auto retval = MpiComm{};
     L3STER_INVOKE_MPI(MPI_Dist_graph_create,
                       m_comm,
-                      static_cast< int >(std::ranges::ssize(sources)),
-                      std::ranges::data(sources),
-                      std::ranges::data(degrees),
-                      std::ranges::data(destinations),
-                      std::ranges::data(weights),
+                      n_nodes,
+                      sources.data(),
+                      degrees.data(),
+                      destinations.data(),
+                      weights.data(),
                       MPI_INFO_NULL,
-                      reorder,
+                      reorder_int,
                       &retval.m_comm);
     return retval;
 }
