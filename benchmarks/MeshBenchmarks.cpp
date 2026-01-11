@@ -108,3 +108,41 @@ static void BM_MakeLocalMeshView(benchmark::State& state)
                            benchmark::Counter::kIs1000};
 }
 BENCHMARK(BM_MakeLocalMeshView)->Unit(benchmark::kMillisecond)->Name("Generate local mesh view");
+
+static void BM_SerializeMesh(benchmark::State& state)
+{
+    const d_id_t boundary_id = 2;
+    const auto   mesh        = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {boundary_id}, mesh::gmsh_tag);
+    size_t       serial_size{};
+
+    for (auto _ : state)
+    {
+        auto serial = mesh::serializeMesh(mesh);
+        serial_size = serial.size();
+        benchmark::DoNotOptimize(serial.data());
+        benchmark::ClobberMemory();
+    }
+
+    state.counters["Write B/s"] = benchmark::Counter{static_cast< double >(serial_size * state.iterations()),
+                                                     benchmark::Counter::kIsRate,
+                                                     benchmark::Counter::kIs1000};
+}
+BENCHMARK(BM_SerializeMesh)->Unit(benchmark::kMillisecond)->Name("Serialize mesh");
+
+static void BM_DeserializeMesh(benchmark::State& state)
+{
+    const d_id_t boundary_id = 2;
+    const auto   mesh        = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {boundary_id}, mesh::gmsh_tag);
+    const auto   serial      = mesh::serializeMesh(mesh);
+
+    for (auto _ : state)
+    {
+        auto deser = mesh::deserializeMesh< 1 >(serial);
+        benchmark::DoNotOptimize(deser);
+    }
+
+    state.counters["Read B/s"] = benchmark::Counter{static_cast< double >(serial.size() * state.iterations()),
+                                                    benchmark::Counter::kIsRate,
+                                                    benchmark::Counter::kIs1000};
+}
+BENCHMARK(BM_DeserializeMesh)->Unit(benchmark::kMillisecond)->Name("Deserialize mesh");
