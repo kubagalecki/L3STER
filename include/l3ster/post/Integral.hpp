@@ -25,7 +25,8 @@ auto evalElementIntegral(
             algsys::evalKernel(kernel, ref_coords, basis_vals, phys_ders, node_vals, element.data, time);
         return jacobian * kernel_result;
     };
-    return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, detail::initResidualKernelResult< params >());
+    return evalQuadrature(
+        compute_value_at_qp, basis_at_qps.quadrature, lstr::detail::initResidualKernelResult< params >());
 }
 
 template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >
@@ -46,7 +47,8 @@ auto evalElementBoundaryIntegral(
             algsys::evalKernel(kernel, ref_coords, basis_vals, phys_ders, node_vals, el_view->data, time, normal);
         return jacobian * kernel_result;
     };
-    return evalQuadrature(compute_value_at_qp, basis_at_qps.quadrature, detail::initResidualKernelResult< params >());
+    return evalQuadrature(
+        compute_value_at_qp, basis_at_qps.quadrature, lstr::detail::initResidualKernelResult< params >());
 }
 
 template < typename Kernel, KernelParams params, el_o_t... orders, AssemblyOptions options >
@@ -69,9 +71,9 @@ auto evalLocalIntegral(const ResidualDomainKernel< Kernel, params >& kernel,
             return evalElementIntegral(kernel, element, field_vals, qbv, time);
         }
         else
-            return detail::initResidualKernelResult< params >();
+            return lstr::detail::initResidualKernelResult< params >();
     };
-    const auto zero = detail::initResidualKernelResult< params >();
+    const auto zero = lstr::detail::initResidualKernelResult< params >();
     return mesh.transformReduce(domain_ids, zero, reduce_element, std::plus{}, std::execution::par);
 }
 
@@ -96,9 +98,9 @@ auto evalLocalIntegral(const ResidualBoundaryKernel< Kernel, params >& kernel,
             return evalElementBoundaryIntegral(kernel, el_view, field_vals, qbv, time);
         }
         else
-            return detail::initResidualKernelResult< params >();
+            return lstr::detail::initResidualKernelResult< params >();
     };
-    const auto zero = detail::initResidualKernelResult< params >();
+    const auto zero = lstr::detail::initResidualKernelResult< params >();
     return mesh.transformReduceBoundaries(boundary_ids, zero, reduce_element, std::plus{}, std::execution::par);
 }
 } // namespace post

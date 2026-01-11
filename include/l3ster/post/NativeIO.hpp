@@ -1,5 +1,5 @@
-#ifndef L3STER_POST_SAVELOAD_HPP
-#define L3STER_POST_SAVELOAD_HPP
+#ifndef L3STER_POST_NATIVEIO_HPP
+#define L3STER_POST_NATIVEIO_HPP
 
 #include "l3ster/comm/DistributeMesh.hpp"
 #include "l3ster/mesh/MeshUtils.hpp"
@@ -323,4 +323,4 @@ auto Loader< orders... >::loadMeshDirect(const MpiComm& comm, const Opts& opts)
     return std::make_shared< mesh::MeshPartition< orders... > >(std::move(part));
 }
 } // namespace lstr
-#endif // L3STER_POST_SAVELOAD_HPP
+#endif // L3STER_POST_NATIVEIO_HPP

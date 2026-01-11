@@ -507,19 +507,7 @@ auto partitionMesh(const MeshPartition< orders... >&                 mesh,
     -> util::ArrayOwner< MeshPartition< orders... > >
 {
     detail::assertUnpartitionedMesh(mesh);
-    util::throwingAssert(n_parts >= 1, "The number of resulting partitions cannot be smaller than 1");
-
-    if (n_parts == 1)
-    {
-        auto retval    = util::ArrayOwner< MeshPartition< orders... > >(1);
-        retval.front() = copy(mesh);
-        node_map_out.clear();
-        for (auto n : mesh.getNodeOwnership().owned())
-            node_map_out.emplace(n, n);
-        for (auto n : mesh.getNodeOwnership().shared())
-            node_map_out.emplace(n, n);
-        return retval;
-    }
+    util::throwingAssert(n_parts > 1, "The number of resulting partitions must be greater than 1");
 
     using detail::partitionMeshImpl;
     const auto boundary_ids = mesh.getBoundaryIdsCopy();
