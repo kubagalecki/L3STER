@@ -1,5 +1,5 @@
 cmake_minimum_required( VERSION 3.24 )
 project( advection-2D )
 add_subdirectory( ../.. L3STER-bin )
-add_executable( advection-2D source.cpp )
-target_link_libraries( advection-2D L3STER )
+add_executable( ${CMAKE_PROJECT_NAME} source.cpp )
+target_link_libraries( ${CMAKE_PROJECT_NAME} L3STER )
