@@ -18,7 +18,7 @@ mkdir build
 cd build
 
 # Configure
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=mpic++ ..
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=mpic++ -DCMAKE_CXX_FLAGS="-march=native -mtune=native" ..
 
 # Build
 cmake --build .
@@ -34,12 +34,13 @@ export OMP_NUM_THREADS=[NHWT]  # NHWT=number of hardware threads (this is likely
 
 ### Index
 
-| \# | Name                | Description                                                | New topics covered                                                                                     |
-|:---|:--------------------|:-----------------------------------------------------------|:-------------------------------------------------------------------------------------------------------|
-| 1  | hello-world         | Library initialization                                     | scope guard, MPI communicator                                                                          |
-| 2  | diffusion-2D        | Solve 2D diffusion problem                                 | simple mesh generation, algebraic system, solution manager, equation kernel, direct solver, VTK export |
-| 3  | advection-2D        | Solve 2D advection problem on prescribed velocity field    | space-dependent kernels, time stepping, accessing field values in kernels, Dirichlet BCs               |
-| 4  | periodic-bc         | Solve 2D advection problem in periodic domain              | periodic BCs, setting the initial solution, higher order time-stepping                                 |
-| 5  | static-condensation | Case from example \#4 with static condensation             | static condensation                                                                                    |
-| 6  | matrix-free         | Case from example \#4 with matrix-free operator evaluation | matrix-free operator evaluation, iterative solvers, preconditioners                                    |
-| 7  | karman-2D           | Solve 2D incompressible flow problem                       | reading the mesh from a file, exporting vector fields to VTK                                           |
+| \# | Name                | Description                                                | New topics covered                                                                                       |
+|:---|:--------------------|:-----------------------------------------------------------|:---------------------------------------------------------------------------------------------------------|
+| 1  | hello-world         | Library initialization                                     | scope guard, MPI communicator                                                                            |
+| 2  | diffusion-2D        | Solve 2D diffusion problem                                 | simple mesh generation, algebraic system, solution manager, equation kernel, direct solver, VTK export   |
+| 3  | advection-2D        | Solve 2D advection problem on prescribed velocity field    | space-dependent kernels, time stepping, accessing field values in kernels, Dirichlet BCs                 |
+| 4  | periodic-bc         | Solve 2D advection problem in periodic domain              | periodic BCs, setting the initial solution, higher order time-stepping, computing the solution error     |
+| 5  | static-condensation | Case from example \#4 with static condensation             | static condensation                                                                                      |
+| 6  | matrix-free         | Case from example \#4 with matrix-free operator evaluation | matrix-free operator evaluation, iterative solvers, preconditioners                                      |
+| 7  | karman-2D           | Solve 2D incompressible flow problem                       | reading the mesh from a gmsh file, exporting vector fields to VTK, simple post-processing                |
+| 8  | native-io           | Save/load mesh and results in native L3STER format         | native I/O                                                                                               |

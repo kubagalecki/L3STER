@@ -25,20 +25,6 @@ auto makeIndexedView(Range&& range, Inds&& inds)
            std::views::transform([r = std::forward< Range >(range) | std::views::all](auto i) { return r.begin()[i]; });
 }
 
-template < std::ranges::range R >
-auto toVector(R&& range) -> std::vector< std::ranges::range_value_t< R > >
-{
-    auto common = std::forward< R >(range) | std::views::common;
-    return {common.begin(), common.end()};
-}
-
-template < std::ranges::range V >
-decltype(auto) toVector(V&& vector)
-    requires Vector_c< V >
-{
-    return std::forward< V >(vector);
-}
-
 template < std::ranges::range Range >
 using range_const_reference_t = std::add_lvalue_reference_t< std::add_const_t< std::ranges::range_value_t< Range > > >;
 

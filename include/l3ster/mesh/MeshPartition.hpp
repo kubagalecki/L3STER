@@ -54,7 +54,6 @@ public:
     using node_ownership_sp_t       = std::shared_ptr< node_ownership_t >;
     using const_node_ownership_sp_t = std::shared_ptr< const node_ownership_t >;
 
-    friend struct SerializedPartition;
     template < el_o_t... O >
     friend auto copy(const MeshPartition< O... >&) -> MeshPartition< O... >;
 
@@ -64,6 +63,12 @@ public:
                          n_id_t                            owned_nodes_begin,
                          n_id_t                            n_owned_nodes,
                          const util::ArrayOwner< d_id_t >& boundary_ids);
+
+    MeshPartition(const MeshPartition&)            = delete;
+    MeshPartition& operator=(const MeshPartition&) = delete;
+    MeshPartition(MeshPartition&&)                 = default;
+    MeshPartition& operator=(MeshPartition&&)      = default;
+    ~MeshPartition()                               = default;
 
     // Iteration (visiting) over elements
     template < MutableElementVisitor_c< orders... > Visitor, SimpleExecutionPolicy_c ExecPolicy = DefaultExec >

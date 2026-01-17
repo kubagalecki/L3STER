@@ -408,8 +408,9 @@ auto makeMeshFromPartitionComponents(util::ArrayOwner< std::map< d_id_t, Domain<
 }
 
 template < el_o_t... orders >
-void renumberNodes(util::ArrayOwner< std::map< d_id_t, Domain< orders... > > >& dom_maps,
+auto renumberNodes(util::ArrayOwner< std::map< d_id_t, Domain< orders... > > >& dom_maps,
                    util::ArrayOwner< std::array< std::vector< n_id_t >, 2 > >&  node_vecs)
+    -> robin_hood::unordered_flat_map< n_id_t, n_id_t >
 {
     auto node_id_map = robin_hood::unordered_flat_map< n_id_t, n_id_t >{};
     for (n_id_t new_id = 0; auto& [owned, _] : node_vecs)
@@ -435,15 +436,23 @@ void renumberNodes(util::ArrayOwner< std::map< d_id_t, Domain< orders... > > >& 
             auto& elems = map_entry.second.elements;
             elems.visit(update_element, std::execution::seq);
         }
+    return node_id_map;
 }
 
+template < el_o_t... orders >
+struct PartitionResult
+{
+    util::ArrayOwner< MeshPartition< orders... > >   parts;
+    robin_hood::unordered_flat_map< n_id_t, n_id_t > node_map;
+};
 template < el_o_t... orders >
 auto partitionMeshImpl(const MeshPartition< orders... >& mesh,
                        idx_t                             n_parts,
                        const util::ArrayOwner< d_id_t >& boundary_ids,
                        util::ArrayOwner< real_t >        part_weights,
-                       util::ArrayOwner< idx_t >         node_weights) -> util::ArrayOwner< MeshPartition< orders... > >
+                       util::ArrayOwner< idx_t >         node_weights) -> PartitionResult< orders... >
 {
+    L3STER_PROFILE_FUNCTION;
     const auto domain_ids  = getDomainIds(mesh, boundary_ids);
     const auto domain_data = getDomainData(mesh, domain_ids);
     auto [epart, npart]    = partitionCondensedMesh(
@@ -451,8 +460,19 @@ auto partitionMeshImpl(const MeshPartition< orders... >& mesh,
     auto new_domain_maps = makeDomainMaps(mesh, n_parts, epart, domain_ids);
     assignBoundaryElements(mesh, epart, new_domain_maps, domain_ids, boundary_ids, domain_data.n_elements);
     auto node_vecs = assignNodes(n_parts, npart, new_domain_maps);
-    renumberNodes(new_domain_maps, node_vecs);
-    return makeMeshFromPartitionComponents(std::move(new_domain_maps), std::move(node_vecs), boundary_ids);
+    auto node_map  = renumberNodes(new_domain_maps, node_vecs);
+    auto parts     = makeMeshFromPartitionComponents(std::move(new_domain_maps), std::move(node_vecs), boundary_ids);
+    return {std::move(parts), std::move(node_map)};
+}
+
+template < el_o_t... orders >
+void assertUnpartitionedMesh(const MeshPartition< orders... >& mesh,
+                             std::source_location              sl = std::source_location::current())
+{
+    util::throwingAssert(mesh.getNodeOwnership().shared().empty() and
+                             mesh.getNodeOwnership().owned().back() == mesh.getNodeOwnership().owned().size() - 1,
+                         "You cannot partition a mesh which has already been partitioned",
+                         sl);
 }
 } // namespace detail
 
@@ -463,10 +483,7 @@ auto partitionMesh(const MeshPartition< orders... >&             mesh,
                    const ProblemDefinition< max_dofs_per_node >& problem_def  = {})
     -> util::ArrayOwner< MeshPartition< orders... > >
 {
-    L3STER_PROFILE_FUNCTION;
-    util::throwingAssert(mesh.getNodeOwnership().shared().empty() and
-                             mesh.getNodeOwnership().owned().back() == mesh.getNodeOwnership().owned().size() - 1,
-                         "You cannot partition a mesh which has already been partitioned");
+    detail::assertUnpartitionedMesh(mesh);
     util::throwingAssert(n_parts >= 1, "The number of resulting partitions cannot be smaller than 1");
 
     if (n_parts == 1)
@@ -478,7 +495,26 @@ auto partitionMesh(const MeshPartition< orders... >&             mesh,
 
     const auto boundary_ids = mesh.getBoundaryIdsCopy();
     auto       node_wgts    = detail::computeNodeWeights(mesh, problem_def);
-    return detail::partitionMeshImpl(mesh, n_parts, boundary_ids, std::move(part_weights), std::move(node_wgts));
+    return detail::partitionMeshImpl(mesh, n_parts, boundary_ids, std::move(part_weights), std::move(node_wgts)).parts;
+}
+
+template < el_o_t... orders, size_t max_dofs_per_node = 0 >
+auto partitionMesh(const MeshPartition< orders... >&                 mesh,
+                   idx_t                                             n_parts,
+                   robin_hood::unordered_flat_map< n_id_t, n_id_t >& node_map_out,
+                   util::ArrayOwner< real_t >                        part_weights = {},
+                   const ProblemDefinition< max_dofs_per_node >&     problem_def  = {})
+    -> util::ArrayOwner< MeshPartition< orders... > >
+{
+    detail::assertUnpartitionedMesh(mesh);
+    util::throwingAssert(n_parts > 1, "The number of resulting partitions must be greater than 1");
+
+    using detail::partitionMeshImpl;
+    const auto boundary_ids = mesh.getBoundaryIdsCopy();
+    auto       node_wgts    = detail::computeNodeWeights(mesh, problem_def);
+    auto [parts, nm] = partitionMeshImpl(mesh, n_parts, boundary_ids, std::move(part_weights), std::move(node_wgts));
+    node_map_out     = std::move(nm);
+    return std::move(parts);
 }
 } // namespace lstr::mesh
 #endif // L3STER_MESH_PARTITIONMESH_HPP

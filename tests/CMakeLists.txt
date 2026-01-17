@@ -108,6 +108,7 @@ add_mpi_test( MultiDomainTest.cpp Solve_Multi_Domain_Problem "1;2;4" )
 add_mpi_test( VtkExportTest.cpp Export_results_to_VTK "1;2;4" )
 add_mpi_test( SolverTests.cpp Solver_Tests "1;2;4" )
 add_mpi_test( NormalizationBCTests.cpp Normalization_BC_Tests "1;2;4" )
+add_mpi_test( SaveLoadTests.cpp Save_Load_Tests "1;2;4" )
 
 #######################################################################################################################
 

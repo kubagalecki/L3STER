@@ -81,7 +81,8 @@ private:
                                     const util::ArrayOwner< util::ArrayOwner< size_t > >& field_component_inds);
     inline auto makeDataDescription(const util::ArrayOwner< std::string >&                field_names,
                                     const util::ArrayOwner< util::ArrayOwner< size_t > >& field_component_inds,
-                                    const std::vector< util::ArrayOwner< char > >& encoded_fields) const -> std::string;
+                                    const util::ArrayOwner< util::ArrayOwner< char > >&   encoded_fields) const
+        -> std::string;
 
     template < ContiguousSizedRangeOf< char > Text >
     MPI_Offset enqueueWrite(std::shared_ptr< MpiComm::FileHandle > file, MPI_Offset pos, Text&& text)
@@ -466,13 +467,12 @@ inline auto encodeField(const SolutionManager& solution_manager, std::span< cons
 
 template < SizedRangeOfConvertibleTo_c< std::span< const size_t > > FieldComps >
 auto encodeSolution(const SolutionManager& solution_manager, FieldComps&& field_components)
-    -> std::vector< util::ArrayOwner< char > >
 {
-    auto retval         = std::vector< util::ArrayOwner< char > >(std::ranges::size(field_components));
-    auto grouping_range = std::forward< FieldComps >(field_components) | std::views::common;
-    util::tbb::parallelTransform(grouping_range, begin(retval), [&](std::span< const size_t > component_inds) {
-        return post::vtk::encodeField(solution_manager, component_inds);
-    });
+    auto       retval = util::ArrayOwner< util::ArrayOwner< char > >(std::ranges::size(field_components));
+    const auto encode = [&](std::span< const size_t > component_inds) {
+        return encodeField(solution_manager, component_inds);
+    };
+    util::tbb::parallelTransform(std::forward< FieldComps >(field_components), retval.begin(), encode);
     return retval;
 }
 
@@ -483,7 +483,7 @@ inline auto makeNumFieldComponentsView(const util::ArrayOwner< util::ArrayOwner<
            std::views::transform([](const auto& cmps) -> size_t { return cmps.size() == 1 ? 1 : 3; });
 }
 
-inline auto makeEncodedFieldSizeView(const std::vector< util::ArrayOwner< char > >& encoded_fields)
+inline auto makeEncodedFieldSizeView(const util::ArrayOwner< util::ArrayOwner< char > >& encoded_fields)
 {
     return encoded_fields | std::views::transform([](const auto& enc) { return enc.size(); });
 }
@@ -617,7 +617,7 @@ void PvtuExporter::enqueueVtuFileWrite(std::string_view                         
 
 auto PvtuExporter::makeDataDescription(const util::ArrayOwner< std::string >&                field_names,
                                        const util::ArrayOwner< util::ArrayOwner< size_t > >& field_component_inds,
-                                       const std::vector< util::ArrayOwner< char > >&        encoded_fields) const
+                                       const util::ArrayOwner< util::ArrayOwner< char > >&   encoded_fields) const
     -> std::string
 {
     const auto n_field_components  = post::vtk::makeNumFieldComponentsView(field_component_inds);

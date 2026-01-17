@@ -274,14 +274,15 @@ StaticCondensationManager< CondensationPolicy::ElementBoundary >::StaticCondensa
                 retval[i] = dof == invalid_local_dof;
             return retval;
         };
+        constexpr auto add_unset = [](const dof_bmp_t& dof_bmp) {
+            return std::make_pair(dof_bmp.size() - dof_bmp.count(), dof_bmp);
+        };
         auto dof_bmp_range = getBoundaryNodes(element) | std::views::transform(std::cref(dof_map)) | std::views::keys |
-                             std::views::transform(get_invalid_dof_bmp) | std::views::common;
-        const auto [n_boundary_dofs, internal_dof_bmp] = std::transform_reduce(
-            std::ranges::cbegin(dof_bmp_range),
-            std::ranges::cend(dof_bmp_range),
-            std::make_pair(0uz, dof_bmp_t{}),
-            [](const auto& p1, const auto& p2) { return std::make_pair(p1.first + p2.first, p1.second | p2.second); },
-            [](const dof_bmp_t& dof_bmp) { return std::make_pair(dof_bmp.size() - dof_bmp.count(), dof_bmp); });
+                             std::views::transform(get_invalid_dof_bmp) | std::views::transform(add_unset);
+        const auto [n_boundary_dofs, internal_dof_bmp] =
+            std::ranges::fold_left(dof_bmp_range, std::make_pair(0uz, dof_bmp_t{}), [](const auto& p1, const auto& p2) {
+                return std::make_pair(p1.first + p2.first, p1.second | p2.second);
+            });
         return std::make_pair(n_boundary_dofs, ~internal_dof_bmp);
     };
     const auto insert_elem_info = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {

@@ -13,6 +13,9 @@ template < std::integral T >
 class SegmentedOwnership
 {
 public:
+    template < typename TO >
+    friend auto copy(const SegmentedOwnership< TO >&) -> SegmentedOwnership< TO >;
+
     SegmentedOwnership() = default;
     template < RangeOfConvertibleTo_c< T > Shared >
     SegmentedOwnership(T owned_begin, size_t num_owned, Shared&& shared)
@@ -20,7 +23,7 @@ public:
           m_owned_end{owned_begin + static_cast< T >(num_owned)},
           m_shared{std::forward< Shared >(shared)}
     {
-        util::throwingAssert(std::ranges::none_of(m_shared, [&](T i) { return isOwned(i); }));
+        throwingAssert(std::ranges::none_of(m_shared, [&](T i) { return isOwned(i); }));
         std::ranges::sort(m_shared);
     }
 
@@ -47,10 +50,10 @@ public:
     using NeighborInfo = std::map< int, std::vector< T > >;
 
     // Distribution of ownership among the ranks of the communicator
-    [[nodiscard]] auto getOwnershipDist(const MpiComm& comm) const -> util::ArrayOwner< T >
+    [[nodiscard]] auto getOwnershipDist(const MpiComm& comm) const -> ArrayOwner< T >
     {
         auto num_owned = std::views::single(static_cast< T >(owned().size()));
-        auto retval    = util::ArrayOwner< T >(static_cast< size_t >(comm.getSize()));
+        auto retval    = ArrayOwner< T >(comm.getSizeUz());
         comm.allGather(num_owned, retval.begin());
         std::inclusive_scan(retval.begin(), retval.end(), retval.begin());
         return retval;
@@ -71,8 +74,8 @@ public:
     // Whose shared indices do I own?
     [[nodiscard]] auto computeInNbrInfo(const MpiComm& comm, const NeighborInfo& out_nbr_info) const -> NeighborInfo
     {
-        const auto               comm_sz = static_cast< size_t >(comm.getSize());
-        util::ArrayOwner< char > out_nbr_bmp(comm_sz, false), in_nbr_bmp(comm_sz);
+        const auto         comm_sz = comm.getSizeUz();
+        ArrayOwner< char > out_nbr_bmp(comm_sz, false), in_nbr_bmp(comm_sz);
         for (const auto& [rank, _] : out_nbr_info)
             out_nbr_bmp.at(rank) = true;
         comm.allToAllAsync(out_nbr_bmp, in_nbr_bmp).wait();
@@ -84,7 +87,7 @@ public:
         reqs.reserve(retval.size() + out_nbr_info.size());
         for (const auto& [out_nbr, inds] : out_nbr_info)
             reqs.push_back(comm.sendAsync(inds, out_nbr, 0));
-        auto posted_recv = util::DynamicBitset{retval.size()};
+        auto posted_recv = DynamicBitset{retval.size()};
         while (posted_recv.count() != posted_recv.size())
             for (auto&& [i, info] : retval | std::views::enumerate)
             {
@@ -104,8 +107,18 @@ public:
     }
 
 private:
-    T                     m_owned_begin = 0, m_owned_end = 0;
-    util::ArrayOwner< T > m_shared;
+    T               m_owned_begin = 0, m_owned_end = 0;
+    ArrayOwner< T > m_shared;
 };
+
+template < typename T >
+auto copy(const SegmentedOwnership< T >& so) -> SegmentedOwnership< T >
+{
+    auto retval          = SegmentedOwnership< T >{};
+    retval.m_owned_begin = so.m_owned_begin;
+    retval.m_owned_end   = so.m_owned_end;
+    retval.m_shared      = copy(so.m_shared);
+    return retval;
+}
 } // namespace lstr::util
 #endif // L3STER_UTIL_SEGMENTEDOWNERSHIP_HPP

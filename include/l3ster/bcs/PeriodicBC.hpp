@@ -140,19 +140,23 @@ inline auto makeNodeSpacemap(const util::ArrayOwner< NodeLocationData >& node_da
         return util::SpatialHashTable< n_id_t, 3 >{};
 
     // Set up the grid with reasonable spacing and origin
-    constexpr auto min_init    = util::makeFilledArray< 3 >(std::numeric_limits< val_t >::max());
-    constexpr auto max_init    = util::makeFilledArray< 3 >(std::numeric_limits< val_t >::min());
-    constexpr auto reduce_init = std::make_pair(min_init, max_init);
-    auto coords = node_data | std::views::transform([](const auto& nd) { return nd.coords; }) | std::views::common;
+    constexpr auto min_init   = util::makeFilledArray< 3 >(std::numeric_limits< val_t >::max());
+    constexpr auto max_init   = util::makeFilledArray< 3 >(std::numeric_limits< val_t >::min());
+    constexpr auto init       = std::make_pair(min_init, max_init);
+    constexpr auto get_coords = [](const auto& nd) {
+        return nd.coords;
+    };
+    constexpr auto dup = [](const auto& p) {
+        return std::make_pair(p, p);
+    };
+    auto           coords = node_data | std::views::transform(get_coords) | std::views::transform(dup);
     constexpr auto reduce = [](const auto& pair1, const auto& pair2) {
         const auto& [min1, max1] = pair1;
         const auto& [min2, max2] = pair2;
         return std::make_pair(util::elwise(min1, min2, util::Min{}), util::elwise(max1, max2, util::Max{}));
     };
-    constexpr auto transform = [](const auto& p) {
-        return std::make_pair(p, p);
-    };
-    const auto [min, max] = std::transform_reduce(coords.begin(), coords.end(), reduce_init, reduce, transform);
+
+    const auto [min, max] = std::ranges::fold_left(coords, init, reduce);
     const auto x_span     = util::elwise(max, min, std::minus{});
     const auto is_planar  = std::ranges::any_of(x_span, [](val_t d) { return d < 1e-15; });
     const auto sz_fp      = static_cast< val_t >(node_data.size());

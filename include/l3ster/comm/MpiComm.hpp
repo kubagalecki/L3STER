@@ -1,8 +1,8 @@
 #ifndef L3STER_COMM_MPICOMM_HPP
 #define L3STER_COMM_MPICOMM_HPP
 
-#include "l3ster/util/ArrayOwner.hpp"
 #include "l3ster/util/Common.hpp"
+#include "l3ster/util/CrsGraph.hpp"
 
 extern "C"
 {
@@ -10,17 +10,14 @@ extern "C"
 }
 
 #include <iterator>
-#include <memory_resource>
 #include <span>
-#include <stdexcept>
 #include <type_traits>
-#include <vector>
 
 namespace lstr
 {
 namespace comm
 {
-template < typename T >
+template < typename >
 struct MpiType
 {};
 #define L3STER_MPI_TYPE_MAPPING_STRUCT(type, mpitype)                                                                  \
@@ -236,6 +233,8 @@ public:
     template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
     void allGather(Data&& data, It out_it) const;
     template < comm::MpiBuf_c Data >
+    void scatter(Data&& data, std::span< std::ranges::range_value_t< Data > > out_span, int root) const;
+    template < comm::MpiBuf_c Data >
     void broadcast(Data&& data, int root) const;
     template < comm::MpiBuf_c Data, comm::MpiOutputIterator_c< Data > It >
     void inclusiveScan(Data&& data, It out_it, MPI_Op op) const;
@@ -254,15 +253,14 @@ public:
     // observers
     [[nodiscard]] inline int getRank() const;
     [[nodiscard]] inline int getSize() const;
+    [[nodiscard]] size_t     getSizeUz() const { return static_cast< size_t >(getSize()); }
     [[nodiscard]] MPI_Comm   get() const { return m_comm; }
 
     // topology-related
-    template < ContiguousSizedRangeOf< int > Src,
-               ContiguousSizedRangeOf< int > Deg,
-               ContiguousSizedRangeOf< int > Dest,
-               ContiguousSizedRangeOf< int > Wgts >
-    [[nodiscard]] MpiComm
-    distGraphCreate(Src&& sources, Deg&& degrees, Dest&& destinations, Wgts&& weights, bool reorder) const;
+    [[nodiscard]] inline MpiComm distGraphCreate(std::span< const int >       sources,
+                                                 const util::CrsGraph< int >& destinations,
+                                                 const util::CrsGraph< int >& weights,
+                                                 bool                         reorder) const;
 
     // misc
     inline FileHandle openFile(const char* file_name, int amode, MPI_Info info = MPI_INFO_NULL) const;
@@ -385,7 +383,7 @@ template < comm::MpiBorrowedBuf_c Data >
 auto MpiComm::FileHandle::readAtAsync(Data&& read_range, MPI_Offset offset) const -> MpiComm::Request
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(read_range);
-    MpiComm::Request request;
+    auto request                               = Request{};
     L3STER_INVOKE_MPI(MPI_File_iread_at, m_file, offset, buf_begin, buf_size, datatype, &request.m_request);
     return request;
 }
@@ -393,15 +391,9 @@ auto MpiComm::FileHandle::readAtAsync(Data&& read_range, MPI_Offset offset) cons
 template < comm::MpiBorrowedBuf_c Data >
 auto MpiComm::FileHandle::writeAtAsync(Data&& write_range, MPI_Offset offset) const -> MpiComm::Request
 {
-    const auto datatype = comm::MpiType< std::ranges::range_value_t< decltype(write_range) > >::value();
-    auto       request  = MpiComm::Request{};
-    L3STER_INVOKE_MPI(MPI_File_iwrite_at,
-                      m_file,
-                      offset,
-                      std::ranges::data(write_range),
-                      util::exactIntegerCast< int >(std::ranges::size(write_range)),
-                      datatype,
-                      &request.m_request);
+    const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(write_range);
+    auto request                               = Request{};
+    L3STER_INVOKE_MPI(MPI_File_iwrite_at, m_file, offset, buf_begin, buf_size, datatype, &request.m_request);
     return request;
 }
 
@@ -507,6 +499,18 @@ void MpiComm::allGather(Data&& data, It out_it) const
 }
 
 template < comm::MpiBuf_c Data >
+void MpiComm::scatter(Data&& data, std::span< std::ranges::range_value_t< Data > > out_span, int root) const
+{
+    const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
+    const auto [elems_per_rank, remain]        = std::div(buf_size, getSize());
+    if (getRank() == root)
+        util::throwingAssert(not remain, "MPI_Scatter: scattered buffer size must be divisible by communicator size");
+    const auto out_ptr = out_span.data();
+    const auto out_sz  = util::exactIntegerCast< int >(out_span.size());
+    L3STER_INVOKE_MPI(MPI_Scatter, buf_begin, elems_per_rank, datatype, out_ptr, out_sz, datatype, root, m_comm);
+}
+
+template < comm::MpiBuf_c Data >
 void MpiComm::broadcast(Data&& data, int root) const
 {
     const auto [datatype, buf_begin, buf_size] = comm::parseMpiBuf(data);
@@ -568,22 +572,30 @@ auto MpiComm::allToAllAsync(SendBuf&& send_buf, RecvBuf&& recv_buf) const -> Mpi
     return request;
 }
 
-template < ContiguousSizedRangeOf< int > Src,
-           ContiguousSizedRangeOf< int > Deg,
-           ContiguousSizedRangeOf< int > Dest,
-           ContiguousSizedRangeOf< int > Wgts >
-MpiComm MpiComm::distGraphCreate(Src&& sources, Deg&& degrees, Dest&& destinations, Wgts&& weights, bool reorder) const
+MpiComm MpiComm::distGraphCreate(std::span< const int >       sources,
+                                 const util::CrsGraph< int >& destinations,
+                                 const util::CrsGraph< int >& weights,
+                                 bool                         reorder) const
 {
+    util::throwingAssert(sources.size() == destinations.getNRows());
+    util::throwingAssert(sources.size() == weights.getNRows());
+    util::throwingAssert(destinations.getRawEntries().size() == weights.getRawEntries().size());
+
+    const auto n_nodes     = util::exactIntegerCast< int >(sources.size());
+    const int  reorder_int = reorder;
+    const auto degrees     = std::views::iota(0uz, sources.size()) |
+                         std::views::transform([&](size_t i) { return static_cast< int >(destinations(i).size()); }) |
+                         std::ranges::to< util::ArrayOwner >();
     auto retval = MpiComm{};
     L3STER_INVOKE_MPI(MPI_Dist_graph_create,
                       m_comm,
-                      static_cast< int >(std::ranges::ssize(sources)),
-                      std::ranges::data(sources),
-                      std::ranges::data(degrees),
-                      std::ranges::data(destinations),
-                      std::ranges::data(weights),
+                      n_nodes,
+                      sources.data(),
+                      degrees.data(),
+                      destinations.data(),
+                      weights.data(),
                       MPI_INFO_NULL,
-                      reorder,
+                      reorder_int,
                       &retval.m_comm);
     return retval;
 }

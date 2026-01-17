@@ -36,11 +36,11 @@ consteval auto getSideIntersection()
     return util::trimArray< intersect_raw.second >(intersect_raw.first);
 }
 
-template < tuple_like T, size_t N >
+template < TupleLike_c T, size_t N >
 struct tuple_largerequal : public std::conditional_t< std::tuple_size_v< T > >= N, std::true_type, std::false_type >
 {};
 
-template < tuple_like T >
+template < TupleLike_c T >
 using tuple_le2 = tuple_largerequal< T, 2 >;
 
 template < ElementType T, el_o_t O, el_side_t S, el_side_t... SIDES >

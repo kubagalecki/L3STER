@@ -69,28 +69,30 @@ template < el_o_t... orders >
 auto allGatherMesh(const MpiComm& comm, const mesh::MeshPartition< orders... >& mesh)
     -> mesh::MeshPartition< orders... >
 {
-    using mesh_t = mesh::MeshPartition< orders... >;
+    constexpr int tag = 0;
+    using mesh_t      = mesh::MeshPartition< orders... >;
     if (comm.getSize() == 1)
         return copy(mesh);
-    auto reqs = std::vector< MpiComm::Request >{};
     if (comm.getRank() == 0)
     {
         auto parts    = util::ArrayOwner< mesh_t >(static_cast< size_t >(comm.getSize()));
         parts.front() = copy(mesh);
         for (int rank = 1; rank != comm.getSize(); ++rank)
-            parts[static_cast< size_t >(rank)] = comm::receiveMesh< orders... >(comm, rank);
-        const auto part_span = std::span{std::as_const(parts)};
-        auto       combined  = combineParts(part_span);
-        for (int rank = 1; rank != comm.getSize(); ++rank)
-            comm::sendMesh(comm, combined, rank, std::back_inserter(reqs));
+            parts[static_cast< size_t >(rank)] = comm::receiveMesh< orders... >(comm, rank, tag);
+        const auto part_span       = std::span{std::as_const(parts)};
+        auto       combined        = combineParts(part_span);
+        const auto combined_serial = mesh::serializeMesh(combined);
+        auto       reqs            = std::views::iota(1, comm.getSize()) |
+                    std::views::transform([&](int dest) { return comm.sendAsync(combined_serial, dest, 0); }) |
+                    std::ranges::to< util::ArrayOwner >();
         MpiComm::Request::waitAll(reqs);
         return combined;
     }
     else
     {
-        comm::sendMesh(comm, mesh, 0, std::back_inserter(reqs));
-        MpiComm::Request::waitAll(reqs);
-        return comm::receiveMesh< orders... >(comm, 0);
+        const auto mesh_serial = mesh::serializeMesh(mesh);
+        comm.send(mesh_serial, 0, tag);
+        return comm::receiveMesh< orders... >(comm, 0, tag);
     }
 }
 

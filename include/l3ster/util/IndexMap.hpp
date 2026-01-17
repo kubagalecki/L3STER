@@ -5,7 +5,6 @@
 
 #include <concepts>
 #include <ranges>
-#include <unordered_map>
 
 namespace lstr::util
 {
