@@ -20,7 +20,7 @@ static void BM_ReferenceBasisComputation(benchmark::State& state)
     const auto       point = Point{.5, .5, .5};
     for (auto _ : state)
     {
-        auto ders = basis::computeRefBasisDers< T, O, basis::BasisType::Lagrange >(point);
+        auto ders = basis::computeReferenceBasisDerivatives< T, O, basis::BasisType::Lagrange >(point);
         benchmark::DoNotOptimize(ders);
     }
 }
@@ -28,10 +28,11 @@ BENCHMARK(BM_ReferenceBasisComputation)->Name("Compute reference basis [hex 1]")
 
 static void BM_BasisPhysicalDerivativeComputation(benchmark::State& state)
 {
-    const auto element  = getExampleHexElement< 1 >();
-    const auto point    = Point{.5, .5, .5};
-    const auto J        = map::getNatJacobiMatGenerator(element.data)(point);
-    const auto ref_ders = basis::computeRefBasisDers< mesh::ElementType::Hex, 1, basis::BasisType::Lagrange >(point);
+    const auto element = getExampleHexElement< 1 >();
+    const auto point   = Point{.5, .5, .5};
+    const auto J       = map::getNatJacobiMatGenerator(element.data)(point);
+    const auto ref_ders =
+        basis::computeReferenceBasisDerivatives< mesh::ElementType::Hex, 1, basis::BasisType::Lagrange >(point);
     for (auto _ : state)
     {
         auto ders = map::computePhysBasisDers(J, ref_ders);

@@ -5,7 +5,6 @@
 #include "l3ster/mapping/MapReferenceToPhysical.hpp"
 #include "l3ster/mesh/ReadMesh.hpp"
 #include "l3ster/mesh/primitives/CubeMesh.hpp"
-#include "l3ster/mesh/primitives/LineMesh.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 #include "l3ster/post/Integral.hpp"
 
@@ -220,19 +219,25 @@ TEST_CASE("Boundary normal computation", "[mapping]")
 TEST_CASE("Basis function values", "[mapping]")
 {
     using namespace basis;
-    constexpr auto LB = BasisType::Lagrange;
+    constexpr auto LB     = BasisType::Lagrange;
+    constexpr auto approx = [](val_t x) {
+        return Approx{x}.margin(1e-16);
+    };
     SECTION("Line")
     {
         constexpr auto   ET = ElementType::Line;
         constexpr el_o_t EO = 1;
 
-        const ReferenceBasisFunction< ET, EO, 0, LB > basis0{};
-        const ReferenceBasisFunction< ET, EO, 1, LB > basis1{};
+        constexpr auto p1 = Point{-1.};
+        constexpr auto p2 = Point{1.};
 
-        CHECK(basis0(Point{-1.}) == Approx{1.}.margin(1e-13));
-        CHECK(basis0(Point{1.}) == Approx{0.}.margin(1e-13));
-        CHECK(basis1(Point{-1.}) == Approx{0.}.margin(1e-13));
-        CHECK(basis1(Point{1.}) == Approx{1.}.margin(1e-13));
+        const auto basis_vals1 = computeReferenceBases< ET, EO, LB >(p1);
+        const auto basis_vals2 = computeReferenceBases< ET, EO, LB >(p2);
+
+        CHECK(basis_vals1[0] == approx(1.));
+        CHECK(basis_vals2[0] == approx(0.));
+        CHECK(basis_vals1[1] == approx(0.));
+        CHECK(basis_vals2[1] == approx(1.));
     }
 
     SECTION("Quad")
@@ -240,30 +245,28 @@ TEST_CASE("Basis function values", "[mapping]")
         constexpr auto   ET = ElementType::Quad;
         constexpr el_o_t EO = 1;
 
-        const ReferenceBasisFunction< ET, EO, 0, LB > basis0{};
-        const ReferenceBasisFunction< ET, EO, 1, LB > basis1{};
-        const ReferenceBasisFunction< ET, EO, 2, LB > basis2{};
-        const ReferenceBasisFunction< ET, EO, 3, LB > basis3{};
+        constexpr auto p1 = Point{-.5, -.5};
+        constexpr auto p2 = Point{.5, .5};
+        constexpr auto p3 = Point{1., 1.};
 
-        const Point p0{-.5, -.5};
-        const Point p1{.5, .5};
-        const Point p2{1., 1.};
+        const auto basis_vals1 = computeReferenceBases< ET, EO, LB >(p1);
+        const auto basis_vals2 = computeReferenceBases< ET, EO, LB >(p2);
+        const auto basis_vals3 = computeReferenceBases< ET, EO, LB >(p3);
 
-        CHECK(basis0(p0) == Approx{.75 * .75}.margin(1e-13));
-        CHECK(basis0(p1) == Approx{.25 * .25}.margin(1e-13));
-        CHECK(basis0(p2) == Approx{0.}.margin(1e-13));
+        CHECK(basis_vals1[0] == approx(.75 * .75));
+        CHECK(basis_vals1[1] == approx(.25 * .75));
+        CHECK(basis_vals1[2] == approx(.75 * .25));
+        CHECK(basis_vals1[3] == approx(.25 * .25));
 
-        CHECK(basis1(p0) == Approx{.25 * .75}.margin(1e-13));
-        CHECK(basis1(p1) == Approx{.25 * .75}.margin(1e-13));
-        CHECK(basis1(p2) == Approx{0.}.margin(1e-13));
+        CHECK(basis_vals2[0] == approx(.25 * .25));
+        CHECK(basis_vals2[1] == approx(.25 * .75));
+        CHECK(basis_vals2[2] == approx(.75 * .25));
+        CHECK(basis_vals2[3] == approx(.75 * .75));
 
-        CHECK(basis2(p0) == Approx{.25 * .75}.margin(1e-13));
-        CHECK(basis2(p1) == Approx{.25 * .75}.margin(1e-13));
-        CHECK(basis2(p2) == Approx{0.}.margin(1e-13));
-
-        CHECK(basis3(p0) == Approx{.25 * .25}.margin(1e-13));
-        CHECK(basis3(p1) == Approx{.75 * .75}.margin(1e-13));
-        CHECK(basis3(p2) == Approx{1.}.margin(1e-13));
+        CHECK(basis_vals3[0] == approx(0.));
+        CHECK(basis_vals3[1] == approx(0.));
+        CHECK(basis_vals3[2] == approx(0.));
+        CHECK(basis_vals3[3] == approx(1.));
     }
 
     SECTION("Hex")
@@ -271,59 +274,51 @@ TEST_CASE("Basis function values", "[mapping]")
         constexpr auto   ET = ElementType::Hex;
         constexpr el_o_t EO = 1;
 
-        const ReferenceBasisFunction< ET, EO, 0, LB > basis0{};
-        const ReferenceBasisFunction< ET, EO, 1, LB > basis1{};
-        const ReferenceBasisFunction< ET, EO, 2, LB > basis2{};
-        const ReferenceBasisFunction< ET, EO, 3, LB > basis3{};
-        const ReferenceBasisFunction< ET, EO, 4, LB > basis4{};
-        const ReferenceBasisFunction< ET, EO, 5, LB > basis5{};
-        const ReferenceBasisFunction< ET, EO, 6, LB > basis6{};
-        const ReferenceBasisFunction< ET, EO, 7, LB > basis7{};
+        constexpr auto p0 = Point{-.5, -.5, -.5};
+        constexpr auto p1 = Point{.5, .5, .5};
+        constexpr auto p2 = Point{1., 1., -1.};
+        constexpr auto p3 = Point{0., 1., 1.};
 
-        const Point p0{-.5, -.5, -.5};
-        const Point p1{.5, .5, .5};
-        const Point p2{1., 1., -1.};
-        const Point p3{0., 1., 1.};
+        const auto basis_vals1 = computeReferenceBases< ET, EO, LB >(p0);
+        const auto basis_vals2 = computeReferenceBases< ET, EO, LB >(p1);
+        const auto basis_vals3 = computeReferenceBases< ET, EO, LB >(p2);
+        const auto basis_vals4 = computeReferenceBases< ET, EO, LB >(p3);
 
-        CHECK(basis0(p0) == Approx{.75 * .75 * .75}.margin(1e-13));
-        CHECK(basis0(p1) == Approx{.25 * .25 * .25}.margin(1e-13));
-        CHECK(basis0(p2) == Approx{0.}.margin(1e-13));
-        CHECK(basis0(p3) == Approx{0.}.margin(1e-13));
+        CHECK(basis_vals1[0] == approx(.75 * .75 * .75));
+        CHECK(basis_vals1[1] == approx(.25 * .75 * .75));
+        CHECK(basis_vals1[2] == approx(.75 * .25 * .75));
+        CHECK(basis_vals1[3] == approx(.25 * .25 * .75));
+        CHECK(basis_vals1[4] == approx(.75 * .75 * .25));
+        CHECK(basis_vals1[5] == approx(.25 * .75 * .25));
+        CHECK(basis_vals1[6] == approx(.75 * .25 * .25));
+        CHECK(basis_vals1[7] == approx(.25 * .25 * .25));
 
-        CHECK(basis1(p0) == Approx{.25 * .75 * .75}.margin(1e-13));
-        CHECK(basis1(p1) == Approx{.25 * .25 * .75}.margin(1e-13));
-        CHECK(basis1(p2) == Approx{0.}.margin(1e-13));
-        CHECK(basis1(p3) == Approx{0.}.margin(1e-13));
+        CHECK(basis_vals2[0] == approx(.25 * .25 * .25));
+        CHECK(basis_vals2[1] == approx(.25 * .25 * .75));
+        CHECK(basis_vals2[2] == approx(.25 * .25 * .75));
+        CHECK(basis_vals2[3] == approx(.25 * .75 * .75));
+        CHECK(basis_vals2[4] == approx(.25 * .25 * .75));
+        CHECK(basis_vals2[5] == approx(.25 * .75 * .75));
+        CHECK(basis_vals2[6] == approx(.25 * .75 * .75));
+        CHECK(basis_vals2[7] == approx(.75 * .75 * .75));
 
-        CHECK(basis2(p0) == Approx{.25 * .75 * .75}.margin(1e-13));
-        CHECK(basis2(p1) == Approx{.25 * .25 * .75}.margin(1e-13));
-        CHECK(basis2(p2) == Approx{0.}.margin(1e-13));
-        CHECK(basis2(p3) == Approx{0.}.margin(1e-13));
+        CHECK(basis_vals3[0] == approx(0.));
+        CHECK(basis_vals3[1] == approx(0.));
+        CHECK(basis_vals3[2] == approx(0.));
+        CHECK(basis_vals3[3] == approx(1.));
+        CHECK(basis_vals3[4] == approx(0.));
+        CHECK(basis_vals3[5] == approx(0.));
+        CHECK(basis_vals3[6] == approx(0.));
+        CHECK(basis_vals3[7] == approx(0.));
 
-        CHECK(basis3(p0) == Approx{.25 * .25 * .75}.margin(1e-13));
-        CHECK(basis3(p1) == Approx{.25 * .75 * .75}.margin(1e-13));
-        CHECK(basis3(p2) == Approx{1.}.margin(1e-13));
-        CHECK(basis3(p3) == Approx{0.}.margin(1e-13));
-
-        CHECK(basis4(p0) == Approx{.25 * .75 * .75}.margin(1e-13));
-        CHECK(basis4(p1) == Approx{.25 * .25 * .75}.margin(1e-13));
-        CHECK(basis4(p2) == Approx{0.}.margin(1e-13));
-        CHECK(basis4(p3) == Approx{0.}.margin(1e-13));
-
-        CHECK(basis5(p0) == Approx{.25 * .25 * .75}.margin(1e-13));
-        CHECK(basis5(p1) == Approx{.25 * .75 * .75}.margin(1e-13));
-        CHECK(basis5(p2) == Approx{0.}.margin(1e-13));
-        CHECK(basis5(p3) == Approx{0.}.margin(1e-13));
-
-        CHECK(basis6(p0) == Approx{.25 * .25 * .75}.margin(1e-13));
-        CHECK(basis6(p1) == Approx{.25 * .75 * .75}.margin(1e-13));
-        CHECK(basis6(p2) == Approx{0.}.margin(1e-13));
-        CHECK(basis6(p3) == Approx{.5}.margin(1e-13));
-
-        CHECK(basis7(p0) == Approx{.25 * .25 * .25}.margin(1e-13));
-        CHECK(basis7(p1) == Approx{.75 * .75 * .75}.margin(1e-13));
-        CHECK(basis7(p2) == Approx{0.}.margin(1e-13));
-        CHECK(basis7(p3) == Approx{.5}.margin(1e-13));
+        CHECK(basis_vals4[0] == approx(0.));
+        CHECK(basis_vals4[1] == approx(0.));
+        CHECK(basis_vals4[2] == approx(0.));
+        CHECK(basis_vals4[3] == approx(0.));
+        CHECK(basis_vals4[4] == approx(0.));
+        CHECK(basis_vals4[5] == approx(0.));
+        CHECK(basis_vals4[6] == approx(.5));
+        CHECK(basis_vals4[7] == approx(.5));
     }
 }
 
@@ -336,8 +331,9 @@ TEST_CASE("Basis function derivatives", "[mapping]")
         const auto element    = getLineElement();
         const auto test_point = Point{0.};
         const auto jac        = getNatJacobiMatGenerator(element.data)(test_point);
-        const auto ref_ders = computeRefBasisDers< decltype(element)::type, decltype(element)::order, LB >(test_point);
-        const auto bf_der   = computePhysBasisDers(jac, ref_ders);
+        const auto ref_ders =
+            computeReferenceBasisDerivatives< decltype(element)::type, decltype(element)::order, LB >(test_point);
+        const auto bf_der = computePhysBasisDers(jac, ref_ders);
         CHECK(bf_der(0, 0) == Approx(-1.).margin(1e-13));
         CHECK(bf_der(0, 1) == Approx(1.).margin(1e-13));
     }
@@ -347,8 +343,9 @@ TEST_CASE("Basis function derivatives", "[mapping]")
         const auto element    = getQuadElement();
         const auto test_point = Point{0., 0.};
         const auto jac        = getNatJacobiMatGenerator(element.data)(test_point);
-        const auto ref_ders = computeRefBasisDers< decltype(element)::type, decltype(element)::order, LB >(test_point);
-        const auto bf_der   = computePhysBasisDers(jac, ref_ders);
+        const auto ref_ders =
+            computeReferenceBasisDerivatives< decltype(element)::type, decltype(element)::order, LB >(test_point);
+        const auto bf_der = computePhysBasisDers(jac, ref_ders);
         CHECK(bf_der(0, 0) == Approx(-.25).margin(1e-13));
         CHECK(bf_der(1, 0) == Approx(-.25).margin(1e-13));
         CHECK(bf_der(0, 1) == Approx(.5).margin(1e-13));
@@ -373,8 +370,9 @@ TEST_CASE("Basis function derivatives", "[mapping]")
                                                                0};
         const auto test_point = Point{0., 0., 0.};
         const auto jac        = getNatJacobiMatGenerator(element.data)(test_point);
-        const auto ref_ders = computeRefBasisDers< decltype(element)::type, decltype(element)::order, LB >(test_point);
-        const auto bf_der   = computePhysBasisDers(jac, ref_ders);
+        const auto ref_ders =
+            computeReferenceBasisDerivatives< decltype(element)::type, decltype(element)::order, LB >(test_point);
+        const auto bf_der = computePhysBasisDers(jac, ref_ders);
         CHECK(bf_der(0, 0) == Approx(-.25).margin(1e-13));
         CHECK(bf_der(1, 0) == Approx(-.25).margin(1e-13));
         CHECK(bf_der(2, 0) == Approx(-.25).margin(1e-13));

@@ -25,12 +25,12 @@ template < BasisType                                                           B
            el_o_t                                                              EO,
            std::convertible_to< Point< mesh::Element< ET, EO >::native_dim > > Point_t,
            size_t                                                              n_points >
-auto evalRefBasisAtPoints(const std::array< Point_t, n_points >& points) -> ReferenceBasisAtPoints< ET, EO, n_points >
+auto evalRefBasisAtPoints(const std::array< Point_t, n_points >& pts) -> ReferenceBasisAtPoints< ET, EO, n_points >
 {
-    auto retval                    = ReferenceBasisAtPoints< ET, EO, n_points >{};
-    auto& [basis_vals, basis_ders] = retval;
-    std::ranges::transform(points, basis_vals.begin(), [](auto pt) { return computeRefBasis< ET, EO, BT >(pt); });
-    std::ranges::transform(points, basis_ders.begin(), [](auto pt) { return computeRefBasisDers< ET, EO, BT >(pt); });
+    auto retval        = ReferenceBasisAtPoints< ET, EO, n_points >{};
+    auto& [vals, ders] = retval;
+    std::ranges::transform(pts, vals.begin(), [](auto p) { return computeReferenceBases< ET, EO, BT >(p); });
+    std::ranges::transform(pts, ders.begin(), [](auto p) { return computeReferenceBasisDerivatives< ET, EO, BT >(p); });
     return retval;
 }
 } // namespace detail

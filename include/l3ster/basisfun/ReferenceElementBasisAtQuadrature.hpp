@@ -10,11 +10,13 @@ namespace lstr::basis
 template < BasisType BT, mesh::ElementType ET, el_o_t EO, quad::QuadratureType QT, q_o_t QO >
 const auto& getReferenceBasisAtDomainQuadrature()
 {
-    static const auto value = std::invoke([] {
+    static const auto           value = std::invoke([] {
         const auto quadrature = quad::getQuadrature< QT, QO, ET >();
         return ReferenceBasisAtQuadrature< ET, EO, quadrature.size >{
-            .quadrature = quadrature, .basis = detail::evalRefBasisAtPoints< BT, ET, EO >(quadrature.points)};
+                      .quadrature = quadrature, .basis = detail::evalRefBasisAtPoints< BT, ET, EO >(quadrature.points)};
     });
+    [[maybe_unused]] const auto basis_span =
+        std::span{reinterpret_cast< const double* >(&value.basis), sizeof(value.basis) / sizeof(double)};
     return value;
 }
 

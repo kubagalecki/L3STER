@@ -6,17 +6,17 @@
 
 namespace lstr::map
 {
-template < mesh::ElementType ET, el_o_t EO >
-val_t computeBoundaryIntegralJacobian(el_side_t side, const JacobiMat< ET, EO >& jacobi_mat)
+template < mesh::ElementType ET >
+val_t computeBoundaryIntegralJacobian(el_side_t side, const JacobiMat< ET >& jacobi_mat)
 {
-    if constexpr (mesh::Element< ET, EO >::native_dim == 1)
+    if constexpr (mesh::Element< ET, 1 >::native_dim == 1)
         return 0.;
     else
     {
         const auto& [rot_mat, _] = getReferenceBoundaryToSideMapping< ET >(side);
-        if constexpr (mesh::Element< ET, EO >::native_dim == 2)
+        if constexpr (mesh::Element< ET, 1 >::native_dim == 2)
             return (jacobi_mat.transpose() * rot_mat.col(0)).norm();
-        else if constexpr (mesh::Element< ET, EO >::native_dim == 3)
+        else if constexpr (mesh::Element< ET, 1 >::native_dim == 3)
         {
             const Eigen::Matrix< val_t, 3, 2 > d_shape_d_ref =
                 jacobi_mat.transpose() * rot_mat.template leftCols< 2 >();

@@ -25,7 +25,7 @@ template < typename T, size_t N, typename UnaryOp >
 constexpr auto elwise(const std::array< T, N >& a, UnaryOp&& op)
     requires std::invocable< UnaryOp, const T& >
 {
-    using Ret = std::invoke_result_t< UnaryOp, const T& >;
+    using Ret = std::remove_cvref_t< std::invoke_result_t< UnaryOp, const T& > >;
     std::array< Ret, N > retval;
     std::ranges::transform(a, retval.begin(), std::forward< UnaryOp >(op));
     return retval;
@@ -35,7 +35,7 @@ template < typename T1, typename T2, size_t N, typename BinaryOp >
 constexpr auto elwise(const std::array< T1, N >& a, const std::array< T2, N >& b, BinaryOp&& op)
     requires std::invocable< BinaryOp, const T1&, const T2& >
 {
-    using Ret = std::invoke_result_t< BinaryOp, const T1&, const T2& >;
+    using Ret = std::remove_cvref_t< std::invoke_result_t< BinaryOp, const T1&, const T2& > >;
     std::array< Ret, N > retval;
     std::ranges::transform(a, b, retval.begin(), std::forward< BinaryOp >(op));
     return retval;

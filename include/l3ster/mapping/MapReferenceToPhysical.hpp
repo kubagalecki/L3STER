@@ -1,7 +1,7 @@
-#ifndef L3STER_MESH_MAPREFERENCETOPHYSICAL_HPP
-#define L3STER_MESH_MAPREFERENCETOPHYSICAL_HPP
+#ifndef L3STER_MAPPING_MAPREFERENCETOPHYSICAL_HPP
+#define L3STER_MAPPING_MAPREFERENCETOPHYSICAL_HPP
 
-#include "l3ster/basisfun/ValueAt.hpp"
+#include "l3ster/basisfun/ReferenceBasisFunction.hpp"
 #include "l3ster/mapping/BoundaryIntegralJacobian.hpp"
 #include "l3ster/mapping/BoundaryNormal.hpp"
 #include "l3ster/mapping/ComputePhysBasisDer.hpp"
@@ -10,6 +10,19 @@
 
 namespace lstr::map
 {
+namespace detail
+{
+template < basis::BasisType BT, mesh::ElementType T, el_o_t O, RandomAccessRangeOf< val_t > R >
+val_t valueAt(R&& node_vals, const Point< mesh::Element< T, O >::native_dim >& point)
+{
+    const auto basis_vals = basis::computeReferenceBases< T, O, BT >(point);
+    val_t      retval     = 0.;
+    for (size_t i = 0; i != std::ranges::size(node_vals); ++i)
+        retval += node_vals[i] * basis_vals[i];
+    return retval;
+}
+} // namespace detail
+
 /// Map point in reference space to physical space
 template < mesh::ElementType T, el_o_t O >
 auto mapToPhysicalSpace(const mesh::ElementData< T, O >&                  element_data,
@@ -18,7 +31,7 @@ auto mapToPhysicalSpace(const mesh::ElementData< T, O >&                  elemen
 {
     const auto& vertices    = element_data.vertices;
     const auto  compute_dim = [&](ptrdiff_t dim) {
-        return valueAt< basis::BasisType::Lagrange, T, 1 >(
+        return detail::valueAt< basis::BasisType::Lagrange, T, 1 >(
             vertices | std::views::transform([&](const Point< 3 >& p) { return p[dim]; }), point);
     };
     return Point{compute_dim(0), compute_dim(1), compute_dim(2)};
@@ -53,7 +66,7 @@ struct BoundaryMappingResult
     {
         const auto jacobi_mat = std::invoke(jacobi_gen, point);
         phys_basis_ders       = computePhysBasisDers(jacobi_mat, ref_basis_ders);
-        jacobian              = computeBoundaryIntegralJacobian< ET, EO >(side, jacobi_mat);
+        jacobian              = computeBoundaryIntegralJacobian< ET >(side, jacobi_mat);
         normal                = computeBoundaryNormal< ET, EO >(side, jacobi_mat);
     }
 
@@ -88,4 +101,4 @@ auto mapBoundary(JacobiMatGenerator&&                                           
     return retval_t{std::forward< JacobiMatGenerator >(jacobi_gen), point, ref_basis_ders, side, el_typeinfo};
 }
 } // namespace lstr::map
-#endif // L3STER_MESH_MAPREFERENCETOPHYSICAL_HPP
+#endif // L3STER_MAPPING_MAPREFERENCETOPHYSICAL_HPP

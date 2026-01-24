@@ -11,16 +11,14 @@ namespace detail
 template < el_o_t O >
 auto makeLineNodeLocations()
 {
-    std::array< Point< 1 >, O + 1 > retval;
-    std::ranges::transform(math::getLobattoRuleAbsc< val_t, O + 1 >(), begin(retval), [](val_t x) { return Point{x}; });
-    return retval;
+    return util::elwise(math::getLobattoRuleAbsc< val_t, O + 1 >(), [](auto x) { return Point{x}; });
 }
 
 template < el_o_t O >
 auto makeQuadNodeLocations()
 {
     constexpr auto nodes_per_edge = O + 1;
-    const auto     absc           = math::getLobattoRuleAbsc< val_t, nodes_per_edge >();
+    const auto&    absc           = math::getLobattoRuleAbsc< val_t, nodes_per_edge >();
     auto           retval         = std::array< Point< 2 >, nodes_per_edge * nodes_per_edge >{};
     for (size_t i = 0; auto eta : absc)
         for (auto xi : absc)
@@ -33,7 +31,7 @@ auto makeHexNodeLocations()
 {
     constexpr auto nodes_per_edge = O + 1;
     constexpr auto total_nodes    = nodes_per_edge * nodes_per_edge * nodes_per_edge;
-    const auto     absc           = math::getLobattoRuleAbsc< val_t, nodes_per_edge >();
+    const auto&    absc           = math::getLobattoRuleAbsc< val_t, nodes_per_edge >();
     auto           retval         = std::array< Point< 3 >, total_nodes >{};
     for (size_t i = 0; auto zeta : absc)
         for (auto eta : absc)

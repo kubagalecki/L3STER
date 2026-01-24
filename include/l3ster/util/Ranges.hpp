@@ -5,6 +5,7 @@
 #include "l3ster/util/Common.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <ranges>
 
 namespace lstr::util
@@ -64,6 +65,13 @@ auto concatArrays(const std::array< T, Ns >&... arrays) -> std::array< T, (Ns + 
     };
     (write_array(arrays), ...);
     return retval;
+}
+
+template < std::integral T >
+auto bitView(T n)
+{
+    return std::views::iota(0uz, static_cast< size_t >(std::bit_width(n))) |
+           std::views::transform([n](size_t bit) { return static_cast< bool >(n >> bit & 1); });
 }
 } // namespace lstr::util
 #endif // L3STER_UTIL_RANGES_HPP
