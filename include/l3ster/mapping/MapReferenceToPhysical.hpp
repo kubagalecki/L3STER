@@ -10,31 +10,19 @@
 
 namespace lstr::map
 {
-namespace detail
-{
-template < basis::BasisType BT, mesh::ElementType T, el_o_t O, RandomAccessRangeOf< val_t > R >
-val_t valueAt(R&& node_vals, const Point< mesh::Element< T, O >::native_dim >& point)
-{
-    const auto basis_vals = basis::computeReferenceBases< T, O, BT >(point);
-    val_t      retval     = 0.;
-    for (size_t i = 0; i != std::ranges::size(node_vals); ++i)
-        retval += node_vals[i] * basis_vals[i];
-    return retval;
-}
-} // namespace detail
-
 /// Map point in reference space to physical space
 template < mesh::ElementType T, el_o_t O >
 auto mapToPhysicalSpace(const mesh::ElementData< T, O >&                  element_data,
                         const Point< mesh::Element< T, O >::native_dim >& point) -> Point< 3 >
-    requires(util::contains({mesh::ElementType::Line, mesh::ElementType::Quad, mesh::ElementType::Hex}, T))
+    requires(mesh::isGeomType(T))
 {
-    const auto& vertices    = element_data.vertices;
-    const auto  compute_dim = [&](ptrdiff_t dim) {
-        return detail::valueAt< basis::BasisType::Lagrange, T, 1 >(
-            vertices | std::views::transform([&](const Point< 3 >& p) { return p[dim]; }), point);
-    };
-    return Point{compute_dim(0), compute_dim(1), compute_dim(2)};
+    constexpr auto GBT             = basis::BasisType::Lagrange;
+    constexpr auto GT              = mesh::ElementTraits< mesh::Element< T, O > >::geom_type;
+    constexpr auto GO              = mesh::ElementTraits< mesh::Element< T, O > >::geom_order;
+    const auto     geom_basis_vals = basis::computeReferenceBases< GT, GO, GBT >(point);
+    const auto     verts_mat       = element_data.getEigenMap();
+    const auto     phys_coords     = (verts_mat * geom_basis_vals).eval();
+    return Point{phys_coords[0], phys_coords[1], phys_coords[2]};
 }
 
 template < int n_bases, int dim >

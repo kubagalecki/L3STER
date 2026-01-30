@@ -39,7 +39,8 @@ void assembleGlobalSystem(const DomainEquationKernel< Kernel, params >&         
         {
             constexpr auto  BT             = asm_opts.basis_type;
             constexpr auto  QT             = asm_opts.quad_type;
-            constexpr q_o_t QO             = 2 * asm_opts.order(EO);
+            constexpr auto  GO             = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
+            constexpr q_o_t QO             = 2 * asm_opts.order(EO) + (GO - 1);
             const auto      field_vals     = field_access.getGloballyIndexed(element.nodes);
             const auto&     rbq            = basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
             const auto& [loc_mat, loc_rhs] = assembleLocalSystem(kernel, element, field_vals, rbq, time);
@@ -82,7 +83,8 @@ void assembleGlobalSystem(const BoundaryEquationKernel< Kernel, params >&       
             {
                 constexpr auto  BT         = asm_opts.basis_type;
                 constexpr auto  QT         = asm_opts.quad_type;
-                constexpr q_o_t QO         = 2 * asm_opts.order(EO);
+                constexpr auto  GO         = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
+                constexpr q_o_t QO         = 2 * asm_opts.order(EO) + (GO - 1);
                 const auto      field_vals = field_access.getGloballyIndexed(el_view->nodes);
                 const auto& qbv = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
                 const auto& [loc_mat, loc_rhs] = assembleLocalSystem(kernel, el_view, field_vals, qbv, time);

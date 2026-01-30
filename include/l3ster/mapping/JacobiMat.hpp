@@ -13,19 +13,16 @@ using JacobiMat = Eigen::Matrix< val_t, mesh::Element< ET, 1 >::native_dim, mesh
 
 // Note: the generator returned from this function cannot outlive the element data passed as its argument
 template < mesh::ElementType T, el_o_t O >
-    requires(T == mesh::ElementType::Line or T == mesh::ElementType::Quad or T == mesh::ElementType::Hex)
 auto getNatJacobiMatGenerator(const mesh::ElementData< T, O >& element_data)
 {
-    constexpr auto n_vert_comps = mesh::ElementData< T, O >::vertex_array_t::value_type::dimension;
-    constexpr auto nat_dim      = mesh::Element< T, O >::native_dim;
-    constexpr auto n_o1_nodes   = mesh::Element< T, 1 >::n_nodes;
-    using vert_tab_t            = Eigen::Matrix< val_t, n_vert_comps, n_o1_nodes >;
-    return [&](const Point< mesh::Element< T, O >::native_dim >& point) -> JacobiMat< T > {
-        const auto shape_ders = basis::computeReferenceBasisDerivatives< T, 1, basis::BasisType::Lagrange >(point);
-        const auto verts_raw  = element_data.vertices.front().coords.data();
-        const auto vert_tab   = Eigen::Map< const vert_tab_t >{verts_raw};
-        auto       retval     = JacobiMat< T >{shape_ders * vert_tab.template topRows< nat_dim >().transpose()};
-        return retval;
+    using traits       = mesh::ElementTraits< mesh::Element< T, O > >;
+    constexpr auto GT  = traits::geom_type;
+    constexpr auto GO  = traits::geom_order;
+    constexpr auto GBT = basis::BasisType::Lagrange;
+    return [&](const Point< traits::native_dim >& point) -> JacobiMat< T > {
+        const auto shape_ders = basis::computeReferenceBasisDerivatives< GT, GO, GBT >(point);
+        const auto vert_mat   = element_data.getEigenMap();
+        return shape_ders * vert_mat.template topRows< traits::native_dim >().transpose();
     };
 }
 } // namespace lstr::map

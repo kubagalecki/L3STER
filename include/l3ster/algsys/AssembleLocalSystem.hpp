@@ -38,7 +38,8 @@ struct AssemblyOptions
                                                      [[maybe_unused]] KernelParams kernel_params) const
     {
         using enum mesh::ElementType;
-        return eval_strategy != LocalEvalStrategy::LocalElement and (ET == Quad or ET == Hex);
+        return eval_strategy != LocalEvalStrategy::LocalElement and
+               std::ranges::contains(std::array{Quad, Quad2, Hex, Hex2}, ET);
     }
     [[nodiscard]] constexpr bool useOddEven(el_o_t EO) const
     {

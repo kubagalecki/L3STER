@@ -6,7 +6,7 @@
 #include "l3ster/algsys/AssembleLocalSystem.hpp"
 #include "l3ster/algsys/SumFactorization.hpp"
 #include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
-#include "l3ster/mesh/NodePhysicalLocation.hpp"
+#include "l3ster/mesh/NodeLocation.hpp"
 #include "l3ster/post/SolutionManager.hpp"
 
 #include "Kernels.hpp"
@@ -63,11 +63,12 @@ inline constexpr auto asm_opts = AssemblyOptions{.value_order = 2}; // over-inte
 template < mesh::ElementType ET, el_o_t EO >
 auto getReferenceBasis() -> const auto&
 {
+    constexpr auto GO = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
     return basis::getReferenceBasisAtDomainQuadrature< asm_opts.basis_type,
                                                        ET,
                                                        EO,
                                                        asm_opts.quad_type,
-                                                       2 * asm_opts.order(EO) >();
+                                                       2 * asm_opts.order(EO) + (GO - 1) >();
 }
 
 template < KernelParams params, el_o_t EO >

@@ -2,7 +2,7 @@
 #define L3STER_POST_VTKEXPORT_HPP
 
 #include "l3ster/dofs/NodeToDofMap.hpp"
-#include "l3ster/mesh/NodePhysicalLocation.hpp"
+#include "l3ster/mesh/NodeLocation.hpp"
 #include "l3ster/post/SolutionManager.hpp"
 #include "l3ster/util/Base64.hpp"
 #include "l3ster/util/TrilinosUtils.hpp"
@@ -192,28 +192,15 @@ inline constexpr std::string_view vtu_postamble = "\n</AppendedData>\n</VTKFile>
 template < mesh::ElementType ET, el_o_t EO >
 consteval size_t numSubels()
 {
-    constexpr auto el_o = static_cast< size_t >(EO);
-    if constexpr (ET == mesh::ElementType::Line)
-        return el_o;
-    else if constexpr (ET == mesh::ElementType::Quad)
-        return el_o * el_o;
-    else if constexpr (ET == mesh::ElementType::Hex)
-        return el_o * el_o * el_o;
-    else
-        static_assert(util::always_false< ET >); // Assert every element type has a corresponding branch
+    static_assert(mesh::isGeomType(ET));
+    return util::integralPower(EO, mesh::Element< ET, EO >::native_dim);
 }
 
 template < mesh::ElementType ET, el_o_t EO >
 consteval size_t numSubelNodes()
 {
-    if constexpr (ET == mesh::ElementType::Line)
-        return 2;
-    else if constexpr (ET == mesh::ElementType::Quad)
-        return 4;
-    else if constexpr (ET == mesh::ElementType::Hex)
-        return 8;
-    else
-        static_assert(util::always_false< ET >); // Assert every element type has a corresponding branch
+    static_assert(mesh::isGeomType(ET));
+    return 1uz << mesh::Element< ET, EO >::native_dim;
 }
 
 template < mesh::ElementType ET, el_o_t EO >
@@ -222,70 +209,71 @@ consteval size_t numSerialTopoEntries()
     return numSubels< ET, EO >() * numSubelNodes< ET, EO >();
 }
 
-template < mesh::ElementType ET, el_o_t EO >
+template < mesh::ElementType ET >
 consteval unsigned char subelCellType()
 {
-    if constexpr (ET == mesh::ElementType::Line)
+    static_assert(mesh::isGeomType(ET));
+    using enum mesh::ElementType;
+    switch (ET)
+    {
+    case Line:
         return 3;
-    else if constexpr (ET == mesh::ElementType::Quad)
+    case Quad:
         return 9;
-    else if constexpr (ET == mesh::ElementType::Hex)
+    case Hex:
         return 12;
-    else
-        static_assert(util::always_false< ET >); // Assert every element type has a corresponding branch
+    default:
+        std::unreachable();
+    }
 }
 
 template < mesh::ElementType ET, el_o_t EO >
 auto serializeElementSubtopo(const mesh::Element< ET, EO >& element)
 {
-    const auto&                                            nodes = element.nodes;
-    std::array< n_id_t, numSerialTopoEntries< ET, EO >() > retval;
-    auto                                                   out_topo = retval.begin();
-    if constexpr (ET == mesh::ElementType::Line)
+    constexpr auto GT       = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_type;
+    const auto&    nodes    = element.nodes;
+    auto           retval   = std::array< n_id_t, numSerialTopoEntries< GT, EO >() >{};
+    auto           out_topo = retval.begin();
+    using enum mesh::ElementType;
+    constexpr auto nodes_per_side  = mesh::ElementTraits< mesh::Element< Line, EO > >::nodes_per_element;
+    constexpr auto nodes_per_layer = nodes_per_side * nodes_per_side;
+    constexpr auto iterspace1d     = std::views::iota(0uz, static_cast< size_t >(nodes_per_side) - 1);
+    switch (GT)
     {
-        for (size_t i = 0; i < nodes.size() - 1; ++i)
+    case Line:
+        for (size_t i : iterspace1d)
         {
             *out_topo++ = nodes[i];
             *out_topo++ = nodes[i + 1];
         }
+        return retval;
+    case Quad:
+        for (auto [row, col] : std::views::cartesian_product(iterspace1d, iterspace1d))
+        {
+            const size_t base = row * nodes_per_side + col;
+            *out_topo++       = nodes[base];
+            *out_topo++       = nodes[base + 1];
+            *out_topo++       = nodes[base + nodes_per_side + 1];
+            *out_topo++       = nodes[base + nodes_per_side];
+        }
+        return retval;
+    case Hex:
+        for (auto [layer, row, col] : std::views::cartesian_product(iterspace1d, iterspace1d, iterspace1d))
+        {
+            const size_t base = layer * nodes_per_layer + row * nodes_per_side + col;
+            *out_topo++       = nodes[base];
+            *out_topo++       = nodes[base + 1];
+            *out_topo++       = nodes[base + nodes_per_side + 1];
+            *out_topo++       = nodes[base + nodes_per_side];
+            *out_topo++       = nodes[base + nodes_per_layer];
+            *out_topo++       = nodes[base + 1 + nodes_per_layer];
+            *out_topo++       = nodes[base + nodes_per_side + 1 + nodes_per_layer];
+            *out_topo++       = nodes[base + nodes_per_side + nodes_per_layer];
+        }
+        return retval;
+    default:
+        std::unreachable();
     }
-    else if constexpr (ET == mesh::ElementType::Quad)
-    {
-        constexpr auto node_per_side =
-            mesh::ElementTraits< mesh::Element< mesh::ElementType::Line, EO > >::nodes_per_element;
-        for (size_t row = 0; row < node_per_side - 1; ++row)
-            for (size_t col = 0; col < node_per_side - 1; ++col)
-            {
-                const size_t base = row * node_per_side + col;
-                *out_topo++       = nodes[base];
-                *out_topo++       = nodes[base + 1];
-                *out_topo++       = nodes[base + node_per_side + 1];
-                *out_topo++       = nodes[base + node_per_side];
-            }
-    }
-    else if constexpr (ET == mesh::ElementType::Hex)
-    {
-        constexpr auto nodes_per_side =
-            mesh::ElementTraits< mesh::Element< mesh::ElementType::Line, EO > >::nodes_per_element;
-        constexpr auto nodes_per_layer = nodes_per_side * nodes_per_side;
-        for (size_t layer = 0; layer < nodes_per_side - 1; ++layer)
-            for (size_t row = 0; row < nodes_per_side - 1; ++row)
-                for (size_t col = 0; col < nodes_per_side - 1; ++col)
-                {
-                    const size_t base = layer * nodes_per_layer + row * nodes_per_side + col;
-                    *out_topo++       = nodes[base];
-                    *out_topo++       = nodes[base + 1];
-                    *out_topo++       = nodes[base + nodes_per_side + 1];
-                    *out_topo++       = nodes[base + nodes_per_side];
-                    *out_topo++       = nodes[base + nodes_per_layer];
-                    *out_topo++       = nodes[base + 1 + nodes_per_layer];
-                    *out_topo++       = nodes[base + nodes_per_side + 1 + nodes_per_layer];
-                    *out_topo++       = nodes[base + nodes_per_side + nodes_per_layer];
-                }
-    }
-    else
-        static_assert(util::always_false< ET >); // Assert every element type has a corresponding branch
-    return retval;
 }
 
 template < el_o_t... orders >
@@ -327,14 +315,14 @@ auto serializeTopology(const mesh::MeshPartition< orders... >& mesh)
 
     unsigned   offset          = 0;
     const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
-        const auto serialized_subtopo = serializeElementSubtopo(element);
+        constexpr auto GT                 = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_type;
+        const auto     serialized_subtopo = serializeElementSubtopo(element);
         std::ranges::transform(serialized_subtopo, std::back_inserter(topo_data), [&mesh](n_id_t node) {
             return mesh.getNodeOwnership().getLocalIndex(node);
         });
-        std::fill_n(std::back_inserter(cell_types), numSubels< ET, EO >(), subelCellType< ET, EO >());
-        std::generate_n(std::back_inserter(offsets), numSubels< ET, EO >(), [&offset]() {
-            offset += static_cast< decltype(offset) >(numSubelNodes< ET, EO >());
-            return offset;
+        std::fill_n(std::back_inserter(cell_types), numSubels< GT, EO >(), subelCellType< GT >());
+        std::generate_n(std::back_inserter(offsets), numSubels< GT, EO >(), [&offset] {
+            return offset += static_cast< decltype(offset) >(numSubelNodes< GT, EO >());
         });
     };
     mesh.visit(process_element);

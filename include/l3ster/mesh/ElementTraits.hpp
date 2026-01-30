@@ -63,7 +63,9 @@ template < el_o_t O >
 struct ElementTraits< Element< ElementType::Hex, O > >
 {
     static constexpr ElementType type              = ElementType::Hex;
+    static constexpr ElementType geom_type         = ElementType::Hex;
     static constexpr el_o_t      order             = O;
+    static constexpr el_o_t      geom_order        = 1;
     static constexpr el_locind_t nodes_per_element = (O + 1) * (O + 1) * (O + 1);
     static constexpr dim_t       native_dim        = 3;
     static constexpr el_side_t   n_sides           = 6;
@@ -108,7 +110,9 @@ template < el_o_t O >
 struct ElementTraits< Element< ElementType::Quad, O > >
 {
     static constexpr ElementType type              = ElementType::Quad;
+    static constexpr ElementType geom_type         = ElementType::Quad;
     static constexpr el_o_t      order             = O;
+    static constexpr el_o_t      geom_order        = 1;
     static constexpr el_locind_t nodes_per_element = (O + 1) * (O + 1);
     static constexpr dim_t       native_dim        = 2;
     static constexpr el_side_t   n_sides           = 4;
@@ -144,7 +148,9 @@ template < el_o_t O >
 struct ElementTraits< Element< ElementType::Line, O > >
 {
     static constexpr ElementType type              = ElementType::Line;
+    static constexpr ElementType geom_type         = ElementType::Line;
     static constexpr el_o_t      order             = O;
+    static constexpr el_o_t      geom_order        = 1;
     static constexpr el_locind_t nodes_per_element = (O + 1);
     static constexpr dim_t       native_dim        = 1;
     static constexpr el_side_t   n_sides           = 2;
@@ -167,7 +173,7 @@ constexpr auto getSideNodeIndices(el_side_t side) -> std::span< const el_locind_
     if constexpr (Array_c< decltype(ElementTraits< Element< ET, EO > >::boundary_table) >)
         return {ElementTraits< Element< ET, EO > >::boundary_table.at(side)};
     else
-        static_assert(util::always_false< ET >, "Unimplemented");
+        static_assert(util::always_false< ET >);
 }
 } // namespace lstr::mesh
 #endif // L3STER_MESH_ELEMENTTRAITS_HPP

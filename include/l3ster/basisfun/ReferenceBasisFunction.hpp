@@ -70,6 +70,7 @@ const auto& getLagrangeBasisDerivativeTable()
 
 template < mesh::ElementType T, el_o_t O, BasisType BT >
 auto computeReferenceBases(const Point< mesh::Element< T, O >::native_dim >& point)
+    requires(mesh::isGeomType(T))
 {
     // Only basis currently supported
     static_assert(BT == BasisType::Lagrange);
@@ -113,13 +114,12 @@ auto computeReferenceBases(const Point< mesh::Element< T, O >::native_dim >& poi
             retval[out_ind]    = val;
         }
     }
-    else
-        static_assert(util::always_false< T >);
     return retval;
 }
 
 template < mesh::ElementType T, el_o_t O, BasisType BT >
 auto computeReferenceBasisDerivatives(const Point< mesh::Element< T, O >::native_dim >& point)
+    requires(mesh::isGeomType(T))
 {
     // Only basis currently supported
     static_assert(BT == BasisType::Lagrange);
@@ -179,8 +179,6 @@ auto computeReferenceBasisDerivatives(const Point< mesh::Element< T, O >::native
             retval(2, out_ind) = dz;
         }
     }
-    else
-        static_assert(util::always_false< T >);
     return retval;
 }
 } // namespace lstr::basis

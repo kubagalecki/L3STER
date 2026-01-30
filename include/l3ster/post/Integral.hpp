@@ -65,7 +65,8 @@ auto evalLocalIntegral(const ResidualDomainKernel< Kernel, params >& kernel,
         {
             constexpr auto BT         = options.basis_type;
             constexpr auto QT         = options.quad_type;
-            constexpr auto QO         = options.order(EO);
+            constexpr auto GO         = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
+            constexpr auto QO         = options.order(EO) + (GO - 1);
             const auto     field_vals = field_access.getGloballyIndexed(element.nodes);
             const auto&    qbv        = basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
             return evalElementIntegral(kernel, element, field_vals, qbv, time);
@@ -92,7 +93,8 @@ auto evalLocalIntegral(const ResidualBoundaryKernel< Kernel, params >& kernel,
         {
             constexpr auto BT         = options.basis_type;
             constexpr auto QT         = options.quad_type;
-            constexpr auto QO         = options.order(EO);
+            constexpr auto GO         = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
+            constexpr auto QO         = options.order(EO) + (GO - 1);
             const auto     field_vals = field_access.getGloballyIndexed(el_view->nodes);
             const auto&    qbv = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
             return evalElementBoundaryIntegral(kernel, el_view, field_vals, qbv, time);

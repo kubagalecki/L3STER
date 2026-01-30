@@ -11,10 +11,11 @@ auto computeBoundaryNormal(
     const Eigen::Matrix< val_t, mesh::Element< ET, EO >::native_dim, mesh::Element< ET, EO >::native_dim >& jacobi_mat)
     -> Eigen::Vector< val_t, mesh::Element< ET, EO >::native_dim >
 {
-    Eigen::Vector< val_t, mesh::Element< ET, EO >::native_dim > retval;
-    if constexpr (ET == mesh::ElementType::Line)
+    constexpr auto GT     = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_type;
+    auto           retval = Eigen::Vector< val_t, mesh::Element< ET, EO >::native_dim >{};
+    if constexpr (GT == mesh::ElementType::Line)
         retval[0] = side == 0 ? -1. : 1.;
-    else if constexpr (ET == mesh::ElementType::Quad)
+    else if constexpr (GT == mesh::ElementType::Quad)
     {
         switch (side)
         {
@@ -36,7 +37,7 @@ auto computeBoundaryNormal(
         }
         retval.normalize();
     }
-    else if constexpr (ET == mesh::ElementType::Hex)
+    else if constexpr (GT == mesh::ElementType::Hex)
     {
         switch (side)
         {

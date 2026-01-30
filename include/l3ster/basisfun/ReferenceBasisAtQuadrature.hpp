@@ -19,8 +19,11 @@ struct ReferenceBasisAtQuadrature
             std::invoke(fun, quad_point, quad_wgt, basis_val, basis_der);
     }
 
-    quad::Quadrature< QL, mesh::Element< ET, EO >::native_dim > quadrature;
-    ReferenceBasisAtPoints< ET, EO, QL >                        basis;
+    using elem_traits = mesh::ElementTraits< mesh::Element< ET, EO > >;
+
+    quad::Quadrature< QL, mesh::Element< ET, EO >::native_dim >                   quadrature;
+    ReferenceBasisAtPoints< ET, EO, QL >                                          basis;
+    ReferenceBasisAtPoints< elem_traits::geom_type, elem_traits::geom_order, QL > geom_basis;
 };
 } // namespace lstr::basis
 #endif // L3STER_BASISFUN_REFERENCEBASISATQUADRATURE_HPP

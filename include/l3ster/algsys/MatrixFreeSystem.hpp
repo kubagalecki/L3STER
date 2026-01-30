@@ -603,9 +603,10 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeInitKernel(
         constexpr auto params     = Kernel::parameters;
         constexpr auto ET         = std::decay_t< decltype(element) >::type;
         constexpr auto EO         = std::decay_t< decltype(element) >::order;
+        constexpr auto GO         = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
         using CommonData          = detail::CommonElemData< field_inds, params, n_fields, max_dofs_per_node, ET, EO >;
-        static constexpr q_o_t QO = 2 * asm_opts.order(EO);
-        constexpr bool is_domain  = std::same_as< std::decay_t< decltype(element) >, mesh::LocalElementView< ET, EO > >;
+        constexpr q_o_t QO        = 2 * asm_opts.order(EO) + (GO - 1);
+        constexpr bool  is_domain = std::same_as< std::decay_t< decltype(element) >, mesh::LocalElementView< ET, EO > >;
         if constexpr (mesh::Element< ET, EO >::native_dim == params.dimension)
         {
             const auto rhs_access          = rhs_access_generator(m_rhs_view);
@@ -652,8 +653,9 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeEvalKernel(
         constexpr auto QT         = asm_opts.quad_type;
         constexpr auto ET         = std::decay_t< decltype(element) >::type;
         constexpr auto EO         = std::decay_t< decltype(element) >::order;
+        constexpr auto GO         = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
         using CommonData          = detail::CommonElemData< field_inds, params, n_fields, max_dofs_per_node, ET, EO >;
-        constexpr q_o_t QO        = 2 * asm_opts.order(EO);
+        constexpr q_o_t QO        = 2 * asm_opts.order(EO) + (GO - 1);
         constexpr bool  is_domain = std::same_as< std::decay_t< decltype(element) >, mesh::LocalElementView< ET, EO > >;
         constexpr bool  use_sum_factorization = asm_opts.useSumFactorization(ET, EO, params);
         if constexpr (mesh::Element< ET, EO >::native_dim == params.dimension)

@@ -2,6 +2,7 @@
 #define L3STER_BASISFUN_REFERENCEBASISATPOINTS_HPP
 
 #include "l3ster/basisfun/ReferenceBasisFunction.hpp"
+#include "l3ster/mesh/NodeLocation.hpp"
 
 namespace lstr::basis
 {
@@ -18,8 +19,6 @@ struct ReferenceBasisAtPoints
     basis_ders_t derivatives;
 };
 
-namespace detail
-{
 template < BasisType                                                           BT,
            mesh::ElementType                                                   ET,
            el_o_t                                                              EO,
@@ -27,12 +26,23 @@ template < BasisType                                                           B
            size_t                                                              n_points >
 auto evalRefBasisAtPoints(const std::array< Point_t, n_points >& pts) -> ReferenceBasisAtPoints< ET, EO, n_points >
 {
-    auto retval        = ReferenceBasisAtPoints< ET, EO, n_points >{};
-    auto& [vals, ders] = retval;
-    std::ranges::transform(pts, vals.begin(), [](auto p) { return computeReferenceBases< ET, EO, BT >(p); });
-    std::ranges::transform(pts, ders.begin(), [](auto p) { return computeReferenceBasisDerivatives< ET, EO, BT >(p); });
+    using traits          = mesh::ElementTraits< mesh::Element< ET, EO > >;
+    constexpr auto GT     = traits::geom_type;
+    auto           retval = ReferenceBasisAtPoints< ET, EO, n_points >{};
+    auto& [vals, ders]    = retval;
+    std::ranges::transform(pts, vals.begin(), [](auto p) { return computeReferenceBases< GT, EO, BT >(p); });
+    std::ranges::transform(pts, ders.begin(), [](auto p) { return computeReferenceBasisDerivatives< GT, EO, BT >(p); });
     return retval;
 }
-} // namespace detail
+
+template < mesh::ElementType ET, el_o_t EO, BasisType BT = BasisType::Lagrange >
+const auto& getBasisAtNodes()
+{
+    static const ReferenceBasisAtPoints< ET, EO, mesh::Element< ET, EO >::n_nodes > retval = std::invoke([] {
+        const auto& reference_locations = mesh::getNodeLocations< ET, EO >();
+        return evalRefBasisAtPoints< BT, ET, EO >(reference_locations);
+    });
+    return retval;
+}
 } // namespace lstr::basis
 #endif // L3STER_BASISFUN_REFERENCEBASISATPOINTS_HPP

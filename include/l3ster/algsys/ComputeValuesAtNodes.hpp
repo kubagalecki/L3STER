@@ -3,11 +3,11 @@
 
 #include "l3ster/algsys/AssembleLocalSystem.hpp"
 #include "l3ster/algsys/OperatorUtils.hpp"
-#include "l3ster/basisfun/ReferenceBasisAtNodes.hpp"
+#include "l3ster/basisfun/ReferenceBasisAtPoints.hpp"
 #include "l3ster/comm/ImportExport.hpp"
 #include "l3ster/dofs/NodeToDofMap.hpp"
 #include "l3ster/mesh/LocalMeshView.hpp"
-#include "l3ster/mesh/NodePhysicalLocation.hpp"
+#include "l3ster/mesh/NodeLocation.hpp"
 #include "l3ster/post/FieldAccess.hpp"
 #include "l3ster/util/Ranges.hpp"
 

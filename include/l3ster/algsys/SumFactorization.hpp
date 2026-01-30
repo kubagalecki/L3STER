@@ -25,9 +25,9 @@ namespace detail
 template < SumFactParams basis_params >
 auto makeInterpolationMatrix()
 {
-    const auto& [qps, _]    = quad::getReferenceQuadrature< basis_params.quad_type, basis_params.quad_order >();
-    const auto basis_at_qps = basis::detail::
-        evalRefBasisAtPoints< basis_params.basis_type, mesh::ElementType::Line, basis_params.basis_order >(qps);
+    const auto& [qps, _] = quad::getReferenceQuadrature< basis_params.quad_type, basis_params.quad_order >();
+    const auto basis_at_qps =
+        basis::evalRefBasisAtPoints< basis_params.basis_type, mesh::ElementType::Line, basis_params.basis_order >(qps);
     auto retval = util::eigen::RowMajorMatrix< val_t, basis_params.n_bases1d(), basis_params.n_qps1d() >{};
     for (q_o_t qi = 0; qi != basis_params.n_qps1d(); ++qi)
         for (el_o_t bi = 0; bi != basis_params.n_bases1d(); ++bi)
@@ -38,9 +38,9 @@ auto makeInterpolationMatrix()
 template < SumFactParams basis_params >
 auto makeDerivativeMatrix()
 {
-    const auto& [qps, _]    = quad::getReferenceQuadrature< basis_params.quad_type, basis_params.quad_order >();
-    const auto basis_at_qps = basis::detail::
-        evalRefBasisAtPoints< basis_params.basis_type, mesh::ElementType::Line, basis_params.basis_order >(qps);
+    const auto& [qps, _] = quad::getReferenceQuadrature< basis_params.quad_type, basis_params.quad_order >();
+    const auto basis_at_qps =
+        basis::evalRefBasisAtPoints< basis_params.basis_type, mesh::ElementType::Line, basis_params.basis_order >(qps);
     auto retval = util::eigen::RowMajorMatrix< val_t, basis_params.n_bases1d(), basis_params.n_qps1d() >{};
     for (q_o_t qi = 0; qi != basis_params.n_qps1d(); ++qi)
         for (el_o_t bi = 0; bi != basis_params.n_bases1d(); ++bi)
@@ -422,18 +422,20 @@ public:
     }
 };
 
-template < KernelParams params, AssemblyOptions asm_opts, el_o_t EO >
-inline constexpr auto make_basis_params = SumFactParams{.basis_order  = EO,
-                                                        .quad_order   = 2 * asm_opts.order(EO),
-                                                        .basis_type   = asm_opts.basis_type,
-                                                        .quad_type    = asm_opts.quad_type,
-                                                        .use_odd_even = asm_opts.useOddEven(EO)};
-template < KernelParams params, AssemblyOptions asm_opts, el_o_t EO >
-inline constexpr auto make_geom_basis_params = SumFactParams{.basis_order  = 1,
-                                                             .quad_order   = 2 * asm_opts.order(EO),
-                                                             .basis_type   = basis::BasisType::Lagrange,
-                                                             .quad_type    = asm_opts.quad_type,
-                                                             .use_odd_even = asm_opts.useOddEven(EO)};
+template < KernelParams params, AssemblyOptions asm_opts, mesh::ElementType ET, el_o_t EO >
+inline constexpr auto make_basis_params = SumFactParams{
+    .basis_order  = EO,
+    .quad_order   = 2 * asm_opts.order(EO) + (mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order - 1),
+    .basis_type   = asm_opts.basis_type,
+    .quad_type    = asm_opts.quad_type,
+    .use_odd_even = asm_opts.useOddEven(EO)};
+template < KernelParams params, AssemblyOptions asm_opts, mesh::ElementType ET, el_o_t EO >
+inline constexpr auto make_geom_basis_params = SumFactParams{
+    .basis_order  = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order,
+    .quad_order   = 2 * asm_opts.order(EO) + (mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order - 1),
+    .basis_type   = basis::BasisType::Lagrange,
+    .quad_type    = asm_opts.quad_type,
+    .use_odd_even = asm_opts.useOddEven(EO)};
 
 template < SumFactParams basis_params, size_t num_fields, std::invocable< std::span< val_t > > Fill >
 auto sumFactBackQuad(Fill&& fill) -> SumFactBufferHelper< basis_params, num_fields, 2 >::buf_array_t
@@ -503,37 +505,23 @@ auto sumFactBackHex(Fill&& fill) -> SumFactBufferHelper< basis_params, num_field
     return retval;
 }
 
-template < SumFactParams basis_params, el_o_t EO >
-auto computeGeomDataLin(const mesh::ElementData< mesh::ElementType::Quad, EO >& el_data)
+template < SumFactParams basis_params, mesh::ElementType ET, el_o_t EO >
+auto computeGeomData(const mesh::ElementData< ET, EO >& el_data)
 {
     L3STER_PROFILE_FUNCTION;
-    const auto fill_coords = [&](std::span< val_t > to_fill) {
-        constexpr size_t num_verts = 4;
-        for (auto&& [ind, vertex] : el_data.vertices | std::views::enumerate)
-        {
-            const auto i           = static_cast< size_t >(ind);
-            to_fill[i]             = vertex.x();
-            to_fill[i + num_verts] = vertex.y();
-        }
+    using traits               = mesh::ElementTraits< mesh::Element< ET, EO > >;
+    constexpr auto GO          = traits::geom_order;
+    constexpr auto nat_dim     = traits::native_dim;
+    const auto     fill_coords = [&](std::span< val_t > to_fill) {
+        constexpr auto num_verts = util::integralPower(GO + 1, nat_dim);
+        for (auto&& [i, vertex] : el_data.vertices | std::views::enumerate)
+            for (size_t j = 0; j != nat_dim; ++j)
+                to_fill[static_cast< size_t >(i) + j * num_verts] = vertex[j];
     };
-    return sumFactBackQuad< basis_params, 2 >(fill_coords);
-}
-
-template < SumFactParams basis_params, el_o_t EO >
-auto computeGeomDataLin(const mesh::ElementData< mesh::ElementType::Hex, EO >& el_data)
-{
-    L3STER_PROFILE_FUNCTION;
-    const auto fill_coords = [&](std::span< val_t > to_fill) {
-        constexpr size_t num_verts = 8;
-        for (auto&& [ind, vertex] : el_data.vertices | std::views::enumerate)
-        {
-            const auto i               = static_cast< size_t >(ind);
-            to_fill[i]                 = vertex.x();
-            to_fill[i + num_verts]     = vertex.y();
-            to_fill[i + 2 * num_verts] = vertex.z();
-        }
-    };
-    return sumFactBackHex< basis_params, 3 >(fill_coords);
+    if constexpr (nat_dim == 2)
+        return sumFactBackQuad< basis_params, 2 >(fill_coords);
+    else if constexpr (nat_dim == 3)
+        return sumFactBackHex< basis_params, 3 >(fill_coords);
 }
 
 inline auto makeJacobianMat(val_t dx_dxi, val_t dx_deta, val_t dy_dxi, val_t dy_deta)
@@ -611,26 +599,32 @@ auto evalFieldDers(
     return retval;
 }
 
-template < typename Kernel, KernelParams params, el_o_t EO, AssemblyOptions asm_opts, size_t n_rhs_actual >
-auto evalAtQuadQPs(typename SumFactBufferHelper< make_basis_params< params, asm_opts, EO >,
+template < typename Kernel,
+           KernelParams      params,
+           mesh::ElementType ET,
+           el_o_t            EO,
+           AssemblyOptions   asm_opts,
+           size_t            n_rhs_actual >
+auto evalAtQuadQPs(typename SumFactBufferHelper< make_basis_params< params, asm_opts, ET, EO >,
                                                  params.n_unknowns * n_rhs_actual + params.n_fields,
-                                                 2 >::buf_array_t&         back_trans_result,
-                   const DomainEquationKernel< Kernel, params >&           kernel,
-                   const mesh::ElementData< mesh::ElementType::Quad, EO >& element_data,
-                   val_t                                                   time,
+                                                 2 >::buf_array_t& back_trans_result,
+                   const DomainEquationKernel< Kernel, params >&   kernel,
+                   const mesh::ElementData< ET, EO >&              element_data,
+                   val_t                                           time,
                    util::ConstexprValue< asm_opts >,
                    util::ConstexprValue< n_rhs_actual >)
+    requires(mesh::ElementTraits< mesh::Element< ET, EO > >::geom_type == mesh::ElementType::Quad)
 {
     L3STER_PROFILE_FUNCTION;
-    constexpr auto basis_params     = make_basis_params< params, asm_opts, EO >;
+    constexpr auto basis_params     = make_basis_params< params, asm_opts, ET, EO >;
     constexpr auto num_operands     = params.n_unknowns * n_rhs_actual;
     constexpr int  num_fields_total = num_operands + params.n_fields;
     using basis_helper_t            = SumFactBufferHelper< basis_params, num_fields_total, 2 >;
     auto [vals, dv_dxi, dv_deta]    = basis_helper_t::makeBufferViewsAtQuadsRowMajor(back_trans_result);
 
-    constexpr auto geom_basis_params = make_geom_basis_params< params, asm_opts, EO >;
+    constexpr auto geom_basis_params = make_geom_basis_params< params, asm_opts, ET, EO >;
     using geom_helper_t              = SumFactBufferHelper< geom_basis_params, 2, 2 >;
-    auto geom_trans_result           = detail::computeGeomDataLin< geom_basis_params >(element_data);
+    auto geom_trans_result           = detail::computeGeomData< geom_basis_params >(element_data);
     const auto [x, dx_dxi, dx_deta]  = geom_helper_t::makeBufferViewsAtQuadsRowMajor(geom_trans_result);
 
     using return_helper_t = SumFactBufferHelper< basis_params, num_operands, 2 >;
@@ -675,26 +669,32 @@ auto evalAtQuadQPs(typename SumFactBufferHelper< make_basis_params< params, asm_
     return retval;
 }
 
-template < typename Kernel, KernelParams params, el_o_t EO, AssemblyOptions asm_opts, size_t n_rhs_actual >
-auto evalAtHexQPs(typename SumFactBufferHelper< make_basis_params< params, asm_opts, EO >,
+template < typename Kernel,
+           KernelParams      params,
+           mesh::ElementType ET,
+           el_o_t            EO,
+           AssemblyOptions   asm_opts,
+           size_t            n_rhs_actual >
+auto evalAtHexQPs(typename SumFactBufferHelper< make_basis_params< params, asm_opts, ET, EO >,
                                                 params.n_unknowns * n_rhs_actual + params.n_fields,
-                                                3 >::buf_array_t&        back_trans_result,
-                  const DomainEquationKernel< Kernel, params >&          kernel,
-                  const mesh::ElementData< mesh::ElementType::Hex, EO >& element_data,
-                  val_t                                                  time,
+                                                3 >::buf_array_t& back_trans_result,
+                  const DomainEquationKernel< Kernel, params >&   kernel,
+                  const mesh::ElementData< ET, EO >&              element_data,
+                  val_t                                           time,
                   util::ConstexprValue< asm_opts >,
                   util::ConstexprValue< n_rhs_actual >)
+    requires(mesh::ElementTraits< mesh::Element< ET, EO > >::geom_type == mesh::ElementType::Hex)
 {
     L3STER_PROFILE_FUNCTION;
-    constexpr auto basis_params            = make_basis_params< params, asm_opts, EO >;
+    constexpr auto basis_params            = make_basis_params< params, asm_opts, ET, EO >;
     constexpr auto num_operands            = params.n_unknowns * n_rhs_actual;
     constexpr int  num_fields_total        = num_operands + params.n_fields;
     using basis_helper_t                   = SumFactBufferHelper< basis_params, num_fields_total, 3 >;
     auto [vals, dv_dxi, dv_deta, dv_dzeta] = basis_helper_t::makeBufferViewsAtQuadsRowMajor(back_trans_result);
 
-    constexpr auto geom_basis_params          = make_geom_basis_params< params, asm_opts, EO >;
+    constexpr auto geom_basis_params          = make_geom_basis_params< params, asm_opts, ET, EO >;
     using geom_helper_t                       = SumFactBufferHelper< geom_basis_params, 3, 3 >;
-    auto geom_trans_result                    = detail::computeGeomDataLin< geom_basis_params >(element_data);
+    auto geom_trans_result                    = detail::computeGeomData< geom_basis_params >(element_data);
     const auto [x, dx_dxi, dx_deta, dx_dzeta] = geom_helper_t::makeBufferViewsAtQuadsRowMajor(geom_trans_result);
 
     using return_helper_t = SumFactBufferHelper< basis_params, num_operands, 3 >;
@@ -815,20 +815,22 @@ void sumFactForwardHex(typename SumFactBufferHelper< basis_params, num_fields, 3
 
 template < typename Kernel,
            KernelParams                         params,
+           mesh::ElementType                    ET,
            el_o_t                               EO,
            AssemblyOptions                      asm_opts,
            std::invocable< std::span< val_t > > Fill,
            std::invocable< std::span< val_t > > YScatter,
            size_t                               n_rhs_actual >
-void sumFactImpl(const DomainEquationKernel< Kernel, params >&           kernel,
-                 const mesh::ElementData< mesh::ElementType::Quad, EO >& element_data,
-                 Fill&&                                                  fill,
-                 YScatter&&                                              y_scatter,
-                 val_t                                                   time,
-                 util::ConstexprValue< asm_opts >                        asm_opts_ctwrpr,
-                 util::ConstexprValue< n_rhs_actual >                    rhs_actual_ctwrpr)
+void sumFactImpl(const DomainEquationKernel< Kernel, params >& kernel,
+                 const mesh::ElementData< ET, EO >&            element_data,
+                 Fill&&                                        fill,
+                 YScatter&&                                    y_scatter,
+                 val_t                                         time,
+                 util::ConstexprValue< asm_opts >              asm_opts_ctwrpr,
+                 util::ConstexprValue< n_rhs_actual >          rhs_actual_ctwrpr)
+    requires(mesh::ElementTraits< mesh::Element< ET, EO > >::geom_type == mesh::ElementType::Quad)
 {
-    constexpr auto basis_params     = make_basis_params< params, asm_opts, EO >;
+    constexpr auto basis_params     = make_basis_params< params, asm_opts, ET, EO >;
     constexpr auto num_operands     = params.n_unknowns * n_rhs_actual;
     constexpr int  num_fields_total = num_operands + params.n_fields;
 
@@ -842,20 +844,22 @@ void sumFactImpl(const DomainEquationKernel< Kernel, params >&           kernel,
 
 template < typename Kernel,
            KernelParams                         params,
+           mesh::ElementType                    ET,
            el_o_t                               EO,
            AssemblyOptions                      asm_opts,
            std::invocable< std::span< val_t > > Fill,
            std::invocable< std::span< val_t > > YScatter,
            size_t                               n_rhs_actual >
-void sumFactImpl(const DomainEquationKernel< Kernel, params >&          kernel,
-                 const mesh::ElementData< mesh::ElementType::Hex, EO >& element_data,
-                 Fill&&                                                 fill,
-                 YScatter&&                                             y_scatter,
-                 val_t                                                  time,
-                 util::ConstexprValue< asm_opts >                       asm_opts_ctwrpr,
-                 util::ConstexprValue< n_rhs_actual >                   rhs_actual_ctwrpr)
+void sumFactImpl(const DomainEquationKernel< Kernel, params >& kernel,
+                 const mesh::ElementData< ET, EO >&            element_data,
+                 Fill&&                                        fill,
+                 YScatter&&                                    y_scatter,
+                 val_t                                         time,
+                 util::ConstexprValue< asm_opts >              asm_opts_ctwrpr,
+                 util::ConstexprValue< n_rhs_actual >          rhs_actual_ctwrpr)
+    requires(mesh::ElementTraits< mesh::Element< ET, EO > >::geom_type == mesh::ElementType::Hex)
 {
-    constexpr auto basis_params     = make_basis_params< params, asm_opts, EO >;
+    constexpr auto basis_params     = make_basis_params< params, asm_opts, ET, EO >;
     constexpr auto num_operands     = params.n_unknowns * n_rhs_actual;
     constexpr int  num_fields_total = num_operands + params.n_fields;
 

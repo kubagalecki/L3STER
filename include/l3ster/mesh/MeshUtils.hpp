@@ -2,7 +2,7 @@
 #define L3STER_MESHUTILS_HPP
 
 #include "l3ster/mesh/MeshPartition.hpp"
-#include "l3ster/mesh/NodePhysicalLocation.hpp"
+#include "l3ster/mesh/NodeLocation.hpp"
 #include "l3ster/util/Functional.hpp"
 #include "l3ster/util/Serialization.hpp"
 #include "l3ster/util/SpatialHashTable.hpp"

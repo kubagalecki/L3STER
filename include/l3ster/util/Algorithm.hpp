@@ -167,12 +167,6 @@ void forEachConstexprParallel(F&& f, ConstexprValue< R >)
         return;
 }
 
-template < typename T >
-constexpr bool contains(std::initializer_list< T > list, T value)
-{
-    return std::ranges::any_of(list, [value = value](T t) { return t == value; });
-}
-
 template < typename T, size_t size >
 constexpr auto makeIotaArray(const T& first = T{})
 {

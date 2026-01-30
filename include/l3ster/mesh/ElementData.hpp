@@ -24,6 +24,12 @@ struct ElementData< T, O >
         : vertices{d.vertices}
     {}
 
+    auto getEigenMap() const
+    {
+        using matrix_t = Eigen::Matrix< val_t, 3, n_verts >;
+        return Eigen::Map< const matrix_t >{vertices.front().coords.data()};
+    }
+
     friend constexpr bool operator==(const ElementData&, const ElementData&) = default;
 
     vertex_array_t vertices;
