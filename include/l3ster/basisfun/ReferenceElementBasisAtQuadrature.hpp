@@ -14,7 +14,7 @@ const auto& getReferenceBasisAtDomainQuadrature()
         constexpr auto GBT        = BasisType::Lagrange;
         constexpr auto GT         = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_type;
         constexpr auto GO         = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
-        const auto     quadrature = quad::getQuadrature< QT, QO, ET >();
+        const auto     quadrature = quad::getQuadrature< QT, QO, GT >();
         return ReferenceBasisAtQuadrature< ET, EO, quadrature.size >{
             .quadrature = quadrature,
             .basis      = evalRefBasisAtPoints< BT, ET, EO >(quadrature.points),

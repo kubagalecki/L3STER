@@ -14,7 +14,6 @@ namespace lstr::map
 template < mesh::ElementType T, el_o_t O >
 auto mapToPhysicalSpace(const mesh::ElementData< T, O >&                  element_data,
                         const Point< mesh::Element< T, O >::native_dim >& point) -> Point< 3 >
-    requires(mesh::isGeomType(T))
 {
     constexpr auto GBT             = basis::BasisType::Lagrange;
     constexpr auto GT              = mesh::ElementTraits< mesh::Element< T, O > >::geom_type;

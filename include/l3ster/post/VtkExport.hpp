@@ -280,10 +280,11 @@ template < el_o_t... orders >
 std::array< size_t, 2 > getLocalTopoSize(const mesh::MeshPartition< orders... >& mesh)
 {
     constexpr auto get_el_entries = []< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >&) {
-        return std::array{numSubels< ET, EO >(), numSerialTopoEntries< ET, EO >()};
+        constexpr auto GT = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_type;
+        return std::array{numSubels< GT, EO >(), numSerialTopoEntries< GT, EO >()};
     };
     constexpr auto add = [](const std::array< size_t, 2 >& a1, const std::array< size_t, 2 >& a2) {
-        return std::array< size_t, 2 >{a1[0] + a2[0], a1[1] + a2[1]};
+        return std::array{a1[0] + a2[0], a1[1] + a2[1]};
     };
     constexpr auto zero = std::array< size_t, 2 >{};
     return mesh.transformReduce(mesh.getDomainIds(), zero, get_el_entries, add);

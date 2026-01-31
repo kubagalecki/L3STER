@@ -10,16 +10,15 @@ namespace lstr::mesh
 {
 enum struct ElementType
 {
-    Hex  = 0,
-    Quad = 1,
-    Line = 2,
+    Hex   = 0,
+    Quad  = 1,
+    Line  = 2,
+    Line2 = 3,
+    Quad2 = 4,
+    Hex2  = 5,
 
     // Update Count when adding new element types
-    Count = 3,
-
-    Line2 = 4,
-    Quad2 = 5,
-    Hex2  = 6
+    Count = 6
 };
 
 // Array containing all defined element types

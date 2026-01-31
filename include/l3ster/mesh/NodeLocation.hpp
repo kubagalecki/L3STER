@@ -46,23 +46,25 @@ auto makeHexNodeLocations()
 
 template < ElementType T, el_o_t O >
 const auto& getNodeLocations()
-    requires(isGeomType(T))
 {
-    if constexpr (T == ElementType::Line)
+    constexpr auto GT = ElementTraits< Element< T, O > >::geom_type;
+    if constexpr (GT == ElementType::Line)
     {
         static const auto value = detail::makeLineNodeLocations< O >();
         return value;
     }
-    else if constexpr (T == ElementType::Quad)
+    else if constexpr (GT == ElementType::Quad)
     {
         static const auto value = detail::makeQuadNodeLocations< O >();
         return value;
     }
-    else if constexpr (T == ElementType::Hex)
+    else if constexpr (GT == ElementType::Hex)
     {
         static const auto value = detail::makeHexNodeLocations< O >();
         return value;
     }
+    else
+        static_assert(util::always_false< T >);
 }
 
 namespace detail

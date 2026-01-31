@@ -10,10 +10,12 @@ template < ElementType T, el_o_t O >
 struct ElementData;
 
 template < ElementType T, el_o_t O >
-    requires(T == ElementType::Line or T == ElementType::Quad or T == ElementType::Hex)
+    requires(isGeomType(ElementTraits< Element< T, O > >::geom_type))
 struct ElementData< T, O >
 {
-    static constexpr auto n_verts = ElementTraits< Element< T, 1 > >::nodes_per_element;
+    static constexpr auto GT      = ElementTraits< Element< T, O > >::geom_type;
+    static constexpr auto GO      = ElementTraits< Element< T, O > >::geom_order;
+    static constexpr auto n_verts = ElementTraits< Element< GT, GO > >::nodes_per_element;
     using vertex_array_t          = std::array< Point< 3 >, n_verts >;
 
     constexpr ElementData() = default;
