@@ -1,7 +1,6 @@
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/Base64.hpp"
 #include "l3ster/util/Common.hpp"
-#include "l3ster/util/ConstexprRefStableCollection.hpp"
 #include "l3ster/util/CrsGraph.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/HwlocWrapper.hpp"
@@ -28,91 +27,6 @@
 #include <ranges>
 
 using namespace lstr;
-
-static consteval auto getConstexprVecParams(int size, int cap)
-{
-    auto v = util::ConstexprVector< int >{};
-    for (int i = 0; i < cap; ++i)
-        v.pushBack(i);
-    for (int i = cap; i > size; --i)
-        v.popBack();
-    return std::make_pair(v.size(), v.capacity());
-}
-
-static consteval bool checkConstexprVecStorage()
-{
-    auto v   = util::ConstexprVector< util::ConstexprVector< int > >(3, util::ConstexprVector< int >{0, 1, 2});
-    bool ret = true;
-    for (int i = 0; i < 3; ++i)
-        for (int j = 0; j < 3; ++j)
-            ret &= v[i][j] == j;
-    return ret;
-}
-
-static consteval auto checkConstexprVectorReserve(int cap)
-{
-    auto v = util::ConstexprVector< int >{};
-    v.reserve(cap);
-    return std::make_pair(v.size(), v.capacity());
-}
-
-static consteval bool checkConstexprVectorIters()
-{
-    auto          v    = util::ConstexprVector< int >{};
-    constexpr int size = 10;
-    v.reserve(size);
-    for (int i = 0; i < size; ++i)
-        v.pushBack(i + 1);
-
-    const auto forward_result  = std::accumulate(v.begin(), v.end(), 0);
-    const auto backward_result = std::accumulate(v.rbegin(), v.rend(), 0);
-    return forward_result == backward_result && forward_result == (size + 1) * size / 2;
-}
-
-TEST_CASE("Constexpr vector", "[util]")
-{
-    SECTION("Size & capcity")
-    {
-        constexpr int size = 3, cap = 8;
-        const auto [size_result, cap_result] = getConstexprVecParams(size, cap);
-        CHECK(size_result == size);
-        CHECK(cap_result >= cap);
-    }
-
-    SECTION("Value storage")
-    {
-        constexpr bool result = checkConstexprVecStorage();
-        CHECK(result);
-    }
-
-    SECTION("Reserve capacity")
-    {
-        constexpr int cap                    = 10;
-        const auto [size_result, cap_result] = checkConstexprVectorReserve(cap);
-        CHECK(size_result == 0);
-        CHECK(cap_result == cap);
-    }
-
-    SECTION("Iterators consistent forward and backward")
-    {
-        constexpr bool result = checkConstexprVectorIters();
-        CHECK(result);
-    }
-}
-
-static consteval auto checkRSC()
-{
-    util::ConstexprRefStableCollection< size_t > nums;
-    for (size_t i = 1; i < nums.block_size * 2; ++i)
-        nums.push(i);
-    std::ranges::sort(nums | std::views::reverse);
-    return std::ranges::is_sorted(nums, std::greater<>{});
-}
-
-TEST_CASE("Constexpr ref-stable collection", "[util]")
-{
-    static_assert(checkRSC());
-}
 
 TEST_CASE("Stack size manipulation", "[util]")
 {

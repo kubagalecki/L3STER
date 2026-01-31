@@ -176,7 +176,7 @@ constexpr auto makeIotaArray(const T& first = T{})
 }
 
 template < typename T >
-void sortRemoveDup(std::vector< T >& vec)
+constexpr void sortRemoveDup(std::vector< T >& vec)
 {
     std::ranges::sort(vec);
     const auto erase_range = std::ranges::unique(vec);
