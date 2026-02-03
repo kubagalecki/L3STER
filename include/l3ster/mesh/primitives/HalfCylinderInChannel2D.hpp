@@ -17,6 +17,7 @@ struct HalfCylinderInChannel2DGeometry
     val_t  r_inner = .5, r_outer = 2., left_offset = 10., right_offset = 16., top_offset = 15.;
     size_t n_circumf = 64, n_radial = 19, n_left = 8, n_right = 50, n_top = 15;
     val_t  q_radial = 1.135, q_left = 1.3, q_right = 1.01, q_top = 1.2;
+    bool   quadratic = false;
 
     [[nodiscard]] bool correct() const
     {
@@ -43,10 +44,10 @@ inline auto makeHalfCylinderInChannel2DMesh(const HalfCylinderInChannel2DGeometr
         const auto radial_dist =
             util::geomSpaceProg(geometry.r_inner, geometry.r_outer, geometry.n_radial + 1, geometry.q_radial);
         const auto circumf_dist = util::linspace(0., 1., geometry.n_circumf / 2 + 1);
-        auto       top_half     = makeSquareMesh(
-            radial_dist,
-            circumf_dist,
-            {.domain = ids.domain, .bottom = ids.bottom_right, .top = ids.bottom_left, .left = ids.cylinder});
+        const auto cyl_ids      = SquareMeshIds{
+                 .domain = ids.domain, .bottom = ids.bottom_right, .top = ids.bottom_left, .left = ids.cylinder};
+        auto       top_half    = geometry.quadratic ? makeSquareMeshQuadratic(radial_dist, circumf_dist, cyl_ids)
+                                                    : makeSquareMesh(radial_dist, circumf_dist, cyl_ids);
         const auto deform_half = [&](Point< 3 > p) -> Point< 3 > {
             const auto r     = p.x();
             const auto angle = p.y() * pi;
@@ -58,9 +59,11 @@ inline auto makeHalfCylinderInChannel2DMesh(const HalfCylinderInChannel2DGeometr
     auto cylinder = make_cylinder();
 
     const auto make_wake = [&](val_t L, size_t n, val_t q, d_id_t edge_id) {
-        const auto x_dist = util::geomSpaceProg(0., L, n + 1, q);
-        const auto y_dist = util::linspace(-pi / 4., pi / 4., geometry.n_circumf / 4 + 1);
-        auto       retval = makeSquareMesh(x_dist, y_dist, {.domain = ids.domain, .right = edge_id});
+        const auto x_dist   = util::geomSpaceProg(0., L, n + 1, q);
+        const auto y_dist   = util::linspace(-pi / 4., pi / 4., geometry.n_circumf / 4 + 1);
+        const auto wake_ids = SquareMeshIds{.domain = ids.domain, .right = edge_id};
+        auto       retval   = geometry.quadratic ? makeSquareMeshQuadratic(x_dist, y_dist, wake_ids)
+                                                 : makeSquareMesh(x_dist, y_dist, wake_ids);
         deform(retval, [&](Point< 3 > p) -> Point< 3 > {
             const auto x = p.x() + (1. - p.x() / L) * geometry.r_outer * std::cos(p.y());
             const auto y = geometry.r_outer * std::sin(p.y());
@@ -70,12 +73,13 @@ inline auto makeHalfCylinderInChannel2DMesh(const HalfCylinderInChannel2DGeometr
     };
     const auto make_half_wake =
         [&](val_t L, size_t n, val_t q, d_id_t edge_id, d_id_t in_id, bool generate_right = true) {
-            const val_t lo     = generate_right ? 0. : -pi / 4.;
-            const val_t hi     = generate_right ? pi / 4. : 0.;
-            const auto  x_dist = util::geomSpaceProg(0., L, n + 1, q);
-            const auto  y_dist = util::linspace(lo, hi, geometry.n_circumf / 8 + 1);
-            auto        retval =
-                makeSquareMesh(x_dist, y_dist, {.domain = ids.domain, .bottom = in_id, .top = in_id, .right = edge_id});
+            const val_t lo       = generate_right ? 0. : -pi / 4.;
+            const val_t hi       = generate_right ? pi / 4. : 0.;
+            const auto  x_dist   = util::geomSpaceProg(0., L, n + 1, q);
+            const auto  y_dist   = util::linspace(lo, hi, geometry.n_circumf / 8 + 1);
+            const auto  wake_ids = SquareMeshIds{.domain = ids.domain, .bottom = in_id, .top = in_id, .right = edge_id};
+            auto        retval   = geometry.quadratic ? makeSquareMeshQuadratic(x_dist, y_dist, wake_ids)
+                                                      : makeSquareMesh(x_dist, y_dist, wake_ids);
             deform(retval, [&](Point< 3 > p) -> Point< 3 > {
                 const auto x = p.x() + (1. - p.x() / L) * geometry.r_outer * std::cos(p.y());
                 const auto y = geometry.r_outer * std::sin(p.y());

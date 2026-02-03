@@ -406,35 +406,52 @@ auto extrude(const MeshPartition< 1 >& mesh, R&& zdist, d_id_t id_back, d_id_t i
 
     const auto extrude_element = [&]< ElementType ET >(const Element< ET, 1 >&               element,
                                                        std::reference_wrapper< Domain< 1 > > domain) {
-        util::throwingAssert(Element< ET, 1 >::native_dim < 3, "Cannot extrude 3D mesh");
-        if constexpr (ET == ElementType::Line or ET == ElementType::Quad)
+        constexpr auto nat_dim = Element< ET, 1 >::native_dim;
+        util::throwingAssert(nat_dim < 3, "Cannot extrude 3D mesh");
+        if constexpr (nat_dim < 3)
         {
-            constexpr auto   ET_extruded = ET == ElementType::Line ? ElementType::Quad : ElementType::Hex;
+            constexpr auto   ET_extruded = std::invoke([] {
+                using enum ElementType;
+                switch (ET)
+                {
+                case Line:
+                    return Quad;
+                case Line2:
+                    return Quad2;
+                case Quad:
+                    return Hex;
+                case Quad2:
+                    return Hex2;
+                }
+            });
+            constexpr size_t geom_order  = ElementTraits< Element< ET, 1 > >::geom_order;
             constexpr size_t n_verts2d   = ElementData< ET, 1 >::n_verts;
             constexpr size_t n_nodes2d   = Element< ET, 1 >::n_nodes;
             auto             data        = ElementData< ET_extruded, 1 >{};
-            std::ranges::copy(element.data.vertices, data.vertices.begin());
-            std::ranges::copy(element.data.vertices, std::next(data.vertices.begin(), n_verts2d));
+            for (auto&& dest_verts : data.vertices | std::views::chunk(n_verts2d))
+                std::ranges::copy(element.data.vertices, dest_verts.begin());
             for (auto&& [layer, zs] : zdist | std::views::adjacent< 2 > | std::views::enumerate)
             {
                 const auto& [z_lo, z_hi] = zs;
-                for (auto& vertex : data.vertices | std::views::take(n_verts2d))
-                    vertex.z() = z_lo;
-                for (auto& vertex : data.vertices | std::views::drop(n_verts2d))
-                    vertex.z() = z_hi;
-                auto nodes = typename Element< ET_extruded, 1 >::node_array_t{};
-                std::ranges::transform(
-                    element.nodes, nodes.begin(), std::bind_back(std::plus{}, layer * nodes_per_layer));
-                std::ranges::transform(nodes | std::views::take(n_nodes2d),
+                static_assert(geom_order <= 2, "[futureproof] Use Lobatto distribution for higher orders");
+                const auto z_geom_pos = util::linspaceArray< geom_order + 1 >(z_lo, z_hi);
+                for (auto&& [z, dest_verts] : std::views::zip(z_geom_pos, data.vertices | std::views::chunk(n_verts2d)))
+                    for (auto& vertex : dest_verts)
+                        vertex.z() = z;
+                auto       nodes       = typename Element< ET_extruded, 1 >::node_array_t{};
+                const auto node_offset = layer * nodes_per_layer;
+                std::ranges::transform(element.nodes, nodes.begin(), std::bind_back(std::plus{}, node_offset));
+                std::ranges::transform(element.nodes,
                                        std::next(nodes.begin(), n_nodes2d),
-                                       std::bind_back(std::plus{}, nodes_per_layer));
+                                       std::bind_back(std::plus{}, node_offset + nodes_per_layer));
                 auto el_extruded = Element< ET_extruded, 1 >{nodes, data, element_id++};
                 pushToDomain(domain.get(), std::move(el_extruded));
             }
         }
     };
     const auto make_back_front_elems = [&]< ElementType ET >(const Element< ET, 1 >& element) {
-        if constexpr (ET != ElementType::Line)
+        constexpr auto nat_dim = Element< ET, 1 >::native_dim;
+        if constexpr (nat_dim == 2)
         {
             const auto make_face = [&](val_t z, d_id_t domain_id, n_id_t node_offs) {
                 auto face = element;
