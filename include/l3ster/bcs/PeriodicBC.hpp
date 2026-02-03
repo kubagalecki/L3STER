@@ -13,6 +13,7 @@
 
 #include <array>
 #include <bitset>
+#include <set>
 
 namespace lstr::bcs
 {

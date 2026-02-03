@@ -186,6 +186,49 @@ TEST_CASE("Element lookup by ID", "[mesh]")
     check_doesnt_contain(id + 1);
 }
 
+TEST_CASE("Mesh dual computation", "[mesh]")
+{
+    const auto mesh = makeSquareMesh(util::linspaceArray< 3 >(0., 1.));
+    SECTION("2 common nodes")
+    {
+        const auto [graph, wgts, el_ids, g2l] = computeMeshDual(mesh, 2);
+        REQUIRE(std::ranges::equal(el_ids, std::views::iota(0uz, mesh.getNElements())));
+        const auto check_edges = [&](const auto& line) {
+            const auto lid = g2l(line.id);
+            CHECK(graph(lid).size() == 1);
+            CHECK(wgts(lid).size() == 1);
+            CHECK(std::ranges::all_of(wgts(lid), std::bind_back(std::equal_to{}, 2u)));
+        };
+        const auto check_domain = [&](const auto& quad) {
+            const auto lid = g2l(quad.id);
+            CHECK(graph(lid).size() == 4);
+            CHECK(wgts(lid).size() == 4);
+            CHECK(std::ranges::all_of(wgts(lid), std::bind_back(std::equal_to{}, 2u)));
+        };
+        mesh.visit(check_domain, 0);
+        mesh.visit(check_edges, {1, 2, 3, 4});
+    }
+    SECTION("1 common node")
+    {
+        const auto [graph, wgts, el_ids, g2l] = computeMeshDual(mesh, 1);
+        REQUIRE(std::ranges::equal(el_ids, std::views::iota(0uz, mesh.getNElements())));
+        const auto check_edges = [&](const auto& line) {
+            const auto lid = g2l(line.id);
+            CHECK(graph(lid).size() == 4);
+            CHECK(wgts(lid).size() == 4);
+            CHECK(std::ranges::all_of(wgts(lid), std::bind_back(std::less_equal{}, 2u)));
+        };
+        const auto check_domain = [&](const auto& quad) {
+            const auto lid = g2l(quad.id);
+            CHECK(graph(lid).size() == 7);
+            CHECK(wgts(lid).size() == 7);
+            CHECK(std::ranges::all_of(wgts(lid), std::bind_back(std::less_equal{}, 2u)));
+        };
+        mesh.visit(check_domain, 0);
+        mesh.visit(check_edges, {1, 2, 3, 4});
+    }
+}
+
 TEST_CASE("Serial mesh partitioning", "[mesh]")
 {
     constexpr auto boundary_ids = std::array< d_id_t, 4 >{2, 3, 4, 5};

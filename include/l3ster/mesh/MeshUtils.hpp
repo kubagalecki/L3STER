@@ -4,6 +4,7 @@
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/mesh/NodeLocation.hpp"
 #include "l3ster/util/Functional.hpp"
+#include "l3ster/util/IndexMap.hpp"
 #include "l3ster/util/Serialization.hpp"
 #include "l3ster/util/SpatialHashTable.hpp"
 
@@ -41,56 +42,76 @@ bool isUnpartitioned(const MeshPartition< orders... >& mesh)
             mesh.getNodeOwnership().owned().back() + 1 == mesh.getNodeOwnership().owned().size());
 }
 
-template < el_o_t... orders >
-auto computeMeshDual(const MeshPartition< orders... >& mesh) -> util::metis::GraphWrapper
+struct MeshDualGraph
 {
-    util::throwingAssert(isUnpartitioned(mesh), "Adjacency graphs for partitioned meshes are not currently supported");
-
-    constexpr std::string_view overflow_msg =
-        "The mesh size exceeds the numeric limits of METIS' signed integer type. Continuing would "
-        "result in signed integer overflow. Consider recompiling METIS with 64 bit integer support";
-    constexpr auto max_metis_id = static_cast< std::uintmax_t >(std::numeric_limits< idx_t >::max());
-    const auto     max_el_id    = static_cast< std::uintmax_t >(mesh.getNElements() + 1);
-    const auto     max_n_id     = static_cast< std::uintmax_t >(mesh.getNodeOwnership().owned().back());
-    util::throwingAssert(max_el_id <= max_metis_id and max_n_id <= max_metis_id, overflow_msg);
-
-    const auto convert_topo_to_metis_format = [&]() {
-        const auto topo_size = std::invoke([&mesh]() {
-            size_t retval = 0;
-            mesh.visit([&retval](const auto& element) { retval += element.nodes.size(); });
-            return retval;
-        });
-        util::throwingAssert(static_cast< std::uintmax_t >(topo_size) <= max_metis_id, overflow_msg);
-
-        auto retval        = std::array< std::vector< idx_t >, 2 >{};
-        auto& [eptr, eind] = retval;
-        eind.reserve(topo_size);
-        eptr.reserve(mesh.getNElements() + 1);
-        eptr.push_back(0);
-
-        const auto convert_element = [&]< ElementType T, el_o_t O >(const Element< T, O >* element) {
-            std::ranges::copy(element->nodes, std::back_inserter(eind));
-            eptr.push_back(static_cast< idx_t >(eptr.back() + element->nodes.size()));
-        };
-        for (el_id_t id = 0; id < mesh.getNElements(); ++id)
+    util::CrsGraph< el_loc_id_t >          graph;          // adjacency graph
+    util::CrsGraph< unsigned >             weights;        // weights
+    util::ArrayOwner< el_id_t >            elements;       // element global IDs
+    util::IndexMap< el_id_t, el_loc_id_t > els_gid_to_lid; // global-to-local element ID map
+};
+template < el_o_t... orders >
+auto computeMeshDual(const MeshPartition< orders... >& mesh, size_t num_common_nodes = 1) -> MeshDualGraph
+{
+    auto element_ids = util::ArrayOwner< el_id_t >(mesh.getNElements(), std::numeric_limits< el_id_t >::max());
+    auto i           = 0uz;
+    mesh.visit([&](const auto& element) { element_ids[i++] = element.id; });
+    std::ranges::sort(element_ids);
+    auto        element_g2l      = util::IndexMap< el_id_t, el_loc_id_t >{element_ids};
+    const auto& node_ownership   = mesh.getNodeOwnership();
+    auto        node_degs        = util::ArrayOwner< unsigned >(node_ownership.localSize(), 0);
+    const auto  update_node_degs = [&](const auto& element) {
+        for (auto n : element.nodes)
+            std::atomic_ref{node_degs[node_ownership.getLocalIndex(n)]}.fetch_add(1, std::memory_order_relaxed);
+    };
+    mesh.visit(update_node_degs, std::execution::par);
+    auto       node2elems     = util::CrsGraph< el_loc_id_t >{node_degs};
+    const auto write_elem_ids = [&](const auto& element) {
+        const auto elid = element_g2l(element.id);
+        for (auto n : element.nodes)
         {
-            const auto el_ptr = mesh.find(id).value();
-            std::visit(convert_element, el_ptr);
-        };
+            const auto nlid         = node_ownership.getLocalIndex(n);
+            const auto index        = std::atomic_ref{node_degs[nlid]}.fetch_sub(1, std::memory_order_acq_rel) - 1u;
+            node2elems(nlid)[index] = elid;
+        }
+    };
+    mesh.visit(write_elem_ids, std::execution::par);
+    auto       elem_degs               = util::ArrayOwner< unsigned >(element_ids.size(), 0);
+    const auto get_neighbors_with_reps = [&](const auto& element, el_loc_id_t elid) {
+        auto retval = element.nodes |
+                      std::views::transform([&](auto node) { return node2elems(node_ownership.getLocalIndex(node)); }) |
+                      std::views::join | std::views::filter(std::bind_back(std::not_equal_to{}, elid)) |
+                      std::ranges::to< util::ArrayOwner >();
+        std::ranges::sort(retval);
         return retval;
     };
-    auto [eptr, eind] = convert_topo_to_metis_format(); // should be const, but METIS API is const-averse
-    auto   ne         = static_cast< idx_t >(mesh.getNElements());
-    auto   nn         = static_cast< idx_t >(mesh.getNodeOwnership().owned().size());
-    idx_t  ncommon    = 2;
-    idx_t  numflag    = 0;
-    idx_t* xadj{};
-    idx_t* adjncy{};
-
-    const auto error_code = METIS_MeshToDual(&ne, &nn, eptr.data(), eind.data(), &ncommon, &numflag, &xadj, &adjncy);
-    util::metis::handleMetisErrorCode(error_code);
-
-    return util::metis::GraphWrapper{xadj, adjncy, mesh.getNElements()};
+    const auto update_elem_degs = [&](const auto& element) {
+        const auto elid     = element_g2l(element.id);
+        const auto nbrs     = get_neighbors_with_reps(element, elid);
+        const auto num_nbrs = std::ranges::count_if(nbrs | std::views::chunk_by(std::equal_to{}), [&](auto&& reps) {
+            return std::ranges::size(std::forward< decltype(reps) >(reps)) >= num_common_nodes;
+        });
+        elem_degs.at(elid)  = static_cast< unsigned >(num_nbrs);
+    };
+    mesh.visit(update_elem_degs, std::execution::par);
+    auto       dual_graph       = util::CrsGraph< el_loc_id_t >{elem_degs};
+    auto       weights          = util::CrsGraph< unsigned >{elem_degs};
+    const auto write_graph_data = [&](const auto& element) {
+        const auto elid       = element_g2l(element.id);
+        const auto nbrs       = get_neighbors_with_reps(element, elid);
+        const auto dest_verts = dual_graph(elid);
+        const auto dest_wgts  = weights(elid);
+        auto       view       = std::views::zip(
+            dest_verts, dest_wgts, nbrs | std::views::chunk_by(std::equal_to{}) | std::views::filter([&](auto&& r) {
+                                       return std::ranges::size(std::forward< decltype(r) >(r)) >= num_common_nodes;
+                                   }));
+        for (auto&& [v, w, reps] : view)
+        {
+            v = *std::ranges::begin(reps);
+            w = static_cast< unsigned >(std::ranges::size(reps));
+        }
+    };
+    mesh.visit(write_graph_data, std::execution::par);
+    return {std::move(dual_graph), std::move(weights), std::move(element_ids), std::move(element_g2l)};
 }
 
 namespace detail

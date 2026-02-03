@@ -4,14 +4,12 @@
 #include "l3ster/mesh/BoundaryView.hpp"
 #include "l3ster/mesh/Domain.hpp"
 #include "l3ster/util/Algorithm.hpp"
-#include "l3ster/util/MetisUtils.hpp"
 #include "l3ster/util/Ranges.hpp"
 #include "l3ster/util/SegmentedOwnership.hpp"
 
 #include "l3ster/util/RobinHoodHashTables.hpp"
 
 #include <map>
-#include <set>
 
 namespace lstr::mesh
 {

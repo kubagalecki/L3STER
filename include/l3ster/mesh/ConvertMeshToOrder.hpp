@@ -4,9 +4,7 @@
 #include "l3ster/mesh/ElementIntersecting.hpp"
 #include "l3ster/mesh/MeshUtils.hpp"
 #include "l3ster/util/Caliper.hpp"
-#include "l3ster/util/Common.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
-#include "l3ster/util/MetisUtils.hpp"
 
 namespace lstr::mesh
 {
@@ -53,9 +51,9 @@ auto convertMeshToOrder(const MeshPartition< 1 >& mesh, std::integral_constant< 
     -> MeshPartition< OC >
 {
     L3STER_PROFILE_FUNCTION;
-    const auto nbr_info_map = detail::makeNeighborInfoMap(mesh);
-    const auto dual_graph   = computeMeshDual(mesh);
-    auto       new_domains  = detail::initNewDomains< OC >(mesh);
+    const auto nbr_info_map                            = detail::makeNeighborInfoMap(mesh);
+    const auto [dual_graph, dual_wgts, el_ids, el_g2l] = computeMeshDual(mesh, 2);
+    auto new_domains                                   = detail::initNewDomains< OC >(mesh);
 
     n_id_t max_node  = mesh.getNodeOwnership().owned().size();
     auto   converted = util::DynamicBitset{mesh.getNElements()};
@@ -81,7 +79,7 @@ auto convertMeshToOrder(const MeshPartition< 1 >& mesh, std::integral_constant< 
                 };
                 std::visit(update_from_nbr, nbr_ptr_var);
             };
-            std::ranges::for_each(dual_graph.getElementAdjacent(el.id), match_nbr_nodes);
+            std::ranges::for_each(dual_graph(el.id), match_nbr_nodes);
 
             for (auto i : ElementTraits< Element< T, OC > >::boundary_node_inds)
                 if (not mask[i])

@@ -7,10 +7,14 @@
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
-#include "l3ster/util/MetisUtils.hpp"
 #include "l3ster/util/RobinHoodHashTables.hpp"
 
 #include <vector>
+
+extern "C"
+{
+#include "metis.h"
+}
 
 // Note on naming: the uninformative names such as eptr, nparts, etc. are inherited from the METIS documentation
 namespace lstr::mesh
@@ -151,6 +155,12 @@ inline auto makeMetisOptionsForPartitioning()
     return opts;
 }
 
+inline void handleMetisErrorCode(int err_code, std::source_location src_loc = std::source_location::current())
+{
+    util::throwingAssert< std::bad_alloc >(err_code != METIS_ERROR_MEMORY, {}, src_loc);
+    util::throwingAssert(err_code == METIS_OK, "Metis runtime error", src_loc);
+}
+
 struct MetisOutput
 {
     util::ArrayOwner< idx_t > epart, npart;
@@ -178,7 +188,7 @@ inline auto invokeMetisPartitioner(idx_t                      n_els,
                                                 &objval_discarded,
                                                 retval.epart.data(),
                                                 retval.npart.data());
-    util::metis::handleMetisErrorCode(error_code);
+    handleMetisErrorCode(error_code);
     return retval;
 }
 

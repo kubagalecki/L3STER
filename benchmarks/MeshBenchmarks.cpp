@@ -12,7 +12,7 @@ static void BM_DualGraphGeneration(benchmark::State& state)
 {
     auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {}, mesh::gmsh_tag);
     for (auto _ : state)
-        benchmark::DoNotOptimize(mesh::computeMeshDual(mesh));
+        benchmark::DoNotOptimize(mesh::computeMeshDual(mesh, 2));
 }
 BENCHMARK(BM_DualGraphGeneration)->Unit(benchmark::kMillisecond)->Name("Generate dual graph");
 
