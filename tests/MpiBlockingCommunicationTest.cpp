@@ -1,8 +1,6 @@
 #include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
-#include <iostream>
-
 #include "Common.hpp"
 
 struct DummyData

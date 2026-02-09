@@ -4,36 +4,11 @@
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/mesh/NodeLocation.hpp"
 #include "l3ster/util/Functional.hpp"
-#include "l3ster/util/IndexMap.hpp"
 #include "l3ster/util/Serialization.hpp"
 #include "l3ster/util/SpatialHashTable.hpp"
 
 namespace lstr::mesh
 {
-template < el_o_t... orders, ElementType BET, el_o_t BEO >
-auto findDomainElement(const MeshPartition< orders... >& mesh,
-                       const Element< BET, BEO >&        bnd_el,
-                       const util::ArrayOwner< d_id_t >& domain_ids)
-    -> std::optional< std::pair< element_cptr_variant_t< orders... >, el_side_t > >
-{
-    auto       retval              = std::optional< std::pair< element_cptr_variant_t< orders... >, el_side_t > >{};
-    const auto bnd_el_nodes_sorted = util::getSortedArray(bnd_el.nodes);
-    const auto match_domain_el     = [&]< ElementType DET, el_o_t DEO >(const Element< DET, DEO >& domain_el) {
-        if constexpr (ElementTraits< Element< DET, DEO > >::native_dim ==
-                      ElementTraits< Element< BET, BEO > >::native_dim + 1)
-        {
-            const auto matched_side = detail::matchBoundaryNodesToElement(domain_el, bnd_el_nodes_sorted);
-            if (matched_side)
-                retval.emplace(&domain_el, *matched_side);
-            return matched_side.has_value();
-        }
-        else
-            return false;
-    };
-    mesh.find(match_domain_el, domain_ids);
-    return retval;
-}
-
 template < el_o_t... orders >
 bool isUnpartitioned(const MeshPartition< orders... >& mesh)
 {
@@ -42,85 +17,13 @@ bool isUnpartitioned(const MeshPartition< orders... >& mesh)
             mesh.getNodeOwnership().owned().back() + 1 == mesh.getNodeOwnership().owned().size());
 }
 
-struct MeshDualGraph
-{
-    util::CrsGraph< el_loc_id_t >          graph;          // adjacency graph
-    util::CrsGraph< unsigned >             weights;        // weights
-    util::ArrayOwner< el_id_t >            elements;       // element global IDs
-    util::IndexMap< el_id_t, el_loc_id_t > els_gid_to_lid; // global-to-local element ID map
-};
-template < el_o_t... orders >
-auto computeMeshDual(const MeshPartition< orders... >& mesh, size_t num_common_nodes = 1) -> MeshDualGraph
-{
-    auto element_ids = util::ArrayOwner< el_id_t >(mesh.getNElements(), std::numeric_limits< el_id_t >::max());
-    auto i           = 0uz;
-    mesh.visit([&](const auto& element) { element_ids[i++] = element.id; });
-    std::ranges::sort(element_ids);
-    auto        element_g2l      = util::IndexMap< el_id_t, el_loc_id_t >{element_ids};
-    const auto& node_ownership   = mesh.getNodeOwnership();
-    auto        node_degs        = util::ArrayOwner< unsigned >(node_ownership.localSize(), 0);
-    const auto  update_node_degs = [&](const auto& element) {
-        for (auto n : element.nodes)
-            std::atomic_ref{node_degs[node_ownership.getLocalIndex(n)]}.fetch_add(1, std::memory_order_relaxed);
-    };
-    mesh.visit(update_node_degs, std::execution::par);
-    auto       node2elems     = util::CrsGraph< el_loc_id_t >{node_degs};
-    const auto write_elem_ids = [&](const auto& element) {
-        const auto elid = element_g2l(element.id);
-        for (auto n : element.nodes)
-        {
-            const auto nlid         = node_ownership.getLocalIndex(n);
-            const auto index        = std::atomic_ref{node_degs[nlid]}.fetch_sub(1, std::memory_order_acq_rel) - 1u;
-            node2elems(nlid)[index] = elid;
-        }
-    };
-    mesh.visit(write_elem_ids, std::execution::par);
-    auto       elem_degs               = util::ArrayOwner< unsigned >(element_ids.size(), 0);
-    const auto get_neighbors_with_reps = [&](const auto& element, el_loc_id_t elid) {
-        auto retval = element.nodes |
-                      std::views::transform([&](auto node) { return node2elems(node_ownership.getLocalIndex(node)); }) |
-                      std::views::join | std::views::filter(std::bind_back(std::not_equal_to{}, elid)) |
-                      std::ranges::to< util::ArrayOwner >();
-        std::ranges::sort(retval);
-        return retval;
-    };
-    const auto update_elem_degs = [&](const auto& element) {
-        const auto elid     = element_g2l(element.id);
-        const auto nbrs     = get_neighbors_with_reps(element, elid);
-        const auto num_nbrs = std::ranges::count_if(nbrs | std::views::chunk_by(std::equal_to{}), [&](auto&& reps) {
-            return std::ranges::size(std::forward< decltype(reps) >(reps)) >= num_common_nodes;
-        });
-        elem_degs.at(elid)  = static_cast< unsigned >(num_nbrs);
-    };
-    mesh.visit(update_elem_degs, std::execution::par);
-    auto       dual_graph       = util::CrsGraph< el_loc_id_t >{elem_degs};
-    auto       weights          = util::CrsGraph< unsigned >{elem_degs};
-    const auto write_graph_data = [&](const auto& element) {
-        const auto elid       = element_g2l(element.id);
-        const auto nbrs       = get_neighbors_with_reps(element, elid);
-        const auto dest_verts = dual_graph(elid);
-        const auto dest_wgts  = weights(elid);
-        auto       view       = std::views::zip(
-            dest_verts, dest_wgts, nbrs | std::views::chunk_by(std::equal_to{}) | std::views::filter([&](auto&& r) {
-                                       return std::ranges::size(std::forward< decltype(r) >(r)) >= num_common_nodes;
-                                   }));
-        for (auto&& [v, w, reps] : view)
-        {
-            v = *std::ranges::begin(reps);
-            w = static_cast< unsigned >(std::ranges::size(reps));
-        }
-    };
-    mesh.visit(write_graph_data, std::execution::par);
-    return {std::move(dual_graph), std::move(weights), std::move(element_ids), std::move(element_g2l)};
-}
-
 namespace detail
 {
 inline auto makeBoundaryNodeCoordsMap(const MeshPartition< 1 >& mesh)
     -> robin_hood::unordered_flat_map< n_id_t, Point< 3 > >
 {
     constexpr auto nan         = std::numeric_limits< val_t >::quiet_NaN();
-    constexpr auto nan_point   = Point< 3 >{nan, nan, nan};
+    constexpr auto nan_point   = Point{nan, nan, nan};
     auto           node_lookup = util::ArrayOwner< Point< 3 > >(mesh.getNodeOwnership().localSize(), nan_point);
     const auto     put_nodes   = [&]< ElementType ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
         const auto& ref_x = mesh::getNodeLocations< ET, EO >();

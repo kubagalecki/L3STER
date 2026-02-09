@@ -18,15 +18,16 @@ BENCHMARK(BM_DualGraphGeneration)->Unit(benchmark::kMillisecond)->Name("Generate
 
 static void BM_BoundaryViewGeneration(benchmark::State& state)
 {
-    const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {}, mesh::gmsh_tag);
+    const auto mesh       = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {}, mesh::gmsh_tag);
+    const auto dual_graph = computeMeshDual(mesh, 2);
     for (auto _ : state)
     {
-        auto bnd_view = mesh::MeshPartition< 1 >::makeBoundaryElementViews(mesh, std::views::single(2));
+        auto bnd_view = mesh::MeshPartition< 1 >::makeBoundaryElementViews(mesh, 2, dual_graph);
         benchmark::DoNotOptimize(bnd_view);
         benchmark::ClobberMemory();
     }
 }
-BENCHMARK(BM_BoundaryViewGeneration)->Unit(benchmark::kMillisecond)->Name("Generate boundary view");
+BENCHMARK(BM_BoundaryViewGeneration)->Unit(benchmark::kMicrosecond)->Name("Generate boundary view");
 
 static void BM_MeshOrderConversion(benchmark::State& state)
 {
