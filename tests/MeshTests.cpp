@@ -125,27 +125,6 @@ TEMPLATE_TEST_CASE("Iteration over elements",
     count = 0;
 }
 
-TEST_CASE("Element lookup", "[mesh]")
-{
-    auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(gmsh_ascii4_square.msh), {}, gmsh_tag);
-
-    constexpr auto existing_nodes = std::array{54, 55, 63, 64};
-    constexpr auto fake_nodes     = std::array{153, 213, 372, 821};
-
-    CHECK(mesh.find([&](const auto& element) {
-        auto element_nodes = element.nodes;
-        std::ranges::sort(element_nodes);
-        return std::ranges::equal(element_nodes, existing_nodes);
-    }));
-    CHECK_FALSE(mesh.find([&](const auto& element) {
-        auto element_nodes = element.nodes;
-        std::ranges::sort(element_nodes);
-        return std::ranges::equal(element_nodes, fake_nodes);
-    }));
-    CHECK_FALSE(MeshPartition< 1 >{}.find([](const auto&) { return true; }));
-    CHECK_FALSE(MeshPartition< 1 >{}.find(0));
-}
-
 TEST_CASE("Element lookup by ID", "[mesh]")
 {
     auto       domain       = Domain< 1 >{};
@@ -205,7 +184,7 @@ TEST_CASE("Mesh dual computation", "[mesh]")
             CHECK(wgts(lid).size() == 4);
             CHECK(std::ranges::all_of(wgts(lid), std::bind_back(std::equal_to{}, 2u)));
         };
-        mesh.visit(check_domain, 0);
+        mesh.visit(check_domain, {0});
         mesh.visit(check_edges, {1, 2, 3, 4});
     }
     SECTION("1 common node")
@@ -224,7 +203,7 @@ TEST_CASE("Mesh dual computation", "[mesh]")
             CHECK(wgts(lid).size() == 7);
             CHECK(std::ranges::all_of(wgts(lid), std::bind_back(std::less_equal{}, 2u)));
         };
-        mesh.visit(check_domain, 0);
+        mesh.visit(check_domain, {0});
         mesh.visit(check_edges, {1, 2, 3, 4});
     }
 }
@@ -345,49 +324,54 @@ TEMPLATE_TEST_CASE("Local mesh view", "[mesh]", Order< 1 >, Order< 2 >, Order< 4
         const auto       global_domain   = global_mesh.getDomain(domain_id);
         const auto       local_domain    = local_view.getDomains().at(domain_id);
 
-        const auto find_local_element = [&](const auto& global_element) {
-            const auto found_el = local_domain.elements.find([&](const auto& local_element) {
-                using local_t  = std::remove_cvref_t< decltype(local_element) >;
-                using global_t = std::remove_cvref_t< decltype(global_element) >;
-                if constexpr (local_t::type == global_t::type and local_t::order == global_t::order)
-                {
-                    const auto nodes = getGlobalNodes(local_element, global_mesh);
-                    return nodes == global_element.nodes and local_element.getData() == global_element.data;
-                }
-                return false;
-            });
-            return found_el.has_value();
+        const auto has_local_element = [&](const auto& global_element) {
+            bool retval = false;
+            local_domain.elements.visit(
+                [&](const auto& local_element) {
+                    using local_t  = std::remove_cvref_t< decltype(local_element) >;
+                    using global_t = std::remove_cvref_t< decltype(global_element) >;
+                    if constexpr (local_t::type == global_t::type and local_t::order == global_t::order)
+                    {
+                        const auto nodes = getGlobalNodes(local_element, global_mesh);
+                        if (nodes == global_element.nodes and local_element.getData() == global_element.data)
+                            retval = true;
+                    }
+                },
+                std::execution::seq);
+            return retval;
         };
         const auto check_element = [&](const auto& global_element) {
-            CHECK(find_local_element(global_element));
+            CHECK(has_local_element(global_element));
         };
         global_domain.elements.visit(check_element, std::execution::seq);
 
-        const auto find_local_boundary_view = [&](const auto& global_boundary_view, d_id_t boundary_id) {
-            const auto found_el = local_domain.elements.find([&](const auto& local_element) {
-                using local_t  = std::remove_cvref_t< decltype(local_element) >;
-                using global_t = std::remove_cvref_t< decltype(global_boundary_view) >;
-                if constexpr (local_t::type == global_t::type and local_t::order == global_t::order)
-                {
-                    for (const auto& [side, boundary] : local_element.getBoundaries())
-                        if (boundary == boundary_id)
-                        {
-                            const auto nodes = getGlobalNodes(local_element, global_mesh);
-                            if (nodes == global_boundary_view->nodes and
-                                local_element.getData() == global_boundary_view->data and
-                                side == global_boundary_view.getSide())
-                                return true;
-                        }
-                }
-                return false;
-            });
-            return found_el.has_value();
+        const auto has_local_boundary_view = [&](const auto& global_boundary_view, d_id_t boundary_id) {
+            bool retval = false;
+            local_domain.elements.visit(
+                [&](const auto& local_element) {
+                    using local_t  = std::remove_cvref_t< decltype(local_element) >;
+                    using global_t = std::remove_cvref_t< decltype(global_boundary_view) >;
+                    if constexpr (local_t::type == global_t::type and local_t::order == global_t::order)
+                    {
+                        for (const auto& [side, boundary] : local_element.getBoundaries())
+                            if (boundary == boundary_id)
+                            {
+                                const auto nodes = getGlobalNodes(local_element, global_mesh);
+                                if (nodes == global_boundary_view->nodes and
+                                    local_element.getData() == global_boundary_view->data and
+                                    side == global_boundary_view.getSide())
+                                    retval = true;
+                            }
+                    }
+                },
+                std::execution::seq);
+            return retval;
         };
         for (d_id_t boundary_id : global_mesh.getBoundaryIdsView())
         {
             const auto& boundary_view       = global_mesh.getBoundary(boundary_id);
             const auto  check_boundary_view = [&](const auto& global_element_boundary_view) {
-                CHECK(find_local_boundary_view(global_element_boundary_view, boundary_id));
+                CHECK(has_local_boundary_view(global_element_boundary_view, boundary_id));
             };
             boundary_view.element_views.visit(check_boundary_view, std::execution::seq);
         }
@@ -415,13 +399,14 @@ TEST_CASE("Serialize/Deserialize mesh", "[mesh]")
     const auto       deserialized = deserializeMesh< order >(serial);
 
     const auto contains_elem = [&]< ElementType T, el_o_t O >(d_id_t dom, const Element< T, O >& element) {
-        const auto predicate = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& other_element) {
+        bool       retval         = false;
+        const auto check_contains = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& other_element) {
             if constexpr (ET == T and EO == O)
-                return element == other_element;
-            else
-                return false;
+                if (element == other_element)
+                    retval = true;
         };
-        return deserialized.find(predicate, {dom}).has_value();
+        deserialized.visit(check_contains, {dom});
+        return retval;
     };
 
     REQUIRE(mesh.getNElements() == deserialized.getNElements());
@@ -429,7 +414,7 @@ TEST_CASE("Serialize/Deserialize mesh", "[mesh]")
     REQUIRE(std::ranges::equal(mesh.getNodeOwnership().owned(), deserialized.getNodeOwnership().owned()));
     REQUIRE(std::ranges::equal(mesh.getNodeOwnership().shared(), deserialized.getNodeOwnership().shared()));
     for (auto dom : mesh.getDomainIds())
-        mesh.visit([&](const auto& element) { CHECK(contains_elem(dom, element)); }, dom);
+        mesh.visit([&](const auto& element) { CHECK(contains_elem(dom, element)); }, {dom});
 }
 
 TEST_CASE("Merge meshes", "[mesh]")

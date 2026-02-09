@@ -720,33 +720,6 @@ TEST_CASE("UniVector", "[util]")
         CHECK(vec.transformReduce(0, transform, std::plus{}, std::execution::seq) == (n_strs + n_ints) * 42);
         CHECK(vec.transformReduce(0, transform, std::plus{}, std::execution::par) == (n_strs + n_ints) * 42);
     }
-
-    SECTION("Lookup")
-    {
-        auto       find_val = 42;
-        const auto pred     = util::OverloadSet{[&find_val](int i) { return i == find_val; },
-                                            [&find_val](const std::string& str) {
-                                                return std::stoi(str) == find_val;
-                                            }};
-
-        {
-            const auto found_ptr = vec.find(pred);
-            REQUIRE(found_ptr.has_value());
-            REQUIRE(*found_ptr == vec.at(0));
-        }
-
-        vec.getVector< std::string >().emplace_back("43");
-        {
-            find_val             = 43;
-            const auto found_ptr = vec.find(pred);
-            REQUIRE(found_ptr.has_value());
-            REQUIRE(*found_ptr == vec.at(n_ints + n_strs));
-        }
-
-        find_val = 44;
-        REQUIRE_FALSE(vec.find(pred).has_value());
-        REQUIRE_FALSE(std::as_const(vec).find(pred).has_value());
-    }
 }
 
 TEST_CASE("CrsGraph", "[util]")

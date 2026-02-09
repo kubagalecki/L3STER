@@ -203,14 +203,13 @@ auto uncondenseNodes(const util::ArrayOwner< idx_t >&  epart,
     for (size_t i = 0; auto node_uncond : reverse_map)
         retval[node_uncond] = npart_cond[i++];
     size_t el_ind = 0;
-    for (auto id : domain_ids)
-        mesh.visit(
-            [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
-                const auto el_part = epart[el_ind++];
-                for (auto n : getInternalNodes(element))
-                    retval[n] = el_part;
-            },
-            id);
+    mesh.visit(
+        [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& element) {
+            const auto el_part = epart[el_ind++];
+            for (auto n : getInternalNodes(element))
+                retval[n] = el_part;
+        },
+        domain_ids);
     return retval;
 }
 
@@ -248,7 +247,7 @@ auto makeDomainMaps(const MeshPartition< orders... >& part,
             auto&      domain           = retval.at(target_partition)[id];
             pushToDomain(domain, element);
         };
-        part.visit(push_to_domain_map, id);
+        part.visit(push_to_domain_map, {id});
     }
     return retval;
 }

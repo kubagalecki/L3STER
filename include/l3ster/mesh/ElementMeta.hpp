@@ -5,8 +5,6 @@
 #include "l3ster/mesh/ElementType.hpp"
 #include "l3ster/util/Algorithm.hpp"
 
-#include <array>
-#include <functional>
 #include <variant>
 
 namespace lstr::mesh
@@ -113,16 +111,8 @@ private:
     };
 
 public:
-    template < typename F, typename... Args >
-    static constexpr bool invocable_on_elements = InvokeHelper< false, F, Args... >::value;
-    template < typename F, typename... Args >
-    static constexpr bool invocable_on_const_elements = InvokeHelper< true, F, Args... >::value;
-    template < typename R, typename F, typename... Args >
-    static constexpr bool invocable_on_elements_return = InvokeReturnHelper< false, R, F, Args... >::value;
     template < typename R, typename F, typename... Args >
     static constexpr bool invocable_on_const_elements_return = InvokeReturnHelper< true, R, F, Args... >::value;
-    template < typename F, typename... Args >
-    static constexpr bool invocable_on_boundary_views = BoundaryInvokeHelper< F, Args... >::value;
     template < typename R, typename F, typename... Args >
     static constexpr bool invocable_on_boundary_views_return = BoundaryInvokeReturnHelper< R, F, Args... >::value;
 };

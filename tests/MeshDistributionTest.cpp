@@ -26,19 +26,17 @@ void testDistribute(const MpiComm& comm, MeshDistOpts opts)
     const auto comm_self     = MpiComm{MPI_COMM_SELF};
     const auto whole         = readAndDistributeMesh< 2 >(comm_self, mesh_path, gmsh_tag, {}, {}, {}, opts);
     const auto find_in_whole = [&whole]< ElementType T, el_o_t O >(const Element< T, O >& element, d_id_t dom) {
-        return whole
-            ->find(
-                [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& other_element) {
-                    if constexpr (ET == T and EO == O)
-                        return other_element.id == element.id and other_element.data == element.data;
-                    else
-                        return false;
-                },
-                {dom})
-            .has_value();
+        bool       retval         = false;
+        const auto check_contains = [&]< ElementType ET, el_o_t EO >(const Element< ET, EO >& other_element) {
+            if constexpr (ET == T and EO == O)
+                if (other_element.id == element.id and other_element.data == element.data)
+                    retval = true;
+        };
+        whole->visit(check_contains, {dom});
+        return retval;
     };
     for (auto dom : part->getDomainIds())
-        part->visit([&](const auto& element) { REQUIRE(find_in_whole(element, dom)); }, dom);
+        part->visit([&](const auto& element) { REQUIRE(find_in_whole(element, dom)); }, {dom});
     std::println(stderr, "PASS");
 }
 

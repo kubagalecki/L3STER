@@ -167,7 +167,7 @@ auto copyElements(MeshPartition< 1 >::domain_map_t& domains,
     for (auto domain_id : domain_ids)
     {
         auto& domain = domains[domain_id];
-        mesh.visit([&](const auto& element) { pushToDomain(domain, std::invoke(el_proj, element)); }, domain_id);
+        mesh.visit([&](const auto& element) { pushToDomain(domain, std::invoke(el_proj, element)); }, {domain_id});
     }
     auto deleted_ids = std::vector< el_id_t >{};
     deleted_ids.reserve(faces_to_delete.size());
@@ -182,7 +182,7 @@ auto copyElements(MeshPartition< 1 >::domain_map_t& domains,
                 else
                     pushToDomain(domain, new_element);
             },
-            domain_id,
+            {domain_id},
             std::execution::seq);
         if (domain.elements.empty())
             domains.erase(domains.find(domain_id));
@@ -394,8 +394,8 @@ auto extrude(const MeshPartition< 1 >& mesh, R&& zdist, d_id_t id_back, d_id_t i
     for (auto domain_id : mesh.getDomainIds())
     {
         auto domain_ref = std::ref(domains3d[domain_id]);
-        mesh.visit(std::bind_back(extrude_element, domain_ref), domain_id);
-        mesh.visit(make_back_front_elems, domain_id);
+        mesh.visit(std::bind_back(extrude_element, domain_ref), {domain_id});
+        mesh.visit(make_back_front_elems, {domain_id});
     }
 
     return {domains3d, util::concatRanges(mesh.getBoundaryIdsView(), std::array{id_back, id_front})};

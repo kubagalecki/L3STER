@@ -55,7 +55,7 @@ auto combineParts(std::span< const mesh::MeshPartition< orders... > > parts) -> 
         for (d_id_t domain_id : part.getDomainIds())
         {
             auto& domain = combined_domains[domain_id];
-            part.visit([&](const auto& el) { mesh::pushToDomain(domain, el); }, domain_id, std::execution::seq);
+            part.visit([&](const auto& el) { mesh::pushToDomain(domain, el); }, {domain_id}, std::execution::seq);
         }
     auto boundaries = std::vector< d_id_t >{};
     std::ranges::copy(parts | std::views::transform([](const auto& part) { return part.getBoundaryIdsView(); }) |
