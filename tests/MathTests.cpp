@@ -163,40 +163,45 @@ TEST_CASE("Legendre polynomials", "[math]")
 
 TEST_CASE("Lobatto abscissas", "[math]")
 {
+    constexpr auto check_equal = [](auto a, auto b) {
+        constexpr auto eps = 1.e-14;
+        CHECK(a == Approx(b).margin(eps));
+    };
+
     SECTION("2 points")
     {
         const auto& la = getLobattoRuleAbsc< double, 2 >();
-        CHECK(la[0] == -1.);
-        CHECK(la[1] == 1.);
+        check_equal(la[0], -1.);
+        check_equal(la[1], 1.);
     }
 
     SECTION("3 points")
     {
         const auto& la = getLobattoRuleAbsc< double, 3 >();
-        CHECK(la[0] == -1.);
-        CHECK(la[1] == 0.);
-        CHECK(la[2] == 1.);
+        check_equal(la[0], -1.);
+        check_equal(la[1], 0.);
+        check_equal(la[2], 1.);
     }
 
     SECTION("4 points")
     {
         const auto& la     = getLobattoRuleAbsc< double, 4 >();
         const auto  a12abs = .2 * std::sqrt(5.);
-        CHECK(la[0] == -1.);
-        CHECK(la[1] == Approx(-a12abs).margin(1e-14));
-        CHECK(la[2] == Approx(a12abs).margin(1e-14));
-        CHECK(la[3] == 1.);
+        check_equal(la[0], -1.);
+        check_equal(la[1], -a12abs);
+        check_equal(la[2], a12abs);
+        check_equal(la[3], 1.);
     }
 
     SECTION("5 points")
     {
         const auto& la     = getLobattoRuleAbsc< double, 5 >();
         const auto  a13abs = std::sqrt(21.) / 7.;
-        CHECK(la[0] == -1.);
-        CHECK(la[1] == Approx(-a13abs).margin(1e-14));
-        CHECK(la[2] == 0.);
-        CHECK(la[3] == Approx(a13abs).margin(1e-14));
-        CHECK(la[4] == 1.);
+        check_equal(la[0], -1.);
+        check_equal(la[1], -a13abs);
+        check_equal(la[2], 0.);
+        check_equal(la[3], a13abs);
+        check_equal(la[4], 1.);
     }
 
     SECTION("6 points")
@@ -204,11 +209,11 @@ TEST_CASE("Lobatto abscissas", "[math]")
         const auto& la     = getLobattoRuleAbsc< double, 6 >();
         const auto  a14abs = std::sqrt((7. + 2 * std::sqrt(7.)) / 21.);
         const auto  a23abs = std::sqrt((7. - 2 * std::sqrt(7.)) / 21.);
-        CHECK(la[0] == -1.);
-        CHECK(la[1] == Approx(-a14abs).margin(1e-14));
-        CHECK(la[2] == Approx(-a23abs).margin(1e-14));
-        CHECK(la[3] == Approx(a23abs).margin(1e-14));
-        CHECK(la[4] == Approx(a14abs).margin(1e-14));
-        CHECK(la[5] == 1.);
+        check_equal(la[0], -1.);
+        check_equal(la[1], -a14abs);
+        check_equal(la[2], -a23abs);
+        check_equal(la[3], a23abs);
+        check_equal(la[4], a14abs);
+        check_equal(la[5], 1.);
     }
 }

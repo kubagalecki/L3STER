@@ -3,25 +3,17 @@
 
 #include "l3ster/mesh/ElementData.hpp"
 
-#include <algorithm>
 #include <array>
-#include <cstddef>
-#include <numeric>
-#include <stdexcept>
-#include <string>
-#include <utility>
-#include <vector>
 
 namespace lstr::mesh
 {
 template < ElementType T, el_o_t O >
 struct Element
 {
-public:
     static constexpr ElementType type       = T;
     static constexpr el_o_t      order      = O;
-    static constexpr size_t      n_nodes    = ElementTraits< Element< T, O > >::nodes_per_element;
-    static constexpr auto        native_dim = ElementTraits< Element< T, O > >::native_dim;
+    static constexpr size_t      n_nodes    = ElementTraits< Element >::nodes_per_element;
+    static constexpr auto        native_dim = ElementTraits< Element >::native_dim;
     using node_array_t                      = std::array< n_id_t, n_nodes >;
 
     friend constexpr bool operator==(const Element&, const Element&) = default;

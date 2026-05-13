@@ -33,6 +33,7 @@ public:
     [[nodiscard]] inline bool        empty() const;
 
     inline void reserve(const std::array< std::size_t, num_types >& sizes);
+    inline void resize(const std::array< std::size_t, num_types >& sizes);
 
     template < typename Fun, SimpleExecutionPolicy_c ExecPolicy >
     void visit(Fun&& fun, ExecPolicy&&)
@@ -167,6 +168,15 @@ void UniVector< Ts... >::reserve(const std::array< std::size_t, num_types >& siz
         vector.reserve(sizes[i++]);
     };
     (reserve_for(getVector< Ts >()), ...);
+}
+
+template < typename... Ts >
+void UniVector< Ts... >::resize(const std::array< std::size_t, num_types >& sizes)
+{
+    auto resize_for = [&sizes, i = 0](auto& vector) mutable {
+        vector.resize(sizes[i++]);
+    };
+    (resize_for(getVector< Ts >()), ...);
 }
 
 template < typename... Ts >

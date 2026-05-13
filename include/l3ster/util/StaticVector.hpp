@@ -1,10 +1,7 @@
 #ifndef L3STER_STATICVECTOR_HPP
 #define L3STER_STATICVECTOR_HPP
 
-#include <algorithm>
-#include <array>
-#include <concepts>
-#include <memory>
+#include "l3ster/util/Common.hpp"
 
 namespace lstr::util
 {
@@ -13,10 +10,11 @@ class StaticVector
 {
 public:
     using value_type = T;
+    using size_type  = smallest_integral_t< capacity >;
 
     StaticVector() = default;
     template < size_t N >
-    explicit StaticVector(const std::array< T, N >& a)
+    StaticVector(const std::array< T, N >& a)
         requires(N <= capacity)
         : m_size{N}
     {
@@ -31,7 +29,7 @@ public:
     template < std::ranges::sized_range R >
     explicit StaticVector(R&& r)
         requires std::convertible_to< std::ranges::range_value_t< R >, T >
-        : m_size{std::ranges::size(r)}
+        : m_size{static_cast< size_type >(std::ranges::size(r))}
     {
         std::ranges::copy(std::forward< R >(r), m_data.begin());
     }
@@ -54,7 +52,7 @@ public:
     [[nodiscard]] constexpr std::size_t size() const { return m_size; }
     [[nodiscard]] constexpr bool        empty() const { return m_size == 0; }
 
-    constexpr void resize(std::size_t size, const T& val = T{})
+    constexpr void resize(size_type size, const T& val = T{})
     {
         if (size <= m_size)
             erase(std::prev(end(), m_size - size), end());
@@ -74,13 +72,24 @@ public:
     {
         const auto last_moved = std::move(const_cast< T* >(last), end(), const_cast< T* >(first));
         std::destroy(last_moved, end());
-        m_size -= static_cast< std::size_t >(std::distance(first, last));
+        m_size -= static_cast< size_type >(std::distance(first, last));
         return const_cast< T* >(last);
     }
 
 private:
     std::array< T, capacity > m_data;
-    std::size_t               m_size{};
+    size_type                 m_size{};
 };
+
+template < typename T, size_t N1, size_t N2 >
+auto operator<=>(const StaticVector< T, N1 >& v1, const StaticVector< T, N2 >& v2)
+{
+    return std::lexicographical_compare_three_way(v1.begin(), v1.end(), v2.begin(), v2.end());
+}
+template < typename T, size_t N1, size_t N2 >
+auto operator==(const StaticVector< T, N1 >& v1, const StaticVector< T, N2 >& v2)
+{
+    return std::ranges::equal(v1, v2);
+}
 } // namespace lstr::util
 #endif // L3STER_STATICVECTOR_HPP

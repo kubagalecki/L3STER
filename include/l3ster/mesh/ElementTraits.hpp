@@ -19,6 +19,7 @@ consteval auto getBoundaryInds(const BoundaryTable& boundary_table) -> std::vect
     util::sortRemoveDup(retval);
     return retval;
 }
+
 template < auto boundary_table >
 consteval auto getBoundaryNodeInds()
 {
@@ -27,6 +28,7 @@ consteval auto getBoundaryNodeInds()
     std::ranges::copy(getBoundaryInds(boundary_table), retval.begin());
     return retval;
 }
+
 template < size_t num_nodes, auto boundary_inds >
 consteval auto getInternalNodeInds()
 {
@@ -65,8 +67,40 @@ struct HexTraitsBase
             retval[4][induz]  = static_cast< lid >(i * nodes_per_side + j * nodes_per_edge); // left
             retval[5][induz]  = static_cast< lid >(retval[4][induz] + right_shift);          // right
         }
+        for (auto& face : retval)
+            std::ranges::sort(face);
         return retval;
     });
+    static constexpr auto        edge_table         = std::invoke([] {
+        using edges_t            = std::array< el_locind_t, O + 1 >;
+        constexpr auto get_edges = [] {
+            auto           edges = std::vector< edges_t >{};
+            constexpr auto inds  = std::views::iota(0uz, boundary_table.size());
+            for (auto&& [i, j] : std::views::cartesian_product(inds, inds))
+            {
+                if (i == j)
+                    continue;
+                const auto& b1           = boundary_table[i];
+                const auto& b2           = boundary_table[j];
+                auto        common_nodes = edges_t{};
+                if (std::ranges::set_intersection(b1, b2, common_nodes.begin()).out == common_nodes.end())
+                    edges.push_back(common_nodes);
+            }
+            return edges;
+        };
+        constexpr auto num_edges = get_edges().size();
+        auto           retval    = std::array< edges_t, num_edges >{};
+        std::ranges::copy(get_edges(), retval.begin());
+        return retval;
+    });
+    static constexpr auto        vertices           = std::array< el_locind_t, 8 >{0,
+                                                                                   O,
+                                                                                   O* O + O,
+                                                                                   O*(O + 2),
+                                                                                   (O + 1) * (O + 1) * O,
+                                                                                   O*(O* O + 2 * O + 2),
+                                                                                   (O + 2) * (O + 1) * O,
+                                                                                   O*(O* O + 3 * O + 3)};
     static constexpr auto        boundary_node_inds = getBoundaryNodeInds< boundary_table >();
     static constexpr auto        internal_node_inds = getInternalNodeInds< nodes_per_element, boundary_node_inds >();
 };
@@ -91,8 +125,12 @@ struct QuadTraitsBase
             retval[2][i] = static_cast< el_locind_t >(i * nodes_per_side);         // left
             retval[3][i] = static_cast< el_locind_t >(retval[2][i] + right_shift); // right
         }
+        for (auto& edge : retval)
+            std::ranges::sort(edge);
         return retval;
     });
+    static constexpr auto        edge_table         = boundary_table;
+    static constexpr auto        vertices           = std::array< el_locind_t, 4 >{0, O, O* O + O, O*(O + 2)};
     static constexpr auto        boundary_node_inds = getBoundaryNodeInds< boundary_table >();
     static constexpr auto        internal_node_inds = getInternalNodeInds< nodes_per_element, boundary_node_inds >();
 };
@@ -106,8 +144,11 @@ struct LineTraitsBase
     static constexpr dim_t       native_dim         = 1;
     static constexpr el_side_t   n_sides            = 2;
     static constexpr auto        boundary_table     = std::array{std::array{el_locind_t{}}, std::array{el_locind_t{O}}};
+    static constexpr auto        vertices           = std::array< el_locind_t, 2 >{0, O};
     static constexpr auto        boundary_node_inds = getBoundaryNodeInds< boundary_table >();
-    static constexpr auto        internal_node_inds = getInternalNodeInds< nodes_per_element, boundary_node_inds >();
+    static constexpr auto        internal_node_inds = util::makeIotaArray< el_locind_t, O - 1 >(1);
+    static constexpr auto        edge_table         = std::array< std::array< el_locind_t, nodes_per_element >, 1 >{
+        util::makeIotaArray< el_locind_t, nodes_per_element >()};
 };
 } // namespace detail
 

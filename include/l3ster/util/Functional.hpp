@@ -84,7 +84,7 @@ constexpr auto negatePredicate(Predicate&& predicate)
 struct Min
 {
     template < typename T >
-    T operator()(const T& a, const T& b)
+    constexpr T operator()(const T& a, const T& b)
     {
         return b > a ? a : b;
     }
@@ -93,7 +93,7 @@ struct Min
 struct Max
 {
     template < typename T >
-    T operator()(const T& a, const T& b)
+    constexpr T operator()(const T& a, const T& b)
     {
         return a < b ? b : a;
     }
