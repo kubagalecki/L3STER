@@ -332,13 +332,8 @@ auto convertElements(const MeshPartition< 1 >&           mesh,
         const auto& d1 = mesh.getDomain(dom_id);
         auto&       dO = new_domains.at(dom_id);
         d1.elements.visitVectors([&]< ElementType T >(const std::vector< Element< T, 1 > >& vec1) {
-            auto& vecO   = dO.elements.template getVector< Element< T, O > >();
-            auto  zipped = std::views::zip(vec1, vecO);
-            util::tbb::parallelFor(zipped, [&](auto&& els) {
-                auto& [el1, elO]     = els;
-                const auto converted = convert_element(el1);
-                elO                  = converted;
-            });
+            auto& vecO = dO.elements.template getVector< Element< T, O > >();
+            util::tbb::parallelTransform(vec1, vecO.begin(), convert_element);
         });
     });
 

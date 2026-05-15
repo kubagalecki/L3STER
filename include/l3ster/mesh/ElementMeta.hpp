@@ -72,16 +72,11 @@ public:
 template < template < typename... > typename Outer, template < ElementType, el_o_t > typename Inner, el_o_t... orders >
 using parametrize_type_over_element_types_and_orders_t = detail::CalculateAppliedType< Outer, Inner, orders... >::type;
 
-template < ElementType ET, el_o_t EO >
-using element_cptr_t = const Element< ET, EO >*;
-template < el_o_t... orders >
-using element_cptr_variant_t =
-    parametrize_type_over_element_types_and_orders_t< std::variant, element_cptr_t, orders... >;
-template < ElementType ET, el_o_t EO >
-class BoundaryElementView;
-
 template < bool is_const, ElementType ET, el_o_t EO >
 using cond_const_elref_t = std::conditional_t< is_const, const Element< ET, EO >&, Element< ET, EO >& >;
+
+template < ElementType ET, el_o_t EO >
+class BoundaryElementView;
 
 template < auto init, template < ElementType, el_o_t > typename Transform, typename Reduce, el_o_t... orders >
 inline constexpr auto meta_transform_reduce = detail::ReductionImpl< init, Transform, Reduce, orders... >::value;

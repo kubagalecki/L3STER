@@ -13,57 +13,104 @@
 
 using namespace lstr;
 using namespace lstr::algsys;
+using namespace lstr::mesh;
+
+template < ElementType ET, el_o_t EO >
+constexpr auto fillNodes(typename Element< ET, EO >::node_array_t& el_nodes)
+{
+    n_id_t n = 0;
+    for (const auto& bnd_node_ind : ElementTraits< Element< ET, EO > >::boundary_node_inds)
+        el_nodes[bnd_node_ind] = n++;
+    for (const auto& int_node_ind : ElementTraits< Element< ET, EO > >::internal_node_inds)
+        el_nodes[int_node_ind] = n++;
+}
 
 constexpr auto makeQuadElement()
 {
-    constexpr auto   ET = mesh::ElementType::Quad;
+    constexpr auto   ET = ElementType::Quad;
     constexpr el_o_t EO = 4;
 
-    auto           el_nodes     = mesh::Element< ET, EO >::node_array_t{};
-    constexpr auto invalid_node = std::numeric_limits< n_id_t >::max();
-    el_nodes.fill(invalid_node);
-    n_id_t n = 0;
-    for (const auto& bnd_node_ind : mesh::ElementTraits< mesh::Element< ET, EO > >::boundary_node_inds)
-        el_nodes[bnd_node_ind] = n++;
-    for (const auto& int_node_ind : mesh::ElementTraits< mesh::Element< ET, EO > >::internal_node_inds)
-        el_nodes[int_node_ind] = n++;
-    const auto data =
-        mesh::ElementData< ET, EO >{{Point{1., 1., 0.}, Point{2., 1., 0.}, Point{1., 3., 0.}, Point{3., 4., 0.}}};
+    auto retval             = Element< ET, EO >{};
+    auto& [nodes, data, id] = retval;
+    fillNodes< ET, EO >(nodes);
+    data = ElementData< ET, EO >{{Point{1., 1., 0.}, Point{2., 1., 0.}, Point{1., 3., 0.}, Point{3., 4., 0.}}};
+    return retval;
+}
 
-    return mesh::Element{el_nodes, data, 0};
+constexpr auto makeQuad2Element()
+{
+    constexpr auto   ET = ElementType::Quad2;
+    constexpr el_o_t EO = 4;
+
+    auto retval             = Element< ET, EO >{};
+    auto& [nodes, data, id] = retval;
+    fillNodes< ET, EO >(nodes);
+    data = ElementData< ET, EO >{{Point{1., 1., 0.},
+                                  Point{1.5, 1., 0.},
+                                  Point{2., 1., 0.},
+                                  Point{1.2, 2., 0.},
+                                  Point{1.95, 2.45, 0.},
+                                  Point{2.7, 2.7, 0.},
+                                  Point{1., 3., 0.},
+                                  Point{2.1, 3.45, 0.},
+                                  Point{3., 4., 0.}}};
+    return retval;
 }
 
 constexpr auto makeHexElement()
 {
-    constexpr auto   ET = mesh::ElementType::Hex;
+    constexpr auto   ET = ElementType::Hex;
     constexpr el_o_t EO = 3;
 
-    auto           el_nodes     = mesh::Element< ET, EO >::node_array_t{};
-    constexpr auto invalid_node = std::numeric_limits< n_id_t >::max();
-    el_nodes.fill(invalid_node);
-    n_id_t n = 0;
-    for (const auto& bnd_node_ind : mesh::ElementTraits< mesh::Element< ET, EO > >::boundary_node_inds)
-        el_nodes[bnd_node_ind] = n++;
-    for (const auto& int_node_ind : mesh::ElementTraits< mesh::Element< ET, EO > >::internal_node_inds)
-        el_nodes[int_node_ind] = n++;
-    const auto data = mesh::ElementData< ET, EO >{{Point{1., 1., 0.},
-                                                   Point{2., 1., 0.},
-                                                   Point{1., 3., 0.},
-                                                   Point{3., 4., 0.},
-                                                   Point{1., 1., 1.},
-                                                   Point{2., 1., 1.5},
-                                                   Point{1., 3., 2.},
-                                                   Point{3., 4., 3.5}}};
+    auto retval             = Element< ET, EO >{};
+    auto& [nodes, data, id] = retval;
+    fillNodes< ET, EO >(nodes);
+    data = ElementData< ET, EO >{{Point{1., 1., 0.},
+                                  Point{2., 1., 0.},
+                                  Point{1., 3., 0.},
+                                  Point{3., 4., 0.},
+                                  Point{1., 1., 1.},
+                                  Point{2., 1., 1.5},
+                                  Point{1., 3., 2.},
+                                  Point{3., 4., 3.5}}};
+    return retval;
+}
 
-    return mesh::Element{el_nodes, data, 0};
+constexpr auto makeHex2Element()
+{
+    constexpr auto   ET = ElementType::Hex2;
+    constexpr el_o_t EO = 3;
+
+    auto retval             = Element< ET, EO >{};
+    auto& [nodes, data, id] = retval;
+    fillNodes< ET, EO >(nodes);
+    constexpr auto trans = [](auto inds) -> Point< 3 > {
+        const auto [iz, iy, ix] = inds;
+        if (ix == 0 and iy == 0 and iz == 0)
+            return {0., 0., 0.};
+
+        const auto     x     = static_cast< double >(ix);
+        const auto     y     = static_cast< double >(iy);
+        const auto     z     = static_cast< double >(iz);
+        const auto     theta = std::atan2(std::sqrt(x * x + y * y), z);
+        const auto     phi   = (ix != 0 or iy != 0) ? std::atan2(y, x) : 0.;
+        constexpr auto r     = std::numbers::sqrt3;
+        auto ret = Point{r * std::sin(theta) * std::cos(phi), r * std::sin(theta) * std::sin(phi), r * std::cos(theta)};
+        std::println("{}, {}, {}", theta, phi, ret.coords);
+        return ret;
+    };
+    constexpr auto i3          = util::makeIotaArray< int, 3 >(-1);
+    const auto     coord_range = std::views::cartesian_product(i3, i3, i3);
+    std::ranges::transform(coord_range, data.vertices.begin(), trans);
+    return retval;
 }
 
 inline constexpr auto asm_opts = AssemblyOptions{.value_order = 2}; // over-integrate to trigger local sys buf overflow
 
-template < mesh::ElementType ET, el_o_t EO >
+template < ElementType ET, el_o_t EO >
 auto getReferenceBasis() -> const auto&
 {
-    constexpr auto GO = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
+    constexpr auto GO = ElementTraits< Element< ET, EO > >::geom_order;
     return basis::getReferenceBasisAtDomainQuadrature< asm_opts.basis_type,
                                                        ET,
                                                        EO,
@@ -71,80 +118,74 @@ auto getReferenceBasis() -> const auto&
                                                        2 * asm_opts.order(EO) + (GO - 1) >();
 }
 
-template < KernelParams params, el_o_t EO >
-auto assembleDiffusionProblem2D(const mesh::Element< mesh::ElementType::Quad, EO >& element)
+template < KernelParams params, ElementType ET, el_o_t EO >
+auto assembleDiffusionProblem2D(const Element< ET, EO >& element)
 {
-    constexpr auto ET         = mesh::ElementType::Quad;
     constexpr auto kernel     = wrapDomainEquationKernel< params >(diffusion_kernel_2D);
     const auto&    basis_at_q = getReferenceBasis< ET, EO >();
     return assembleLocalSystem(kernel, element, {}, basis_at_q, 0.);
 }
 
-template < KernelParams params, el_o_t EO >
-auto assembleDiffusionProblem3D(const mesh::Element< mesh::ElementType::Hex, EO >& element)
+template < KernelParams params, ElementType ET, el_o_t EO >
+auto assembleDiffusionProblem3D(const Element< ET, EO >& element)
 {
-    constexpr auto ET         = mesh::ElementType::Hex;
     constexpr auto kernel     = wrapDomainEquationKernel< params >(diffusion_kernel_3D);
     const auto&    basis_at_q = getReferenceBasis< ET, EO >();
     return assembleLocalSystem(kernel, element, {}, basis_at_q, 0.);
 }
 
-template < KernelParams params, el_o_t EO >
-auto evalDiffusionOperator2D(const mesh::LocalElementView< mesh::ElementType::Quad, EO >& element,
-                             const Operand< mesh::ElementType::Quad, EO, params >&        x)
+template < KernelParams params, ElementType ET, el_o_t EO >
+auto evalDiffusionOperator2D(const LocalElementView< ET, EO >&               element,
+                             const Operand< ElementType::Quad, EO, params >& x)
 {
-    constexpr auto ET         = mesh::ElementType::Quad;
     constexpr auto kernel     = wrapDomainEquationKernel< params >(diffusion_kernel_2D);
     const auto&    basis_at_q = getReferenceBasis< ET, EO >();
     return evaluateLocalOperator(kernel, element, {}, basis_at_q, 0., x);
 }
 
-template < KernelParams params, el_o_t EO >
-auto evalDiffusionOperator3D(const mesh::LocalElementView< mesh::ElementType::Hex, EO >& element,
-                             const Operand< mesh::ElementType::Hex, EO, params >&        x)
+template < KernelParams params, ElementType ET, el_o_t EO >
+auto evalDiffusionOperator3D(const LocalElementView< ET, EO >&              element,
+                             const Operand< ElementType::Hex, EO, params >& x)
 {
-    constexpr auto ET         = mesh::ElementType::Hex;
     constexpr auto kernel     = wrapDomainEquationKernel< params >(diffusion_kernel_3D);
     const auto&    basis_at_q = getReferenceBasis< ET, EO >();
     return evaluateLocalOperator(kernel, element, {}, basis_at_q, 0., x);
 }
 
-template < KernelParams params, el_o_t EO >
-auto evalDiffusionOperator2DVar(const mesh::LocalElementView< mesh::ElementType::Quad, EO >& element,
-                                const Operand< mesh::ElementType::Quad, EO, params >&        x,
-                                const SolutionManager&                                       sol_man)
+template < KernelParams params, ElementType ET, el_o_t EO >
+auto evalDiffusionOperator2DVar(const LocalElementView< ET, EO >&               element,
+                                const Operand< ElementType::Quad, EO, params >& x,
+                                const SolutionManager&                          sol_man)
 {
-    constexpr auto ET         = mesh::ElementType::Quad;
     constexpr auto kernel     = wrapDomainEquationKernel< params >(diffusion_kernel_2D_var);
     const auto&    basis_at_q = getReferenceBasis< ET, EO >();
     const auto     node_vals  = sol_man.getFieldAccess(std::array{0}).getLocallyIndexed(element.getLocalNodes());
     return evaluateLocalOperator(kernel, element, node_vals, basis_at_q, 0., x);
 }
 
-template < KernelParams params, el_o_t EO >
-auto evalDiffusionOperator3DVar(const mesh::LocalElementView< mesh::ElementType::Hex, EO >& element,
-                                const Operand< mesh::ElementType::Hex, EO, params >&        x,
-                                const SolutionManager&                                      sol_man)
+template < KernelParams params, ElementType ET, el_o_t EO >
+auto evalDiffusionOperator3DVar(const LocalElementView< ET, EO >&              element,
+                                const Operand< ElementType::Hex, EO, params >& x,
+                                const SolutionManager&                         sol_man)
 {
-    constexpr auto ET         = mesh::ElementType::Hex;
     constexpr auto kernel     = wrapDomainEquationKernel< params >(diffusion_kernel_3D_var);
     const auto&    basis_at_q = getReferenceBasis< ET, EO >();
     const auto     node_vals  = sol_man.getFieldAccess(std::array{0}).getLocallyIndexed(element.getLocalNodes());
     return evaluateLocalOperator(kernel, element, node_vals, basis_at_q, 0., x);
 }
 
-template < KernelParams params, mesh::ElementType ET, el_o_t EO >
-auto evalDiffusionVarOperatorSumFact(const mesh::LocalElementView< ET, EO >& element,
-                                     const Operand< ET, EO, params >&        x,
-                                     const SolutionManager&                  sol_man)
+template < KernelParams params, ElementType ET, el_o_t EO >
+auto evalDiffusionVarOperatorSumFact(const LocalElementView< ET, EO >& element,
+                                     const Operand< ET, EO, params >&  x,
+                                     const SolutionManager&            sol_man)
 {
     constexpr auto            kernel  = std::invoke([] {
-        if constexpr (ET == mesh::ElementType::Quad)
+        if constexpr (ElementTraits< Element< ET, EO > >::native_dim == 2)
             return wrapDomainEquationKernel< params >(diffusion_kernel_2D_var);
         else
             return wrapDomainEquationKernel< params >(diffusion_kernel_3D_var);
     });
-    constexpr auto            n_nodes = mesh::Element< ET, EO >::n_nodes;
+    constexpr auto            n_nodes = Element< ET, EO >::n_nodes;
     constexpr Eigen::Index    nukn    = params.n_unknowns;
     Operand< ET, EO, params > y{x.rows(), x.cols()};
     const auto                x_fill = [&x](std::span< val_t > to_fill) {
@@ -168,30 +209,30 @@ auto evalDiffusionVarOperatorSumFact(const mesh::LocalElementView< ET, EO >& ele
     return y;
 }
 
-template < KernelParams params, mesh::ElementType ET, el_o_t EO >
-auto initDiffusionOperator2D(const mesh::LocalElementView< ET, EO >& element,
-                             const DirichletInds< ET, EO, params >&  dirichlet_inds = {},
-                             const DirichletVals< ET, EO, params >&  dirichlet_vals = {})
+template < KernelParams params, ElementType ET, el_o_t EO >
+auto initDiffusionOperator2D(const LocalElementView< ET, EO >&      element,
+                             const DirichletInds< ET, EO, params >& dirichlet_inds = {},
+                             const DirichletVals< ET, EO, params >& dirichlet_vals = {})
 {
     constexpr auto kernel     = wrapDomainEquationKernel< params >(diffusion_kernel_2D);
     const auto&    basis_at_q = getReferenceBasis< ET, EO >();
     return precomputeOperatorDiagonalAndRhs(kernel, element, {}, basis_at_q, 0., dirichlet_inds, dirichlet_vals);
 }
 
-template < KernelParams params, mesh::ElementType ET, el_o_t EO >
-auto initDiffusionOperator3D(const mesh::LocalElementView< ET, EO >& element,
-                             const DirichletInds< ET, EO, params >&  dirichlet_inds = {},
-                             const DirichletVals< ET, EO, params >&  dirichlet_vals = {})
+template < KernelParams params, ElementType ET, el_o_t EO >
+auto initDiffusionOperator3D(const LocalElementView< ET, EO >&      element,
+                             const DirichletInds< ET, EO, params >& dirichlet_inds = {},
+                             const DirichletVals< ET, EO, params >& dirichlet_vals = {})
 {
     constexpr auto kernel     = wrapDomainEquationKernel< params >(diffusion_kernel_3D);
     const auto&    basis_at_q = getReferenceBasis< ET, EO >();
     return precomputeOperatorDiagonalAndRhs(kernel, element, {}, basis_at_q, 0., dirichlet_inds, dirichlet_vals);
 }
 
-template < mesh::ElementType ET, el_o_t EO, KernelParams params >
+template < ElementType ET, el_o_t EO, KernelParams params >
 void applyDirichletBCs(auto& A, auto& b, const auto& phi)
 {
-    const auto& bnd_node_inds = mesh::ElementTraits< mesh::Element< ET, EO > >::boundary_node_inds;
+    const auto& bnd_node_inds = ElementTraits< Element< ET, EO > >::boundary_node_inds;
     auto        bc_dofs       = std::array< Eigen::Index, bnd_node_inds.size() >{};
     for (auto&& [dof, node] : std::views::zip(bc_dofs, bnd_node_inds))
         dof = node * params.n_unknowns;
@@ -205,22 +246,22 @@ void applyDirichletBCs(auto& A, auto& b, const auto& phi)
     }
 }
 
-template < mesh::ElementType ET, el_o_t EO, KernelParams params >
-auto makeSolution(const mesh::Element< ET, EO >& element)
+template < ElementType ET, el_o_t EO, KernelParams params >
+auto makeSolution(const Element< ET, EO >& element)
 {
     // Analytical solution - phi(x) = x
-    auto retval = Eigen::Matrix< val_t, mesh::Element< ET, EO >::n_nodes, params.n_rhs >{};
+    auto retval = Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, params.n_rhs >{};
     for (el_locind_t n = 0; n != element.nodes.size(); ++n)
     {
         const auto location = nodePhysicalLocation(element, n);
-        for (size_t d = 0; d != mesh::Element< ET, EO >::native_dim; ++d)
+        for (size_t d = 0; d != Element< ET, EO >::native_dim; ++d)
             retval(n, d) = location[d];
     }
     return retval;
 }
 
 template < el_o_t... EO >
-auto makeRandomlyFilledSolutiondManager(const mesh::MeshPartition< EO... >& partition, size_t n_fields)
+auto makeRandomlyFilledSolutiondManager(const MeshPartition< EO... >& partition, size_t n_fields)
 {
     auto retval   = SolutionManager{partition, n_fields};
     auto raw_view = retval.getRawView();
