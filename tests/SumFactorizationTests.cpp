@@ -1,54 +1,76 @@
 #include "LocalOperatorCommon.hpp"
 
+template < typename MakeElement >
+static void diff2DTest(MakeElement&& make_element)
+{
+    const auto element    = std::invoke(std::forward< MakeElement >(make_element));
+    using eltype          = std::decay_t< decltype(element) >;
+    constexpr auto ET     = eltype::type;
+    constexpr auto EO     = eltype::order;
+    constexpr auto params = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3, .n_fields = 1, .n_rhs = 2};
+
+    auto dom_map = typename MeshPartition< EO >::domain_map_t{};
+    pushToDomain(dom_map[0], element);
+    const auto global_mesh   = MeshPartition< EO >{std::move(dom_map), {}};
+    const auto local_element = LocalElementView{element, global_mesh, {}};
+    const auto sol_man       = makeRandomlyFilledSolutiondManager(global_mesh, 1);
+
+    auto x = Operand< ET, EO, params >{operand_size< ET, EO, params >, params.n_rhs};
+    x.setRandom();
+
+    const auto y_local_element = evalDiffusionOperator2DVar< params >(local_element, x, sol_man);
+    const auto y_sum_fact      = evalDiffusionVarOperatorSumFact< params >(local_element, x, sol_man);
+
+    constexpr auto eps = 1e-8;
+    CHECK((y_local_element - y_sum_fact).norm() < eps);
+}
+
+template < typename MakeElement >
+static void diff3DTest(MakeElement&& make_element)
+{
+    const auto element    = std::invoke(std::forward< MakeElement >(make_element));
+    using eltype          = std::decay_t< decltype(element) >;
+    constexpr auto ET     = eltype::type;
+    constexpr auto EO     = eltype::order;
+    constexpr auto params = KernelParams{.dimension = 3, .n_equations = 7, .n_unknowns = 4, .n_fields = 1, .n_rhs = 2};
+
+    auto dom_map = typename MeshPartition< EO >::domain_map_t{};
+    pushToDomain(dom_map[0], element);
+    const auto global_mesh   = MeshPartition< EO >{std::move(dom_map), {}};
+    const auto local_element = LocalElementView{element, global_mesh, {}};
+    const auto sol_man       = makeRandomlyFilledSolutiondManager(global_mesh, 1);
+
+    auto x = Operand< ET, EO, params >{operand_size< ET, EO, params >, params.n_rhs};
+    x.setRandom();
+
+    const auto y_local_element = evalDiffusionOperator3DVar< params >(local_element, x, sol_man);
+    const auto y_sum_fact      = evalDiffusionVarOperatorSumFact< params >(local_element, x, sol_man);
+
+    constexpr auto eps = 1e-8;
+    CHECK((y_local_element - y_sum_fact).norm() < eps);
+}
+
+// Compare results between the local element approach and the sum-factorization technique
 TEST_CASE("Sum-factorized evaluation", "[local_asm]")
 {
-    // Compare results between the local element approach and the sum-factorization technique
-    SECTION("Diffusion 2D")
+    SECTION("Diffusion 2D, GO=1")
     {
-        constexpr auto element = makeQuadElement();
-        constexpr auto ET      = element.type;
-        constexpr auto EO      = element.order;
-        constexpr auto params =
-            KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3, .n_fields = 1, .n_rhs = 2};
-
-        auto dom_map = mesh::MeshPartition< EO >::domain_map_t{};
-        mesh::pushToDomain(dom_map[0], element);
-        const auto global_mesh   = mesh::MeshPartition< EO >{std::move(dom_map), {}};
-        const auto local_element = mesh::LocalElementView{element, global_mesh, {}};
-        const auto sol_man       = makeRandomlyFilledSolutiondManager(global_mesh, 1);
-
-        auto x = Operand< ET, EO, params >{operand_size< ET, EO, params >, params.n_rhs};
-        x.setRandom();
-
-        const auto y_local_element = evalDiffusionOperator2DVar< params >(local_element, x, sol_man);
-        const auto y_sum_fact      = evalDiffusionVarOperatorSumFact< params >(local_element, x, sol_man);
-
-        constexpr auto eps = 1e-8;
-        CHECK((y_local_element - y_sum_fact).norm() < eps);
+        diff2DTest([] { return makeQuadElement(); });
     }
 
-    SECTION("Diffusion 3D")
+    SECTION("Diffusion 3D, GO=1")
     {
-        constexpr auto element = makeHexElement();
-        constexpr auto ET      = element.type;
-        constexpr auto EO      = element.order;
-        constexpr auto params =
-            KernelParams{.dimension = 3, .n_equations = 7, .n_unknowns = 4, .n_fields = 1, .n_rhs = 2};
+        diff3DTest([] { return makeHexElement(); });
+    }
 
-        auto dom_map = mesh::MeshPartition< EO >::domain_map_t{};
-        mesh::pushToDomain(dom_map[0], element);
-        const auto global_mesh   = mesh::MeshPartition< EO >{std::move(dom_map), {}};
-        const auto local_element = mesh::LocalElementView{element, global_mesh, {}};
-        const auto sol_man       = makeRandomlyFilledSolutiondManager(global_mesh, 1);
+    SECTION("Diffusion 2D, GO=2")
+    {
+        diff2DTest([] { return makeQuad2Element(); });
+    }
 
-        auto x = Operand< ET, EO, params >{operand_size< ET, EO, params >, params.n_rhs};
-        x.setRandom();
-
-        const auto y_local_element = evalDiffusionOperator3DVar< params >(local_element, x, sol_man);
-        const auto y_sum_fact      = evalDiffusionVarOperatorSumFact< params >(local_element, x, sol_man);
-
-        constexpr auto eps = 1e-8;
-        CHECK((y_local_element - y_sum_fact).norm() < eps);
+    SECTION("Diffusion 3D, GO=2")
+    {
+        diff3DTest([] { return makeHex2Element(); });
     }
 }
 

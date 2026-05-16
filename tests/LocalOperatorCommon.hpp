@@ -14,6 +14,7 @@
 using namespace lstr;
 using namespace lstr::algsys;
 using namespace lstr::mesh;
+using namespace lstr::basis;
 
 template < ElementType ET, el_o_t EO >
 constexpr auto fillNodes(typename Element< ET, EO >::node_array_t& el_nodes)
@@ -95,9 +96,7 @@ constexpr auto makeHex2Element()
         const auto     theta = std::atan2(std::sqrt(x * x + y * y), z);
         const auto     phi   = (ix != 0 or iy != 0) ? std::atan2(y, x) : 0.;
         constexpr auto r     = std::numbers::sqrt3;
-        auto ret = Point{r * std::sin(theta) * std::cos(phi), r * std::sin(theta) * std::sin(phi), r * std::cos(theta)};
-        std::println("{}, {}, {}", theta, phi, ret.coords);
-        return ret;
+        return {r * std::sin(theta) * std::cos(phi), r * std::sin(theta) * std::sin(phi), r * std::cos(theta)};
     };
     constexpr auto i3          = util::makeIotaArray< int, 3 >(-1);
     const auto     coord_range = std::views::cartesian_product(i3, i3, i3);
@@ -111,11 +110,11 @@ template < ElementType ET, el_o_t EO >
 auto getReferenceBasis() -> const auto&
 {
     constexpr auto GO = ElementTraits< Element< ET, EO > >::geom_order;
-    return basis::getReferenceBasisAtDomainQuadrature< asm_opts.basis_type,
-                                                       ET,
-                                                       EO,
-                                                       asm_opts.quad_type,
-                                                       2 * asm_opts.order(EO) + (GO - 1) >();
+    return getReferenceBasisAtDomainQuadrature< asm_opts.basis_type,
+                                                ET,
+                                                EO,
+                                                asm_opts.quad_type,
+                                                2 * asm_opts.order(EO) + (GO - 1) >();
 }
 
 template < KernelParams params, ElementType ET, el_o_t EO >
