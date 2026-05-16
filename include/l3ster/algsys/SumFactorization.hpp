@@ -729,7 +729,7 @@ auto evalAtHexQPs(typename SumFactBufferHelper< make_basis_params< params, asm_o
                                                                 dv_dzeta.template rightCols< params.n_fields >(),
                                                                 jac_inv,
                                                                 qi);
-                const auto point        = SpaceTimePoint{Point< 3 >{x(qi, 0), x(qi, 1), 0.}, time};
+                const auto point        = SpaceTimePoint{Point< 3 >{x(qi, 0), x(qi, 1), x(qi, 2)}, time};
                 const auto ker_input = typename KernelInterface< params >::DomainInput{field_vals, field_ders, point};
                 const auto kernel_result     = std::invoke(kernel, ker_input);
                 const auto& [A0, A1, A2, A3] = kernel_result.operators;
