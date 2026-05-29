@@ -21,12 +21,20 @@ enum struct ElementType
     Count = 6
 };
 
+#ifndef L3STER_DISABLE_CURVILINEAR
 // Array containing all defined element types
-inline constexpr std::array< ElementType, std::to_underlying(ElementType::Count) > element_types = std::invoke([] {
+inline constexpr auto element_types = std::invoke([] {
     auto retval = std::array< ElementType, static_cast< size_t >(ElementType::Count) >{};
     std::ranges::generate(retval, [i = 0]() mutable { return static_cast< ElementType >(i++); });
     return retval;
 });
+#else
+inline constexpr auto element_types = std::invoke([] {
+    auto retval = std::array< ElementType, static_cast< size_t >(ElementType::Count) / 2 >{};
+    std::ranges::generate(retval, [i = 0]() mutable { return static_cast< ElementType >(i++); });
+    return retval;
+});
+#endif
 
 constexpr bool isGeomType(ElementType ET)
 {
