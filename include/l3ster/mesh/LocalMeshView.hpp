@@ -42,9 +42,10 @@ public:
 
     inline auto getLocalNodes() const -> std::array< n_loc_id_t, n_nodes >
         requires optimize_internal;
-    inline auto getLocalNodes() const -> const std::array< n_loc_id_t, n_nodes >& requires(not optimize_internal);
-    auto        getData() const -> const Data& { return m_data; }
-    inline auto getBoundaries() const -> util::StaticVector< bound_descr, n_sides >;
+    inline auto getLocalNodes() const -> const std::array< n_loc_id_t, n_nodes >&
+        requires(not optimize_internal);
+    auto               getData() const -> const Data& { return m_data; }
+    inline auto        getBoundaries() const -> util::StaticVector< bound_descr, n_sides >;
     [[nodiscard]] bool hasBoundaries() const
         requires(n_sides > 0);
     [[nodiscard]] bool hasBoundaries() const
@@ -242,8 +243,11 @@ auto LocalElementView< ET, EO >::getLocalNodes() const -> std::array< n_loc_id_t
 }
 
 template < ElementType ET, el_o_t EO >
-auto LocalElementView< ET, EO >::getLocalNodes() const
-    -> const std::array< n_loc_id_t, n_nodes >& requires(not optimize_internal) { return m_nodes; }
+auto LocalElementView< ET, EO >::getLocalNodes() const -> const std::array< n_loc_id_t, n_nodes >&
+    requires(not optimize_internal)
+{
+    return m_nodes;
+}
 
 template < ElementType ET, el_o_t EO >
 auto LocalElementView< ET, EO >::getBoundaries() const -> util::StaticVector< bound_descr, n_sides >

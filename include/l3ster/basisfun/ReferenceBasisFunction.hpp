@@ -6,7 +6,6 @@
 #include "l3ster/math/LobattoRuleAbsc.hpp"
 #include "l3ster/mesh/Element.hpp"
 #include "l3ster/mesh/ElementTraits.hpp"
-#include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/Functional.hpp"
 
 namespace lstr::basis

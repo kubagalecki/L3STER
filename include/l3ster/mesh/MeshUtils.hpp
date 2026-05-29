@@ -1,9 +1,9 @@
 #ifndef L3STER_MESHUTILS_HPP
 #define L3STER_MESHUTILS_HPP
 
+#include "l3ster/mapping/MapReferenceToPhysical.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
 #include "l3ster/mesh/NodeLocation.hpp"
-#include "l3ster/util/Functional.hpp"
 #include "l3ster/util/Serialization.hpp"
 #include "l3ster/util/SpatialHashTable.hpp"
 
@@ -26,14 +26,11 @@ inline auto makeBoundaryNodeCoordsMap(const MeshPartition< 1 >& mesh)
     constexpr auto nan_point   = Point{nan, nan, nan};
     auto           node_lookup = util::ArrayOwner< Point< 3 > >(mesh.getNodeOwnership().localSize(), nan_point);
     const auto     put_nodes   = [&]< ElementType ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
-        const auto& ref_x = mesh::getNodeLocations< ET, EO >();
-        for (auto i : el_view.getSideNodeInds())
+        const auto node_locations = map::getPhysicalSideNodeLocations(el_view);
+        for (auto&& [node, location] : std::views::zip(el_view.getSideNodesView(), node_locations))
         {
-            const auto  node_id       = el_view->nodes[i];
-            const auto& ref_location  = ref_x[i];
-            const auto  phys_location = map::mapToPhysicalSpace(el_view->data, ref_location);
-            auto&       dest_xyz      = node_lookup.at(node_id);
-            for (auto&& [x_src, x_dest] : std::views::zip(phys_location, dest_xyz))
+            auto& dest_xyz = node_lookup.at(node);
+            for (auto&& [x_src, x_dest] : std::views::zip(location, dest_xyz))
                 std::atomic_ref{x_dest}.store(x_src, std::memory_order_relaxed);
         }
     };

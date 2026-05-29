@@ -5,8 +5,6 @@
 
 #include "l3ster/algsys/AssembleLocalSystem.hpp"
 #include "l3ster/algsys/SumFactorization.hpp"
-#include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
-#include "l3ster/mesh/NodeLocation.hpp"
 #include "l3ster/post/SolutionManager.hpp"
 
 #include "Kernels.hpp"
@@ -15,6 +13,7 @@ using namespace lstr;
 using namespace lstr::algsys;
 using namespace lstr::mesh;
 using namespace lstr::basis;
+using namespace lstr::map;
 
 template < ElementType ET, el_o_t EO >
 constexpr auto fillNodes(typename Element< ET, EO >::node_array_t& el_nodes)
@@ -107,87 +106,72 @@ constexpr auto makeHex2Element()
 inline constexpr auto asm_opts = AssemblyOptions{.value_order = 2}; // over-integrate to trigger local sys buf overflow
 
 template < ElementType ET, el_o_t EO >
-auto getReferenceBasis() -> const auto&
+auto getReferenceBasis()
 {
     constexpr auto GO = ElementTraits< Element< ET, EO > >::geom_order;
-    return getReferenceBasisAtDomainQuadrature< asm_opts.basis_type,
-                                                ET,
-                                                EO,
-                                                asm_opts.quad_type,
-                                                2 * asm_opts.order(EO) + (GO - 1) >();
+    constexpr auto QO = 2 * asm_opts.order(EO) + (GO - 1);
+    return getQuadratureView< asm_opts.basis_type, ET, EO, asm_opts.quad_type, QO >();
+}
+
+template < typename Element >
+auto getMappingAndWgts(const Element& element)
+{
+    const auto get_verts = [&] -> const auto& {
+        if constexpr (std::same_as< Element, mesh::Element< Element::type, Element::order > >)
+            return element.data.vertices;
+        else
+            return element.getData().vertices;
+    };
+    const auto verts      = std::span{get_verts()};
+    const auto basis_at_q = getReferenceBasis< Element::type, Element::order >();
+    auto       mapping    = TabulatedDomainMapping{basis_at_q.bases, verts};
+    return std::make_pair(std::move(mapping), basis_at_q.weights);
+}
+
+template < KernelParams params, typename Element, typename Kernel >
+auto assembleImpl(const Element& element, const Kernel& ker)
+{
+    const auto kernel             = wrapDomainEquationKernel< params >(ker);
+    const auto [mapping, weights] = getMappingAndWgts(element);
+    return assembleLocalSystem(kernel, mapping, {}, weights, 0.);
+}
+
+template < KernelParams params, typename Element, typename Kernel, typename X >
+auto evalImpl(const Element& element, const Kernel& ker, const X& x)
+{
+    const auto kernel             = wrapDomainEquationKernel< params >(ker);
+    const auto [mapping, weights] = getMappingAndWgts(element);
+    return evaluateLocalOperator(kernel, mapping, {}, weights, 0., x);
+}
+
+template < KernelParams params, ElementType ET, el_o_t EO, typename Kernel >
+auto evalDiffusionOperatorVar(const LocalElementView< ET, EO >&                    element,
+                              const Operand< params, Element< ET, EO >::n_nodes >& x,
+                              const SolutionManager&                               sol_man,
+                              const Kernel&                                        ker)
+{
+    const auto kernel             = wrapDomainEquationKernel< params >(ker);
+    const auto [mapping, weights] = getMappingAndWgts(element);
+    const auto node_vals          = sol_man.getFieldAccess(std::array{0}).getLocallyIndexed(element.getLocalNodes());
+    const auto fields             = FieldValuesAtPoints{*mapping.basis_values, mapping.physical_derivatives, node_vals};
+    return evaluateLocalOperator(kernel, mapping, fields, weights, 0., x);
 }
 
 template < KernelParams params, ElementType ET, el_o_t EO >
-auto assembleDiffusionProblem2D(const Element< ET, EO >& element)
+auto evalDiffusionVarOperatorSumFact(const LocalElementView< ET, EO >&                    element,
+                                     const Operand< params, Element< ET, EO >::n_nodes >& x,
+                                     const SolutionManager&                               sol_man)
 {
-    constexpr auto kernel     = wrapDomainEquationKernel< params >(diffusion_kernel_2D);
-    const auto&    basis_at_q = getReferenceBasis< ET, EO >();
-    return assembleLocalSystem(kernel, element, {}, basis_at_q, 0.);
-}
-
-template < KernelParams params, ElementType ET, el_o_t EO >
-auto assembleDiffusionProblem3D(const Element< ET, EO >& element)
-{
-    constexpr auto kernel     = wrapDomainEquationKernel< params >(diffusion_kernel_3D);
-    const auto&    basis_at_q = getReferenceBasis< ET, EO >();
-    return assembleLocalSystem(kernel, element, {}, basis_at_q, 0.);
-}
-
-template < KernelParams params, ElementType ET, el_o_t EO >
-auto evalDiffusionOperator2D(const LocalElementView< ET, EO >&               element,
-                             const Operand< ElementType::Quad, EO, params >& x)
-{
-    constexpr auto kernel     = wrapDomainEquationKernel< params >(diffusion_kernel_2D);
-    const auto&    basis_at_q = getReferenceBasis< ET, EO >();
-    return evaluateLocalOperator(kernel, element, {}, basis_at_q, 0., x);
-}
-
-template < KernelParams params, ElementType ET, el_o_t EO >
-auto evalDiffusionOperator3D(const LocalElementView< ET, EO >&              element,
-                             const Operand< ElementType::Hex, EO, params >& x)
-{
-    constexpr auto kernel     = wrapDomainEquationKernel< params >(diffusion_kernel_3D);
-    const auto&    basis_at_q = getReferenceBasis< ET, EO >();
-    return evaluateLocalOperator(kernel, element, {}, basis_at_q, 0., x);
-}
-
-template < KernelParams params, ElementType ET, el_o_t EO >
-auto evalDiffusionOperator2DVar(const LocalElementView< ET, EO >&               element,
-                                const Operand< ElementType::Quad, EO, params >& x,
-                                const SolutionManager&                          sol_man)
-{
-    constexpr auto kernel     = wrapDomainEquationKernel< params >(diffusion_kernel_2D_var);
-    const auto&    basis_at_q = getReferenceBasis< ET, EO >();
-    const auto     node_vals  = sol_man.getFieldAccess(std::array{0}).getLocallyIndexed(element.getLocalNodes());
-    return evaluateLocalOperator(kernel, element, node_vals, basis_at_q, 0., x);
-}
-
-template < KernelParams params, ElementType ET, el_o_t EO >
-auto evalDiffusionOperator3DVar(const LocalElementView< ET, EO >&              element,
-                                const Operand< ElementType::Hex, EO, params >& x,
-                                const SolutionManager&                         sol_man)
-{
-    constexpr auto kernel     = wrapDomainEquationKernel< params >(diffusion_kernel_3D_var);
-    const auto&    basis_at_q = getReferenceBasis< ET, EO >();
-    const auto     node_vals  = sol_man.getFieldAccess(std::array{0}).getLocallyIndexed(element.getLocalNodes());
-    return evaluateLocalOperator(kernel, element, node_vals, basis_at_q, 0., x);
-}
-
-template < KernelParams params, ElementType ET, el_o_t EO >
-auto evalDiffusionVarOperatorSumFact(const LocalElementView< ET, EO >& element,
-                                     const Operand< ET, EO, params >&  x,
-                                     const SolutionManager&            sol_man)
-{
-    constexpr auto            kernel  = std::invoke([] {
+    constexpr auto             kernel  = std::invoke([] {
         if constexpr (ElementTraits< Element< ET, EO > >::native_dim == 2)
             return wrapDomainEquationKernel< params >(diffusion_kernel_2D_var);
         else
             return wrapDomainEquationKernel< params >(diffusion_kernel_3D_var);
     });
-    constexpr auto            n_nodes = Element< ET, EO >::n_nodes;
-    constexpr Eigen::Index    nukn    = params.n_unknowns;
-    Operand< ET, EO, params > y{x.rows(), x.cols()};
-    const auto                x_fill = [&x](std::span< val_t > to_fill) {
+    constexpr auto             n_nodes = Element< ET, EO >::n_nodes;
+    constexpr Eigen::Index     nukn    = params.n_unknowns;
+    Operand< params, n_nodes > y{x.rows(), x.cols()};
+    const auto                 x_fill = [&x](std::span< val_t > to_fill) {
         using map_t = Eigen::Map< Eigen::Matrix< val_t, n_nodes, params.n_unknowns * params.n_rhs > >;
         auto to_fill_map = map_t{to_fill.data()};
         for (Eigen::Index n = 0; n != n_nodes; ++n)
@@ -209,23 +193,27 @@ auto evalDiffusionVarOperatorSumFact(const LocalElementView< ET, EO >& element,
 }
 
 template < KernelParams params, ElementType ET, el_o_t EO >
-auto initDiffusionOperator2D(const LocalElementView< ET, EO >&      element,
-                             const DirichletInds< ET, EO, params >& dirichlet_inds = {},
-                             const DirichletVals< ET, EO, params >& dirichlet_vals = {})
+auto initDiffusionOperator2D(const LocalElementView< ET, EO >&                          element,
+                             const DirichletInds< params, Element< ET, EO >::n_nodes >& dirichlet_inds = {},
+                             const DirichletVals< params, Element< ET, EO >::n_nodes >& dirichlet_vals = {})
 {
     constexpr auto kernel     = wrapDomainEquationKernel< params >(diffusion_kernel_2D);
-    const auto&    basis_at_q = getReferenceBasis< ET, EO >();
-    return precomputeOperatorDiagonalAndRhs(kernel, element, {}, basis_at_q, 0., dirichlet_inds, dirichlet_vals);
+    const auto     basis_at_q = getReferenceBasis< ET, EO >();
+    const auto     mapping    = TabulatedDomainMapping{basis_at_q.bases, std::span{element.getData().vertices}};
+    return precomputeOperatorDiagonalAndRhs(
+        kernel, mapping, {}, basis_at_q.weights, 0., dirichlet_inds, dirichlet_vals);
 }
 
 template < KernelParams params, ElementType ET, el_o_t EO >
-auto initDiffusionOperator3D(const LocalElementView< ET, EO >&      element,
-                             const DirichletInds< ET, EO, params >& dirichlet_inds = {},
-                             const DirichletVals< ET, EO, params >& dirichlet_vals = {})
+auto initDiffusionOperator3D(const LocalElementView< ET, EO >&                          element,
+                             const DirichletInds< params, Element< ET, EO >::n_nodes >& dirichlet_inds = {},
+                             const DirichletVals< params, Element< ET, EO >::n_nodes >& dirichlet_vals = {})
 {
     constexpr auto kernel     = wrapDomainEquationKernel< params >(diffusion_kernel_3D);
-    const auto&    basis_at_q = getReferenceBasis< ET, EO >();
-    return precomputeOperatorDiagonalAndRhs(kernel, element, {}, basis_at_q, 0., dirichlet_inds, dirichlet_vals);
+    const auto     basis_at_q = getReferenceBasis< ET, EO >();
+    const auto     mapping    = TabulatedDomainMapping{basis_at_q.bases, std::span{element.getData().vertices}};
+    return precomputeOperatorDiagonalAndRhs(
+        kernel, mapping, {}, basis_at_q.weights, 0., dirichlet_inds, dirichlet_vals);
 }
 
 template < ElementType ET, el_o_t EO, KernelParams params >
@@ -249,10 +237,11 @@ template < ElementType ET, el_o_t EO, KernelParams params >
 auto makeSolution(const Element< ET, EO >& element)
 {
     // Analytical solution - phi(x) = x
-    auto retval = Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, params.n_rhs >{};
+    const auto node_locs = map::getPhysicalNodeLocations(element);
+    auto       retval    = Eigen::Matrix< val_t, Element< ET, EO >::n_nodes, params.n_rhs >{};
     for (el_locind_t n = 0; n != element.nodes.size(); ++n)
     {
-        const auto location = nodePhysicalLocation(element, n);
+        const auto location = node_locs[n];
         for (size_t d = 0; d != Element< ET, EO >::native_dim; ++d)
             retval(n, d) = location[d];
     }

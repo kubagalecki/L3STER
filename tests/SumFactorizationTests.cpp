@@ -3,11 +3,12 @@
 template < typename MakeElement >
 static void diff2DTest(MakeElement&& make_element)
 {
-    const auto element    = std::invoke(std::forward< MakeElement >(make_element));
-    using eltype          = std::decay_t< decltype(element) >;
-    constexpr auto ET     = eltype::type;
-    constexpr auto EO     = eltype::order;
-    constexpr auto params = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3, .n_fields = 1, .n_rhs = 2};
+    const auto element     = std::invoke(std::forward< MakeElement >(make_element));
+    using eltype           = std::decay_t< decltype(element) >;
+    constexpr auto ET      = eltype::type;
+    constexpr auto EO      = eltype::order;
+    constexpr auto n_nodes = ElementTraits< Element< ET, EO > >::nodes_per_element;
+    constexpr auto params  = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3, .n_fields = 1, .n_rhs = 2};
 
     auto dom_map = typename MeshPartition< EO >::domain_map_t{};
     pushToDomain(dom_map[0], element);
@@ -15,10 +16,8 @@ static void diff2DTest(MakeElement&& make_element)
     const auto local_element = LocalElementView{element, global_mesh, {}};
     const auto sol_man       = makeRandomlyFilledSolutiondManager(global_mesh, 1);
 
-    auto x = Operand< ET, EO, params >{operand_size< ET, EO, params >, params.n_rhs};
-    x.setRandom();
-
-    const auto y_local_element = evalDiffusionOperator2DVar< params >(local_element, x, sol_man);
+    const auto x = Operand< params, n_nodes >::Random(operand_size< params, n_nodes >, params.n_rhs).eval();
+    const auto y_local_element = evalDiffusionOperatorVar< params >(local_element, x, sol_man, diffusion_kernel_2D_var);
     const auto y_sum_fact      = evalDiffusionVarOperatorSumFact< params >(local_element, x, sol_man);
 
     constexpr auto eps = 1e-8;
@@ -28,11 +27,12 @@ static void diff2DTest(MakeElement&& make_element)
 template < typename MakeElement >
 static void diff3DTest(MakeElement&& make_element)
 {
-    const auto element    = std::invoke(std::forward< MakeElement >(make_element));
-    using eltype          = std::decay_t< decltype(element) >;
-    constexpr auto ET     = eltype::type;
-    constexpr auto EO     = eltype::order;
-    constexpr auto params = KernelParams{.dimension = 3, .n_equations = 7, .n_unknowns = 4, .n_fields = 1, .n_rhs = 2};
+    const auto element     = std::invoke(std::forward< MakeElement >(make_element));
+    using eltype           = std::decay_t< decltype(element) >;
+    constexpr auto ET      = eltype::type;
+    constexpr auto EO      = eltype::order;
+    constexpr auto n_nodes = ElementTraits< Element< ET, EO > >::nodes_per_element;
+    constexpr auto params  = KernelParams{.dimension = 3, .n_equations = 7, .n_unknowns = 4, .n_fields = 1, .n_rhs = 2};
 
     auto dom_map = typename MeshPartition< EO >::domain_map_t{};
     pushToDomain(dom_map[0], element);
@@ -40,10 +40,8 @@ static void diff3DTest(MakeElement&& make_element)
     const auto local_element = LocalElementView{element, global_mesh, {}};
     const auto sol_man       = makeRandomlyFilledSolutiondManager(global_mesh, 1);
 
-    auto x = Operand< ET, EO, params >{operand_size< ET, EO, params >, params.n_rhs};
-    x.setRandom();
-
-    const auto y_local_element = evalDiffusionOperator3DVar< params >(local_element, x, sol_man);
+    const auto x = Operand< params, n_nodes >::Random(operand_size< params, n_nodes >, params.n_rhs).eval();
+    const auto y_local_element = evalDiffusionOperatorVar< params >(local_element, x, sol_man, diffusion_kernel_3D_var);
     const auto y_sum_fact      = evalDiffusionVarOperatorSumFact< params >(local_element, x, sol_man);
 
     constexpr auto eps = 1e-8;

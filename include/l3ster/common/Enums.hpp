@@ -5,9 +5,9 @@ namespace lstr
 {
 enum struct Space
 {
-    X,
-    Y,
-    Z
+    X = 0,
+    Y = 1,
+    Z = 2
 };
 
 enum struct CondensationPolicy

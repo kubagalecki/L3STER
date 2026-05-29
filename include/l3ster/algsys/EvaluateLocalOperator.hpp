@@ -2,7 +2,6 @@
 #define L3STER_ALGSYS_EVALUATELOCALOPERATOR
 
 #include "l3ster/algsys/AssembleLocalSystem.hpp"
-#include "l3ster/mesh/LocalMeshView.hpp"
 #include "l3ster/util/CacheSizesAtCompileTime.hpp"
 
 #include <numeric>
@@ -63,13 +62,13 @@ class OperatorEvaluationManager
     using operand_t             = util::eigen::MatrixMaxCol_t< val_t, operator_size, n_rhs >;
 
 public:
-    template < int n_unknowns, int n_bases, int dim >
-    void update(const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dim + 1 >& kernel_result,
-                const Eigen::Vector< val_t, n_bases >&                                        basis_vals,
-                const util::eigen::RowMajorMatrix< val_t, dim, n_bases >&                     basis_ders,
-                val_t                                                                         weight,
-                const operand_t&                                                              x,
-                operand_t&                                                                    y)
+    template < int n_unknowns, size_t dimp1, typename Bvals, typename Bders >
+    void update(const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dimp1 >& kernel_result,
+                const Bvals&                                                                basis_vals,
+                const Bders&                                                                basis_ders,
+                val_t                                                                       weight,
+                const operand_t&                                                            x,
+                operand_t&                                                                  y)
     {
         if (fillBatch(kernel_result, basis_vals, basis_ders, weight))
             flushFull(x, y);
@@ -77,11 +76,11 @@ public:
     void finalize(const operand_t& x, operand_t& y) { flush(x, y); }
 
 private:
-    template < int n_unknowns, int n_bases, int dim >
-    bool fillBatch(const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dim + 1 >& kernel_result,
-                   const Eigen::Vector< val_t, n_bases >&                                        basis_vals,
-                   const util::eigen::RowMajorMatrix< val_t, dim, n_bases >&                     basis_ders,
-                   val_t                                                                         weight);
+    template < int n_unknowns, size_t dimp1, typename Bvals, typename Bders >
+    bool fillBatch(const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dimp1 >& kernel_result,
+                   const Bvals&                                                                basis_vals,
+                   const Bders&                                                                basis_ders,
+                   val_t                                                                       weight);
     void flushImpl(auto&& update_block, const operand_t& x, operand_t& y);
     void flushFull(const operand_t& x, operand_t& y) { flushImpl(*m_update_matrix, x, y); }
     void flush(const operand_t& x, operand_t& y) { flushImpl(m_update_matrix->leftCols(m_filled_cols), x, y); }
@@ -92,19 +91,21 @@ private:
 };
 
 template < size_t operator_size, size_t update_size, size_t n_rhs >
-template < int n_unknowns, int n_bases, int dim >
+template < int n_unknowns, size_t dimp1, typename Bvals, typename Bders >
 bool OperatorEvaluationManager< operator_size, update_size, n_rhs >::fillBatch(
-    const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dim + 1 >& kernel_result,
-    const Eigen::Vector< lstr::val_t, n_bases >&                                  basis_vals,
-    const util::eigen::RowMajorMatrix< lstr::val_t, dim, n_bases >&               basis_ders,
-    val_t                                                                         weight)
+    const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dimp1 >& kernel_result,
+    const Bvals&                                                                basis_vals,
+    const Bders&                                                                basis_ders,
+    val_t                                                                       weight)
 {
-    // Note: this function is performance critical
+    // Note: this function is performance-critical
     // Filling the batch matrix column by column allows the compiler to keep the A^T columns in registers
 
     L3STER_PROFILE_FUNCTION;
-    const auto As_trans = detail::transposeOperators(kernel_result);
-    using col_t         = Eigen::Vector< val_t, n_unknowns >;
+    constexpr int dim      = dimp1 - 1;
+    constexpr int n_bases  = Bders::RowsAtCompileTime;
+    const auto    As_trans = detail::transposeOperators(kernel_result);
+    using col_t            = Eigen::Vector< val_t, n_unknowns >;
     for (int eq = 0; eq != update_size; ++eq)
     {
         const auto  dest_col = m_filled_cols + eq;
@@ -117,7 +118,7 @@ bool OperatorEvaluationManager< operator_size, update_size, n_rhs >::fillBatch(
             const auto dest_row = basis * n_unknowns;
             col_t      col      = val_col * basis_vals[basis];
             for (int d = 0; d != dim; ++d)
-                col += der_cols[d] * basis_ders(d, basis);
+                col += der_cols[d] * basis_ders(basis, d);
             m_update_matrix->template block< n_unknowns, 1 >(dest_row, dest_col) = col;
         }
     }
@@ -127,8 +128,9 @@ bool OperatorEvaluationManager< operator_size, update_size, n_rhs >::fillBatch(
 }
 
 template < size_t operator_size, size_t update_size, size_t n_rhs >
-void OperatorEvaluationManager< operator_size, update_size, n_rhs >::flushImpl(
-    auto&& update_block, const OperatorEvaluationManager::operand_t& x, OperatorEvaluationManager::operand_t& y)
+void OperatorEvaluationManager< operator_size, update_size, n_rhs >::flushImpl(auto&&           update_block,
+                                                                               const operand_t& x,
+                                                                               operand_t&       y)
 {
     L3STER_PROFILE_FUNCTION;
     constexpr int intermediate_size = std::remove_cvref_t< decltype(update_block) >::ColsAtCompileTime;
@@ -145,20 +147,19 @@ void OperatorEvaluationManager< operator_size, update_size, n_rhs >::flushImpl(
     m_filled_cols = 0;
 }
 
-template < mesh::ElementType ET, el_o_t EO, KernelParams params >
-inline constexpr size_t operand_size = mesh::Element< ET, EO >::n_nodes * params.n_unknowns;
-template < mesh::ElementType ET, el_o_t EO, KernelParams params >
-using Operand = util::eigen::MatrixMaxCol_t< val_t, operand_size< ET, EO, params >, params.n_rhs >;
-template < mesh::ElementType ET, el_o_t EO, KernelParams params >
-using DirichletInds = std::span< const util::smallest_integral_t< operand_size< ET, EO, params > > >;
-template < mesh::ElementType ET, el_o_t EO, KernelParams params >
-using DirichletVals =
-    Eigen::Matrix< val_t, Eigen::Dynamic, params.n_rhs, Eigen::ColMajor, operand_size< ET, EO, params > >;
+template < KernelParams params, size_t NB >
+inline constexpr size_t operand_size = NB * params.n_unknowns;
+template < KernelParams params, size_t NB >
+using Operand = util::eigen::MatrixMaxCol_t< val_t, operand_size< params, NB >, params.n_rhs >;
+template < KernelParams params, size_t NB >
+using DirichletInds = std::span< const util::smallest_integral_t< operand_size< params, NB > > >;
+template < KernelParams params, size_t NB >
+using DirichletVals = Eigen::Matrix< val_t, Eigen::Dynamic, params.n_rhs, Eigen::ColMajor, operand_size< params, NB > >;
 
-template < mesh::ElementType ET, el_o_t EO, KernelParams params >
+template < KernelParams params, size_t NB >
 auto& getLocalOperatorEvalManager()
 {
-    constexpr auto operand_size = static_cast< size_t >(Operand< ET, EO, params >::RowsAtCompileTime);
+    constexpr auto operand_size = static_cast< size_t >(Operand< params, NB >::RowsAtCompileTime);
     static_assert(operand_size > 0);
     constexpr auto num_equations = params.n_equations;
     constexpr auto num_rhs       = params.n_rhs;
@@ -169,18 +170,19 @@ auto& getLocalOperatorEvalManager()
 
 namespace detail
 {
-template < KernelParams params, int n_bases, std::integral I >
-void precomputeDiagRhsImpl(const typename KernelInterface< params >::Result&                      kernel_result,
-                           const Eigen::Vector< val_t, n_bases >&                                 basis_vals,
-                           const util::eigen::RowMajorMatrix< val_t, params.dimension, n_bases >& basis_ders,
-                           val_t                                                                  weight,
-                           Eigen::Vector< val_t, n_bases * params.n_unknowns >&                   diagonal,
-                           Eigen::Matrix< val_t, n_bases * params.n_unknowns, params.n_rhs >&     rhs,
-                           std::span< const I >                                                   dirichlet_inds,
-                           const util::eigen::Matrix_c auto&                                      dirichlet_vals)
+template < KernelParams params, int total_unknowns, typename Bvals, typename Bders, typename Dind, typename Dvals >
+void precomputeDiagRhsImpl(const typename KernelInterface< params >::Result&     kernel_result,
+                           const Bvals&                                          basis_vals,
+                           const Bders&                                          basis_ders,
+                           val_t                                                 weight,
+                           Eigen::Vector< val_t, total_unknowns >&               diagonal,
+                           Eigen::Matrix< val_t, total_unknowns, params.n_rhs >& rhs,
+                           std::span< const Dind >                               dirichlet_inds,
+                           const Dvals&                                          dirichlet_vals)
 {
     constexpr auto nukn         = static_cast< int >(params.n_unknowns);
     constexpr auto neq          = static_cast< int >(params.n_equations);
+    constexpr int  n_bases      = total_unknowns / nukn;
     const auto     ops_trans    = detail::transposeOperators(kernel_result.operators);
     const auto     update_block = [&](const auto& At, int basis) {
         diagonal.template segment< nukn >(basis * nukn) += At.rowwise().squaredNorm() * weight;
@@ -189,7 +191,7 @@ void precomputeDiagRhsImpl(const typename KernelInterface< params >::Result&    
     if (dirichlet_inds.empty())
         for (int basis = 0; basis != n_bases; ++basis)
         {
-            const auto At = detail::computeATrans(ops_trans, basis_vals[basis], basis_ders.col(basis));
+            const auto At = detail::computeATrans(ops_trans, basis_vals[basis], basis_ders.row(basis).transpose());
             update_block(At, basis);
         }
     else
@@ -197,7 +199,7 @@ void precomputeDiagRhsImpl(const typename KernelInterface< params >::Result&    
         auto update_mat = Eigen::Matrix< val_t, nukn * n_bases, neq >{};
         for (int basis = 0; basis != n_bases; ++basis)
         {
-            const auto At = detail::computeATrans(ops_trans, basis_vals[basis], basis_ders.col(basis));
+            const auto At = detail::computeATrans(ops_trans, basis_vals[basis], basis_ders.row(basis).transpose());
             update_block(At, basis);
             update_mat.template block< nukn, neq >(basis * nukn, 0) = At;
         }
@@ -208,64 +210,60 @@ void precomputeDiagRhsImpl(const typename KernelInterface< params >::Result&    
 }
 } // namespace detail
 
-template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >
-auto evaluateLocalOperator(
-    const DomainEquationKernel< Kernel, params >&                                                  kernel,
-    const mesh::LocalElementView< ET, EO >&                                                        element,
-    const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, params.n_fields >& node_vals,
-    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,
-    val_t                                                                                          time,
-    const Operand< ET, EO, params >& x) -> Operand< ET, EO, params >
+template < typename Kernel, KernelParams params, size_t NB, size_t NP >
+auto evaluateLocalOperator(const DomainEquationKernel< Kernel, params >&                            kernel,
+                           const map::TabulatedDomainMapping< NB, NP, params.dimension >&           mapping,
+                           const map::FieldValuesAtPoints< NP, params.n_fields, params.dimension >& fields,
+                           std::span< const val_t, NP >                                             quad_wgt,
+                           val_t                                                                    time,
+                           const Operand< params, NB >& x) -> Operand< params, NB >
 {
     L3STER_PROFILE_FUNCTION;
-    static_assert(params.dimension == mesh::ElementTraits< mesh::Element< ET, EO > >::native_dim);
-    Operand< ET, EO, params > y(x.rows(), x.cols());
-    const auto&               el_data              = element.getData();
-    const auto                jacobi_mat_generator = map::getNatJacobiMatGenerator(el_data);
-    auto&                     eval_manager         = getLocalOperatorEvalManager< ET, EO, params >();
-    const auto process_qp = [&](auto point, val_t weight, const auto& basis_vals, const auto& ref_basis_ders) {
-        const auto [phys_ders, jacobian] = map::mapDomain< ET, EO >(jacobi_mat_generator, point, ref_basis_ders);
-        const auto [A, _]                = evalKernel(kernel, point, basis_vals, phys_ders, node_vals, el_data, time);
-        util::throwingAssert(jacobian > 0., "Encountered degenerate element ( |J| <= 0 )");
-        eval_manager.update(A, basis_vals, phys_ders, jacobian * weight, x, y);
-    };
+    const auto& [J, basis_vals, basis_ders, points] = mapping;
+    auto y                                          = Operand< params, NB >(x.rows(), x.cols());
     y.setZero();
-    basis_at_qps.forEach(process_qp);
+    auto& eval_manager = getLocalOperatorEvalManager< params, NB >();
+    for (size_t p = 0; p != NP; ++p)
+    {
+        const auto point    = SpaceTimePoint{points[p], time};
+        const auto [fv, fd] = fields.get(p);
+        const auto [A, _]   = kernel({fv, fd, point});
+        const auto weight   = J[p] * quad_wgt[p];
+        eval_manager.update(A, basis_vals->getMap().row(p), basis_ders.getPointMap(p), weight, x, y);
+    }
     eval_manager.finalize(x, y);
     return y;
 }
 
-template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >
-auto evaluateLocalOperator(
-    const BoundaryEquationKernel< Kernel, params >&                                                kernel,
-    const mesh::LocalElementBoundaryView< ET, EO >&                                                el_view,
-    const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, params.n_fields >& node_vals,
-    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,
-    val_t                                                                                          time,
-    const Operand< ET, EO, params >& x) -> Operand< ET, EO, params >
+template < typename Kernel, KernelParams params, size_t NB, size_t NP >
+auto evaluateLocalOperator(const BoundaryEquationKernel< Kernel, params >&                          kernel,
+                           const map::TabulatedBoundaryMapping< NB, NP, params.dimension >&         mapping,
+                           const map::FieldValuesAtPoints< NP, params.n_fields, params.dimension >& fields,
+                           std::span< const val_t, NP >                                             quad_wgt,
+                           val_t                                                                    time,
+                           const Operand< params, NB >& x) -> Operand< params, NB >
 {
     L3STER_PROFILE_FUNCTION;
-    static_assert(params.dimension == mesh::ElementTraits< mesh::Element< ET, EO > >::native_dim);
-    Operand< ET, EO, params > y(x.rows(), x.cols());
-    const auto                el_data      = el_view->getData();
-    const auto                jacobi_gen   = map::getNatJacobiMatGenerator(el_data);
-    auto&                     eval_manager = getLocalOperatorEvalManager< ET, EO, params >();
-    const auto                side         = el_view.getSide();
-    const auto process_qp = [&](auto point, val_t weight, const auto& basis_vals, const auto& ref_basis_ders) {
-        const auto [phys_ders, jacobian, normal] = map::mapBoundary< ET, EO >(jacobi_gen, point, ref_basis_ders, side);
-        const auto [A, _] = evalKernel(kernel, point, basis_vals, phys_ders, node_vals, el_data, time, normal);
-        eval_manager.update(A, basis_vals, phys_ders, jacobian * weight, x, y);
-    };
+    const auto& [J, basis_vals, basis_ders, points, normals] = mapping;
+    auto y                                                   = Operand< params, NB >(x.rows(), x.cols());
     y.setZero();
-    basis_at_qps.forEach(process_qp);
+    auto& eval_manager = getLocalOperatorEvalManager< params, NB >();
+    for (size_t p = 0; p != NP; ++p)
+    {
+        const auto point    = SpaceTimePoint{points[p], time};
+        const auto [fv, fd] = fields.get(p);
+        const auto [A, _]   = kernel({fv, fd, point, normals[p]});
+        const auto weight   = J[p] * quad_wgt[p];
+        eval_manager.update(A, basis_vals->getMap().row(p), basis_ders.getPointMap(p), weight, x, y);
+    }
     eval_manager.finalize(x, y);
     return y;
 }
 
-template < KernelParams params, mesh::ElementType ET, el_o_t EO >
+template < KernelParams params, size_t NB >
 struct InitResult
 {
-    static constexpr size_t size = mesh::Element< ET, EO >::n_nodes * params.n_unknowns;
+    static constexpr size_t size = NB * params.n_unknowns;
     using diagonal_t             = Eigen::Vector< val_t, size >;
     using rhs_t                  = Eigen::Matrix< val_t, size, params.n_rhs >;
 
@@ -273,57 +271,69 @@ struct InitResult
     rhs_t      rhs      = rhs_t::Zero();
 };
 
-template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >
-auto precomputeOperatorDiagonalAndRhs(
-    const DomainEquationKernel< Kernel, params >&                                                  kernel,
-    const mesh::LocalElementView< ET, EO >&                                                        element,
-    const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, params.n_fields >& node_vals,
-    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,
-    val_t                                                                                          time,
-    DirichletInds< ET, EO, params >                                                                dirichlet_inds,
-    const DirichletVals< ET, EO, params >& dirichlet_vals) -> InitResult< params, ET, EO >
+template < typename Kernel, KernelParams params, size_t NB, size_t NP >
+auto precomputeOperatorDiagonalAndRhs(const DomainEquationKernel< Kernel, params >&                            kernel,
+                                      const map::TabulatedDomainMapping< NB, NP, params.dimension >&           mapping,
+                                      const map::FieldValuesAtPoints< NP, params.n_fields, params.dimension >& fields,
+                                      std::span< const val_t, NP >                                             quad_wgt,
+                                      val_t                                                                    time,
+                                      DirichletInds< params, NB >                                              dir_inds,
+                                      const DirichletVals< params, NB >& dir_vals) -> InitResult< params, NB >
 {
     L3STER_PROFILE_FUNCTION;
-    auto retval           = InitResult< params, ET, EO >{};
-    auto& [diagonal, rhs] = retval;
-    static_assert(params.dimension == mesh::ElementTraits< mesh::Element< ET, EO > >::native_dim);
-    const auto& el_data              = element.getData();
-    const auto  jacobi_mat_generator = map::getNatJacobiMatGenerator(el_data);
-    const auto  process_qp = [&](auto point, val_t weight, const auto& basis_vals, const auto& ref_basis_ders) {
-        const auto [phys_ders, jacobian] = map::mapDomain< ET, EO >(jacobi_mat_generator, point, ref_basis_ders);
-        const auto kernel_result         = evalKernel(kernel, point, basis_vals, phys_ders, node_vals, el_data, time);
+    const auto& [J, basis_vals, basis_ders, points] = mapping;
+    auto retval                                     = InitResult< params, NB >{};
+    auto& [diagonal, rhs]                           = retval;
+    for (size_t p = 0; p != NP; ++p)
+    {
+        const auto jacobian = J[p];
         util::throwingAssert(jacobian > 0., "Encountered degenerate element ( |J| <= 0 )");
-        detail::precomputeDiagRhsImpl< params >(
-            kernel_result, basis_vals, phys_ders, jacobian * weight, diagonal, rhs, dirichlet_inds, dirichlet_vals);
-    };
-    basis_at_qps.forEach(process_qp);
+        const auto point         = SpaceTimePoint{points[p], time};
+        const auto [fv, fd]      = fields.get(p);
+        const auto kernel_result = kernel({fv, fd, point});
+        const auto weight        = jacobian * quad_wgt[p];
+        detail::precomputeDiagRhsImpl< params >(kernel_result,
+                                                basis_vals->getMap().row(p),
+                                                basis_ders.getPointMap(p),
+                                                weight,
+                                                diagonal,
+                                                rhs,
+                                                dir_inds,
+                                                dir_vals);
+    }
     return retval;
 }
 
-template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >
-auto precomputeOperatorDiagonalAndRhs(
-    const BoundaryEquationKernel< Kernel, params >&                                                kernel,
-    const mesh::LocalElementBoundaryView< ET, EO >&                                                el_view,
-    const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, params.n_fields >& node_vals,
-    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,
-    val_t                                                                                          time,
-    DirichletInds< ET, EO, params >                                                                dirichlet_inds,
-    const DirichletVals< ET, EO, params >& dirichlet_vals) -> InitResult< params, ET, EO >
+template < typename Kernel, KernelParams params, size_t NB, size_t NP >
+auto precomputeOperatorDiagonalAndRhs(const BoundaryEquationKernel< Kernel, params >&                          kernel,
+                                      const map::TabulatedBoundaryMapping< NB, NP, params.dimension >&         mapping,
+                                      const map::FieldValuesAtPoints< NP, params.n_fields, params.dimension >& fields,
+                                      std::span< const val_t, NP >                                             quad_wgt,
+                                      val_t                                                                    time,
+                                      DirichletInds< params, NB >                                              dir_inds,
+                                      const DirichletVals< params, NB >& dir_vals) -> InitResult< params, NB >
 {
     L3STER_PROFILE_FUNCTION;
-    static_assert(params.dimension == mesh::ElementTraits< mesh::Element< ET, EO > >::native_dim);
-    auto retval            = InitResult< params, ET, EO >{};
-    auto& [diagonal, rhs]  = retval;
-    const auto& el_data    = el_view->getData();
-    const auto  jacobi_gen = map::getNatJacobiMatGenerator(el_data);
-    const auto  side       = el_view.getSide();
-    const auto  process_qp = [&](auto point, val_t weight, const auto& basis_vals, const auto& ref_basis_ders) {
-        const auto [phys_ders, jacobian, normal] = map::mapBoundary< ET, EO >(jacobi_gen, point, ref_basis_ders, side);
-        const auto kernel_result = evalKernel(kernel, point, basis_vals, phys_ders, node_vals, el_data, time, normal);
-        detail::precomputeDiagRhsImpl< params >(
-            kernel_result, basis_vals, phys_ders, jacobian * weight, diagonal, rhs, dirichlet_inds, dirichlet_vals);
-    };
-    basis_at_qps.forEach(process_qp);
+    const auto& [J, basis_vals, basis_ders, points, normals] = mapping;
+    auto retval                                              = InitResult< params, NB >{};
+    auto& [diagonal, rhs]                                    = retval;
+    for (size_t p = 0; p != NP; ++p)
+    {
+        const auto jacobian = J[p];
+        util::throwingAssert(jacobian > 0., "Encountered degenerate element ( |J| <= 0 )");
+        const auto point         = SpaceTimePoint{points[p], time};
+        const auto [fv, fd]      = fields.get(p);
+        const auto kernel_result = kernel({fv, fd, point, normals[p]});
+        const auto weight        = jacobian * quad_wgt[p];
+        detail::precomputeDiagRhsImpl< params >(kernel_result,
+                                                basis_vals->getMap().row(p),
+                                                basis_ders.getPointMap(p),
+                                                weight,
+                                                diagonal,
+                                                rhs,
+                                                dir_inds,
+                                                dir_vals);
+    }
     return retval;
 }
 } // namespace lstr::algsys

@@ -3,7 +3,6 @@
 
 #include "l3ster/algsys/AssembleLocalSystem.hpp"
 #include "l3ster/algsys/OperatorUtils.hpp"
-#include "l3ster/basisfun/ReferenceBasisAtPoints.hpp"
 #include "l3ster/comm/ImportExport.hpp"
 #include "l3ster/dofs/NodeToDofMap.hpp"
 #include "l3ster/mesh/LocalMeshView.hpp"
@@ -206,6 +205,62 @@ inline void updateNodeVals(const Kokkos::View< val_t**, Kokkos::LayoutLeft >& va
     };
     util::tbb::parallelFor(std::views::iota(0uz, values.extent(0)), update_row);
 }
+
+template < typename Kernel, KernelParams params, size_t NB >
+auto computeValsAtNodesImpl(const ResidualDomainKernel< Kernel, params >&                  kernel,
+                            const map::TabulatedDomainMapping< NB, NB, params.dimension >& map_result,
+                            const Eigen::Matrix< val_t, int{NB}, params.n_fields >&        node_vals,
+                            val_t time) -> std::array< typename KernelInterface< params >::Rhs, NB >
+{
+    const auto& [_, vals, ders, points] = map_result;
+    const auto fields                   = map::FieldValuesAtPoints{*vals, ders, node_vals};
+    auto       retval                   = std::array< typename KernelInterface< params >::Rhs, NB >{};
+    for (size_t p = 0; p != NB; ++p)
+    {
+        const auto point              = SpaceTimePoint{points[p], time};
+        const auto [field_v, field_d] = fields.get(p);
+        retval[p]                     = kernel({field_v, field_d, point});
+    }
+    return retval;
+}
+
+template < typename Kernel, KernelParams params, size_t NB, size_t NP >
+auto computeValsAtNodesImpl(const ResidualBoundaryKernel< Kernel, params >&                  kernel,
+                            const map::TabulatedBoundaryMapping< NB, NP, params.dimension >& map_result,
+                            const Eigen::Matrix< val_t, int{NB}, params.n_fields >&          node_vals,
+                            val_t time) -> std::array< typename KernelInterface< params >::Rhs, NP >
+{
+    const auto& [_, vals, ders, points, normals] = map_result;
+    const auto fields                            = map::FieldValuesAtPoints{*vals, ders, node_vals};
+    auto       retval                            = std::array< typename KernelInterface< params >::Rhs, NP >{};
+    for (size_t p = 0; p != NP; ++p)
+    {
+        const auto point              = SpaceTimePoint{points[p], time};
+        const auto [field_v, field_d] = fields.get(p);
+        retval[p]                     = kernel({field_v, field_d, point, normals[p]});
+    }
+    return retval;
+}
+
+template < mesh::ElementType ET, el_o_t EO >
+auto getMappingAtNodes(const mesh::ElementData< ET, EO >& data)
+{
+    constexpr auto BT             = basis::BasisType::Lagrange;
+    const auto     basis_at_nodes = basis::getNodeBasisView< BT, ET, EO >();
+    const auto     verts          = std::span{data.vertices};
+    return map::TabulatedDomainMapping{basis_at_nodes, verts};
+}
+
+template < mesh::ElementType ET, el_o_t EO >
+auto getMappingAtSideNodes(const mesh::ElementData< ET, EO >& data, el_side_t side)
+{
+    using eltraits                = mesh::ElementTraits< mesh::Element< ET, EO > >;
+    constexpr auto BT             = basis::BasisType::Lagrange;
+    constexpr auto GT             = util::ConstexprValue< eltraits::geom_type >{};
+    const auto     basis_at_nodes = basis::getSideNodeBasisView< BT, ET, EO >(side);
+    const auto     verts          = std::span{data.vertices};
+    return map::TabulatedBoundaryMapping{basis_at_nodes, verts, GT, side};
+}
 } // namespace detail
 
 template < el_o_t... orders,
@@ -318,14 +373,13 @@ template < typename Kernel,
            el_o_t... orders,
            size_t        max_dofs_per_node,
            std::integral dofind_t,
-           size_t        num_maps,
-           size_t        n_fields >
+           size_t        num_maps >
 void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&                 kernel,
                           const mesh::MeshPartition< orders... >&                       mesh,
                           const util::ArrayOwner< d_id_t >&                             domain_ids,
                           const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& dof_map,
                           const std::array< dofind_t, params.n_equations >&             dof_inds,
-                          const post::FieldAccess< n_fields >&                          field_access,
+                          const post::FieldAccess< params.n_fields >&                   field_access,
                           const tpetra_multivector_t::host_view_type&                   values,
                           const tpetra_multivector_t::host_view_type&                   num_contribs,
                           val_t                                                         time)
@@ -338,19 +392,10 @@ void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&         
     const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
         if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
         {
-            const auto& el_nodes       = element.nodes;
-            const auto& el_data        = element.data;
-            const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
-            const auto& node_locations = mesh::getNodeLocations< ET, EO >();
-            const auto  node_vals      = field_access.getGloballyIndexed(el_nodes);
-            const auto  jacobi_gen     = map::getNatJacobiMatGenerator(el_data);
-            const auto  process_node   = [&](size_t node_ind) {
-                const auto& ref_coords    = node_locations[node_ind];
-                const auto& ref_val       = basis_at_nodes.values[node_ind];
-                const auto& ref_ders      = basis_at_nodes.derivatives[node_ind];
-                const auto [phys_ders, _] = map::mapDomain< ET, EO >(jacobi_gen, ref_coords, ref_ders);
-                const auto node           = el_nodes[node_ind];
-                const auto ker_res = evalKernel(kernel, ref_coords, ref_val, phys_ders, node_vals, el_data, time);
+            const auto field_node_vals = field_access.getGloballyIndexed(element.nodes);
+            const auto mapping         = detail::getMappingAtNodes(element.data);
+            const auto node_vals       = detail::computeValsAtNodesImpl(kernel, mapping, field_node_vals, time);
+            for (auto&& [node, ker_res] : std::views::zip(element.nodes, node_vals))
                 for (auto&& [dof_ind, dof] : detail::getNodeDofsAtInds(dof_map, dof_inds, node) | std::views::enumerate)
                 {
                     std::atomic_ref{num_contribs(dof, 0)}.fetch_add(1., std::memory_order_relaxed);
@@ -361,19 +406,12 @@ void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&         
                         std::atomic_ref{dest}.fetch_add(value, std::memory_order_relaxed);
                     }
                 }
-            };
-            std::ranges::for_each(std::views::iota(0u, el_nodes.size()), process_node);
         }
     };
     mesh.visit(process_element, domain_ids, std::execution::par);
 }
 
-template < typename Kernel,
-           KernelParams params,
-           el_o_t... orders,
-           size_t        max_dofs_per_node,
-           std::integral dofind_t,
-           size_t        n_fields >
+template < typename Kernel, KernelParams params, el_o_t... orders, size_t max_dofs_per_node, std::integral dofind_t >
 void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&     kernel,
                           const MpiComm&                                    comm,
                           const mesh::LocalMeshView< orders... >&           mesh_interior,
@@ -382,7 +420,7 @@ void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&     kern
                           const util::ArrayOwner< d_id_t >&                 domain_ids,
                           const dofs::LocalDofMap< max_dofs_per_node >&     dof_map,
                           const std::array< dofind_t, params.n_equations >& dof_inds,
-                          const post::FieldAccess< n_fields >&              field_access,
+                          const post::FieldAccess< params.n_fields >&       field_access,
                           const tpetra_multivector_t::host_view_type&       owned_values,
                           val_t                                             time)
 {
@@ -412,18 +450,11 @@ void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&     kern
     const auto visitor = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::LocalElementView< ET, EO >& element) {
         if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
         {
-            const auto& el_nodes       = element.getLocalNodes();
-            const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
-            const auto& node_locations = mesh::getNodeLocations< ET, EO >();
-            const auto  node_vals      = field_access.getLocallyIndexed(el_nodes);
-            const auto  jacobi_gen     = map::getNatJacobiMatGenerator(element.getData());
-            for (auto&& [node_ind, node] : el_nodes | std::views::enumerate)
-            {
-                const auto& ref_coords    = node_locations[node_ind];
-                const auto& ref_ders      = basis_at_nodes.derivatives[node_ind];
-                const auto [phys_ders, _] = map::mapDomain< ET, EO >(jacobi_gen, ref_coords, ref_ders);
-                const auto ker_res        = evalKernel(
-                    kernel, ref_coords, basis_at_nodes.values[node_ind], phys_ders, node_vals, element.getData(), time);
+            const auto& el_nodes        = element.getLocalNodes();
+            const auto  field_node_vals = field_access.getLocallyIndexed(el_nodes);
+            const auto  mapping         = detail::getMappingAtNodes(element.getData());
+            const auto  node_vals       = detail::computeValsAtNodesImpl(kernel, mapping, field_node_vals, time);
+            for (auto&& [node, ker_res] : std::views::zip(el_nodes, node_vals))
                 for (auto&& [dof_ind, dof] : detail::getNodeDofsAtInds(dof_map, dof_inds, node) | std::views::enumerate)
                     for (size_t rhs_ind = 0; rhs_ind != n_rhs; ++rhs_ind)
                     {
@@ -431,7 +462,6 @@ void computeValuesAtNodes(const ResidualDomainKernel< Kernel, params >&     kern
                         val_t&      dest      = border_accessor(dof, static_cast< local_dof_t >(rhs_ind));
                         std::atomic_ref{dest}.fetch_add(increment, std::memory_order_relaxed);
                     }
-            }
         }
     };
     const auto do_interior = [&] {
@@ -452,20 +482,18 @@ template < typename Kernel,
            el_o_t... orders,
            size_t        max_dofs_per_node,
            std::integral dofind_t,
-           size_t        num_maps,
-           size_t        n_fields >
+           size_t        num_maps >
 void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&               kernel,
                           const mesh::MeshPartition< orders... >&                       mesh,
                           const util::ArrayOwner< d_id_t >&                             boundary_ids,
                           const dofs::NodeToLocalDofMap< max_dofs_per_node, num_maps >& dof_map,
                           const std::array< dofind_t, params.n_equations >&             dof_inds,
-                          const post::FieldAccess< n_fields >&                          field_access,
+                          const post::FieldAccess< params.n_fields >&                   field_access,
                           const tpetra_multivector_t::host_view_type&                   values,
                           const tpetra_multivector_t::host_view_type&                   num_contribs,
                           val_t                                                         time)
 {
     L3STER_PROFILE_FUNCTION;
-
     const bool dim_match = detail::checkDomainDimension(mesh, boundary_ids, params.dimension - 1);
     util::throwingAssert(dim_match, "The dimension of the kernel does not match the dimension of the boundary");
     util::throwingAssert(params.n_rhs == values.extent(1));
@@ -473,21 +501,10 @@ void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&       
     const auto process_el_view = [&]< mesh::ElementType ET, el_o_t EO >(mesh::BoundaryElementView< ET, EO > el_view) {
         if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
         {
-            const auto& el_nodes       = el_view->nodes;
-            const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
-            const auto& node_locations = mesh::getNodeLocations< ET, EO >();
-            const auto  node_vals      = field_access.getGloballyIndexed(el_nodes);
-            const auto& el_data        = el_view->data;
-            const auto  jacobi_gen     = map::getNatJacobiMatGenerator(el_data);
-            const auto  side           = el_view.getSide();
-            const auto  process_node   = [&](size_t node_ind) {
-                const auto  node                  = el_nodes[node_ind];
-                const auto& ref_coords            = node_locations[node_ind];
-                const auto& ref_ders              = basis_at_nodes.derivatives[node_ind];
-                const auto& basis_val             = basis_at_nodes.values[node_ind];
-                const auto [phys_ders, _, normal] = map::mapBoundary< ET, EO >(jacobi_gen, ref_coords, ref_ders, side);
-                const auto ker_res =
-                    evalKernel(kernel, ref_coords, basis_val, phys_ders, node_vals, el_data, time, normal);
+            const auto field_node_vals = field_access.getGloballyIndexed(el_view->nodes);
+            const auto mapping         = detail::getMappingAtSideNodes(el_view->data, el_view.getSide());
+            const auto node_vals       = detail::computeValsAtNodesImpl(kernel, mapping, field_node_vals, time);
+            for (auto&& [node, ker_res] : std::views::zip(el_view.getSideNodesView(), node_vals))
                 for (auto&& [dof_ind, dof] : detail::getNodeDofsAtInds(dof_map, dof_inds, node) | std::views::enumerate)
                 {
                     std::atomic_ref{num_contribs(dof, 0)}.fetch_add(1., std::memory_order_relaxed);
@@ -498,19 +515,12 @@ void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&       
                         std::atomic_ref{dest}.fetch_add(value, std::memory_order_relaxed);
                     }
                 }
-            };
-            std::ranges::for_each(el_view.getSideNodeInds(), process_node);
         }
     };
     mesh.visitBoundaries(process_el_view, boundary_ids, std::execution::par);
 }
 
-template < typename Kernel,
-           KernelParams params,
-           el_o_t... orders,
-           size_t        max_dofs_per_node,
-           std::integral dofind_t,
-           size_t        n_fields >
+template < typename Kernel, KernelParams params, el_o_t... orders, size_t max_dofs_per_node, std::integral dofind_t >
 void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&   kernel,
                           const MpiComm&                                    comm,
                           const mesh::LocalMeshView< orders... >&           mesh_interior,
@@ -519,7 +529,7 @@ void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&   kern
                           const util::ArrayOwner< d_id_t >&                 boundary_ids,
                           const dofs::LocalDofMap< max_dofs_per_node >&     dof_map,
                           const std::array< dofind_t, params.n_equations >& dof_inds,
-                          const post::FieldAccess< n_fields >&              field_access,
+                          const post::FieldAccess< params.n_fields >&       field_access,
                           const tpetra_multivector_t::host_view_type&       owned_values,
                           val_t                                             time)
 {
@@ -549,36 +559,25 @@ void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&   kern
             }
         }
     };
-    const auto visitor = [&]< mesh::ElementType ET, el_o_t EO >(
-                             const mesh::LocalElementBoundaryView< ET, EO >& el_view) {
-        if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
-        {
-            const auto& el_nodes       = el_view->getLocalNodes();
-            const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
-            const auto& node_locations = mesh::getNodeLocations< ET, EO >();
-            const auto  node_vals      = field_access.getLocallyIndexed(el_nodes);
-            const auto& el_data        = el_view->getData();
-            const auto  jacobi_gen     = map::getNatJacobiMatGenerator(el_data);
-            const auto  side           = el_view.getSide();
-            for (auto node_ind : el_view.getSideNodeInds())
+    const auto visitor =
+        [&]< mesh::ElementType ET, el_o_t EO >(const mesh::LocalElementBoundaryView< ET, EO >& el_view) {
+            if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
             {
-                const auto  node                  = el_nodes[node_ind];
-                const auto& ref_coords            = node_locations[node_ind];
-                const auto& ref_ders              = basis_at_nodes.derivatives[node_ind];
-                const auto& basis_vals            = basis_at_nodes.values[node_ind];
-                const auto [phys_ders, _, normal] = map::mapBoundary< ET, EO >(jacobi_gen, ref_coords, ref_ders, side);
-                const auto ker_res =
-                    evalKernel(kernel, ref_coords, basis_vals, phys_ders, node_vals, el_data, time, normal);
-                for (auto&& [dof_ind, dof] : detail::getNodeDofsAtInds(dof_map, dof_inds, node) | std::views::enumerate)
-                    for (local_dof_t rhs_ind = 0; rhs_ind != n_rhs; ++rhs_ind)
-                    {
-                        const val_t increment = ker_res(dof_ind, rhs_ind);
-                        val_t&      dest      = border_accessor(dof, rhs_ind);
-                        std::atomic_ref{dest}.fetch_add(increment, std::memory_order_relaxed);
-                    }
+                const auto& el_nodes        = el_view->getLocalNodes();
+                const auto  field_node_vals = field_access.getLocallyIndexed(el_nodes);
+                const auto  mapping         = detail::getMappingAtSideNodes(el_view->getData(), el_view.getSide());
+                const auto  node_vals       = detail::computeValsAtNodesImpl(kernel, mapping, field_node_vals, time);
+                for (auto&& [node_ind, ker_res] : std::views::zip(el_view.getSideNodeInds(), node_vals))
+                    for (auto&& [dof_ind, dof] :
+                         detail::getNodeDofsAtInds(dof_map, dof_inds, el_nodes[node_ind]) | std::views::enumerate)
+                        for (local_dof_t rhs_ind = 0; rhs_ind != n_rhs; ++rhs_ind)
+                        {
+                            const val_t increment = ker_res(dof_ind, rhs_ind);
+                            val_t&      dest      = border_accessor(dof, rhs_ind);
+                            std::atomic_ref{dest}.fetch_add(increment, std::memory_order_relaxed);
+                        }
             }
-        }
-    };
+        };
     const auto do_interior = [&] {
         mesh_interior.visitBoundaries(visitor, boundary_ids, std::execution::par);
     };
@@ -592,14 +591,14 @@ void computeValuesAtNodes(const ResidualBoundaryKernel< Kernel, params >&   kern
         comm, owned_values, shared_values, num_contribs, exporter, do_interior, do_border);
 }
 
-template < el_o_t... orders, KernelParams params, typename Kernel, size_t n_fields >
+template < el_o_t... orders, KernelParams params, typename Kernel >
 void computeValuesAtNodes(const MpiComm&                                     comm,
                           const mesh::MeshPartition< orders... >&            mesh,
                           const ResidualDomainKernel< Kernel, params >&      kernel,
                           const util::ArrayOwner< d_id_t >&                  domain_ids,
                           const util::ArrayOwner< size_t >&                  inds,
                           const Kokkos::View< val_t**, Kokkos::LayoutLeft >& node_values,
-                          const post::FieldAccess< n_fields >&               field_access,
+                          const post::FieldAccess< params.n_fields >&        field_access,
                           val_t                                              time)
     requires(params.n_rhs == 1)
 {
@@ -624,24 +623,15 @@ void computeValuesAtNodes(const MpiComm&                                     com
     const auto set_el_vals = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
         if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
         {
-            const auto& el_nodes       = element.nodes;
-            const auto& el_data        = element.data;
-            const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
-            const auto& node_locations = mesh::getNodeLocations< ET, EO >();
-            const auto  node_vals      = field_access.getGloballyIndexed(el_nodes);
-            const auto  jacobi_gen     = map::getNatJacobiMatGenerator(el_data);
-            const auto  process_node   = [&](size_t node_ind) {
-                const auto& ref_coords    = node_locations[node_ind];
-                const auto& ref_val       = basis_at_nodes.values[node_ind];
-                const auto& ref_ders      = basis_at_nodes.derivatives[node_ind];
-                const auto [phys_ders, _] = map::mapDomain< ET, EO >(jacobi_gen, ref_coords, ref_ders);
-                const auto ker_res  = evalKernel(kernel, ref_coords, ref_val, phys_ders, node_vals, el_data, time);
-                const auto node_gid = el_nodes[node_ind];
+            const auto field_node_vals = field_access.getGloballyIndexed(element.nodes);
+            const auto mapping         = detail::getMappingAtNodes(element.data);
+            const auto node_vals       = detail::computeValsAtNodesImpl(kernel, mapping, field_node_vals, time);
+            for (auto&& [node_gid, ker_res] : std::views::zip(element.nodes, node_vals))
+            {
                 const auto node_lid = ownership.getLocalIndex(node_gid);
                 for (Eigen::Index i = 0; i != static_cast< Eigen::Index >(num_inds); ++i)
                     std::atomic_ref{new_vals(node_lid, i)}.fetch_add(ker_res[i], std::memory_order_relaxed);
-            };
-            std::ranges::for_each(std::views::iota(0u, el_nodes.size()), process_node);
+            }
         }
     };
     const auto set_values = [&] {
@@ -653,14 +643,14 @@ void computeValuesAtNodes(const MpiComm&                                     com
     detail::updateNodeVals(node_values, new_vals, num_contribs, inds);
 }
 
-template < el_o_t... orders, KernelParams params, typename Kernel, size_t n_fields >
+template < el_o_t... orders, KernelParams params, typename Kernel >
 void computeValuesAtNodes(const MpiComm&                                     comm,
                           const mesh::MeshPartition< orders... >&            mesh,
                           const ResidualBoundaryKernel< Kernel, params >&    kernel,
                           const util::ArrayOwner< d_id_t >&                  boundary_ids,
                           const util::ArrayOwner< size_t >&                  inds,
                           const Kokkos::View< val_t**, Kokkos::LayoutLeft >& node_values,
-                          const post::FieldAccess< n_fields >&               field_access,
+                          const post::FieldAccess< params.n_fields >&        field_access,
                           val_t                                              time)
     requires(params.n_rhs == 1)
 {
@@ -683,32 +673,21 @@ void computeValuesAtNodes(const MpiComm&                                     com
         for (auto lid : el_view.getSideNodesView() | std::views::transform(std::bind_front(g2l, std::cref(ownership))))
             std::atomic_ref{num_contribs.at(lid)}.fetch_add(1, std::memory_order_relaxed);
     };
-    const auto set_el_vals = [&]< mesh::ElementType ET, el_o_t EO >(
-                                 const mesh::BoundaryElementView< ET, EO >& el_view) {
-        if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
-        {
-            const auto& el_nodes       = el_view->nodes;
-            const auto& basis_at_nodes = basis::getBasisAtNodes< ET, EO >();
-            const auto& node_locations = mesh::getNodeLocations< ET, EO >();
-            const auto  node_vals      = field_access.getGloballyIndexed(el_nodes);
-            const auto& el_data        = el_view->data;
-            const auto  jacobi_gen     = map::getNatJacobiMatGenerator(el_data);
-            const auto  side           = el_view.getSide();
-            const auto  process_node   = [&](size_t node_ind) {
-                const auto& ref_coords            = node_locations[node_ind];
-                const auto& ref_ders              = basis_at_nodes.derivatives[node_ind];
-                const auto& basis_val             = basis_at_nodes.values[node_ind];
-                const auto [phys_ders, _, normal] = map::mapBoundary< ET, EO >(jacobi_gen, ref_coords, ref_ders, side);
-                const auto ker_res =
-                    evalKernel(kernel, ref_coords, basis_val, phys_ders, node_vals, el_data, time, normal);
-                const auto node_gid = el_nodes[node_ind];
-                const auto node_lid = ownership.getLocalIndex(node_gid);
-                for (Eigen::Index i = 0; i != static_cast< Eigen::Index >(num_inds); ++i)
-                    std::atomic_ref{new_vals(node_lid, i)}.fetch_add(ker_res[i], std::memory_order_relaxed);
-            };
-            std::ranges::for_each(el_view.getSideNodeInds(), process_node);
-        }
-    };
+    const auto set_el_vals =
+        [&]< mesh::ElementType ET, el_o_t EO >(const mesh::BoundaryElementView< ET, EO >& el_view) {
+            if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
+            {
+                const auto field_node_vals = field_access.getGloballyIndexed(el_view->nodes);
+                const auto mapping         = detail::getMappingAtSideNodes(el_view->data, el_view.getSide());
+                const auto node_vals       = detail::computeValsAtNodesImpl(kernel, mapping, field_node_vals, time);
+                for (auto&& [node_gid, ker_res] : std::views::zip(el_view.getSideNodesView(), node_vals))
+                {
+                    const auto node_lid = ownership.getLocalIndex(node_gid);
+                    for (Eigen::Index i = 0; i != static_cast< Eigen::Index >(num_inds); ++i)
+                        std::atomic_ref{new_vals(node_lid, i)}.fetch_add(ker_res[i], std::memory_order_relaxed);
+                }
+            }
+        };
     const auto set_values = [&] {
         mesh.visitBoundaries(zero_el, boundary_ids, std::execution::par);
         mesh.visitBoundaries(set_el_vals, boundary_ids, std::execution::par);

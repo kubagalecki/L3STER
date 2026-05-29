@@ -2,6 +2,8 @@
 #define L3STER_COMMON_INTERFACE_HPP
 
 #include "l3ster/common/Enums.hpp"
+#include "l3ster/common/Structs.hpp"
+#include "l3ster/common/Typedefs.h"
 #include "l3ster/util/Common.hpp"
 #include "l3ster/util/EigenUtils.hpp"
 

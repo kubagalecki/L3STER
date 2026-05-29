@@ -31,15 +31,15 @@ public:
 
     template < size_t n_nodes >
     auto getLocallyIndexed(const std::array< n_loc_id_t, n_nodes >& nodes) const
-        -> util::eigen::RowMajorMatrix< val_t, n_nodes, num_fields >
+        -> Eigen::Matrix< val_t, n_nodes, num_fields >
     {
-        auto retval = util::eigen::RowMajorMatrix< val_t, n_nodes, num_fields >{};
+        auto retval = Eigen::Matrix< val_t, n_nodes, num_fields >{};
         fill(retval, nodes);
         return retval;
     }
     template < size_t n_nodes >
     auto getGloballyIndexed(const std::array< n_id_t, n_nodes >& nodes) const
-        -> util::eigen::RowMajorMatrix< val_t, n_nodes, num_fields >
+        -> Eigen::Matrix< val_t, n_nodes, num_fields >
     {
         auto lids = std::array< n_loc_id_t, n_nodes >{};
         std::ranges::transform(nodes, lids.begin(), [&](n_id_t node) { return m_ownership->getLocalIndex(node); });
@@ -65,14 +65,12 @@ public:
     {}
 
     template < size_t n_nodes >
-    auto getLocallyIndexed(const std::array< n_loc_id_t, n_nodes >&) const
-        -> util::eigen::RowMajorMatrix< val_t, n_nodes, 0 >
+    auto getLocallyIndexed(const std::array< n_loc_id_t, n_nodes >&) const -> Eigen::Matrix< val_t, n_nodes, 0 >
     {
         return {};
     }
     template < size_t n_nodes >
-    auto getGloballyIndexed(const std::array< n_id_t, n_nodes >&) const
-        -> util::eigen::RowMajorMatrix< val_t, n_nodes, 0 >
+    auto getGloballyIndexed(const std::array< n_id_t, n_nodes >&) const -> Eigen::Matrix< val_t, n_nodes, 0 >
     {
         return {};
     }

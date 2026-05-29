@@ -1,91 +1,148 @@
 #ifndef L3STER_MAPPING_MAPREFERENCETOPHYSICAL_HPP
 #define L3STER_MAPPING_MAPREFERENCETOPHYSICAL_HPP
 
-#include "l3ster/basisfun/ReferenceBasisFunction.hpp"
+#include "l3ster/basisfun/BasisAtPoints.hpp"
 #include "l3ster/mapping/BoundaryIntegralJacobian.hpp"
 #include "l3ster/mapping/BoundaryNormal.hpp"
-#include "l3ster/mapping/ComputePhysBasisDer.hpp"
-#include "l3ster/mesh/Element.hpp"
 #include "l3ster/util/Caliper.hpp"
 
 namespace lstr::map
 {
-/// Map point in reference space to physical space
-template < mesh::ElementType T, el_o_t O >
-auto mapToPhysicalSpace(const mesh::ElementData< T, O >&                  element_data,
-                        const Point< mesh::Element< T, O >::native_dim >& point) -> Point< 3 >
+template < size_t NG, size_t NP >
+auto mapToPhysicalSpace(const basis::TabulatedBasisValues< NG, NP >& geom_basis,
+                        std::span< const Point< 3 >, NG >            vertices) -> std::array< Point< 3 >, NP >
 {
-    constexpr auto GBT             = basis::BasisType::Lagrange;
-    constexpr auto GT              = mesh::ElementTraits< mesh::Element< T, O > >::geom_type;
-    constexpr auto GO              = mesh::ElementTraits< mesh::Element< T, O > >::geom_order;
-    const auto     geom_basis_vals = basis::computeReferenceBases< GT, GO, GBT >(point);
-    const auto     verts_mat       = element_data.getEigenMap();
-    const auto     phys_coords     = (verts_mat * geom_basis_vals).eval();
-    return Point{phys_coords[0], phys_coords[1], phys_coords[2]};
+    static_assert(NG > 0 && NP > 0);
+    L3STER_PROFILE_FUNCTION;
+    using vert_map_t         = Eigen::Map< const Eigen::Matrix< val_t, 3, NG > >;
+    using point_map_t        = Eigen::Map< Eigen::Matrix< val_t, 3, NP > >;
+    const auto vert_map      = vert_map_t{vertices.front().coords.data()};
+    const auto geo_basis_map = geom_basis.getMap();
+
+    std::array< Point< 3 >, NP > retval;
+    auto                         point_map = point_map_t{retval.front().coords.data()};
+
+    point_map.transpose() = geo_basis_map * vert_map.transpose();
+    return retval;
 }
 
-template < int n_bases, int dim >
-struct DomainMappingResult
+template < size_t NA, size_t NP, dim_t D >
+struct TabulatedDomainMapping
 {
-    template < typename JacobiMatGenerator >
-    DomainMappingResult(JacobiMatGenerator&&                                      jacobi_gen,
-                        const std::array< val_t, dim >&                           point,
-                        const util::eigen::RowMajorMatrix< val_t, dim, n_bases >& ref_basis_ders)
+    template < size_t NG >
+    TabulatedDomainMapping(const basis::TabulatedBasisAtPointsView< NA, NG, NP, D >& basis,
+                           std::span< const Point< 3 >, NG >                         vertices)
     {
-        const auto jacobi_mat = std::invoke(jacobi_gen, point);
-        phys_basis_ders       = computePhysBasisDers(jacobi_mat, ref_basis_ders);
-        jacobian              = jacobi_mat.determinant();
+        L3STER_PROFILE_FUNCTION;
+        auto jacobi_mats = computeJacobiMats(basis.geom_basis->derivatives, vertices);
+        jacobians        = computeJacobians(jacobi_mats);
+        invertJacobiMats(jacobi_mats, std::span{std::as_const(jacobians)});
+        basis_values         = &basis.approx_basis->values;
+        physical_derivatives = computePhysicalDerivatives(basis.approx_basis->derivatives, jacobi_mats);
+        points               = mapToPhysicalSpace(basis.geom_basis->values, vertices);
     }
 
-    Eigen::Matrix< val_t, dim, n_bases > phys_basis_ders;
-    val_t                                jacobian;
+    std::array< val_t, NP >                       jacobians;
+    const basis::TabulatedBasisValues< NA, NP >*  basis_values;
+    basis::TabulatedBasisDerivatives< NA, NP, D > physical_derivatives;
+    std::array< Point< 3 >, NP >                  points;
 };
 
-template < int n_bases, int dim >
-struct BoundaryMappingResult
+template < size_t NA, size_t NP, dim_t D >
+struct TabulatedBoundaryMapping
 {
-    template < mesh::ElementType ET, el_o_t EO, typename JacobiMatGenerator >
-    BoundaryMappingResult(JacobiMatGenerator&&                                      jacobi_gen,
-                          const std::array< val_t, dim >&                           point,
-                          const util::eigen::RowMajorMatrix< val_t, dim, n_bases >& ref_basis_ders,
-                          el_side_t                                                 side,
-                          util::ValuePack< ET, EO >)
+    template < size_t NG, mesh::ElementType GT >
+    TabulatedBoundaryMapping(const basis::TabulatedBasisAtPointsView< NA, NG, NP, D >& basis,
+                             std::span< const Point< 3 >, NG >                         vertices,
+                             util::ConstexprValue< GT >,
+                             el_side_t side)
     {
-        const auto jacobi_mat = std::invoke(jacobi_gen, point);
-        phys_basis_ders       = computePhysBasisDers(jacobi_mat, ref_basis_ders);
-        jacobian              = computeBoundaryIntegralJacobian< ET >(side, jacobi_mat);
-        normal                = computeBoundaryNormal< ET, EO >(side, jacobi_mat);
+        L3STER_PROFILE_FUNCTION;
+        auto jacobi_mats = computeJacobiMats(basis.geom_basis->derivatives, vertices);
+        for (size_t p = 0; p != NP; ++p)
+            normals[p] = computeBoundaryNormal< GT >(side, jacobi_mats.get(p));
+        const auto volume_jacobians = computeJacobians(jacobi_mats);
+        jacobians                   = computeBoundaryIntegralJacobians< GT >(side, jacobi_mats);
+        invertJacobiMats(jacobi_mats, std::span{volume_jacobians});
+        basis_values         = &basis.approx_basis->values;
+        physical_derivatives = computePhysicalDerivatives(basis.approx_basis->derivatives, jacobi_mats);
+        points               = mapToPhysicalSpace(basis.geom_basis->values, vertices);
     }
 
-    Eigen::Matrix< val_t, dim, n_bases > phys_basis_ders;
-    val_t                                jacobian;
-    Eigen::Vector< val_t, dim >          normal;
+    std::array< val_t, NP >                       jacobians;
+    const basis::TabulatedBasisValues< NA, NP >*  basis_values;
+    basis::TabulatedBasisDerivatives< NA, NP, D > physical_derivatives;
+    std::array< Point< 3 >, NP >                  points;
+    std::array< Eigen::Vector< val_t, D >, NP >   normals;
 };
+
+template < size_t NP, size_t NF, dim_t D >
+class FieldValuesAtPoints
+{
+public:
+    using vals_t = std::array< val_t, NF >;
+    using ders_t = std::array< vals_t, D >;
+
+    FieldValuesAtPoints()
+        requires(NF == 0)
+    = default;
+    template < size_t NA >
+    FieldValuesAtPoints(const basis::TabulatedBasisValues< NA, NP >&         basis_vals,
+                        const basis::TabulatedBasisDerivatives< NA, NP, D >& basis_phys_ders,
+                        const Eigen::Matrix< val_t, int{NA}, int{NF} >&      node_vals)
+    {
+        L3STER_PROFILE_FUNCTION;
+        if constexpr (NF > 0) // Eigen matrix assignment for size=0 doesn't compile
+        {
+            m_fields.getValuesMap() = basis_vals.getMap() * node_vals;
+            for (dim_t d = 0; d != D; ++d)
+                m_fields.getDerivativesMap(d) = basis_phys_ders.getMap(d) * node_vals;
+        }
+    }
+
+    auto get(size_t point) const noexcept -> std::pair< vals_t, ders_t >
+    {
+        std::pair< vals_t, ders_t > retval;
+        auto& [vals, ders] = retval;
+        for (size_t f = 0; f != NF; ++f)
+        {
+            vals[f] = m_fields.getValuesMap()(point, f);
+            for (dim_t d = 0; d != D; ++d)
+                ders[d][f] = m_fields.getDerivativesMap(d)(point, f);
+        }
+        return retval;
+    }
+
+private:
+    basis::TabulatedBasis< NF, NP, D > m_fields;
+};
+template < size_t NA, size_t NP, int NF, dim_t D >
+FieldValuesAtPoints(const basis::TabulatedBasisValues< NA, NP >&,
+                    const basis::TabulatedBasisDerivatives< NA, NP, D >&,
+                    const Eigen::Matrix< val_t, int{NA}, NF >&)
+    -> FieldValuesAtPoints< NP, static_cast< size_t >(NF), D >;
 
 template < mesh::ElementType ET, el_o_t EO >
-using RefDersMat =
-    util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::native_dim, mesh::Element< ET, EO >::n_nodes >;
-
-template < mesh::ElementType ET, el_o_t EO, typename JacobiMatGenerator >
-auto mapDomain(JacobiMatGenerator&&                                            jacobi_gen,
-               const std::array< val_t, mesh::Element< ET, EO >::native_dim >& point,
-               const RefDersMat< ET, EO >&                                     ref_basis_ders)
+auto getPhysicalNodeLocations(const mesh::Element< ET, EO >& element)
 {
     L3STER_PROFILE_FUNCTION;
-    using retval_t = DomainMappingResult< mesh::Element< ET, EO >::n_nodes, mesh::Element< ET, EO >::native_dim >;
-    return retval_t{std::forward< JacobiMatGenerator >(jacobi_gen), point, ref_basis_ders};
+    using eltraits            = mesh::ElementTraits< mesh::Element< ET, EO > >;
+    constexpr auto GBT        = basis::BasisType::Lagrange;
+    const auto&    geom_basis = basis::getBasisAtNodes< GBT, eltraits::geom_type, EO, eltraits::geom_order >();
+    const auto     verts      = std::span{element.data.vertices};
+    return mapToPhysicalSpace(geom_basis.values, verts);
 }
 
-template < mesh::ElementType ET, el_o_t EO, typename JacobiMatGenerator >
-auto mapBoundary(JacobiMatGenerator&&                                            jacobi_gen,
-                 const std::array< val_t, mesh::Element< ET, EO >::native_dim >& point,
-                 const RefDersMat< ET, EO >&                                     ref_basis_ders,
-                 el_side_t                                                       side)
+template < mesh::ElementType ET, el_o_t EO >
+auto getPhysicalSideNodeLocations(const mesh::BoundaryElementView< ET, EO >& el_view)
 {
     L3STER_PROFILE_FUNCTION;
-    using retval_t = BoundaryMappingResult< mesh::Element< ET, EO >::n_nodes, mesh::Element< ET, EO >::native_dim >;
-    constexpr auto el_typeinfo = util::ValuePack< ET, EO >{};
-    return retval_t{std::forward< JacobiMatGenerator >(jacobi_gen), point, ref_basis_ders, side, el_typeinfo};
+    using eltraits            = mesh::ElementTraits< mesh::Element< ET, EO > >;
+    constexpr auto GBT        = basis::BasisType::Lagrange;
+    const auto     side       = el_view.getSide();
+    const auto&    geom_basis = basis::getBasisAtSideNodes< GBT, eltraits::geom_type, EO, eltraits::geom_order >(side);
+    const auto     verts      = std::span{el_view->data.vertices};
+    return mapToPhysicalSpace(geom_basis.values, verts);
 }
 } // namespace lstr::map
 #endif // L3STER_MAPPING_MAPREFERENCETOPHYSICAL_HPP

@@ -1,90 +1,48 @@
 #include "Kernels.hpp"
 
-template < el_o_t EO >
-static void BM_NS3DLocalEvaluation(benchmark::State& state)
+template < el_o_t EO, q_o_t QO, KernelParams params, typename Kernel >
+static void localEvalBenchImpl(benchmark::State& state, const Kernel& ker)
 {
-    constexpr auto  QT = quad::QuadratureType::GaussLegendre;
-    constexpr auto  BT = basis::BasisType::Lagrange;
-    constexpr q_o_t QO = 4 * EO - 1;
+    constexpr auto ET = mesh::ElementType::Hex;
+    constexpr auto QT = quad::QuadratureType::GaussLegendre;
+    constexpr auto BT = basis::BasisType::Lagrange;
 
-    const auto element = getExampleHexElement< EO >();
-    auto       dom_map = typename mesh::MeshPartition< EO >::domain_map_t{};
-    mesh::pushToDomain(dom_map[0], element);
-    const auto mesh          = mesh::MeshPartition< EO >{dom_map, 0, element.nodes.size(), {}};
-    const auto local_element = mesh::LocalElementView{element, mesh, {}};
-
-    constexpr size_t n_fields     = 7;
-    constexpr size_t n_eq         = 8;
-    using nodal_vals_t            = Eigen::Matrix< val_t, element.n_nodes, n_fields >;
-    const nodal_vals_t nodal_vals = nodal_vals_t::Random();
-
-    constexpr auto n_nodes      = mesh::Element< mesh::ElementType ::Hex, EO >::n_nodes;
-    constexpr auto loc_mat_rows = n_nodes * n_fields;
-
-    const auto& ref_bas_at_quad =
-        basis::getReferenceBasisAtDomainQuadrature< BT, mesh::ElementType::Hex, EO, QT, QO >();
-
-    constexpr auto params = KernelParams{.dimension = 3, .n_equations = 8, .n_unknowns = 7, .n_fields = 7};
-    constexpr auto kernel = wrapDomainEquationKernel< params >(ns3d_kernel);
-
-    Eigen::Vector< val_t, element.n_nodes * params.n_unknowns > x;
-    x.setRandom();
+    const auto element   = getExampleHexElement< EO >();
+    const auto node_vals = Eigen::Matrix< val_t, element.n_nodes, params.n_fields >::Random().eval();
+    const auto quad_view = basis::getQuadratureView< BT, ET, EO, QT, QO >();
+    const auto mapping   = map::TabulatedDomainMapping{quad_view.bases, std::span{element.data.vertices}};
+    const auto fields    = map::FieldValuesAtPoints{*mapping.basis_values, mapping.physical_derivatives, node_vals};
+    const auto kernel    = wrapDomainEquationKernel< params >(ker);
+    const auto x         = Eigen::Vector< val_t, element.n_nodes * params.n_unknowns >::Random().eval();
 
     for (auto _ : state)
     {
-        auto y = algsys::evaluateLocalOperator(kernel, local_element, nodal_vals, ref_bas_at_quad, 0., x);
+        auto y = algsys::evaluateLocalOperator(kernel, mapping, fields, quad_view.weights, 0., x);
         benchmark::DoNotOptimize(y);
     }
 
-    const auto flops_per_qp = /* physical basis derivative computation */ n_nodes * 3 * 3 * 2 +
-                              /* field value computation */ n_fields * n_nodes * 2 * 4 +
-                              /* fill H */ params.n_equations * n_nodes * params.n_unknowns * 7 +
-                              /* operator evaluation */ params.n_equations * (n_nodes * params.n_unknowns * 4 + 2);
-    const auto n_qp           = ref_bas_at_quad.quadrature.size;
-    state.counters["DPFlops"] = benchmark::Counter{static_cast< double >(state.iterations()) * n_qp * flops_per_qp,
+    constexpr auto loc_mat_rows = element.n_nodes * params.n_unknowns;
+    constexpr auto num_qps      = std::decay_t< decltype(*quad_view.bases.geom_basis) >::size;
+    const auto     flops_per_qp =
+        /* fill H */ params.n_equations * loc_mat_rows * 7 +
+        /* operator evaluation */ params.n_equations * (4 * loc_mat_rows + 2);
+    state.counters["DPFlops"] = benchmark::Counter{static_cast< double >(state.iterations()) * num_qps * flops_per_qp,
                                                    benchmark::Counter::kIsRate,
                                                    benchmark::Counter::kIs1000};
 }
 
 template < el_o_t EO >
+static void BM_NS3DLocalEvaluation(benchmark::State& state)
+{
+    constexpr auto params = KernelParams{.dimension = 3, .n_equations = 8, .n_unknowns = 7, .n_fields = 7};
+    localEvalBenchImpl< EO, 4 * EO - 1, params >(state, ns3d_kernel);
+}
+
+template < el_o_t EO >
 static void BM_DiffS3DLocalEvaluation(benchmark::State& state)
 {
-    constexpr auto  params = KernelParams{.dimension = 3, .n_equations = 7, .n_unknowns = 4};
-    constexpr auto  QT     = quad::QuadratureType::GaussLegendre;
-    constexpr auto  BT     = basis::BasisType::Lagrange;
-    constexpr q_o_t QO     = 2 * EO;
-
-    const auto element = getExampleHexElement< EO >();
-    auto       dom_map = typename mesh::MeshPartition< EO >::domain_map_t{};
-    mesh::pushToDomain(dom_map[0], element);
-    const auto mesh               = mesh::MeshPartition< EO >{dom_map, 0, element.nodes.size(), {}};
-    const auto local_element      = mesh::LocalElementView{element, mesh, {}};
-    using nodal_vals_t            = Eigen::Matrix< val_t, element.n_nodes, params.n_fields >;
-    const nodal_vals_t nodal_vals = nodal_vals_t::Random();
-    constexpr auto     n_nodes    = mesh::Element< mesh::ElementType ::Hex, EO >::n_nodes;
-
-    const auto& ref_bas_at_quad =
-        basis::getReferenceBasisAtDomainQuadrature< BT, mesh::ElementType::Hex, EO, QT, QO >();
-
-    constexpr auto kernel = wrapDomainEquationKernel< params >(diff3d_kernel);
-
-    Eigen::Vector< val_t, element.n_nodes * params.n_unknowns > x;
-    x.setRandom();
-
-    for (auto _ : state)
-    {
-        auto y = algsys::evaluateLocalOperator(kernel, local_element, nodal_vals, ref_bas_at_quad, 0., x);
-        benchmark::DoNotOptimize(y);
-    }
-
-    const auto flops_per_qp = /* physical basis derivative computation */ n_nodes * 3 * 3 * 2 +
-                              /* field value computation */ params.n_fields * n_nodes * 2 * 4 +
-                              /* fill H */ params.n_equations * n_nodes * params.n_unknowns * 7 +
-                              /* operator evaluation */ params.n_equations * (n_nodes * params.n_unknowns * 4 + 2);
-    const auto n_qp           = ref_bas_at_quad.quadrature.size;
-    state.counters["DPFlops"] = benchmark::Counter{static_cast< double >(state.iterations()) * n_qp * flops_per_qp,
-                                                   benchmark::Counter::kIsRate,
-                                                   benchmark::Counter::kIs1000};
+    constexpr auto params = KernelParams{.dimension = 3, .n_equations = 8, .n_unknowns = 7, .n_fields = 7};
+    localEvalBenchImpl< EO, 2 * EO, params >(state, diff3d_kernel);
 }
 
 #define NS3D_EVAL_BENCH(ELO, UNIT)                                                                                     \

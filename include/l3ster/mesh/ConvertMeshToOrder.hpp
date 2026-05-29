@@ -217,15 +217,15 @@ auto computeFeatureNodeCoords(const MeshPartition< 1 >& mesh, const ExtractedFea
     auto retval = util::CrsGraph< Point< 3 > >{features.features | std::views::transform(get_num_new)};
 
     const auto compute_feat_node_coords = [&]< ElementType T >(const Element< T, 1 >& element) {
-        const auto& feature_inds       = features.element_to_features.at(element.id);
-        const auto  synth_converted_el = Element< T, O >{{}, element.data, {}};
-        size_t      i                  = 0;
-        const auto  process_feature    = [&](std::span< const el_locind_t > node_inds) {
+        const auto& feature_inds    = features.element_to_features.at(element.id);
+        const auto  node_locs       = map::getPhysicalNodeLocations(Element< T, O >{{}, element.data, {}});
+        size_t      i               = 0;
+        const auto  process_feature = [&](std::span< const el_locind_t > node_inds) {
             const auto  feature_ind = feature_inds.at(i++);
             const auto& feature     = features.features.at(feature_ind);
             if (feature.parent == element.id and feature.is_shared)
                 for (auto&& [node_i, coord] : std::views::zip(node_inds, retval(feature_ind)))
-                    coord = nodePhysicalLocation(synth_converted_el, node_i);
+                    coord = node_locs[node_i];
         };
 
         // Ignore volume - no need to compute coords (volume is always uniquely owned)
@@ -287,6 +287,7 @@ auto convertElements(const MeshPartition< 1 >&           mesh,
         auto retval            = Element< T, O >{{}, element1.data, element1.id};
         auto& [nodesO, _1, _2] = retval;
 
+        const auto  node_locs    = map::getPhysicalNodeLocations(retval);
         const auto& feature_inds = features.element_to_features.at(element1.id);
         auto process_feature     = [&, fit = feature_inds.begin()](std::span< const el_locind_t > node_inds) mutable {
             const auto feat_ind   = *fit++;
@@ -300,7 +301,7 @@ auto convertElements(const MeshPartition< 1 >&           mesh,
                 const auto feature_coords = feature_node_coords(feat_ind);
                 for (auto ni : node_inds)
                 {
-                    const auto node_coords = nodePhysicalLocation(retval, ni);
+                    const auto node_coords = node_locs[ni];
                     const auto new_node_id = matchNode(feature_coords, node_coords, node_start);
                     nodesO[ni]             = new_node_id;
                 }

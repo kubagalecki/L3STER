@@ -365,7 +365,7 @@ std::string makeCoordsSerialized(const mesh::MeshPartition< orders... >& mesh)
     data_to_encode.front() = std::bit_cast< val_t >(coords.size_bytes());
 
     const auto process_element = [&](const auto& element) {
-        const auto node_coords = nodePhysicalLocation(element);
+        const auto node_coords = map::getPhysicalNodeLocations(element);
         for (auto&& [i, point] : node_coords | std::views::enumerate)
         {
             const auto local_node_ind = mesh.getNodeOwnership().getLocalIndex(element.nodes[i]);

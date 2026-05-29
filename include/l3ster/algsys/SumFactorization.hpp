@@ -25,26 +25,30 @@ namespace detail
 template < SumFactParams basis_params >
 auto makeInterpolationMatrix()
 {
-    const auto& [qps, _] = quad::getReferenceQuadrature< basis_params.quad_type, basis_params.quad_order >();
-    const auto basis_at_qps =
-        basis::evalRefBasisAtPoints< basis_params.basis_type, mesh::ElementType::Line, basis_params.basis_order >(qps);
-    auto retval = util::eigen::RowMajorMatrix< val_t, basis_params.n_bases1d(), basis_params.n_qps1d() >{};
+    const auto basis  = basis::getBasisInDomain< basis_params.basis_type,
+                                                 mesh::ElementType::Line,
+                                                 basis_params.basis_order,
+                                                 basis_params.quad_type,
+                                                 basis_params.quad_order >();
+    auto       retval = util::eigen::RowMajorMatrix< val_t, basis_params.n_bases1d(), basis_params.n_qps1d() >{};
     for (q_o_t qi = 0; qi != basis_params.n_qps1d(); ++qi)
         for (el_o_t bi = 0; bi != basis_params.n_bases1d(); ++bi)
-            retval(bi, qi) = basis_at_qps.values[qi][bi];
+            retval(bi, qi) = basis.getValuesMap()(qi, bi);
     return retval;
 }
 
 template < SumFactParams basis_params >
 auto makeDerivativeMatrix()
 {
-    const auto& [qps, _] = quad::getReferenceQuadrature< basis_params.quad_type, basis_params.quad_order >();
-    const auto basis_at_qps =
-        basis::evalRefBasisAtPoints< basis_params.basis_type, mesh::ElementType::Line, basis_params.basis_order >(qps);
-    auto retval = util::eigen::RowMajorMatrix< val_t, basis_params.n_bases1d(), basis_params.n_qps1d() >{};
-    for (q_o_t qi = 0; qi != basis_params.n_qps1d(); ++qi)
-        for (el_o_t bi = 0; bi != basis_params.n_bases1d(); ++bi)
-            retval(bi, qi) = basis_at_qps.derivatives[qi][bi];
+    const auto basis  = basis::getBasisInDomain< basis_params.basis_type,
+                                                 mesh::ElementType::Line,
+                                                 basis_params.basis_order,
+                                                 basis_params.quad_type,
+                                                 basis_params.quad_order >();
+    auto       retval = util::eigen::RowMajorMatrix< val_t, basis_params.n_bases1d(), basis_params.n_qps1d() >{};
+    for (size_t qi = 0; qi != basis_params.n_qps1d(); ++qi)
+        for (size_t bi = 0; bi != basis_params.n_bases1d(); ++bi)
+            retval(bi, qi) = basis.getDerivativesMap(0)(qi, bi);
     return retval;
 }
 

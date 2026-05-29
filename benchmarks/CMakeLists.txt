@@ -2,7 +2,7 @@ find_package( benchmark REQUIRED )
 include( CTest )
 
 add_executable( Non_MPI_benchmarks BenchmarksMain.cpp
-                ElementBenchmarks.cpp
+                MappingBenchmarks.cpp
                 LocalAssemblyBenchmarks.cpp
                 LocalOperatorEvaluationBenchmarks.cpp
                 MeshBenchmarks.cpp

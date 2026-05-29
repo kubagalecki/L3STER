@@ -1,9 +1,8 @@
 #ifndef L3STER_MESH_NODELOCATION_HPP
 #define L3STER_MESH_NODELOCATION_HPP
 
+#include "l3ster/basisfun/ReferenceBasisFunction.hpp"
 #include "l3ster/common/Structs.hpp"
-#include "l3ster/mapping/MapReferenceToPhysical.hpp"
-#include "l3ster/math/LobattoRuleAbsc.hpp"
 
 namespace lstr::mesh
 {
@@ -67,47 +66,12 @@ const auto& getNodeLocations()
         static_assert(util::always_false< T >);
 }
 
-namespace detail
-{
 template < ElementType T, el_o_t O >
-const auto& getGeomBasisValuesAtNodes()
+auto getSideNodeLocations(el_side_t side)
 {
-    static const auto value = std::invoke([] {
-        using elem_traits            = ElementTraits< Element< T, O > >;
-        constexpr auto num_nodes     = elem_traits::nodes_per_element;
-        constexpr auto GBT           = basis::BasisType::Lagrange;
-        constexpr auto GT            = elem_traits::geom_type;
-        constexpr auto GO            = elem_traits::geom_order;
-        constexpr auto num_bases     = Element< GT, GO >::n_nodes;
-        const auto&    node_ref_locs = getNodeLocations< GT, O >();
-        auto           retval        = Eigen::Matrix< val_t, num_bases, num_nodes >{};
-        for (auto&& [i, x] : node_ref_locs | std::views::enumerate)
-            retval.col(i) = basis::computeReferenceBases< GT, GO, GBT >(x);
-        return retval;
-    });
-    return value;
-}
-} // namespace detail
-
-template < ElementType T, el_o_t O >
-Point< 3 > nodePhysicalLocation(const Element< T, O >& element, el_locind_t i)
-{
-    const auto  verts      = element.data.getEigenMap();
-    const auto& geom_basis = detail::getGeomBasisValuesAtNodes< T, O >();
-    const auto  phys_loc   = (verts * geom_basis.col(i)).eval();
-    return Point{phys_loc[0], phys_loc[1], phys_loc[2]};
-}
-
-template < ElementType T, el_o_t O >
-auto nodePhysicalLocation(const Element< T, O >& element)
-{
-    constexpr auto n_nodes                     = Element< T, O >::n_nodes;
-    using retval_map_t                         = Eigen::Map< Eigen::Matrix< val_t, 3, n_nodes > >;
-    const auto  verts                          = element.data.getEigenMap();
-    const auto& geom_basis                     = detail::getGeomBasisValuesAtNodes< T, O >();
-    auto        retval                         = std::array< Point< 3 >, n_nodes >{};
-    retval_map_t{retval.front().coords.data()} = verts * geom_basis;
-    return retval;
+    using eltraits           = ElementTraits< Element< T, O > >;
+    const auto all_node_locs = getNodeLocations< T, O >();
+    return util::elwise(eltraits::boundary_table[side], [&](auto i) { return all_node_locs[i]; });
 }
 } // namespace lstr::mesh
 #endif // L3STER_MESH_NODELOCATION_HPP
