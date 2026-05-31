@@ -4,7 +4,6 @@
 #include "Common.hpp"
 
 #include <cmath>
-#include <iostream>
 
 using namespace lstr;
 using namespace lstr::comm;

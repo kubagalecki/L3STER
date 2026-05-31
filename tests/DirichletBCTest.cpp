@@ -1,3 +1,5 @@
+#define L3STER_DISABLE_CURVILINEAR
+
 #include "l3ster/bcs/DirichletBC.hpp"
 #include "l3ster/algsys/ScatterLocalSystem.hpp"
 #include "l3ster/algsys/SparsityGraph.hpp"

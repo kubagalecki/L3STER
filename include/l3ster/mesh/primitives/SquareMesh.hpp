@@ -76,6 +76,7 @@ auto makeSquareMesh(R&& dist, const SquareMeshIds& ids = {}) -> MeshPartition< 1
     return makeSquareMesh(dist, dist, ids);
 }
 
+#ifndef L3STER_DISABLE_CURVILINEAR
 template < std::ranges::random_access_range Rx, std::ranges::random_access_range Ry >
 auto makeSquareMeshQuadratic(Rx&& distx, Ry&& disty, const SquareMeshIds& ids = {}) -> MeshPartition< 1 >
     requires std::convertible_to< std::ranges::range_value_t< std::decay_t< Rx > >, val_t > and
@@ -152,5 +153,6 @@ auto makeSquareMeshQuadratic(R&& dist, const SquareMeshIds& ids = {}) -> MeshPar
 {
     return makeSquareMeshQuadratic(dist, dist, ids);
 }
+#endif
 } // namespace lstr::mesh
 #endif // L3STER_MESH_SQUAREMESH_HPP

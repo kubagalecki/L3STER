@@ -1,11 +1,11 @@
+#define L3STER_DISABLE_CURVILINEAR
+
 #include "l3ster/algsys/MakeAlgebraicSystem.hpp"
 #include "l3ster/comm/DistributeMesh.hpp"
-#include "l3ster/mesh/primitives/CubeMesh.hpp"
 #include "l3ster/mesh/primitives/SquareMesh.hpp"
 #include "l3ster/post/NormL2.hpp"
 #include "l3ster/solve/BelosSolvers.hpp"
 #include "l3ster/solve/NativePreconditioners.hpp"
-#include "l3ster/util/ScopeGuards.hpp"
 
 #include "Common.hpp"
 
