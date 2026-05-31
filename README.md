@@ -33,8 +33,8 @@ $$ A_0 u + \left( \sum_{i=1}^{D} A_i \frac{\partial}{\partial x_i} \right) u = f
 
 where $D = 2,3$ is the spatial dimension of the problem,
 $u : \Omega \rightarrow \mathbb{R}^U$ is the unknown vector field,
-$A_i \, : \, \Omega \rightarrow \mathbb{R}^{E \times U}$ describe the first-order differential operator,
-$f \, : \, \Omega \rightarrow \mathbb{R}^E$ is the source term,
+$A_i : \Omega \rightarrow \mathbb{R}^{E \times U}$ describe the first-order differential operator,
+$f : \Omega \rightarrow \mathbb{R}^E$ is the source term,
 $E$ is the number of equations, and $U$ the number of unknowns ($E$ and $U$ may not be equal).
 
 ### Boundary conditions
