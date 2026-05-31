@@ -166,17 +166,25 @@ struct ElementTraits< Element< ElementType::Hex, O > > : detail::HexTraitsBase< 
 };
 
 template < el_o_t O >
-struct ElementTraits< Element< ElementType::Hex2, O > > : detail::HexTraitsBase< O >
-{
-    static constexpr auto   type       = ElementType::Hex2;
-    static constexpr el_o_t geom_order = 2;
-};
-
-template < el_o_t O >
 struct ElementTraits< Element< ElementType::Quad, O > > : detail::QuadTraitsBase< O >
 {
     static constexpr auto   type       = ElementType::Quad;
     static constexpr el_o_t geom_order = 1;
+};
+
+template < el_o_t O >
+struct ElementTraits< Element< ElementType::Line, O > > : detail::LineTraitsBase< O >
+{
+    static constexpr auto   type       = ElementType::Line;
+    static constexpr el_o_t geom_order = 1;
+};
+
+#ifndef L3STER_DISABLE_CURVILINEAR
+template < el_o_t O >
+struct ElementTraits< Element< ElementType::Hex2, O > > : detail::HexTraitsBase< O >
+{
+    static constexpr auto   type       = ElementType::Hex2;
+    static constexpr el_o_t geom_order = 2;
 };
 
 template < el_o_t O >
@@ -187,18 +195,12 @@ struct ElementTraits< Element< ElementType::Quad2, O > > : detail::QuadTraitsBas
 };
 
 template < el_o_t O >
-struct ElementTraits< Element< ElementType::Line, O > > : detail::LineTraitsBase< O >
-{
-    static constexpr auto   type       = ElementType::Line;
-    static constexpr el_o_t geom_order = 1;
-};
-
-template < el_o_t O >
 struct ElementTraits< Element< ElementType::Line2, O > > : detail::LineTraitsBase< O >
 {
     static constexpr auto   type       = ElementType::Line2;
     static constexpr el_o_t geom_order = 2;
 };
+#endif
 
 template < ElementType ET, el_o_t EO >
 constexpr auto getSideNodeIndices(el_side_t side) -> std::span< const el_locind_t >
