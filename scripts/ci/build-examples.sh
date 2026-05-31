@@ -10,4 +10,4 @@ cmake \
   -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
   -DCMAKE_CXX_COMPILER=mpic++ \
   .. || exit 1
-cmake --build . -- -j "$(grep -c ^processor /proc/cpuinfo)" || exit 1
+cmake --build . -- -j "$(nproc)" || exit 1
