@@ -1,6 +1,6 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Tests](https://github.com/kubagalecki/L3STER/workflows/tests/badge.svg)](https://github.com/kubagalecki/L3STER/actions)
-[![codecov](https://codecov.io/gh/kubagalecki/L3STER/branch/main/graph/badge.svg?token=6VT1TVS7FG)](https://codecov.io/gh/kubagalecki/L3STER)
+[![Tests](https://github.com/kubagalecki/L3STER/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kubagalecki/L3STER/actions/workflows/ci.yml)
+[![Codecov](https://codecov.io/gh/kubagalecki/L3STER/branch/main/graph/badge.svg?token=6VT1TVS7FG)](https://codecov.io/gh/kubagalecki/L3STER)
 
 # L3STER :cheese:
 
@@ -31,10 +31,10 @@ At the end of the day, each equation takes the form of:
 
 $$ A_0 u + \left( \sum_{i=1}^{D} A_i \frac{\partial}{\partial x_i} \right) u = f $$
 
-where $D \in \{ 2,3 \}$ is the spatial dimension of the problem,
+where $D = 2,3$ is the spatial dimension of the problem,
 $u : \Omega \rightarrow \mathbb{R}^U$ is the unknown vector field,
-$A_i : \Omega \rightarrow \mathbb{R}^{E \times U}$ describe the first-order differential operator,
-$f : \Omega \rightarrow \mathbb{R}^E$ is the source term,
+$A_i \, : \, \Omega \rightarrow \mathbb{R}^{E \times U}$ describe the first-order differential operator,
+$f \, : \, \Omega \rightarrow \mathbb{R}^E$ is the source term,
 $E$ is the number of equations, and $U$ the number of unknowns ($E$ and $U$ may not be equal).
 
 ### Boundary conditions
@@ -54,7 +54,7 @@ For example, you can use the backward Euler scheme:
 
 $$ \frac{\partial u}{\partial t} \approx \frac{u_{n+1} - u_n}{\Delta t} $$
 
-You can then add $I \Delta t$ to $A_0$ and add $u_n / \Delta t$ to the source term to obtain a PDE for $u$ at the next time step.
+You can then add $I / \Delta t$ to $A_0$ and add $u_n / \Delta t$ to the source term to obtain a PDE for $u$ at the next time step.
 
 ### Non-linear problems
 
@@ -80,7 +80,7 @@ That being said, L3STER has several dependencies, which will need to be installe
 - A C++ 23 compliant compiler, gcc 14 or newer will work
 - MPI
 - Hwloc
-- Metis
+- Parmetis
 - Trilinos 14.0 or newer. The following packages are currently used:
   - Kokkos (which can be built separately from Trilinos)
   - Tpetra
@@ -88,7 +88,7 @@ That being said, L3STER has several dependencies, which will need to be installe
   - Amesos2 - optional, needed for direct solvers
   - Ifpack2 - optional, used for preconditioners (L3STER provides a few simple ones natively)
 - Intel OneTBB
-- Eigen version 3.4
+- Eigen version 3.4.1
 
 All of these dependencies are available via [Spack](https://spack.readthedocs.io/en/latest/index.html).
 You can easily install them as follows:
@@ -101,7 +101,7 @@ git checkout tags/releases/latest
 . share/spack/setup-env.sh # consider adding this to your .bashrc
 
 # Find some common packages so that spack doesn't have to build them from scratch (saves time)
-spack external find binutils cmake coreutils curl diffutils findutils git gmake openssh perl python sed tar
+spack external find binutils cmake coreutils curl diffutils findutils git gmake openssh perl python sed tar m4
 
 # If you have a sufficiently recent compiler, skip this section
 spack install gcc
@@ -112,7 +112,7 @@ spack compiler find
 # Some of the libraries listed above are not mentioned explicitly, they will be built as dependencies of other packages
 spack env create l3ster
 spacktivate l3ster
-spack add eigen intel-oneapi-tbb parmetis kokkos+openmp trilinos cxxstd=17 +openmp +amesos2 +belos +tpetra +ifpack2
+spack add eigen@3.4.1 intel-oneapi-tbb parmetis kokkos+openmp+serial trilinos cxxstd=17 +openmp +amesos2 +belos +tpetra +ifpack2
 spack concretize
 spack install
 
@@ -134,7 +134,10 @@ L3STER follows the MPI+X paradigm (hybrid parallelism).
 It uses TBB for multithreading, and MPI for multiprocessing.
 It is recommended that you launch one MPI rank per CPU, not CPU *core*.
 
-> Trilinos uses OpenMP for multithreading. L3STER and Trilinos parallel regions never overlap, so oversubscription is not an issue.
+> Trilinos uses OpenMP for multithreading.
+> L3STER and Trilinos parallel regions never overlap, so epxlicit oversubscription is not an issue.
+> However, OpenMP threads spin for a time after completing parallel work, which may cause problems.
+> It is strongly recommended that you set the environment variable `OMP_WAIT_POLICY=PASSIVE` (see `examples/README.md`)
 
 > L3STER uses Hwloc to detect your machine's topology and limits the SMT parallelism where appropriate. You don't need to worry about hyperthreading, L3STER will just do the right thing.
 
@@ -164,12 +167,14 @@ Example slurm script demonstrating L3STER usage:
 cd /my/project/dir
 mkdir build
 cd build
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=mpic++ .. || exit 1
-cmake --build .                                                 || exit 1
+cmake -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_CXX_COMPILER=mpic++ \
+      -DCMAKE_CXX_FLAGS="-march=native -mtune=native" .. || exit 1
+cmake --build .                                          || exit 1
 srun my-l3ster-app
 ```
 
 ## Usage
 
-We are working on fully documenting the L3STER library.
+We are working on fully documenting L3STER.
 For the time being, please refer to the examples.
