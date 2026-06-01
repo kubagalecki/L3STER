@@ -3,7 +3,6 @@
 
 #include "l3ster/mapping/MapReferenceToPhysical.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
-#include "l3ster/mesh/NodeLocation.hpp"
 #include "l3ster/util/Serialization.hpp"
 #include "l3ster/util/SpatialHashTable.hpp"
 
@@ -302,15 +301,50 @@ inline auto merge(const MeshPartition< 1 >& mesh1, const MeshPartition< 1 >& mes
     return {domains, 0, num_nodes, remaining_boundaries};
 }
 
+/// Deform according to the provided deformation field
 template < Mapping_c< Point< 3 >, Point< 3 > > Deformation >
 auto deform(MeshPartition< 1 >& mesh, Deformation&& deform)
 {
-    mesh.visit(
-        [&]< ElementType ET, el_o_t EO >(Element< ET, EO >& element) {
-            for (auto& point : element.data.vertices)
-                point = std::invoke(deform, point);
-        },
-        std::execution::par);
+    const auto deform_elem = [&]< ElementType ET, el_o_t EO >(Element< ET, EO >& element) {
+        std::ranges::transform(element.data.vertices, element.data.vertices.begin(), deform);
+    };
+    mesh.visit(deform_elem, std::execution::par);
+}
+
+/// Deform according to the provided deformation field, additionally constraining the curvature of the elements. The
+/// curvature field is evaluated in the deformed space; it should return a value from the interval [0,1] (0 - flat,
+/// 1 - fully curvilinear), values outside this interval are clamped accordingly.
+template < Mapping_c< Point< 3 >, Point< 3 > > Deformation, Mapping_c< Point< 3 >, val_t > Curvature >
+auto deform(MeshPartition< 1 >& mesh, Deformation&& deform, Curvature&& curvature)
+{
+    const auto deform_elem = [&]< ElementType ET, el_o_t EO >(Element< ET, EO >& element) {
+        using eltraits = ElementTraits< Element< ET, EO > >;
+        auto& vertices = element.data.vertices;
+        if constexpr (eltraits::geom_order == 1)
+            std::ranges::transform(vertices, vertices.begin(), deform);
+        else
+        {
+            // Blend between actual deformed and fictitious GO=1 element vertex coords
+            using element1_t      = Element< eltraits::geom_type, eltraits::geom_order >;
+            using geom_traits     = ElementTraits< element1_t >;
+            const auto curv_locs  = util::elwise(vertices, deform);
+            const auto curv_field = util::elwise(curv_locs, curvature);
+            const auto o1_verts   = util::elwise(geom_traits::vertices, [&](auto i) { return curv_locs.at(i); });
+            const auto el1        = element1_t{.nodes = {}, .data = {o1_verts}, .id = {}};
+            const auto lin_locs   = map::getPhysicalNodeLocations(el1);
+            const auto new_locs   = std::views::zip_transform(
+                [](const Point< 3 >& l1, const Point< 3 >& l2, val_t cur) -> Point< 3 > {
+                    const auto c  = std::clamp(cur, 0., 1.);
+                    const auto cr = 1. - c;
+                    return util::elwise(l1.coords, l2.coords, [&](auto x1, auto x2) { return cr * x1 + c * x2; });
+                },
+                lin_locs,
+                curv_locs,
+                curv_field);
+            std::ranges::copy(new_locs, vertices.begin());
+        }
+    };
+    mesh.visit(deform_elem, std::execution::par);
 }
 
 template < std::ranges::random_access_range R >

@@ -53,17 +53,20 @@ inline auto makeHalfCylinderInChannel2DMesh(const HalfCylinderInChannel2DGeometr
             const auto angle = p.y() * pi;
             return {r * std::cos(angle), r * std::sin(angle), 0.};
         };
-        deform(top_half, deform_half);
+        const auto curv_field = [r  = geometry.r_inner,
+                                 dr = geometry.r_outer - geometry.r_inner](const Point< 3 >& point) -> val_t {
+            const auto rp = std::sqrt(point.x() * point.x() + point.y() * point.y());
+            return 1. - (rp - r) / dr; // This gets clamped to [0,1] in the deformation function
+        };
+        deform(top_half, deform_half, curv_field);
         return top_half;
     };
-    auto cylinder = make_cylinder();
 
     const auto make_wake = [&](val_t L, size_t n, val_t q, d_id_t edge_id) {
         const auto x_dist   = util::geomSpaceProg(0., L, n + 1, q);
         const auto y_dist   = util::linspace(-pi / 4., pi / 4., geometry.n_circumf / 4 + 1);
         const auto wake_ids = SquareMeshIds{.domain = ids.domain, .right = edge_id};
-        auto       retval   = geometry.quadratic ? makeSquareMeshQuadratic(x_dist, y_dist, wake_ids)
-                                                 : makeSquareMesh(x_dist, y_dist, wake_ids);
+        auto       retval   = makeSquareMesh(x_dist, y_dist, wake_ids);
         deform(retval, [&](Point< 3 > p) -> Point< 3 > {
             const auto x = p.x() + (1. - p.x() / L) * geometry.r_outer * std::cos(p.y());
             const auto y = geometry.r_outer * std::sin(p.y());
@@ -71,6 +74,7 @@ inline auto makeHalfCylinderInChannel2DMesh(const HalfCylinderInChannel2DGeometr
         });
         return retval;
     };
+
     const auto make_half_wake =
         [&](val_t L, size_t n, val_t q, d_id_t edge_id, d_id_t in_id, bool generate_right = true) {
             const val_t lo       = generate_right ? 0. : -pi / 4.;
@@ -78,8 +82,7 @@ inline auto makeHalfCylinderInChannel2DMesh(const HalfCylinderInChannel2DGeometr
             const auto  x_dist   = util::geomSpaceProg(0., L, n + 1, q);
             const auto  y_dist   = util::linspace(lo, hi, geometry.n_circumf / 8 + 1);
             const auto  wake_ids = SquareMeshIds{.domain = ids.domain, .bottom = in_id, .top = in_id, .right = edge_id};
-            auto        retval   = geometry.quadratic ? makeSquareMeshQuadratic(x_dist, y_dist, wake_ids)
-                                                      : makeSquareMesh(x_dist, y_dist, wake_ids);
+            auto        retval   = makeSquareMesh(x_dist, y_dist, wake_ids);
             deform(retval, [&](Point< 3 > p) -> Point< 3 > {
                 const auto x = p.x() + (1. - p.x() / L) * geometry.r_outer * std::cos(p.y());
                 const auto y = geometry.r_outer * std::sin(p.y());
@@ -99,6 +102,7 @@ inline auto makeHalfCylinderInChannel2DMesh(const HalfCylinderInChannel2DGeometr
                 {.domain = ids.domain, .bottom = other_id, .top = tid, .left = other_id, .right = rid});
         };
 
+    auto cylinder = make_cylinder();
     auto right_wake =
         make_half_wake(geometry.right_offset, geometry.n_right, geometry.q_right, ids.right, ids.bottom_right);
     auto left_wake =

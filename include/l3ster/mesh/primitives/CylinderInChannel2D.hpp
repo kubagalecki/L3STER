@@ -54,19 +54,22 @@ inline auto makeCylinderInChannel2DMesh(const CylinderInChannel2DGeometry& geome
             const auto angle = p.y() * pi;
             return {r * std::cos(angle), r * std::sin(angle), 0.};
         };
-        deform(top_half, deform_half);
+        const auto curv_field = [r  = geometry.r_inner,
+                                 dr = geometry.r_outer - geometry.r_inner](const Point< 3 >& point) -> val_t {
+            const auto rp = std::sqrt(point.x() * point.x() + point.y() * point.y());
+            return 1. - (rp - r) / dr; // This gets clamped to [0,1] in the deformation function
+        };
+        deform(top_half, deform_half, curv_field);
         auto bot_half = copy(top_half);
         deform(bot_half, std::bind_back(rotate, pi));
         return merge(top_half, bot_half);
     };
-    auto cylinder = make_cylinder();
 
     const auto make_wake = [&](val_t L, size_t n, val_t q, d_id_t edge_id) {
         const auto x_dist   = util::geomSpaceProg(0., L, n + 1, q);
         const auto y_dist   = util::linspace(-pi / 4., pi / 4., geometry.n_circumf / 4 + 1);
         const auto wake_ids = SquareMeshIds{.domain = ids.domain, .right = edge_id};
-        auto       retval   = geometry.quadratic ? makeSquareMeshQuadratic(x_dist, y_dist, wake_ids)
-                                                 : makeSquareMesh(x_dist, y_dist, wake_ids);
+        auto       retval   = makeSquareMesh(x_dist, y_dist, wake_ids);
         deform(retval, [&](Point< 3 > p) -> Point< 3 > {
             const auto x = p.x() + (1. - p.x() / L) * geometry.r_outer * std::cos(p.y());
             const auto y = geometry.r_outer * std::sin(p.y());
@@ -86,6 +89,7 @@ inline auto makeCylinderInChannel2DMesh(const CylinderInChannel2DGeometry& geome
                               {.domain = ids.domain, .top = tid, .right = rid});
     };
 
+    auto cylinder   = make_cylinder();
     auto right_wake = make_wake(geometry.right_offset, geometry.n_right, geometry.q_right, ids.right);
     auto left_wake  = make_wake(geometry.left_offset, geometry.n_left, geometry.q_left, ids.left);
     auto bot_wake   = make_wake(geometry.bottom_offset, geometry.n_bottom, geometry.q_bottom, ids.bottom);
