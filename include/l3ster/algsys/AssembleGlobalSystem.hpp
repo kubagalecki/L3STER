@@ -38,7 +38,7 @@ void assembleGlobalSystem(const DomainEquationKernel< Kernel, params >&         
             constexpr auto  BT        = asm_opts.basis_type;
             constexpr auto  QT        = asm_opts.quad_type;
             constexpr auto  GO        = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
-            constexpr q_o_t QO        = 2 * asm_opts.order(EO) + (GO - 1);
+            constexpr q_o_t QO        = 2 * asm_opts.order(EO) + GO;
             const auto      quad_view = basis::getQuadratureView< BT, ET, EO, QT, QO >();
             const auto      node_vals = field_access.getGloballyIndexed(element.nodes);
             const auto      mapping   = map::TabulatedDomainMapping{quad_view.bases, std::span{element.data.vertices}};
@@ -86,7 +86,7 @@ void assembleGlobalSystem(const BoundaryEquationKernel< Kernel, params >&       
                 constexpr auto QT = asm_opts.quad_type;
                 constexpr auto GT = util::ConstexprValue< mesh::ElementTraits< mesh::Element< ET, EO > >::geom_type >{};
                 constexpr auto GO = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
-                constexpr q_o_t QO        = 2 * asm_opts.order(EO) + (GO - 1);
+                constexpr q_o_t QO        = 2 * asm_opts.order(EO) + GO;
                 const auto      side      = el_view.getSide();
                 const auto      quad_view = basis::getSideQuadratureView< BT, ET, EO, QT, QO >(side);
                 const auto      node_vals = field_access.getGloballyIndexed(el_view->nodes);

@@ -427,19 +427,19 @@ public:
 };
 
 template < KernelParams params, AssemblyOptions asm_opts, mesh::ElementType ET, el_o_t EO >
-inline constexpr auto make_basis_params = SumFactParams{
-    .basis_order  = EO,
-    .quad_order   = 2 * asm_opts.order(EO) + (mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order - 1),
-    .basis_type   = asm_opts.basis_type,
-    .quad_type    = asm_opts.quad_type,
-    .use_odd_even = asm_opts.useOddEven(EO)};
+inline constexpr auto make_basis_params =
+    SumFactParams{.basis_order  = EO,
+                  .quad_order   = 2 * asm_opts.order(EO) + mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order,
+                  .basis_type   = asm_opts.basis_type,
+                  .quad_type    = asm_opts.quad_type,
+                  .use_odd_even = asm_opts.useOddEven(EO)};
 template < KernelParams params, AssemblyOptions asm_opts, mesh::ElementType ET, el_o_t EO >
-inline constexpr auto make_geom_basis_params = SumFactParams{
-    .basis_order  = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order,
-    .quad_order   = 2 * asm_opts.order(EO) + (mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order - 1),
-    .basis_type   = basis::BasisType::Lagrange,
-    .quad_type    = asm_opts.quad_type,
-    .use_odd_even = asm_opts.useOddEven(EO)};
+inline constexpr auto make_geom_basis_params =
+    SumFactParams{.basis_order  = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order,
+                  .quad_order   = 2 * asm_opts.order(EO) + mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order,
+                  .basis_type   = basis::BasisType::Lagrange,
+                  .quad_type    = asm_opts.quad_type,
+                  .use_odd_even = asm_opts.useOddEven(EO)};
 
 template < SumFactParams basis_params, size_t num_fields, std::invocable< std::span< val_t > > Fill >
 auto sumFactBackQuad(Fill&& fill) -> SumFactBufferHelper< basis_params, num_fields, 2 >::buf_array_t

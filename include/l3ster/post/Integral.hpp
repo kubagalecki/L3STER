@@ -62,7 +62,7 @@ auto evalLocalIntegral(const ResidualDomainKernel< Kernel, params >& kernel,
             constexpr auto BT = options.basis_type;
             constexpr auto QT = options.quad_type;
             constexpr auto GO = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
-            constexpr auto QO = options.order(EO) + (GO - 1);
+            constexpr auto QO = options.order(EO) + GO;
 
             const auto node_vals    = field_access.getGloballyIndexed(element.nodes);
             const auto basis_at_qps = basis::getQuadratureView< BT, ET, EO, QT, QO >();
@@ -94,7 +94,7 @@ auto evalLocalIntegral(const ResidualBoundaryKernel< Kernel, params >& kernel,
             constexpr auto QT = options.quad_type;
             constexpr auto GT = util::ConstexprValue< mesh::ElementTraits< mesh::Element< ET, EO > >::geom_type >{};
             constexpr auto GO = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
-            constexpr auto QO = options.order(EO) + (GO - 1);
+            constexpr auto QO = options.order(EO) + GO;
 
             const auto side         = el_view.getSide();
             const auto node_vals    = field_access.getGloballyIndexed(el_view->nodes);

@@ -587,7 +587,7 @@ auto getQuadView(const mesh::LocalElementView< ET, EO >&)
     constexpr auto  BT = asm_opts.basis_type;
     constexpr auto  QT = asm_opts.quad_type;
     constexpr auto  GO = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
-    constexpr q_o_t QO = 2 * asm_opts.order(EO) + (GO - 1);
+    constexpr q_o_t QO = 2 * asm_opts.order(EO) + GO;
     return basis::getQuadratureView< BT, ET, EO, QT, QO >();
 }
 
@@ -597,7 +597,7 @@ auto getQuadView(const mesh::LocalElementBoundaryView< ET, EO >& el_view)
     constexpr auto  BT = asm_opts.basis_type;
     constexpr auto  QT = asm_opts.quad_type;
     constexpr auto  GO = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
-    constexpr q_o_t QO = 2 * asm_opts.order(EO) + (GO - 1);
+    constexpr q_o_t QO = 2 * asm_opts.order(EO) + GO;
     return basis::getSideQuadratureView< BT, ET, EO, QT, QO >(el_view.getSide());
 }
 

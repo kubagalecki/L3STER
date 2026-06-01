@@ -109,7 +109,7 @@ template < ElementType ET, el_o_t EO >
 auto getReferenceBasis()
 {
     constexpr auto GO = ElementTraits< Element< ET, EO > >::geom_order;
-    constexpr auto QO = 2 * asm_opts.order(EO) + (GO - 1);
+    constexpr auto QO = 2 * asm_opts.order(EO) + GO;
     return getQuadratureView< asm_opts.basis_type, ET, EO, asm_opts.quad_type, QO >();
 }
 
