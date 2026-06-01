@@ -122,78 +122,18 @@ inline auto readMesh(std::string_view                  file_path,
         util::throwingAssert(found, "Error while reading .msh file: required section not present");
     };
 
-    enum class Format
-    {
-        ASCII_V2,
-        BIN32_V2,
-        BIN64_V2,
-        ASCII_V4,
-        BIN32_V4,
-        BIN64_V4,
-    };
-    const auto parse_format = [&]() -> Format {
+    const auto parse_format = [&] {
         skip_until_section("$MeshFormat");
-
         float  version;
         bool   bin;
         size_t size;
         file >> version >> bin >> size;
-
+        util::throwingAssert(version >= 4. and version < 5. and not bin,
+                             "Unknown format. Only the ASCII v4 gmsh format is currently supported");
         skip_until_section("$EndMeshFormat");
-
-        Format format;
-        if (version >= 4.0 and version < 5.0)
-        {
-            if (bin)
-            {
-                switch (size)
-                {
-                case 4:
-                    format = Format::BIN32_V4;
-                    break;
-                case 8:
-                    format = Format::BIN64_V4;
-                    break;
-                default:
-                    util::throwingAssert(
-                        false, "Error while reading .msh file: Unsupported size of size_t in the format section");
-                }
-            }
-            else
-                format = Format::ASCII_V4;
-        }
-        else
-        {
-            if (version >= 2.0 and version < 3.0)
-            {
-                if (bin)
-                {
-                    switch (size)
-                    {
-                    case 4:
-                        format = Format::BIN32_V2;
-                        break;
-                    case 8:
-                        format = Format::BIN64_V2;
-                        break;
-                    default:
-                        util::throwingAssert(
-                            false, "Error while reading .msh file: Unsupported size of size_t in the format section");
-                    }
-                }
-                else
-                    format = Format::ASCII_V2;
-            }
-            else
-                util::throwingAssert(false, "Error while reading .msh file: Unsupported .msh format version");
-        }
-
-        util::throwingAssert(format == Format::ASCII_V4,
-                             "Unsupported .msh format. Only the ASCII v4 gmsh format is currently supported");
-        return format;
     };
 
-    const auto parse_entities = [&](const Format&) {
+    const auto parse_entities = [&] {
         skip_until_section("$Entities");
 
         constexpr size_t n_entity_types = 4;
@@ -241,11 +181,11 @@ inline auto readMesh(std::string_view                  file_path,
 
         return std::make_pair(entity_data, n_physical_domains);
     };
-    using entity_data_t = decltype(parse_entities(parse_format()));
+    using entity_data_t = decltype(parse_entities());
 
     // Maps Gmsh ID to condensed ID + coordinates
     using node_data_t      = robin_hood::unordered_flat_map< size_t, detail::NodeInfo >;
-    const auto parse_nodes = [&](const Format&) -> node_data_t {
+    const auto parse_nodes = [&] -> node_data_t {
         skip_until_section("$Nodes");
 
         const auto parse_nodes_asciiv4 = [&]() {
@@ -283,7 +223,7 @@ inline auto readMesh(std::string_view                  file_path,
         // TODO: switch over other possible formats once implemented
     };
 
-    const auto parse_elements = [&](Format, const entity_data_t& entity_data, const node_data_t& node_data) {
+    const auto parse_elements = [&](const entity_data_t& entity_data, const node_data_t& node_data) {
         skip_until_section("$Elements");
 
         auto domain_map = MeshPartition< 1 >::domain_map_t{};
@@ -356,10 +296,10 @@ inline auto readMesh(std::string_view                  file_path,
     };
 
     assert_file_ok("Failed to open .msh file");
-    const auto format_data = parse_format();
-    const auto entity_data = parse_entities(format_data);
-    const auto node_data   = parse_nodes(format_data);
-    return parse_elements(format_data, entity_data, node_data);
+    parse_format();
+    const auto entity_data = parse_entities();
+    const auto node_data   = parse_nodes();
+    return parse_elements(entity_data, node_data);
 }
 } // namespace lstr::mesh
 #endif // L3STER_MESH_READMESH_HPP

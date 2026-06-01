@@ -1,4 +1,3 @@
-#include "l3ster/quad/EvalQuadrature.hpp"
 #include "l3ster/quad/GenerateQuadrature.hpp"
 
 #include "catch2/catch.hpp"
@@ -6,6 +5,42 @@
 static constexpr double tol = 1e-10;
 
 using namespace lstr;
+using namespace lstr::quad;
+
+template < typename Integrand, typename Q >
+struct QuadIntTraits
+{
+    using pt_t = Q::q_points_t::value_type;
+    using w_t  = Q::weights_t::value_type;
+
+    using kernel_t = decltype(std::apply(std::declval< Integrand >(), std::declval< pt_t >()) * std::declval< w_t >());
+};
+
+template < typename Integrand, q_l_t quad_length, dim_t quad_dim >
+auto evalQuadrature(Integrand&& integrator, const Quadrature< quad_length, quad_dim >& quad)
+{
+    using point_t  = Quadrature< quad_length, quad_dim >::q_points_t::value_type;
+    using weight_t = Quadrature< quad_length, quad_dim >::weights_t::value_type;
+
+    const auto invoke_and_weigh = [&](const point_t& point, const weight_t& weight) {
+        return std::apply(integrator, point) * weight;
+    };
+    const auto zero_init = typename QuadIntTraits< Integrand, Quadrature< quad_length, quad_dim > >::kernel_t{};
+    return std::transform_reduce(
+        quad.points.cbegin(), quad.points.cend(), quad.weights.cbegin(), zero_init, std::plus<>{}, invoke_and_weigh);
+}
+
+template < typename Integrand, q_l_t quad_length, dim_t quad_dim, typename Zero >
+auto evalQuadrature(Integrand&& integrand, const Quadrature< quad_length, quad_dim >& quadrature, Zero zero)
+{
+    for (auto&& [i, quad] : std::views::zip(quadrature.points, quadrature.weights) | std::views::enumerate)
+    {
+        const auto& [point, weight] = quad;
+        const auto integrand_value  = integrand(i, point);
+        zero += integrand_value * weight;
+    }
+    return zero;
+}
 
 TEST_CASE("1D Gauss-Legendre quadrature, 1 point", "[quadrature]")
 {

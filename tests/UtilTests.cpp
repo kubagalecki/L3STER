@@ -1,14 +1,12 @@
 #include "l3ster/util/Algorithm.hpp"
 #include "l3ster/util/Base64.hpp"
 #include "l3ster/util/Common.hpp"
-#include "l3ster/util/ConstexprRefStableCollection.hpp"
 #include "l3ster/util/CrsGraph.hpp"
 #include "l3ster/util/DynamicBitset.hpp"
 #include "l3ster/util/HwlocWrapper.hpp"
 #include "l3ster/util/IO.hpp"
 #include "l3ster/util/IndexMap.hpp"
 #include "l3ster/util/Meta.hpp"
-#include "l3ster/util/MetisUtils.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 #include "l3ster/util/Serialization.hpp"
 #include "l3ster/util/SetStackSize.hpp"
@@ -28,91 +26,6 @@
 #include <ranges>
 
 using namespace lstr;
-
-static consteval auto getConstexprVecParams(int size, int cap)
-{
-    auto v = util::ConstexprVector< int >{};
-    for (int i = 0; i < cap; ++i)
-        v.pushBack(i);
-    for (int i = cap; i > size; --i)
-        v.popBack();
-    return std::make_pair(v.size(), v.capacity());
-}
-
-static consteval bool checkConstexprVecStorage()
-{
-    auto v   = util::ConstexprVector< util::ConstexprVector< int > >(3, util::ConstexprVector< int >{0, 1, 2});
-    bool ret = true;
-    for (int i = 0; i < 3; ++i)
-        for (int j = 0; j < 3; ++j)
-            ret &= v[i][j] == j;
-    return ret;
-}
-
-static consteval auto checkConstexprVectorReserve(int cap)
-{
-    auto v = util::ConstexprVector< int >{};
-    v.reserve(cap);
-    return std::make_pair(v.size(), v.capacity());
-}
-
-static consteval bool checkConstexprVectorIters()
-{
-    auto          v    = util::ConstexprVector< int >{};
-    constexpr int size = 10;
-    v.reserve(size);
-    for (int i = 0; i < size; ++i)
-        v.pushBack(i + 1);
-
-    const auto forward_result  = std::accumulate(v.begin(), v.end(), 0);
-    const auto backward_result = std::accumulate(v.rbegin(), v.rend(), 0);
-    return forward_result == backward_result && forward_result == (size + 1) * size / 2;
-}
-
-TEST_CASE("Constexpr vector", "[util]")
-{
-    SECTION("Size & capcity")
-    {
-        constexpr int size = 3, cap = 8;
-        const auto [size_result, cap_result] = getConstexprVecParams(size, cap);
-        CHECK(size_result == size);
-        CHECK(cap_result >= cap);
-    }
-
-    SECTION("Value storage")
-    {
-        constexpr bool result = checkConstexprVecStorage();
-        CHECK(result);
-    }
-
-    SECTION("Reserve capacity")
-    {
-        constexpr int cap                    = 10;
-        const auto [size_result, cap_result] = checkConstexprVectorReserve(cap);
-        CHECK(size_result == 0);
-        CHECK(cap_result == cap);
-    }
-
-    SECTION("Iterators consistent forward and backward")
-    {
-        constexpr bool result = checkConstexprVectorIters();
-        CHECK(result);
-    }
-}
-
-static consteval auto checkRSC()
-{
-    util::ConstexprRefStableCollection< size_t > nums;
-    for (size_t i = 1; i < nums.block_size * 2; ++i)
-        nums.push(i);
-    std::ranges::sort(nums | std::views::reverse);
-    return std::ranges::is_sorted(nums, std::greater<>{});
-}
-
-TEST_CASE("Constexpr ref-stable collection", "[util]")
-{
-    static_assert(checkRSC());
-}
 
 TEST_CASE("Stack size manipulation", "[util]")
 {
@@ -147,51 +60,6 @@ TEST_CASE("Stack size manipulation", "[util]")
         CHECK(initial == current);
     }
 }
-
-#if defined(__GNUC__) || defined(__GNUG__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpragmas"
-#pragma GCC diagnostic ignored "-Wself-move"
-#endif
-
-TEST_CASE("MetisGraphWrapper", "[util]")
-{
-    // Test data is a full graph of size n_nodes
-    constexpr idx_t n_nodes     = 10;
-    constexpr idx_t n_node_nbrs = n_nodes - 1;
-
-    auto node_adjcncy_inds = static_cast< idx_t* >(malloc(sizeof(idx_t) * (n_nodes + 1)));
-    auto node_adjcncy      = static_cast< idx_t* >(malloc(sizeof(idx_t) * n_nodes * n_node_nbrs));
-
-    for (idx_t i = 0; i <= n_nodes; ++i)
-        node_adjcncy_inds[i] = i * n_node_nbrs;
-    for (idx_t i = 0; i < n_nodes; ++i)
-    {
-        auto base = node_adjcncy_inds[i];
-        for (idx_t j = 0; j < i; ++j)
-            node_adjcncy[base + j] = j;
-        for (idx_t j = i + 1; j < n_nodes; ++j)
-            node_adjcncy[base + j - 1] = j;
-    }
-
-    auto test_obj1 = util::metis::GraphWrapper{node_adjcncy_inds, node_adjcncy, n_nodes};
-    auto test_obj2{std::move(test_obj1)};
-    auto test_obj3 = test_obj2;
-
-    test_obj3 = test_obj2;
-    test_obj3 = test_obj3; // NOLINT
-
-    auto test_obj4 = test_obj3;
-    test_obj3      = std::move(test_obj4);
-    test_obj3      = std::move(test_obj3); // NOLINT
-
-    CHECK(std::ranges::equal(test_obj2.getAdjncy(), test_obj3.getAdjncy()));
-    CHECK(std::ranges::equal(test_obj2.getXadj(), test_obj3.getXadj()));
-}
-
-#if defined(__GNUC__) || defined(__GNUG__)
-#pragma GCC diagnostic pop
-#endif
 
 TEST_CASE("Dynamic bitset", "[util]")
 {
@@ -851,33 +719,6 @@ TEST_CASE("UniVector", "[util]")
 
         CHECK(vec.transformReduce(0, transform, std::plus{}, std::execution::seq) == (n_strs + n_ints) * 42);
         CHECK(vec.transformReduce(0, transform, std::plus{}, std::execution::par) == (n_strs + n_ints) * 42);
-    }
-
-    SECTION("Lookup")
-    {
-        auto       find_val = 42;
-        const auto pred     = util::OverloadSet{[&find_val](int i) { return i == find_val; },
-                                            [&find_val](const std::string& str) {
-                                                return std::stoi(str) == find_val;
-                                            }};
-
-        {
-            const auto found_ptr = vec.find(pred);
-            REQUIRE(found_ptr.has_value());
-            REQUIRE(*found_ptr == vec.at(0));
-        }
-
-        vec.getVector< std::string >().emplace_back("43");
-        {
-            find_val             = 43;
-            const auto found_ptr = vec.find(pred);
-            REQUIRE(found_ptr.has_value());
-            REQUIRE(*found_ptr == vec.at(n_ints + n_strs));
-        }
-
-        find_val = 44;
-        REQUIRE_FALSE(vec.find(pred).has_value());
-        REQUIRE_FALSE(std::as_const(vec).find(pred).has_value());
     }
 }
 

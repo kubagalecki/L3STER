@@ -2,53 +2,49 @@
 #define L3STER_POST_INTEGRAL_HPP
 
 #include "l3ster/algsys/AssembleGlobalSystem.hpp"
-#include "l3ster/quad/EvalQuadrature.hpp"
 
 namespace lstr
 {
 namespace post
 {
-template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >
-auto evalElementIntegral(
-    const ResidualDomainKernel< Kernel, params >&                                                  kernel,
-    const mesh::Element< ET, EO >&                                                                 element,
-    const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, params.n_fields >& node_vals,
-    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,
-    val_t time) -> KernelInterface< params >::Rhs
+template < typename Kernel, KernelParams params, size_t NB, size_t QL >
+auto evalElementIntegral(const ResidualDomainKernel< Kernel, params >&                  kernel,
+                         const map::TabulatedDomainMapping< NB, QL, params.dimension >& map_result,
+                         const Eigen::Matrix< val_t, int{NB}, params.n_fields >&        node_vals,
+                         std::span< const val_t, QL >                                   quad_weights,
+                         val_t time) -> KernelInterface< params >::Rhs
 {
-    const auto jacobi_gen          = map::getNatJacobiMatGenerator(element.data);
-    const auto compute_value_at_qp = [&](ptrdiff_t qp_ind, const auto& ref_coords) -> KernelInterface< params >::Rhs {
-        const auto& basis_vals           = basis_at_qps.basis.values[qp_ind];
-        const auto& ref_ders             = basis_at_qps.basis.derivatives[qp_ind];
-        const auto [phys_ders, jacobian] = map::mapDomain< ET, EO >(jacobi_gen, ref_coords, ref_ders);
-        const auto kernel_result =
-            algsys::evalKernel(kernel, ref_coords, basis_vals, phys_ders, node_vals, element.data, time);
-        return jacobian * kernel_result;
-    };
-    return evalQuadrature(
-        compute_value_at_qp, basis_at_qps.quadrature, lstr::detail::initResidualKernelResult< params >());
+    const auto& [J, vals, ders, points] = map_result;
+    const auto fields                   = map::FieldValuesAtPoints{*vals, ders, node_vals};
+    auto       retval                   = lstr::detail::initResidualKernelResult< params >();
+    for (size_t p = 0; p != QL; ++p)
+    {
+        const auto point              = SpaceTimePoint{points[p], time};
+        const auto [field_v, field_d] = fields.get(p);
+        const auto wgt                = quad_weights[p] * J[p];
+        retval += wgt * kernel({field_v, field_d, point});
+    }
+    return retval;
 }
 
-template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >
-auto evalElementBoundaryIntegral(
-    const ResidualBoundaryKernel< Kernel, params >&                                                kernel,
-    const mesh::BoundaryElementView< ET, EO >&                                                     el_view,
-    const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, params.n_fields >& node_vals,
-    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,
-    val_t time) -> KernelInterface< params >::Rhs
+template < typename Kernel, KernelParams params, size_t NB, size_t QL >
+auto evalElementBoundaryIntegral(const ResidualBoundaryKernel< Kernel, params >&                  kernel,
+                                 const map::TabulatedBoundaryMapping< NB, QL, params.dimension >& map_result,
+                                 const Eigen::Matrix< val_t, int{NB}, params.n_fields >&          node_vals,
+                                 std::span< const val_t, QL >                                     quad_weights,
+                                 val_t time) -> KernelInterface< params >::Rhs
 {
-    const auto jacobi_gen          = map::getNatJacobiMatGenerator(el_view->data);
-    const auto compute_value_at_qp = [&](ptrdiff_t qp_ind, const auto& ref_coords) -> KernelInterface< params >::Rhs {
-        const auto& basis_vals                   = basis_at_qps.basis.values[qp_ind];
-        const auto& ref_ders                     = basis_at_qps.basis.derivatives[qp_ind];
-        const auto  side                         = el_view.getSide();
-        const auto [phys_ders, jacobian, normal] = map::mapBoundary< ET, EO >(jacobi_gen, ref_coords, ref_ders, side);
-        const auto kernel_result =
-            algsys::evalKernel(kernel, ref_coords, basis_vals, phys_ders, node_vals, el_view->data, time, normal);
-        return jacobian * kernel_result;
-    };
-    return evalQuadrature(
-        compute_value_at_qp, basis_at_qps.quadrature, lstr::detail::initResidualKernelResult< params >());
+    const auto& [J, vals, ders, points, normals] = map_result;
+    const auto fields                            = map::FieldValuesAtPoints{*vals, ders, node_vals};
+    auto       retval                            = lstr::detail::initResidualKernelResult< params >();
+    for (size_t p = 0; p != QL; ++p)
+    {
+        const auto point              = SpaceTimePoint{points[p], time};
+        const auto [field_v, field_d] = fields.get(p);
+        const auto wgt                = quad_weights[p] * J[p];
+        retval += wgt * kernel({field_v, field_d, point, normals[p]});
+    }
+    return retval;
 }
 
 template < typename Kernel, KernelParams params, el_o_t... orders, AssemblyOptions options >
@@ -63,12 +59,16 @@ auto evalLocalIntegral(const ResidualDomainKernel< Kernel, params >& kernel,
                                     const mesh::Element< ET, EO >& element) -> KernelInterface< params >::Rhs {
         if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
         {
-            constexpr auto BT         = options.basis_type;
-            constexpr auto QT         = options.quad_type;
-            constexpr auto QO         = options.order(EO);
-            const auto     field_vals = field_access.getGloballyIndexed(element.nodes);
-            const auto&    qbv        = basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
-            return evalElementIntegral(kernel, element, field_vals, qbv, time);
+            constexpr auto BT = options.basis_type;
+            constexpr auto QT = options.quad_type;
+            constexpr auto GO = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
+            constexpr auto QO = options.order(EO) + GO;
+
+            const auto node_vals    = field_access.getGloballyIndexed(element.nodes);
+            const auto basis_at_qps = basis::getQuadratureView< BT, ET, EO, QT, QO >();
+            const auto verts        = std::span{element.data.vertices};
+            const auto mapping      = map::TabulatedDomainMapping{basis_at_qps.bases, verts};
+            return evalElementIntegral(kernel, mapping, node_vals, basis_at_qps.weights, time);
         }
         else
             return lstr::detail::initResidualKernelResult< params >();
@@ -90,12 +90,18 @@ auto evalLocalIntegral(const ResidualBoundaryKernel< Kernel, params >& kernel,
             const mesh::BoundaryElementView< ET, EO >& el_view) -> KernelInterface< params >::Rhs {
         if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
         {
-            constexpr auto BT         = options.basis_type;
-            constexpr auto QT         = options.quad_type;
-            constexpr auto QO         = options.order(EO);
-            const auto     field_vals = field_access.getGloballyIndexed(el_view->nodes);
-            const auto&    qbv = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
-            return evalElementBoundaryIntegral(kernel, el_view, field_vals, qbv, time);
+            constexpr auto BT = options.basis_type;
+            constexpr auto QT = options.quad_type;
+            constexpr auto GT = util::ConstexprValue< mesh::ElementTraits< mesh::Element< ET, EO > >::geom_type >{};
+            constexpr auto GO = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
+            constexpr auto QO = options.order(EO) + GO;
+
+            const auto side         = el_view.getSide();
+            const auto node_vals    = field_access.getGloballyIndexed(el_view->nodes);
+            const auto basis_at_qps = basis::getSideQuadratureView< BT, ET, EO, QT, QO >(side);
+            const auto verts        = std::span{el_view->data.vertices};
+            const auto mapping      = map::TabulatedBoundaryMapping{basis_at_qps.bases, verts, GT, side};
+            return evalElementBoundaryIntegral(kernel, mapping, node_vals, basis_at_qps.weights, time);
         }
         else
             return lstr::detail::initResidualKernelResult< params >();

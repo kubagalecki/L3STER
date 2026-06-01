@@ -27,7 +27,7 @@ void test2D(const std::shared_ptr< MpiComm >& comm)
         return retval;
     });
     const auto     my_partition =
-        generateAndDistributeMesh< 2 >(*comm, [&] { return mesh::makeSquareMesh(node_distx, node_disty); });
+        generateAndDistributeMesh< 2 >(*comm, [&] { return makeSquareMeshQuadratic(node_distx, node_disty); });
 
     constexpr d_id_t domain_id = 0, bot_boundary = 1, top_boundary = 2;
     constexpr auto   params           = KernelParams{.dimension = 2, .n_equations = 2};

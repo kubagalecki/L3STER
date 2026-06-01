@@ -79,15 +79,13 @@ void printMesh(const lstr::MpiComm& comm, const lstr::mesh::MeshPartition< order
                 std::println("Domain: {}", dom);
                 mesh.visit(
                     []< lstr::mesh::ElementType ET, lstr::el_o_t EO >(const lstr::mesh::Element< ET, EO >& element) {
-                        std::print("Element ID: {}, type: {}, order: {:d}, nodes: ",
-                                   element.id,
-                                   std::to_underlying(ET),
-                                   EO);
+                        std::print(
+                            "Element ID: {}, type: {}, order: {:d}, nodes: ", element.id, std::to_underlying(ET), EO);
                         for (auto n : element.nodes)
                             std::print("{} ", n);
                         std::println();
                     },
-                    dom);
+                    {dom});
             }
             std::println();
             if (comm.getRank() == comm.getSize() - 1)

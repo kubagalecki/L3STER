@@ -30,6 +30,9 @@ option( L3STER_ENABLE_COVERAGE "enable coverage" )
 # Build benchmarks
 option( L3STER_ENABLE_BENCHMARKS "enable benchmarks" )
 
+# Disable curvilinear elements - this should significantly improve compile times if only linear elements are required
+option( L3STER_DISABLE_CURVILINEAR_ELEMENTS "disable curvilinear elements for faster compile times" )
+
 #######################################################################################################################
 
 ### Detect dependencies ###
@@ -95,6 +98,11 @@ file( GLOB_RECURSE L3STER_SOURCES
       include/l3ster/*
       )
 target_sources( L3STER INTERFACE $<BUILD_INTERFACE:${L3STER_SOURCES}> )
+
+if ( L3STER_DISABLE_CURVILINEAR_ELEMENTS )
+    target_compile_definitions( L3STER INTERFACE "L3STER_DISABLE_CURVILINEAR" )
+    message( STATUS "Curvilinear elements disabled - note that this is an experimental feature" )
+endif ()
 
 #######################################################################################################################
 

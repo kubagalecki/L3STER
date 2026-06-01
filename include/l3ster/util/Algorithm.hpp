@@ -96,11 +96,11 @@ constexpr void forEachTuple(Tup&& t, F&& f)
     std::invoke(visit_inds, std::make_index_sequence< std::tuple_size_v< std::remove_cvref_t< Tup > > >{});
 }
 
-template < std::copy_constructible T_a, std::integral T_filter, size_t N_a, size_t N_filter >
-constexpr auto arrayAtInds(const std::array< T_a, N_a >& array, const std::array< T_filter, N_filter >& filter)
+template < std::copy_constructible T_a, std::integral T_inds, size_t N_a, size_t N_inds >
+constexpr auto arrayAtInds(const std::array< T_a, N_a >& array, const std::array< T_inds, N_inds >& filter)
 {
-    std::array< T_a, N_filter > retval;
-    std::ranges::transform(filter, begin(retval), [&](T_filter i) { return array[i]; });
+    std::array< T_a, N_inds > retval;
+    std::ranges::transform(filter, begin(retval), [&](T_inds i) { return array[i]; });
     return retval;
 }
 
@@ -167,12 +167,6 @@ void forEachConstexprParallel(F&& f, ConstexprValue< R >)
         return;
 }
 
-template < typename T >
-constexpr bool contains(std::initializer_list< T > list, T value)
-{
-    return std::ranges::any_of(list, [value = value](T t) { return t == value; });
-}
-
 template < typename T, size_t size >
 constexpr auto makeIotaArray(const T& first = T{})
 {
@@ -182,7 +176,7 @@ constexpr auto makeIotaArray(const T& first = T{})
 }
 
 template < typename T >
-void sortRemoveDup(std::vector< T >& vec)
+constexpr void sortRemoveDup(std::vector< T >& vec)
 {
     std::ranges::sort(vec);
     const auto erase_range = std::ranges::unique(vec);

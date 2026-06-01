@@ -76,7 +76,7 @@ auto makeDomainMaps(const MeshPartition< orders... >& mesh, ElementPredicate&& e
             else
                 mesh::pushToDomain(false_els[domain_id], element);
         };
-        mesh.visit(push_elem, domain_id);
+        mesh.visit(push_elem, {domain_id});
     }
     assignBoundaryElements(mesh, true_el_ids, retval);
     return retval;
@@ -100,6 +100,10 @@ auto makeMesh(const MeshPartition< orders... >&                   parent_mesh,
             parent_mesh.getBoundaryIdsCopy()};
 }
 } // namespace detail
+
+template < typename F, el_o_t... orders >
+concept ElementPredicate_c =
+    ElementDeductionHelper< orders... >::template invocable_on_const_elements_return< bool, F >;
 
 template < typename ElementPredicate, el_o_t... orders >
 auto splitMeshPartition(const MeshPartition< orders... >& mesh, ElementPredicate&& element_predicate)

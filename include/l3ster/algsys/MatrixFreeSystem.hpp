@@ -1,11 +1,11 @@
 #ifndef L3STER_ALGSYS_MATRIXFREESYSTEM_HPP
 #define L3STER_ALGSYS_MATRIXFREESYSTEM_HPP
 
-#include "SumFactorization.hpp"
 #include "l3ster/algsys/ComputeValuesAtNodes.hpp"
 #include "l3ster/algsys/EvaluateLocalOperator.hpp"
 #include "l3ster/algsys/SparsityGraph.hpp"
-#include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
+#include "l3ster/algsys/SumFactorization.hpp"
+#include "l3ster/basisfun/BasisAtPoints.hpp"
 #include "l3ster/bcs/LocalDirichletBC.hpp"
 #include "l3ster/comm/ImportExport.hpp"
 #include "l3ster/mesh/SplitMesh.hpp"
@@ -361,13 +361,13 @@ auto getDirichletIndsSumFact(const std::array< local_dof_t, num_dofs >&    dofs,
     return retval;
 }
 
-template < mesh::ElementType ET, el_o_t EO, KernelParams params, size_t num_dofs, util::KokkosView_c Vals >
+template < KernelParams params, size_t num_dofs, util::KokkosView_c Vals >
 auto gatherDirichletVals(
     const std::array< local_dof_t, num_dofs >&                                   dofs,
     const util::StaticVector< util::smallest_integral_t< num_dofs >, num_dofs >& dirichlet_dof_inds,
-    const Vals& dirichlet_vals) -> DirichletVals< ET, EO, params >
+    const Vals& dirichlet_vals) -> DirichletVals< params, num_dofs >
 {
-    auto retval = DirichletVals< ET, EO, params >(dirichlet_dof_inds.size(), params.n_rhs);
+    auto retval = DirichletVals< params, num_dofs >(dirichlet_dof_inds.size(), params.n_rhs);
     for (auto&& [i, dof_ind] : dirichlet_dof_inds | std::views::enumerate)
         for (size_t rhs = 0; rhs != params.n_rhs; ++rhs)
             retval(i, rhs) = dirichlet_vals(dofs[dof_ind], rhs);
@@ -559,7 +559,7 @@ template < auto              field_inds,
 struct CommonElemData
 {
     static_assert(field_inds.size() == params.n_unknowns);
-    static constexpr auto n_nodes = mesh::Element< ET, EO >::n_nodes;
+    static constexpr auto n_nodes = mesh::ElementTraits< mesh::Element< ET, EO > >::nodes_per_element;
     static constexpr auto n_dofs  = params.n_unknowns * n_nodes;
 
     CommonElemData(const mesh::LocalElementView< ET, EO >&       element,
@@ -572,14 +572,49 @@ struct CommonElemData
         node_values          = field_access.getLocallyIndexed(el_nodes);
         dofs                 = detail::getDofs(el_nodes, dof_map, util::ConstexprValue< field_inds >{});
         dirichlet_dof_inds   = detail::getDirichletDofInds(dofs, dirichlet_bc);
-        dirichlet_values     = detail::gatherDirichletVals< ET, EO, params >(dofs, dirichlet_dof_inds, dirichlet_vals);
+        dirichlet_values     = detail::gatherDirichletVals< params >(dofs, dirichlet_dof_inds, dirichlet_vals);
     }
 
-    util::eigen::RowMajorMatrix< val_t, n_nodes, n_fields >           node_values;
+    Eigen::Matrix< val_t, n_nodes, n_fields >                         node_values;
     std::array< local_dof_t, n_dofs >                                 dofs;
     util::StaticVector< util::smallest_integral_t< n_dofs >, n_dofs > dirichlet_dof_inds;
-    DirichletVals< ET, EO, params >                                   dirichlet_values;
+    DirichletVals< params, n_nodes >                                  dirichlet_values;
 };
+
+template < AssemblyOptions asm_opts, mesh::ElementType ET, el_o_t EO >
+auto getQuadView(const mesh::LocalElementView< ET, EO >&)
+{
+    constexpr auto  BT = asm_opts.basis_type;
+    constexpr auto  QT = asm_opts.quad_type;
+    constexpr auto  GO = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
+    constexpr q_o_t QO = 2 * asm_opts.order(EO) + GO;
+    return basis::getQuadratureView< BT, ET, EO, QT, QO >();
+}
+
+template < AssemblyOptions asm_opts, mesh::ElementType ET, el_o_t EO >
+auto getQuadView(const mesh::LocalElementBoundaryView< ET, EO >& el_view)
+{
+    constexpr auto  BT = asm_opts.basis_type;
+    constexpr auto  QT = asm_opts.quad_type;
+    constexpr auto  GO = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
+    constexpr q_o_t QO = 2 * asm_opts.order(EO) + GO;
+    return basis::getSideQuadratureView< BT, ET, EO, QT, QO >(el_view.getSide());
+}
+
+template < mesh::ElementType ET, el_o_t EO, typename QuadView >
+auto getMapping(const mesh::LocalElementView< ET, EO >& element, const QuadView& quad_view)
+{
+    return map::TabulatedDomainMapping{quad_view.bases, std::span{element.getData().vertices}};
+}
+
+template < mesh::ElementType ET, el_o_t EO, typename QuadView >
+auto getMapping(const mesh::LocalElementBoundaryView< ET, EO >& el_view, const QuadView& quad_view)
+{
+    constexpr auto GT        = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_type;
+    constexpr auto gt_ctwrpr = util::ConstexprValue< GT >{};
+    const auto     verts     = std::span{el_view->getData().vertices};
+    return map::TabulatedBoundaryMapping{quad_view.bases, verts, gt_ctwrpr, el_view.getSide()};
+}
 } // namespace detail
 
 template < size_t max_dofs_per_node, size_t n_rhs, el_o_t... orders >
@@ -598,33 +633,27 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeInitKernel(
     -> std::conditional_t< DomainKernel_c< Kernel >, DomainInitializerOverload, BoundaryInitializerOverload >
 {
     return [=, this](const auto& element) {
-        constexpr auto BT         = asm_opts.basis_type;
-        constexpr auto QT         = asm_opts.quad_type;
-        constexpr auto params     = Kernel::parameters;
-        constexpr auto ET         = std::decay_t< decltype(element) >::type;
-        constexpr auto EO         = std::decay_t< decltype(element) >::order;
-        using CommonData          = detail::CommonElemData< field_inds, params, n_fields, max_dofs_per_node, ET, EO >;
-        static constexpr q_o_t QO = 2 * asm_opts.order(EO);
-        constexpr bool is_domain  = std::same_as< std::decay_t< decltype(element) >, mesh::LocalElementView< ET, EO > >;
-        if constexpr (mesh::Element< ET, EO >::native_dim == params.dimension)
+        constexpr auto params    = Kernel::parameters;
+        constexpr auto ET        = std::decay_t< decltype(element) >::type;
+        constexpr auto EO        = std::decay_t< decltype(element) >::order;
+        using CommonData         = detail::CommonElemData< field_inds, params, n_fields, max_dofs_per_node, ET, EO >;
+        constexpr bool is_domain = std::same_as< std::decay_t< decltype(element) >, mesh::LocalElementView< ET, EO > >;
+        if constexpr (mesh::ElementTraits< mesh::Element< ET, EO > >::native_dim == params.dimension)
         {
-            const auto rhs_access          = rhs_access_generator(m_rhs_view);
-            const auto get_reference_basis = [&element] -> const auto& {
-                if constexpr (is_domain)
-                    return basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
-                else
-                    return basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(element.getSide());
-            };
-            const auto get_data = [&] -> CommonData {
+            const auto rhs_access = rhs_access_generator(m_rhs_view);
+            const auto get_data   = [&] -> CommonData {
                 if constexpr (is_domain)
                     return {element, field_access, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
                 else
                     return {*element, field_access, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
             };
+            const auto quad_view                                 = detail::getQuadView< asm_opts >(element);
+            const auto mapping                                   = detail::getMapping(element, quad_view);
             const auto [node_vals, dofs, dir_dof_inds, dir_vals] = get_data();
-            const auto& rbq                                      = get_reference_basis();
-            const auto [loc_diag, loc_rhs] =
-                precomputeOperatorDiagonalAndRhs(kernel, element, node_vals, rbq, time, dir_dof_inds, dir_vals);
+            const auto fields =
+                map::FieldValuesAtPoints{*mapping.basis_values, mapping.physical_derivatives, node_vals};
+            const auto [loc_diag, loc_rhs] = precomputeOperatorDiagonalAndRhs(
+                kernel, mapping, fields, quad_view.weights, time, dir_dof_inds, dir_vals);
             detail::scatterInit< params.n_rhs >(dofs, loc_rhs, loc_diag, rhs_access, m_diagonal);
         }
     };
@@ -648,14 +677,11 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeEvalKernel(
 {
     static constexpr auto params = Kernel::parameters;
     return [=, this](const auto& element, const const_view_t& x, const view_t& y, val_t alpha) {
-        constexpr auto BT         = asm_opts.basis_type;
-        constexpr auto QT         = asm_opts.quad_type;
-        constexpr auto ET         = std::decay_t< decltype(element) >::type;
-        constexpr auto EO         = std::decay_t< decltype(element) >::order;
-        using CommonData          = detail::CommonElemData< field_inds, params, n_fields, max_dofs_per_node, ET, EO >;
-        constexpr q_o_t QO        = 2 * asm_opts.order(EO);
-        constexpr bool  is_domain = std::same_as< std::decay_t< decltype(element) >, mesh::LocalElementView< ET, EO > >;
-        constexpr bool  use_sum_factorization = asm_opts.useSumFactorization(ET, EO, params);
+        constexpr auto ET        = std::decay_t< decltype(element) >::type;
+        constexpr auto EO        = std::decay_t< decltype(element) >::order;
+        using CommonData         = detail::CommonElemData< field_inds, params, n_fields, max_dofs_per_node, ET, EO >;
+        constexpr bool is_domain = std::same_as< std::decay_t< decltype(element) >, mesh::LocalElementView< ET, EO > >;
+        constexpr bool use_sum_factorization = asm_opts.useSumFactorization(ET, EO, params);
         if constexpr (mesh::Element< ET, EO >::native_dim == params.dimension)
         {
             const auto x_access = x_access_generator(x);
@@ -689,22 +715,19 @@ auto MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::makeEvalKernel(
             }
             else
             {
-                const auto get_reference_basis = [&element] -> const auto& {
-                    if constexpr (is_domain)
-                        return basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
-                    else
-                        return basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(element.getSide());
-                };
                 const auto get_data = [&] -> CommonData {
                     if constexpr (is_domain)
                         return {element, field_access, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
                     else
                         return {*element, field_access, m_node_dof_map, m_dirichlet_bc, m_dirichlet_values};
                 };
+                const auto quad_view                                 = detail::getQuadView< asm_opts >(element);
+                const auto mapping                                   = detail::getMapping(element, quad_view);
                 const auto [node_vals, dofs, dir_dof_inds, dir_vals] = get_data();
-                const auto& rbq                                      = get_reference_basis();
-                const auto  x_local = detail::gather< params.n_rhs >(x_access, dofs, m_dirichlet_bc, x.extent_int(1));
-                const auto  y_local = evaluateLocalOperator(kernel, element, node_vals, rbq, time, x_local);
+                const auto fields =
+                    map::FieldValuesAtPoints{*mapping.basis_values, mapping.physical_derivatives, node_vals};
+                const auto x_local = detail::gather< params.n_rhs >(x_access, dofs, m_dirichlet_bc, x.extent_int(1));
+                const auto y_local = evaluateLocalOperator(kernel, mapping, fields, quad_view.weights, time, x_local);
                 detail::scatter(y_local, y_access, dofs, m_dirichlet_bc, alpha);
             }
         }

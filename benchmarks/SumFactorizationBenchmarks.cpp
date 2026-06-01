@@ -1,20 +1,21 @@
 #include "Kernels.hpp"
 
 template < LocalEvalStrategy LES, KernelParams params, mesh::ElementType ET, el_o_t EO >
-static auto evalDiffusionOperatorSumFact(const mesh::LocalElementView< ET, EO >&  element,
-                                         const algsys::Operand< ET, EO, params >& x)
+static auto evalDiffusionOperatorSumFact(
+    const mesh::LocalElementView< ET, EO >&                                                             element,
+    const algsys::Operand< params, mesh::ElementTraits< mesh::Element< ET, EO > >::nodes_per_element >& x)
 {
-    constexpr auto                    kernel  = std::invoke([] {
+    constexpr auto         kernel  = std::invoke([] {
         if constexpr (ET == mesh::ElementType::Quad)
             return wrapDomainEquationKernel< params >(diff2d_kernel);
         else
             return wrapDomainEquationKernel< params >(diff3d_kernel);
     });
-    constexpr auto                    n_nodes = mesh::Element< ET, EO >::n_nodes;
-    constexpr Eigen::Index            nukn    = params.n_unknowns;
-    algsys::Operand< ET, EO, params > y{x.rows(), x.cols()};
-    const auto                        x_fill = [&x](std::span< val_t > to_fill) {
-        using map_t = Eigen::Map< Eigen::Matrix< val_t, n_nodes, params.n_unknowns * params.n_rhs > >;
+    constexpr auto         n_nodes = mesh::Element< ET, EO >::n_nodes;
+    constexpr Eigen::Index nukn    = params.n_unknowns;
+    algsys::Operand< params, mesh::ElementTraits< mesh::Element< ET, EO > >::nodes_per_element > y{x.rows(), x.cols()};
+    const auto x_fill = [&x](std::span< val_t > to_fill) {
+        using map_t      = Eigen::Map< Eigen::Matrix< val_t, n_nodes, params.n_unknowns * params.n_rhs > >;
         auto to_fill_map = map_t{to_fill.data()};
         for (Eigen::Index n = 0; n != n_nodes; ++n)
             for (Eigen::Index rhs = 0; rhs != params.n_rhs; ++rhs)
@@ -56,8 +57,9 @@ static void BM_SumFactQuadDiff(benchmark::State& state)
     const auto local_element = mesh::LocalElementView{element, global_mesh, {}};
 
     constexpr auto params = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3};
-    auto           x      = algsys::Operand< ET, EO, params >{algsys::operand_size< ET, EO, params >, params.n_rhs};
-    auto           y      = algsys::Operand< ET, EO, params >{algsys::operand_size< ET, EO, params >, params.n_rhs};
+    using operand_t = algsys::Operand< params, mesh::ElementTraits< mesh::Element< ET, EO > >::nodes_per_element >;
+    auto x          = operand_t{operand_t::RowsAtCompileTime, params.n_rhs};
+    auto y          = operand_t{operand_t::RowsAtCompileTime, params.n_rhs};
     x.setRandom();
     y.setZero();
 

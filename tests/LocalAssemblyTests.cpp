@@ -11,7 +11,7 @@ TEST_CASE("Local system assembly", "[local_asm]")
         constexpr auto nat_dim = element.native_dim;
         constexpr auto params  = KernelParams{.dimension = 2, .n_equations = 4, .n_unknowns = 3, .n_rhs = nat_dim};
         const auto     phi     = makeSolution< ET, EO, params >(element);
-        auto [A, b]            = assembleDiffusionProblem2D< params >(element);
+        auto [A, b]            = assembleImpl< params >(element, diffusion_kernel_2D);
         applyDirichletBCs< ET, EO, params >(A, b, phi);
         const auto x = std::decay_t< decltype(b) >{A.llt().solve(b)};
         for (el_locind_t node = 0; node != element.nodes.size(); ++node)
@@ -30,7 +30,7 @@ TEST_CASE("Local system assembly", "[local_asm]")
         constexpr auto nat_dim = element.native_dim;
         constexpr auto params  = KernelParams{.dimension = 3, .n_equations = 7, .n_unknowns = 4, .n_rhs = nat_dim};
         const auto     phi     = makeSolution< ET, EO, params >(element);
-        auto [A, b]            = assembleDiffusionProblem3D< params >(element);
+        auto [A, b]            = assembleImpl< params >(element, diffusion_kernel_3D);
         applyDirichletBCs< ET, EO, params >(A, b, phi);
         const auto x = std::decay_t< decltype(b) >{A.llt().solve(b)};
         for (el_locind_t node = 0; node != element.nodes.size(); ++node)

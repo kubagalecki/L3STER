@@ -10,6 +10,7 @@ template < dim_t DIM >
 struct Point
 {
     static_assert(DIM <= 3);
+    static constexpr dim_t dimension = DIM;
 
     constexpr Point() = default;
     constexpr Point(const std::array< val_t, DIM >& coords_) : coords{coords_} {}

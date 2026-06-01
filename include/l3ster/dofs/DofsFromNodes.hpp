@@ -30,9 +30,9 @@ auto getDofsCopy(const NodeToGlobalDofMap< max_dofs_per_node >& node2dof,
 }
 
 template < IndexRange_c auto dof_inds, size_t n_nodes, size_t dofs_per_node >
-auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&             nodes,
-                      const dofs::NodeToGlobalDofMap< dofs_per_node >& node_dof_map,
-                      util::ConstexprValue< dof_inds >                 dofinds_ctwrpr = {})
+auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&       nodes,
+                      const NodeToGlobalDofMap< dofs_per_node >& node_dof_map,
+                      util::ConstexprValue< dof_inds >           dofinds_ctwrpr = {})
     -> std::array< global_dof_t, std::ranges::size(dof_inds) * n_nodes >
 {
     std::array< global_dof_t, std::ranges::size(dof_inds) * n_nodes > retval;
@@ -44,9 +44,9 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&             nodes,
 }
 
 template < size_t n_nodes, size_t dofs_per_node, SizedRangeOfConvertibleTo_c< size_t > Inds >
-auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&             nodes,
-                      const dofs::NodeToGlobalDofMap< dofs_per_node >& node_dof_map,
-                      Inds&&                                           dof_inds)
+auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&       nodes,
+                      const NodeToGlobalDofMap< dofs_per_node >& node_dof_map,
+                      Inds&&                                     dof_inds)
 {
     return nodes | std::views::transform([&](n_id_t node) {
                const auto& all_dofs = node_dof_map(node);
@@ -56,8 +56,8 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&             nodes,
 }
 
 template < size_t n_nodes, size_t dofs_per_node >
-auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&             nodes,
-                      const dofs::NodeToGlobalDofMap< dofs_per_node >& node_dof_map)
+auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&       nodes,
+                      const NodeToGlobalDofMap< dofs_per_node >& node_dof_map)
     -> util::StaticVector< global_dof_t, dofs_per_node * n_nodes >
 {
     util::StaticVector< global_dof_t, dofs_per_node * n_nodes > retval;
@@ -69,9 +69,9 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&             nodes,
 }
 
 template < IndexRange_c auto dof_inds, size_t n_nodes, size_t dofs_per_node, size_t num_maps >
-auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                      nodes,
-                      const dofs::NodeToLocalDofMap< dofs_per_node, num_maps >& node_dof_map,
-                      const util::ConstexprValue< dof_inds >                    dofinds_ctwrpr = {})
+auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                nodes,
+                      const NodeToLocalDofMap< dofs_per_node, num_maps >& node_dof_map,
+                      const util::ConstexprValue< dof_inds >              dofinds_ctwrpr = {})
 {
     using dof_array_t = std::array< local_dof_t, std::ranges::size(dof_inds) * n_nodes >;
     auto retval       = std::array< dof_array_t, num_maps >{};
@@ -87,8 +87,8 @@ auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                      
 }
 
 template < size_t n_nodes, size_t dofs_per_node, size_t num_maps >
-auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                      nodes,
-                      const dofs::NodeToLocalDofMap< dofs_per_node, num_maps >& node_dof_map)
+auto getDofsFromNodes(const std::array< n_id_t, n_nodes >&                nodes,
+                      const NodeToLocalDofMap< dofs_per_node, num_maps >& node_dof_map)
 {
     using dof_vec_t = util::StaticVector< local_dof_t, dofs_per_node * n_nodes >;
     std::array< dof_vec_t, num_maps > retval;

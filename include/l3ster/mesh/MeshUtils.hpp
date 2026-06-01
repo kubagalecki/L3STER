@@ -1,38 +1,13 @@
 #ifndef L3STER_MESHUTILS_HPP
 #define L3STER_MESHUTILS_HPP
 
+#include "l3ster/mapping/MapReferenceToPhysical.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
-#include "l3ster/mesh/NodePhysicalLocation.hpp"
-#include "l3ster/util/Functional.hpp"
 #include "l3ster/util/Serialization.hpp"
 #include "l3ster/util/SpatialHashTable.hpp"
 
 namespace lstr::mesh
 {
-template < el_o_t... orders, ElementType BET, el_o_t BEO >
-auto findDomainElement(const MeshPartition< orders... >& mesh,
-                       const Element< BET, BEO >&        bnd_el,
-                       const util::ArrayOwner< d_id_t >& domain_ids)
-    -> std::optional< std::pair< element_cptr_variant_t< orders... >, el_side_t > >
-{
-    auto       retval              = std::optional< std::pair< element_cptr_variant_t< orders... >, el_side_t > >{};
-    const auto bnd_el_nodes_sorted = util::getSortedArray(bnd_el.nodes);
-    const auto match_domain_el     = [&]< ElementType DET, el_o_t DEO >(const Element< DET, DEO >& domain_el) {
-        if constexpr (ElementTraits< Element< DET, DEO > >::native_dim ==
-                      ElementTraits< Element< BET, BEO > >::native_dim + 1)
-        {
-            const auto matched_side = detail::matchBoundaryNodesToElement(domain_el, bnd_el_nodes_sorted);
-            if (matched_side)
-                retval.emplace(&domain_el, *matched_side);
-            return matched_side.has_value();
-        }
-        else
-            return false;
-    };
-    mesh.find(match_domain_el, domain_ids);
-    return retval;
-}
-
 template < el_o_t... orders >
 bool isUnpartitioned(const MeshPartition< orders... >& mesh)
 {
@@ -41,75 +16,20 @@ bool isUnpartitioned(const MeshPartition< orders... >& mesh)
             mesh.getNodeOwnership().owned().back() + 1 == mesh.getNodeOwnership().owned().size());
 }
 
-template < el_o_t... orders >
-auto computeMeshDual(const MeshPartition< orders... >& mesh) -> util::metis::GraphWrapper
-{
-    util::throwingAssert(isUnpartitioned(mesh), "Adjacency graphs for partitioned meshes are not currently supported");
-
-    constexpr std::string_view overflow_msg =
-        "The mesh size exceeds the numeric limits of METIS' signed integer type. Continuing would "
-        "result in signed integer overflow. Consider recompiling METIS with 64 bit integer support";
-    constexpr auto max_metis_id = static_cast< std::uintmax_t >(std::numeric_limits< idx_t >::max());
-    const auto     max_el_id    = static_cast< std::uintmax_t >(mesh.getNElements() + 1);
-    const auto     max_n_id     = static_cast< std::uintmax_t >(mesh.getNodeOwnership().owned().back());
-    util::throwingAssert(max_el_id <= max_metis_id and max_n_id <= max_metis_id, overflow_msg);
-
-    const auto convert_topo_to_metis_format = [&]() {
-        const auto topo_size = std::invoke([&mesh]() {
-            size_t retval = 0;
-            mesh.visit([&retval](const auto& element) { retval += element.nodes.size(); });
-            return retval;
-        });
-        util::throwingAssert(static_cast< std::uintmax_t >(topo_size) <= max_metis_id, overflow_msg);
-
-        auto retval        = std::array< std::vector< idx_t >, 2 >{};
-        auto& [eptr, eind] = retval;
-        eind.reserve(topo_size);
-        eptr.reserve(mesh.getNElements() + 1);
-        eptr.push_back(0);
-
-        const auto convert_element = [&]< ElementType T, el_o_t O >(const Element< T, O >* element) {
-            std::ranges::copy(element->nodes, std::back_inserter(eind));
-            eptr.push_back(static_cast< idx_t >(eptr.back() + element->nodes.size()));
-        };
-        for (el_id_t id = 0; id < mesh.getNElements(); ++id)
-        {
-            const auto el_ptr = mesh.find(id).value();
-            std::visit(convert_element, el_ptr);
-        };
-        return retval;
-    };
-    auto [eptr, eind] = convert_topo_to_metis_format(); // should be const, but METIS API is const-averse
-    auto   ne         = static_cast< idx_t >(mesh.getNElements());
-    auto   nn         = static_cast< idx_t >(mesh.getNodeOwnership().owned().size());
-    idx_t  ncommon    = 2;
-    idx_t  numflag    = 0;
-    idx_t* xadj{};
-    idx_t* adjncy{};
-
-    const auto error_code = METIS_MeshToDual(&ne, &nn, eptr.data(), eind.data(), &ncommon, &numflag, &xadj, &adjncy);
-    util::metis::handleMetisErrorCode(error_code);
-
-    return util::metis::GraphWrapper{xadj, adjncy, mesh.getNElements()};
-}
-
 namespace detail
 {
 inline auto makeBoundaryNodeCoordsMap(const MeshPartition< 1 >& mesh)
     -> robin_hood::unordered_flat_map< n_id_t, Point< 3 > >
 {
     constexpr auto nan         = std::numeric_limits< val_t >::quiet_NaN();
-    constexpr auto nan_point   = Point< 3 >{nan, nan, nan};
+    constexpr auto nan_point   = Point{nan, nan, nan};
     auto           node_lookup = util::ArrayOwner< Point< 3 > >(mesh.getNodeOwnership().localSize(), nan_point);
     const auto     put_nodes   = [&]< ElementType ET, el_o_t EO >(const BoundaryElementView< ET, EO >& el_view) {
-        const auto& ref_x = mesh::getNodeLocations< ET, EO >();
-        for (auto i : el_view.getSideNodeInds())
+        const auto node_locations = map::getPhysicalSideNodeLocations(el_view);
+        for (auto&& [node, location] : std::views::zip(el_view.getSideNodesView(), node_locations))
         {
-            const auto  node_id       = el_view->nodes[i];
-            const auto& ref_location  = ref_x[i];
-            const auto  phys_location = map::mapToPhysicalSpace(el_view->data, ref_location);
-            auto&       dest_xyz      = node_lookup.at(node_id);
-            for (auto&& [x_src, x_dest] : std::views::zip(phys_location, dest_xyz))
+            auto& dest_xyz = node_lookup.at(node);
+            for (auto&& [x_src, x_dest] : std::views::zip(location, dest_xyz))
                 std::atomic_ref{x_dest}.store(x_src, std::memory_order_relaxed);
         }
     };
@@ -243,7 +163,7 @@ auto copyElements(MeshPartition< 1 >::domain_map_t& domains,
     for (auto domain_id : domain_ids)
     {
         auto& domain = domains[domain_id];
-        mesh.visit([&](const auto& element) { pushToDomain(domain, std::invoke(el_proj, element)); }, domain_id);
+        mesh.visit([&](const auto& element) { pushToDomain(domain, std::invoke(el_proj, element)); }, {domain_id});
     }
     auto deleted_ids = std::vector< el_id_t >{};
     deleted_ids.reserve(faces_to_delete.size());
@@ -258,7 +178,7 @@ auto copyElements(MeshPartition< 1 >::domain_map_t& domains,
                 else
                     pushToDomain(domain, new_element);
             },
-            domain_id,
+            {domain_id},
             std::execution::seq);
         if (domain.elements.empty())
             domains.erase(domains.find(domain_id));
@@ -381,15 +301,50 @@ inline auto merge(const MeshPartition< 1 >& mesh1, const MeshPartition< 1 >& mes
     return {domains, 0, num_nodes, remaining_boundaries};
 }
 
+/// Deform according to the provided deformation field
 template < Mapping_c< Point< 3 >, Point< 3 > > Deformation >
 auto deform(MeshPartition< 1 >& mesh, Deformation&& deform)
 {
-    mesh.visit(
-        [&]< ElementType ET, el_o_t EO >(Element< ET, EO >& element) {
-            for (auto& point : element.data.vertices)
-                point = std::invoke(deform, point);
-        },
-        std::execution::par);
+    const auto deform_elem = [&]< ElementType ET, el_o_t EO >(Element< ET, EO >& element) {
+        std::ranges::transform(element.data.vertices, element.data.vertices.begin(), deform);
+    };
+    mesh.visit(deform_elem, std::execution::par);
+}
+
+/// Deform according to the provided deformation field, additionally constraining the curvature of the elements. The
+/// curvature field is evaluated in the deformed space; it should return a value from the interval [0,1] (0 - flat,
+/// 1 - fully curvilinear), values outside this interval are clamped accordingly.
+template < Mapping_c< Point< 3 >, Point< 3 > > Deformation, Mapping_c< Point< 3 >, val_t > Curvature >
+auto deform(MeshPartition< 1 >& mesh, Deformation&& deform, Curvature&& curvature)
+{
+    const auto deform_elem = [&]< ElementType ET, el_o_t EO >(Element< ET, EO >& element) {
+        using eltraits = ElementTraits< Element< ET, EO > >;
+        auto& vertices = element.data.vertices;
+        if constexpr (eltraits::geom_order == 1)
+            std::ranges::transform(vertices, vertices.begin(), deform);
+        else
+        {
+            // Blend between actual deformed and fictitious GO=1 element vertex coords
+            using element1_t      = Element< eltraits::geom_type, eltraits::geom_order >;
+            using geom_traits     = ElementTraits< element1_t >;
+            const auto curv_locs  = util::elwise(vertices, deform);
+            const auto curv_field = util::elwise(curv_locs, curvature);
+            const auto o1_verts   = util::elwise(geom_traits::vertices, [&](auto i) { return curv_locs.at(i); });
+            const auto el1        = element1_t{.nodes = {}, .data = {o1_verts}, .id = {}};
+            const auto lin_locs   = map::getPhysicalNodeLocations(el1);
+            const auto new_locs   = std::views::zip_transform(
+                [](const Point< 3 >& l1, const Point< 3 >& l2, val_t cur) -> Point< 3 > {
+                    const auto c  = std::clamp(cur, 0., 1.);
+                    const auto cr = 1. - c;
+                    return util::elwise(l1.coords, l2.coords, [&](auto x1, auto x2) { return cr * x1 + c * x2; });
+                },
+                lin_locs,
+                curv_locs,
+                curv_field);
+            std::ranges::copy(new_locs, vertices.begin());
+        }
+    };
+    mesh.visit(deform_elem, std::execution::par);
 }
 
 template < std::ranges::random_access_range R >
@@ -406,35 +361,52 @@ auto extrude(const MeshPartition< 1 >& mesh, R&& zdist, d_id_t id_back, d_id_t i
 
     const auto extrude_element = [&]< ElementType ET >(const Element< ET, 1 >&               element,
                                                        std::reference_wrapper< Domain< 1 > > domain) {
-        util::throwingAssert(Element< ET, 1 >::native_dim < 3, "Cannot extrude 3D mesh");
-        if constexpr (ET == ElementType::Line or ET == ElementType::Quad)
+        constexpr auto nat_dim = Element< ET, 1 >::native_dim;
+        util::throwingAssert(nat_dim < 3, "Cannot extrude 3D mesh");
+        if constexpr (nat_dim < 3)
         {
-            constexpr auto   ET_extruded = ET == ElementType::Line ? ElementType::Quad : ElementType::Hex;
+            constexpr auto   ET_extruded = std::invoke([] {
+                using enum ElementType;
+                switch (ET)
+                {
+                case Line:
+                    return Quad;
+                case Line2:
+                    return Quad2;
+                case Quad:
+                    return Hex;
+                case Quad2:
+                    return Hex2;
+                }
+            });
+            constexpr size_t geom_order  = ElementTraits< Element< ET, 1 > >::geom_order;
             constexpr size_t n_verts2d   = ElementData< ET, 1 >::n_verts;
             constexpr size_t n_nodes2d   = Element< ET, 1 >::n_nodes;
             auto             data        = ElementData< ET_extruded, 1 >{};
-            std::ranges::copy(element.data.vertices, data.vertices.begin());
-            std::ranges::copy(element.data.vertices, std::next(data.vertices.begin(), n_verts2d));
+            for (auto&& dest_verts : data.vertices | std::views::chunk(n_verts2d))
+                std::ranges::copy(element.data.vertices, dest_verts.begin());
             for (auto&& [layer, zs] : zdist | std::views::adjacent< 2 > | std::views::enumerate)
             {
                 const auto& [z_lo, z_hi] = zs;
-                for (auto& vertex : data.vertices | std::views::take(n_verts2d))
-                    vertex.z() = z_lo;
-                for (auto& vertex : data.vertices | std::views::drop(n_verts2d))
-                    vertex.z() = z_hi;
-                auto nodes = typename Element< ET_extruded, 1 >::node_array_t{};
-                std::ranges::transform(
-                    element.nodes, nodes.begin(), std::bind_back(std::plus{}, layer * nodes_per_layer));
-                std::ranges::transform(nodes | std::views::take(n_nodes2d),
+                static_assert(geom_order <= 2, "[futureproof] Use Lobatto distribution for higher orders");
+                const auto z_geom_pos = util::linspaceArray< geom_order + 1 >(z_lo, z_hi);
+                for (auto&& [z, dest_verts] : std::views::zip(z_geom_pos, data.vertices | std::views::chunk(n_verts2d)))
+                    for (auto& vertex : dest_verts)
+                        vertex.z() = z;
+                auto       nodes       = typename Element< ET_extruded, 1 >::node_array_t{};
+                const auto node_offset = layer * nodes_per_layer;
+                std::ranges::transform(element.nodes, nodes.begin(), std::bind_back(std::plus{}, node_offset));
+                std::ranges::transform(element.nodes,
                                        std::next(nodes.begin(), n_nodes2d),
-                                       std::bind_back(std::plus{}, nodes_per_layer));
+                                       std::bind_back(std::plus{}, node_offset + nodes_per_layer));
                 auto el_extruded = Element< ET_extruded, 1 >{nodes, data, element_id++};
                 pushToDomain(domain.get(), std::move(el_extruded));
             }
         }
     };
     const auto make_back_front_elems = [&]< ElementType ET >(const Element< ET, 1 >& element) {
-        if constexpr (ET != ElementType::Line)
+        constexpr auto nat_dim = Element< ET, 1 >::native_dim;
+        if constexpr (nat_dim == 2)
         {
             const auto make_face = [&](val_t z, d_id_t domain_id, n_id_t node_offs) {
                 auto face = element;
@@ -453,8 +425,8 @@ auto extrude(const MeshPartition< 1 >& mesh, R&& zdist, d_id_t id_back, d_id_t i
     for (auto domain_id : mesh.getDomainIds())
     {
         auto domain_ref = std::ref(domains3d[domain_id]);
-        mesh.visit(std::bind_back(extrude_element, domain_ref), domain_id);
-        mesh.visit(make_back_front_elems, domain_id);
+        mesh.visit(std::bind_back(extrude_element, domain_ref), {domain_id});
+        mesh.visit(make_back_front_elems, {domain_id});
     }
 
     return {domains3d, util::concatRanges(mesh.getBoundaryIdsView(), std::array{id_back, id_front})};

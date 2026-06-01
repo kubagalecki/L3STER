@@ -1,79 +1,35 @@
 #include "Kernels.hpp"
 
-template < q_o_t QO, el_o_t EO >
-static void BM_PhysBasisDersComputation(benchmark::State& state)
-{
-    constexpr auto QT          = quad::QuadratureType::GaussLegendre;
-    constexpr auto BT          = basis::BasisType::Lagrange;
-    const auto     element     = getExampleHexElement< EO >();
-    const auto&    ref_basis   = basis::getReferenceBasisAtDomainQuadrature< BT, mesh::ElementType::Hex, EO, QT, QO >();
-    const auto     jac_mat_gen = map::getNatJacobiMatGenerator(element.data);
-    for (auto _ : state)
-        for (size_t qp_ind = 0; qp_ind < ref_basis.quadrature.size; ++qp_ind)
-        {
-            const auto  jac_mat  = jac_mat_gen(ref_basis.quadrature.points[qp_ind]);
-            const auto& ref_ders = ref_basis.basis.derivatives[qp_ind];
-            benchmark::DoNotOptimize(map::computePhysBasisDers(jac_mat, ref_ders));
-        }
-
-    constexpr auto n_nodes = mesh::Element< mesh::ElementType::Hex, EO >::n_nodes;
-    const auto     n_qp    = ref_basis.quadrature.size;
-    state.counters["DPFlops"] =
-        benchmark::Counter{static_cast< double >(state.iterations()) * 3 * 3 * 2 * n_nodes * n_qp,
-                           benchmark::Counter::kIsRate,
-                           benchmark::Counter::kIs1000};
-}
-
-#define DEF_PHYS_BAS_BENCH(QO, EO)                                                                                     \
-    BENCHMARK_TEMPLATE(BM_PhysBasisDersComputation, QO, EO)                                                            \
-        ->Name("Phys. basis der. at QPs computation [Hex, EO " #EO ", QO " #QO "]")                                    \
-        ->Unit(benchmark::kMicrosecond);
-#define DEF_PHYS_BAS_BENCH_SUITE(EO)                                                                                   \
-    DEF_PHYS_BAS_BENCH(0, EO);                                                                                         \
-    DEF_PHYS_BAS_BENCH(6, EO);                                                                                         \
-    DEF_PHYS_BAS_BENCH(18, EO);
-
-DEF_PHYS_BAS_BENCH_SUITE(1)
-DEF_PHYS_BAS_BENCH_SUITE(2)
-DEF_PHYS_BAS_BENCH_SUITE(4)
-DEF_PHYS_BAS_BENCH_SUITE(6)
-
 template < el_o_t EO >
 static void BM_NS3DLocalAssembly(benchmark::State& state)
 {
-    constexpr auto  QT = quad::QuadratureType::GaussLegendre;
-    constexpr auto  BT = basis::BasisType::Lagrange;
-    constexpr q_o_t QO = 4 * EO - 1;
+    constexpr auto  ET     = mesh::ElementType::Hex;
+    constexpr auto  QT     = quad::QuadratureType::GaussLegendre;
+    constexpr auto  BT     = basis::BasisType::Lagrange;
+    constexpr q_o_t QO     = 4 * EO - 1;
+    constexpr auto  params = KernelParams{.dimension = 3, .n_equations = 8, .n_unknowns = 7, .n_fields = 7};
 
-    const auto element = getExampleHexElement< EO >();
-
-    constexpr size_t n_fields     = 7;
-    constexpr size_t n_eq         = 8;
-    using nodal_vals_t            = Eigen::Matrix< val_t, element.n_nodes, n_fields >;
-    const nodal_vals_t nodal_vals = nodal_vals_t::Random();
-
-    constexpr auto n_nodes      = mesh::Element< mesh::ElementType ::Hex, EO >::n_nodes;
-    constexpr auto loc_mat_rows = n_nodes * n_fields;
-
-    const auto& ref_bas_at_quad =
-        basis::getReferenceBasisAtDomainQuadrature< BT, mesh::ElementType::Hex, EO, QT, QO >();
-
-    constexpr auto params = KernelParams{.dimension = 3, .n_equations = 8, .n_unknowns = 7, .n_fields = 7};
-    constexpr auto kernel = wrapDomainEquationKernel< params >(ns3d_kernel);
+    const auto     element   = getExampleHexElement< EO >();
+    const auto     node_vals = Eigen::Matrix< val_t, element.n_nodes, params.n_fields >::Random().eval();
+    const auto     quad_view = basis::getQuadratureView< BT, ET, EO, QT, QO >();
+    const auto     mapping   = map::TabulatedDomainMapping{quad_view.bases, std::span{element.data.vertices}};
+    const auto     fields    = map::FieldValuesAtPoints{*mapping.basis_values, mapping.physical_derivatives, node_vals};
+    constexpr auto kernel    = wrapDomainEquationKernel< params >(ns3d_kernel);
 
     for (auto _ : state)
     {
-        const auto& local_sys = algsys::assembleLocalSystem(kernel, element, nodal_vals, ref_bas_at_quad, 0.);
+        const auto& local_sys = algsys::assembleLocalSystem(kernel, mapping, fields, quad_view.weights, 0.);
         benchmark::DoNotOptimize(&local_sys);
         benchmark::ClobberMemory();
     }
 
-    const auto flops_per_qp = /* physical basis derivative computation */ n_nodes * 3 * 3 * 2 +
-                              /* field value computation */ n_fields * n_nodes * 2 * 4 +
-                              /* rank update matrix creation */ loc_mat_rows * n_eq * 7 +
-                              /* rank update flops */ (loc_mat_rows + 1) * (loc_mat_rows + 1) / 2 * (2 * n_eq + 1);
-    const auto n_qp           = ref_bas_at_quad.quadrature.size;
-    state.counters["DPFlops"] = benchmark::Counter{static_cast< double >(state.iterations()) * n_qp * flops_per_qp,
+    constexpr auto loc_mat_rows = element.n_nodes * params.n_unknowns;
+    constexpr auto num_qps      = std::decay_t< decltype(*quad_view.bases.geom_basis) >::size;
+    const auto     flops_per_qp =
+        /* rank update matrix creation */ loc_mat_rows * params.n_equations * 7 +
+        /* rank update flops */ (loc_mat_rows + 1) * (loc_mat_rows + 1) / 2 * (2 * params.n_equations + 1);
+
+    state.counters["DPFlops"] = benchmark::Counter{static_cast< double >(state.iterations()) * num_qps * flops_per_qp,
                                                    benchmark::Counter::kIsRate,
                                                    benchmark::Counter::kIs1000};
 }

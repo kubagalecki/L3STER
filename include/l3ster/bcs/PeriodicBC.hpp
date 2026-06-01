@@ -5,7 +5,7 @@
 #include "l3ster/comm/MpiComm.hpp"
 #include "l3ster/mapping/MapReferenceToPhysical.hpp"
 #include "l3ster/mesh/MeshPartition.hpp"
-#include "l3ster/mesh/NodeReferenceLocation.hpp"
+#include "l3ster/mesh/NodeLocation.hpp"
 #include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/Functional.hpp"
 #include "l3ster/util/IndexMap.hpp"
@@ -13,6 +13,7 @@
 
 #include <array>
 #include <bitset>
+#include <set>
 
 namespace lstr::bcs
 {
@@ -90,16 +91,12 @@ auto getNodeLocationData(const mesh::MeshPartition< orders... >& mesh, const uti
 {
     auto       node_to_loc    = robin_hood::unordered_flat_map< n_id_t, std::array< val_t, 3 > >{};
     const auto write_node_loc = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::BoundaryElementView< ET, EO >& bv) {
-        const auto& ref_x   = mesh::getNodeLocations< ET, EO >();
-        const auto& el_data = bv->data;
-        for (auto i : bv.getSideNodeInds())
+        const auto node_locations = map::getPhysicalSideNodeLocations(bv);
+        for (auto&& [node, location] : std::views::zip(bv.getSideNodesView(), node_locations))
         {
-            const auto node_id = bv->nodes[i];
-            if (node_to_loc.contains(node_id))
+            if (node_to_loc.contains(node))
                 continue;
-            const auto& ref_location  = ref_x[i];
-            const auto  phys_location = map::mapToPhysicalSpace(el_data, ref_location);
-            node_to_loc[node_id]      = phys_location;
+            node_to_loc[node] = location;
         }
     };
     mesh.visitBoundaries(write_node_loc, boundary_ids, std::execution::seq);

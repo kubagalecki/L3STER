@@ -3,6 +3,7 @@
 #include "l3ster/mesh/primitives/CylinderInChannel2D.hpp"
 #include "l3ster/post/NativeIO.hpp"
 #include "l3ster/post/NormL2.hpp"
+#include "l3ster/post/VtkExport.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
 using namespace lstr;
@@ -10,10 +11,8 @@ using namespace lstr;
 constexpr auto mesh_order = 4;
 
 constexpr auto set_fields = [](const auto& in, auto& out) {
-    const auto x = in.point.space.x();
-    const auto y = in.point.space.y();
-    out[0]       = std::sin(.5 * x);
-    out[1]       = std::cos(.5 * y);
+    out[0] = std::sin(in.point.space.x());
+    out[1] = std::cos(in.point.space.y());
 };
 
 auto makeMesh(const MpiComm& comm)
@@ -26,11 +25,13 @@ auto makeMesh(const MpiComm& comm)
                                                                  .bottom_offset = pi,
                                                                  .top_offset    = pi,
                                                                  .n_circumf     = 16,
-                                                                 .n_radial      = 5,
-                                                                 .n_left        = 5,
-                                                                 .n_right       = 5,
-                                                                 .n_bottom      = 5,
-                                                                 .n_top         = 5};
+                                                                 .n_radial      = 3,
+                                                                 .n_left        = 4,
+                                                                 .n_right       = 4,
+                                                                 .n_bottom      = 4,
+                                                                 .n_top         = 4,
+                                                                 .q_radial      = 1,
+                                                                 .quadratic     = true};
     return generateAndDistributeMesh< mesh_order >(comm, [&] { return mesh::makeCylinderInChannel2DMesh(mesh_opts); });
 }
 
@@ -73,11 +74,18 @@ void checkResults(const MpiComm& comm, std::string_view file_name, const Loader<
     const auto     field_access         = solution_manager.getFieldAccess(std::array{0, 1});
     const auto     loaded_error         = computeNormL2(comm, error_kernel, *mesh, {0}, field_access);
     const auto     error                = loaded_error.norm();
-    constexpr auto threshold            = 1e-6;
+    constexpr auto threshold            = 1e-5;
     if (comm.getRank() == 0)
         error < threshold ? std::println("Error: {:.2e} < {:.1e}; PASS", error, threshold)
                           : std::println(stderr, "Error: {:.2e} >= {:.1e}; FAIL", error, threshold);
     REQUIRE(error < threshold);
+
+    auto export_def = ExportDefinition{"results"};
+    export_def.defineField("f1", {0});
+    export_def.defineField("f2", {1});
+    const auto commw    = std::make_shared< MpiComm >(MPI_COMM_WORLD);
+    auto       exporter = PvtuExporter{commw, *mesh};
+    exporter.exportSolution(export_def, solution_manager);
 }
 
 int main(int argc, char* argv[])

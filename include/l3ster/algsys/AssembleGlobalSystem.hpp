@@ -3,8 +3,6 @@
 
 #include "l3ster/algsys/OperatorUtils.hpp"
 #include "l3ster/algsys/StaticCondensationManager.hpp"
-#include "l3ster/basisfun/ReferenceElementBasisAtQuadrature.hpp"
-#include "l3ster/mesh/BoundaryView.hpp"
 #include "l3ster/post/FieldAccess.hpp"
 #include "l3ster/util/ScopeGuards.hpp"
 
@@ -37,12 +35,16 @@ void assembleGlobalSystem(const DomainEquationKernel< Kernel, params >&         
     const auto process_element = [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >& element) {
         if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
         {
-            constexpr auto  BT             = asm_opts.basis_type;
-            constexpr auto  QT             = asm_opts.quad_type;
-            constexpr q_o_t QO             = 2 * asm_opts.order(EO);
-            const auto      field_vals     = field_access.getGloballyIndexed(element.nodes);
-            const auto&     rbq            = basis::getReferenceBasisAtDomainQuadrature< BT, ET, EO, QT, QO >();
-            const auto& [loc_mat, loc_rhs] = assembleLocalSystem(kernel, element, field_vals, rbq, time);
+            constexpr auto  BT        = asm_opts.basis_type;
+            constexpr auto  QT        = asm_opts.quad_type;
+            constexpr auto  GO        = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
+            constexpr q_o_t QO        = 2 * asm_opts.order(EO) + GO;
+            const auto      quad_view = basis::getQuadratureView< BT, ET, EO, QT, QO >();
+            const auto      node_vals = field_access.getGloballyIndexed(element.nodes);
+            const auto      mapping   = map::TabulatedDomainMapping{quad_view.bases, std::span{element.data.vertices}};
+            const auto& [_1, bas_vals, phys_ders, _2] = mapping;
+            const auto fields                         = map::FieldValuesAtPoints{*bas_vals, phys_ders, node_vals};
+            const auto& [loc_mat, loc_rhs] = assembleLocalSystem(kernel, mapping, fields, quad_view.weights, time);
             condensation_manager.condenseSystem(
                 dof_map, global_mat, global_rhs, loc_mat, loc_rhs, element, field_inds_ctwrpr);
         }
@@ -80,12 +82,19 @@ void assembleGlobalSystem(const BoundaryEquationKernel< Kernel, params >&       
         [&]< mesh::ElementType ET, el_o_t EO >(const mesh::BoundaryElementView< ET, EO >& el_view) {
             if constexpr (params.dimension == mesh::Element< ET, EO >::native_dim)
             {
-                constexpr auto  BT         = asm_opts.basis_type;
-                constexpr auto  QT         = asm_opts.quad_type;
-                constexpr q_o_t QO         = 2 * asm_opts.order(EO);
-                const auto      field_vals = field_access.getGloballyIndexed(el_view->nodes);
-                const auto& qbv = basis::getReferenceBasisAtBoundaryQuadrature< BT, ET, EO, QT, QO >(el_view.getSide());
-                const auto& [loc_mat, loc_rhs] = assembleLocalSystem(kernel, el_view, field_vals, qbv, time);
+                constexpr auto BT = asm_opts.basis_type;
+                constexpr auto QT = asm_opts.quad_type;
+                constexpr auto GT = util::ConstexprValue< mesh::ElementTraits< mesh::Element< ET, EO > >::geom_type >{};
+                constexpr auto GO = mesh::ElementTraits< mesh::Element< ET, EO > >::geom_order;
+                constexpr q_o_t QO        = 2 * asm_opts.order(EO) + GO;
+                const auto      side      = el_view.getSide();
+                const auto      quad_view = basis::getSideQuadratureView< BT, ET, EO, QT, QO >(side);
+                const auto      node_vals = field_access.getGloballyIndexed(el_view->nodes);
+                const auto      verts     = std::span{el_view->data.vertices};
+                const auto      mapping   = map::TabulatedBoundaryMapping{quad_view.bases, verts, GT, side};
+                const auto& [_1, bas_vals, phys_ders, _2, _3] = mapping;
+                const auto fields              = map::FieldValuesAtPoints{*bas_vals, phys_ders, node_vals};
+                const auto& [loc_mat, loc_rhs] = assembleLocalSystem(kernel, mapping, fields, quad_view.weights, time);
                 condensation_manager.condenseSystem(
                     dof_map, global_mat, global_rhs, loc_mat, loc_rhs, *el_view, field_inds_ctwrpr);
             }

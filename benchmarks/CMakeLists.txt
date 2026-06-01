@@ -2,12 +2,11 @@ find_package( benchmark REQUIRED )
 include( CTest )
 
 add_executable( Non_MPI_benchmarks BenchmarksMain.cpp
-                ElementBenchmarks.cpp
+                MappingBenchmarks.cpp
                 LocalAssemblyBenchmarks.cpp
                 LocalOperatorEvaluationBenchmarks.cpp
                 MeshBenchmarks.cpp
                 SumFactorizationBenchmarks.cpp
-                UtilBenchmarks.cpp
                 )
 target_include_directories( Non_MPI_benchmarks PRIVATE ${CMAKE_CURRENT_BINARY_DIR} )
 target_link_libraries( Non_MPI_benchmarks PRIVATE L3STER benchmark::benchmark )

@@ -27,19 +27,18 @@ const auto& getQuadrature()
         constexpr auto ref_size = ref_quadrature.size;
         using quadrature_t      = Quadrature< ref_size * ref_size, 2 >;
 
-        typename quadrature_t::q_points_t q_points;
-        typename quadrature_t::weights_t  weights;
+        auto q_points = typename quadrature_t::q_points_t{};
+        auto weights  = typename quadrature_t::weights_t{};
 
-        size_t index = 0;
-        for (size_t i = 0; i < ref_size; ++i)
-            for (size_t j = 0; j < ref_size; ++j)
-            {
-                q_points[index][0] = ref_quadrature_p[i][0];
-                q_points[index][1] = ref_quadrature_p[j][0];
-                weights[index]     = ref_quadrature_w[i] * ref_quadrature_w[j];
-                ++index;
-            }
-
+        constexpr auto iter1 = std::views::iota(0uz, ref_size);
+        for (auto&& [index, ij] : std::views::cartesian_product(iter1, iter1) | std::views::enumerate)
+        {
+            const auto [i, j]  = ij;
+            const auto induz   = static_cast< size_t >(index);
+            q_points[induz][0] = ref_quadrature_p[i][0];
+            q_points[induz][1] = ref_quadrature_p[j][0];
+            weights[induz]     = ref_quadrature_w[i] * ref_quadrature_w[j];
+        }
         return quadrature_t{q_points, weights};
     });
     return value;
@@ -57,21 +56,19 @@ const auto& getQuadrature()
         constexpr auto ref_size = ref_quadrature.size;
         using quadrature_t      = Quadrature< ref_size * ref_size * ref_size, 3 >;
 
-        typename quadrature_t::q_points_t q_points;
-        typename quadrature_t::weights_t  weights;
+        auto q_points = typename quadrature_t::q_points_t{};
+        auto weights  = typename quadrature_t::weights_t{};
 
-        size_t index = 0;
-        for (size_t i = 0; i < ref_size; ++i)
-            for (size_t j = 0; j < ref_size; ++j)
-                for (size_t k = 0; k < ref_size; ++k)
-                {
-                    q_points[index][0] = ref_quadrature_p[i][0];
-                    q_points[index][1] = ref_quadrature_p[j][0];
-                    q_points[index][2] = ref_quadrature_p[k][0];
-                    weights[index]     = ref_quadrature_w[i] * ref_quadrature_w[j] * ref_quadrature_w[k];
-                    ++index;
-                }
-
+        constexpr auto iter1 = std::views::iota(0uz, ref_size);
+        for (auto&& [index, ijk] : std::views::cartesian_product(iter1, iter1, iter1) | std::views::enumerate)
+        {
+            const auto [i, j, k] = ijk;
+            const auto induz     = static_cast< size_t >(index);
+            q_points[induz][0]   = ref_quadrature_p[i][0];
+            q_points[induz][1]   = ref_quadrature_p[j][0];
+            q_points[induz][2]   = ref_quadrature_p[k][0];
+            weights[induz]       = ref_quadrature_w[i] * ref_quadrature_w[j] * ref_quadrature_w[k];
+        }
         return quadrature_t{q_points, weights};
     });
     return value;

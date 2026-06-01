@@ -12,21 +12,22 @@ static void BM_DualGraphGeneration(benchmark::State& state)
 {
     auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {}, mesh::gmsh_tag);
     for (auto _ : state)
-        benchmark::DoNotOptimize(mesh::computeMeshDual(mesh));
+        benchmark::DoNotOptimize(mesh::computeMeshDual(mesh, 2));
 }
 BENCHMARK(BM_DualGraphGeneration)->Unit(benchmark::kMillisecond)->Name("Generate dual graph");
 
 static void BM_BoundaryViewGeneration(benchmark::State& state)
 {
-    const auto mesh = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {}, mesh::gmsh_tag);
+    const auto mesh       = readMesh(L3STER_TESTDATA_ABSPATH(sphere.msh), {}, mesh::gmsh_tag);
+    const auto dual_graph = computeMeshDual(mesh, 2);
     for (auto _ : state)
     {
-        auto bnd_view = mesh::MeshPartition< 1 >::makeBoundaryElementViews(mesh, std::views::single(2));
+        auto bnd_view = mesh::MeshPartition< 1 >::makeBoundaryElementViews(mesh, 2, dual_graph);
         benchmark::DoNotOptimize(bnd_view);
         benchmark::ClobberMemory();
     }
 }
-BENCHMARK(BM_BoundaryViewGeneration)->Unit(benchmark::kMillisecond)->Name("Generate boundary view");
+BENCHMARK(BM_BoundaryViewGeneration)->Unit(benchmark::kMicrosecond)->Name("Generate boundary view");
 
 static void BM_MeshOrderConversion(benchmark::State& state)
 {
@@ -82,14 +83,14 @@ static void BM_CopyElementNodes(benchmark::State& state)
                                                         benchmark::Counter::kIsRate,
                                                         benchmark::Counter::kIs1000};
 }
-BENCHMARK_TEMPLATE(BM_CopyElementNodes, std::execution::sequenced_policy)
-    ->Unit(benchmark::kMicrosecond)
-    ->UseRealTime()
-    ->Name("Hash nodes [serial]");
-BENCHMARK_TEMPLATE(BM_CopyElementNodes, std::execution::parallel_policy)
-    ->Unit(benchmark::kMicrosecond)
-    ->UseRealTime()
-    ->Name("Hash nodes [parallel]");
+// BENCHMARK_TEMPLATE(BM_CopyElementNodes, std::execution::sequenced_policy)
+//     ->Unit(benchmark::kMicrosecond)
+//     ->UseRealTime()
+//     ->Name("Hash nodes [serial]");
+// BENCHMARK_TEMPLATE(BM_CopyElementNodes, std::execution::parallel_policy)
+//     ->Unit(benchmark::kMicrosecond)
+//     ->UseRealTime()
+//     ->Name("Hash nodes [parallel]");
 
 static void BM_MakeLocalMeshView(benchmark::State& state)
 {

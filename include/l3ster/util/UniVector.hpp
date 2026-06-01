@@ -33,6 +33,7 @@ public:
     [[nodiscard]] inline bool        empty() const;
 
     inline void reserve(const std::array< std::size_t, num_types >& sizes);
+    inline void resize(const std::array< std::size_t, num_types >& sizes);
 
     template < typename Fun, SimpleExecutionPolicy_c ExecPolicy >
     void visit(Fun&& fun, ExecPolicy&&)
@@ -43,12 +44,6 @@ public:
     template < typename Zero, typename Transform, typename Reduction, SimpleExecutionPolicy_c ExecPolicy >
     auto transformReduce(Zero zero, Transform transform, Reduction reduction, ExecPolicy&&) const -> Zero
         requires ReductionFor_c< Reduction, Zero > and (Mapping_c< Transform, Ts, Zero > and ...);
-    template < typename Predicate >
-    auto find(Predicate&& pred) const -> std::optional< const_ptr_variant_t >
-        requires(std::predicate< Predicate, std::add_const_t< Ts > > and ...);
-    template < typename Predicate >
-    auto find(Predicate&& pred) -> std::optional< ptr_variant_t >
-        requires(std::predicate< Predicate, std::add_const_t< Ts > > and ...);
 
     auto at(std::size_t index) -> ptr_variant_t;
     auto at(std::size_t index) const -> const_ptr_variant_t;
@@ -149,36 +144,6 @@ auto UniVector< Ts... >::transformReduce(Zero zero, Transform transform, Reducti
 }
 
 template < typename... Ts >
-template < typename Predicate >
-auto UniVector< Ts... >::find(Predicate&& pred) const -> std::optional< const_ptr_variant_t >
-    requires(std::predicate< Predicate, std::add_const_t< Ts > > and ...)
-{
-    auto       retval      = std::optional< const_ptr_variant_t >{};
-    const auto try_find_in = [&]< typename T >(const std::vector< T >& vec) {
-        using cptr_t     = std::add_pointer_t< std::add_const_t< T > >;
-        const auto iter  = std::ranges::find_if(vec, pred);
-        const bool found = iter != vec.end();
-        if (found)
-            retval.emplace(std::in_place_type< cptr_t >, std::addressof(*iter));
-        return found;
-    };
-    visitVectorsUntil(try_find_in);
-    return retval;
-}
-
-template < typename... Ts >
-template < typename Predicate >
-auto UniVector< Ts... >::find(Predicate&& pred) -> std::optional< ptr_variant_t >
-    requires(std::predicate< Predicate, std::add_const_t< Ts > > and ...)
-{
-    const auto found = std::as_const(*this).find(std::forward< Predicate >(pred));
-    if (found)
-        return deconstify(*found);
-    else
-        return {};
-}
-
-template < typename... Ts >
 std::size_t UniVector< Ts... >::size() const
 {
     return (getVector< Ts >().size() + ...);
@@ -203,6 +168,15 @@ void UniVector< Ts... >::reserve(const std::array< std::size_t, num_types >& siz
         vector.reserve(sizes[i++]);
     };
     (reserve_for(getVector< Ts >()), ...);
+}
+
+template < typename... Ts >
+void UniVector< Ts... >::resize(const std::array< std::size_t, num_types >& sizes)
+{
+    auto resize_for = [&sizes, i = 0](auto& vector) mutable {
+        vector.resize(sizes[i++]);
+    };
+    (resize_for(getVector< Ts >()), ...);
 }
 
 template < typename... Ts >

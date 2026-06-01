@@ -6,7 +6,6 @@
 #include "l3ster/solve/NativePreconditioners.hpp"
 
 #include "Common.hpp"
-#include "Kernels.hpp"
 
 using namespace lstr;
 using namespace lstr::algsys;

@@ -5,13 +5,14 @@
 
 namespace lstr::map
 {
-template < mesh::ElementType ET, el_o_t EO >
+template < mesh::ElementType ET >
 auto computeBoundaryNormal(
-    el_side_t                                                                                               side,
-    const Eigen::Matrix< val_t, mesh::Element< ET, EO >::native_dim, mesh::Element< ET, EO >::native_dim >& jacobi_mat)
-    -> Eigen::Vector< val_t, mesh::Element< ET, EO >::native_dim >
+    el_side_t                                                                                             side,
+    const Eigen::Matrix< val_t, mesh::Element< ET, 1 >::native_dim, mesh::Element< ET, 1 >::native_dim >& jacobi_mat)
+    -> Eigen::Vector< val_t, mesh::Element< ET, 1 >::native_dim >
+    requires(mesh::isGeomType(ET))
 {
-    Eigen::Vector< val_t, mesh::Element< ET, EO >::native_dim > retval;
+    auto retval = Eigen::Vector< val_t, mesh::Element< ET, 1 >::native_dim >{};
     if constexpr (ET == mesh::ElementType::Line)
         retval[0] = side == 0 ? -1. : 1.;
     else if constexpr (ET == mesh::ElementType::Quad)

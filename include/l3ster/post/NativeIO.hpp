@@ -202,7 +202,7 @@ auto loadUnifiedMesh(const std::filesystem::path& path) -> mesh::MeshPartition< 
         for (auto dom_id : part.getDomainIds())
         {
             auto& domain = dom_map[dom_id];
-            part.visit([&](const auto& element) { mesh::pushToDomain(domain, element); }, dom_id);
+            part.visit([&](const auto& element) { mesh::pushToDomain(domain, element); }, {dom_id});
         }
         if (bnd_ids.empty())
             bnd_ids = part.getBoundaryIdsCopy();

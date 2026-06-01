@@ -1,18 +1,15 @@
 #ifndef L3STER_UTIL_ASSERTION_HPP
 #define L3STER_UTIL_ASSERTION_HPP
 
-#include <algorithm>
 #include <array>
 #include <charconv>
 #include <concepts>
+#include <cstdio>
 #include <exception>
 #include <format>
 #include <functional>
-#include <iostream>
-#include <iterator>
-#include <ranges>
+#include <print>
 #include <source_location>
-#include <span>
 #include <stdexcept>
 #include <string>
 
@@ -29,7 +26,7 @@ constexpr auto toString(I i) -> std::string
     return result.ec == std::errc{} ? std::string{buf.data(), result.ptr} : std::string{"[format error]"};
 }
 
-inline constexpr auto makeErrMsg(std::string_view err_message, std::source_location src_loc) -> std::string
+constexpr auto makeErrMsg(std::string_view err_message, std::source_location src_loc) -> std::string
 {
     using namespace std::string_literals;
     using namespace std::string_view_literals;
@@ -80,7 +77,8 @@ constexpr void throwErrorWithLocation(std::string_view err_message, std::source_
 
 inline void terminateWithMessage(std::string_view err_message, std::source_location src_loc)
 {
-    std::cerr << makeErrMsg(err_message, src_loc);
+    const auto err_marked = makeErrMsg(err_message, src_loc);
+    std::print(stderr, "{}", err_marked);
     std::terminate();
 }
 } // namespace detail

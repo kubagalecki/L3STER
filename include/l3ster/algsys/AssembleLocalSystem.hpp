@@ -1,12 +1,10 @@
 #ifndef L3STER_ALGSYS_ASSEMBLELOCALSYSTEM_HPP
 #define L3STER_ALGSYS_ASSEMBLELOCALSYSTEM_HPP
 
-#include "l3ster/basisfun/ReferenceBasisAtQuadrature.hpp"
 #include "l3ster/common/KernelInterface.hpp"
 #include "l3ster/common/Structs.hpp"
 #include "l3ster/mapping/MapReferenceToPhysical.hpp"
 #include "l3ster/math/IntegerMath.hpp"
-#include "l3ster/mesh/BoundaryElementView.hpp"
 #include "l3ster/util/Caliper.hpp"
 #include "l3ster/util/SetStackSize.hpp"
 #include "l3ster/util/Simd.hpp"
@@ -38,7 +36,8 @@ struct AssemblyOptions
                                                      [[maybe_unused]] KernelParams kernel_params) const
     {
         using enum mesh::ElementType;
-        return eval_strategy != LocalEvalStrategy::LocalElement and (ET == Quad or ET == Hex);
+        return eval_strategy != LocalEvalStrategy::LocalElement and
+               std::ranges::contains(std::array{Quad, Quad2, Hex, Hex2}, ET);
     }
     [[nodiscard]] constexpr bool useOddEven(el_o_t EO) const
     {
@@ -51,29 +50,6 @@ struct AssemblyOptions
 
 namespace lstr::algsys
 {
-template < int n_nodes, int n_fields >
-auto computeFieldVals(const Eigen::Vector< val_t, n_nodes >&                         basis_vals,
-                      const util::eigen::RowMajorMatrix< val_t, n_nodes, n_fields >& node_vals)
-{
-    std::array< val_t, n_fields > retval;
-    if constexpr (n_fields != 0)
-        Eigen::Map< Eigen::Vector< val_t, n_fields > >{retval.data()} = node_vals.transpose() * basis_vals;
-    return retval;
-}
-
-template < int n_nodes, int n_fields, int dim >
-auto computeFieldDers(const util::eigen::RowMajorMatrix< val_t, dim, n_nodes >&      basis_ders,
-                      const util::eigen::RowMajorMatrix< val_t, n_nodes, n_fields >& node_vals)
-{
-    std::array< std::array< val_t, n_fields >, dim > retval;
-    if constexpr (n_fields != 0)
-    {
-        const auto retval_data = reinterpret_cast< val_t* >(retval.data());
-        Eigen::Map< util::eigen::RowMajorMatrix< val_t, dim, n_fields > >{retval_data} = basis_ders * node_vals;
-    }
-    return retval;
-}
-
 template < size_t problem_size, size_t update_size, size_t n_rhs >
 class LocalSystemManager
 {
@@ -94,20 +70,20 @@ public:
     inline auto setZero() -> LocalSystemManager&;
     inline auto getSystem() -> const system_t&;
 
-    template < int n_unknowns, int n_bases, int dim >
-    void update(const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dim + 1 >& kernel_result,
-                const Eigen::Matrix< val_t, update_size, int{n_rhs} >&                        kernel_rhs,
-                const Eigen::Vector< val_t, n_bases >&                                        basis_vals,
-                const util::eigen::RowMajorMatrix< val_t, dim, n_bases >&                     basis_ders,
-                val_t                                                                         weight);
+    template < int n_unknowns, size_t dimp1, typename Vals, typename Ders >
+    void update(const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dimp1 >& kernel_result,
+                const Eigen::Matrix< val_t, update_size, int{n_rhs} >&                      kernel_rhs,
+                const Vals&                                                                 basis_vals,
+                const Ders&                                                                 basis_ders,
+                val_t                                                                       weight);
 
 private:
-    template < int n_unknowns, int n_bases, int dim >
+    template < int n_unknowns, size_t dimp1, typename Vals, typename Ders >
     static auto
-    makeBasisBlock(const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dim + 1 >& kernel_result,
-                   const Eigen::Vector< val_t, n_bases >&                                        basis_vals,
-                   const util::eigen::RowMajorMatrix< val_t, dim, n_bases >&                     basis_ders,
-                   size_t                                                                        basis_ind);
+    makeBasisBlock(const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dimp1 >& kernel_result,
+                   const Vals&                                                                 basis_vals,
+                   const Ders&                                                                 basis_ders,
+                   size_t                                                                      basis_ind);
 
     inline auto tieBatchData(bool is_positive);
     inline void flush();
@@ -127,33 +103,34 @@ auto LocalSystemManager< problem_size, update_size, n_rhs >::tieBatchData(bool i
 }
 
 template < size_t problem_size, size_t update_size, size_t n_rhs >
-template < int n_unknowns, int n_bases, int dim >
+template < int n_unknowns, size_t dimp1, typename Vals, typename Ders >
 auto LocalSystemManager< problem_size, update_size, n_rhs >::makeBasisBlock(
-    const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dim + 1 >& kernel_result,
-    const Eigen::Vector< val_t, n_bases >&                                        basis_vals,
-    const util::eigen::RowMajorMatrix< val_t, dim, n_bases >&                     basis_ders,
-    size_t                                                                        basis_ind)
+    const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dimp1 >& kernel_result,
+    const Vals&                                                                 basis_vals,
+    const Ders&                                                                 basis_ders,
+    size_t                                                                      basis_ind)
 {
+    constexpr size_t                                              dim = dimp1 - 1;
     util::eigen::RowMajorMatrix< val_t, n_unknowns, update_size > retval =
         basis_vals[basis_ind] * kernel_result[0].transpose();
-    for (size_t dim_ind = 0; dim_ind < static_cast< size_t >(dim); ++dim_ind)
-        retval += basis_ders(dim_ind, basis_ind) * kernel_result[dim_ind + 1].transpose();
+    for (size_t dim_ind = 0; dim_ind < dim; ++dim_ind)
+        retval += basis_ders(basis_ind, dim_ind) * kernel_result[dim_ind + 1].transpose();
     return retval;
 }
 
 template < size_t problem_size, size_t update_size, size_t n_rhs >
-template < int n_unknowns, int n_bases, int dim >
+template < int n_unknowns, size_t dimp1, typename Vals, typename Ders >
 void LocalSystemManager< problem_size, update_size, n_rhs >::update(
-    const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dim + 1 >& kernel_result,
-    const Eigen::Matrix< val_t, update_size, int{n_rhs} >&                        kernel_rhs,
-    const Eigen::Vector< val_t, n_bases >&                                        basis_vals,
-    const util::eigen::RowMajorMatrix< val_t, dim, n_bases >&                     basis_ders,
-    val_t                                                                         weight)
+    const std::array< Eigen::Matrix< val_t, update_size, n_unknowns >, dimp1 >& kernel_result,
+    const Eigen::Matrix< val_t, update_size, int{n_rhs} >&                      kernel_rhs,
+    const Vals&                                                                 basis_vals,
+    const Ders&                                                                 basis_ders,
+    val_t                                                                       weight)
 {
     const bool is_wgt_positive      = weight >= 0.;
     auto [batch_matrix, batch_size] = tieBatchData(is_wgt_positive);
     const auto wgt_abs_sqrt         = std::sqrt(std::fabs(weight));
-    for (size_t basis_ind = 0; basis_ind < static_cast< size_t >(n_bases); ++basis_ind)
+    for (size_t basis_ind = 0; basis_ind < static_cast< size_t >(basis_vals.size()); ++basis_ind)
     {
         const auto block = makeBasisBlock(kernel_result, basis_vals, basis_ders, basis_ind);
         const auto row   = basis_ind * n_unknowns;
@@ -200,8 +177,9 @@ void LocalSystemManager< problem_size, update_size, n_rhs >::flushBuf(const batc
 }
 
 template < size_t problem_size, size_t update_size, size_t n_rhs >
-void LocalSystemManager< problem_size, update_size, n_rhs >::flushFullBuf(
-    const LocalSystemManager::batch_update_matrix_t& batch_matrix, size_t& batch_size, val_t wgt)
+void LocalSystemManager< problem_size, update_size, n_rhs >::flushFullBuf(const batch_update_matrix_t& batch_matrix,
+                                                                          size_t&                      batch_size,
+                                                                          val_t                        wgt)
 {
     m_system->first.template selfadjointView< Eigen::Lower >().rankUpdate(batch_matrix, wgt);
     batch_size = 0;
@@ -215,67 +193,49 @@ auto LocalSystemManager< problem_size, update_size, n_rhs >::setZero() -> LocalS
     return *this;
 }
 
-auto evalKernel(const auto& kernel,
-                const auto& point,
-                const auto& basis_vals,
-                const auto& phys_basis_ders,
-                const auto& node_vals,
-                const auto& element_data,
-                val_t       time,
-                const auto&... args)
-{
-    const auto field_vals  = computeFieldVals(basis_vals, node_vals);
-    const auto field_ders  = computeFieldDers(phys_basis_ders, node_vals);
-    const auto phys_coords = map::mapToPhysicalSpace(element_data, point);
-    const auto eval_point  = SpaceTimePoint{phys_coords, time};
-    return kernel({field_vals, field_ders, eval_point, args...});
-}
-
-template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >
-const auto& assembleLocalSystem(
-    const DomainEquationKernel< Kernel, params >&                                                  kernel,
-    const mesh::Element< ET, EO >&                                                                 element,
-    const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, params.n_fields >& node_vals,
-    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,
-    val_t                                                                                          time)
+template < typename Kernel, KernelParams params, size_t NB, size_t NP >
+const auto& assembleLocalSystem(const DomainEquationKernel< Kernel, params >&                            kernel,
+                                const map::TabulatedDomainMapping< NB, NP, params.dimension >&           mapping,
+                                const map::FieldValuesAtPoints< NP, params.n_fields, params.dimension >& fields,
+                                std::span< const val_t, NP >                                             quad_weights,
+                                val_t                                                                    time)
 {
     L3STER_PROFILE_FUNCTION;
-    static_assert(params.dimension == mesh::ElementTraits< mesh::Element< ET, EO > >::native_dim);
-    const auto& el_data              = element.data;
-    const auto  jacobi_gen           = map::getNatJacobiMatGenerator(el_data);
-    auto&       local_system_manager = getLocalSystemManager< params, mesh::Element< ET, EO >::n_nodes >();
-    const auto  process_qp = [&](const auto& point, val_t weight, const auto& basis_vals, const auto& ref_ders) {
-        const auto [phys_ders, jacobian] = map::mapDomain< ET, EO >(jacobi_gen, point, ref_ders);
+    const auto& [J, basis_vals, basis_ders, points] = mapping;
+    auto& local_system_manager                      = getLocalSystemManager< params, NB >();
+    for (size_t p = 0; p != NP; ++p)
+    {
+        const auto jacobian = J[p];
         util::throwingAssert(jacobian > 0., "Encountered degenerate element ( |J| <= 0 )");
-        const auto [A, F]             = evalKernel(kernel, point, basis_vals, phys_ders, node_vals, el_data, time);
-        const auto rank_update_weight = jacobian * weight;
-        local_system_manager.update(A, F, basis_vals, phys_ders, rank_update_weight);
-    };
-    basis_at_qps.forEach(process_qp);
+        const auto point    = SpaceTimePoint{points[p], time};
+        const auto [fv, fd] = fields.get(p);
+        const auto [A, F]   = kernel({fv, fd, point});
+        const auto weight   = jacobian * quad_weights[p];
+        local_system_manager.update(A, F, basis_vals->getMap().row(p), basis_ders.getPointMap(p), weight);
+    }
     return local_system_manager.getSystem();
 }
 
-template < typename Kernel, KernelParams params, mesh::ElementType ET, el_o_t EO, q_l_t QL >
-const auto& assembleLocalSystem(
-    const BoundaryEquationKernel< Kernel, params >&                                                kernel,
-    mesh::BoundaryElementView< ET, EO >                                                            el_view,
-    const util::eigen::RowMajorMatrix< val_t, mesh::Element< ET, EO >::n_nodes, params.n_fields >& node_vals,
-    const basis::ReferenceBasisAtQuadrature< ET, EO, QL >&                                         basis_at_qps,
-    val_t                                                                                          time)
+template < typename Kernel, KernelParams params, size_t NB, size_t NP >
+const auto& assembleLocalSystem(const BoundaryEquationKernel< Kernel, params >&                          kernel,
+                                const map::TabulatedBoundaryMapping< NB, NP, params.dimension >&         mapping,
+                                const map::FieldValuesAtPoints< NP, params.n_fields, params.dimension >& fields,
+                                std::span< const val_t, NP >                                             quad_weights,
+                                val_t                                                                    time)
 {
     L3STER_PROFILE_FUNCTION;
-    static_assert(params.dimension == mesh::ElementTraits< mesh::Element< ET, EO > >::native_dim);
-    const auto& el_data              = el_view->data;
-    const auto  jacobi_gen           = map::getNatJacobiMatGenerator(el_data);
-    auto&       local_system_manager = getLocalSystemManager< params, mesh::Element< ET, EO >::n_nodes >();
-    const auto  process_qp           = [&](auto point, val_t weight, const auto& basis_vals, const auto& ref_ders) {
-        const auto side                          = el_view.getSide();
-        const auto [phys_ders, jacobian, normal] = map::mapBoundary< ET, EO >(jacobi_gen, point, ref_ders, side);
-        const auto [A, F] = evalKernel(kernel, point, basis_vals, phys_ders, node_vals, el_data, time, normal);
-        const auto rank_update_weight = jacobian * weight;
-        local_system_manager.update(A, F, basis_vals, phys_ders, rank_update_weight);
-    };
-    basis_at_qps.forEach(process_qp);
+    const auto& [J, basis_vals, basis_ders, points, normals] = mapping;
+    auto& local_system_manager                               = getLocalSystemManager< params, NB >();
+    for (size_t p = 0; p != NP; ++p)
+    {
+        const auto jacobian = J[p];
+        util::throwingAssert(jacobian > 0., "Encountered degenerate element ( |J| <= 0 )");
+        const auto point    = SpaceTimePoint{points[p], time};
+        const auto [fv, fd] = fields.get(p);
+        const auto [A, F]   = kernel({fv, fd, point, normals[p]});
+        const auto weight   = jacobian * quad_weights[p];
+        local_system_manager.update(A, F, basis_vals->getMap().row(p), basis_ders.getPointMap(p), weight);
+    }
     return local_system_manager.getSystem();
 }
 } // namespace lstr::algsys
