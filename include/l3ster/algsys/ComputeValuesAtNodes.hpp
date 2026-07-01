@@ -364,6 +364,9 @@ void computeValuesAtNodes(const MpiComm&                                        
     const auto do_border = [&] {
         do_mesh(border_mesh);
     };
+
+    interior_mesh.visit(do_interior, domain_ids, std::execution::par);
+    border_mesh.visit(do_border, domain_ids, std::execution::par);
     detail::averageElementContributions(
         comm, owned_values, shared_values, num_contribs, exporter, do_interior, do_border);
 }

@@ -35,17 +35,20 @@ void solveAdvection2D()
     constexpr auto alg_params       = AlgebraicSystemParams{.eval_strategy = S, .cond_policy = CP};
     constexpr auto algparams_ctwrpr = util::ConstexprValue< alg_params >{};
     auto           alg_sys          = makeAlgebraicSystem(comm, mesh, problem_def, bc_def, algparams_ctwrpr);
+    alg_sys.endAssembly();
     alg_sys.describe();
 
     //    // BDF 2
     //    constexpr auto time_order       = 2;
     //    constexpr auto bdf_leading      = 1.5;
     //    constexpr auto bdf_coefs        = std::array< double, time_order >{2., -.5};
+    //    constexpr auto extrap_coefs     = std::array< double, time_order >{2., -1.};
 
     // BDF 3
-    constexpr auto time_order  = 3;
-    constexpr auto bdf_leading = 11. / 6.;
-    constexpr auto bdf_coefs   = std::array< double, time_order >{3., -1.5, 1. / 3.};
+    constexpr auto time_order   = 3;
+    constexpr auto bdf_leading  = 11. / 6.;
+    constexpr auto bdf_coefs    = std::array< double, time_order >{3., -1.5, 1. / 3.};
+    constexpr auto extrap_coefs = std::array< double, time_order >{3., -3., 1.};
 
     constexpr double u = 1., v = 0.;
     constexpr double dt       = .05;
@@ -57,7 +60,7 @@ void solveAdvection2D()
         A0(0, 0)                                    = bdf_leading;
         A1(0, 0)                                    = u * dt;
         A2(0, 0)                                    = v * dt;
-        rhs(0, 0) = std::transform_reduce(field_vals.begin(), field_vals.end(), bdf_coefs.begin(), 0.); // inner product
+        rhs(0, 0) = std::transform_reduce(field_vals.begin(), field_vals.end(), bdf_coefs.begin(), 0.);
     });
     constexpr auto adv_params_eval         = KernelParams{.dimension = 2, .n_equations = 1, .n_unknowns = 1};
     const auto     advection_kernel2d_eval = wrapDomainEquationKernel< adv_params_eval >([&](const auto&, auto& out) {
@@ -66,6 +69,12 @@ void solveAdvection2D()
         A0(0, 0)             = bdf_leading;
         A1(0, 0)             = u * dt;
         A2(0, 0)             = v * dt;
+    });
+
+    constexpr auto extrap_params = KernelParams{.dimension = 2, .n_equations = 1, .n_fields = time_order};
+    const auto     extrap_kernel = wrapDomainResidualKernel< extrap_params >([&](const auto& in, auto& out) {
+        const auto& [field_vals, field_ders, point] = in;
+        out[0] = std::transform_reduce(field_vals.begin(), field_vals.end(), extrap_coefs.begin(), 0.);
     });
 
     constexpr auto anal_sol = [](const auto& in, auto& out) {
@@ -97,15 +106,17 @@ void solveAdvection2D()
     const auto     num_steps    = std::lround((node_dist_x.back() - node_dist_x.front()) / dt);
     for (long time_step = 1; time_step <= num_steps; ++time_step)
     {
-        const auto time = static_cast< double >(time_step) * dt;
+        const auto time             = static_cast< double >(time_step) * dt;
+        const auto time_hist_access = solution_manager.getFieldAccess(time_hist_inds);
         alg_sys.setDirichletBCValues(solution_kernel_bc, {bot_bound, top_bound}, i0, {}, time);
+        alg_sys.setValues(
+            alg_sys.getSolution(), extrap_kernel, {domain_id}, util::makeIotaArray< size_t, 1 >(), time_hist_access);
         alg_sys.beginAssembly();
         if constexpr (S == OperatorEvaluationStrategy::GlobalAssembly)
-            alg_sys.assembleProblem(
-                advection_kernel2d_init, {domain_id}, solution_manager.getFieldAccess(time_hist_inds));
+            alg_sys.assembleProblem(advection_kernel2d_init, {domain_id}, time_hist_access);
         else // Don't recompute RHS during every kernel evaluation
         {
-            alg_sys.initProblem(advection_kernel2d_init, {domain_id}, solution_manager.getFieldAccess(time_hist_inds));
+            alg_sys.initProblem(advection_kernel2d_init, {domain_id}, time_hist_access);
             alg_sys.defineOperator(advection_kernel2d_eval, {domain_id});
         }
         alg_sys.endAssembly();
