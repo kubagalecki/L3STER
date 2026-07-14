@@ -10,38 +10,31 @@
 
 namespace lstr::util
 {
-inline constexpr std::size_t default_stack_size = 1u << 23;
-
 struct MaxStackSizeTracker
 {
     static size_t get() { return access(); }
-    static void   set(size_t value)
-    {
-        const auto prev_val = access();
-        access()            = std::max(value, prev_val);
-    }
+    static void   set(size_t value) { access() = std::max(value, access()); }
 
-    template < size_t size >
-    struct MaxStackSizeRequest
+    struct Request
     {
-        inline static const bool _ = std::invoke([] {
-            MaxStackSizeTracker::set(size);
-            return false;
-        });
+        Request(size_t size) { set(size); }
     };
 
 private:
     static size_t& access()
     {
-        static size_t value = default_stack_size;
+        static size_t value = 0;
         return value;
-    };
+    }
 };
+
+template < size_t size >
+inline const auto stack_size_request = MaxStackSizeTracker::Request(size);
 
 template < size_t size >
 void requestStackSize()
 {
-    [[maybe_unused]] const auto request = MaxStackSizeTracker::MaxStackSizeRequest< size >{};
+    (void)&stack_size_request< size >;
 }
 
 namespace detail
@@ -60,7 +53,7 @@ inline auto getStackSize() -> rlimit
 {
     auto       retval   = rlimit{};
     const auto err_code = getrlimit(RLIMIT_STACK, &retval);
-    util::throwingAssert(not err_code, "Could not determine the stack size");
+    throwingAssert(not err_code, "Could not determine the stack size");
     return retval;
 }
 
@@ -70,10 +63,10 @@ inline void setMinStackSize(rlim_t requested_size)
     const auto [current_stack_size, max_stack_size] = resource_limit;
     if (requested_size <= current_stack_size)
         return;
-    util::throwingAssert(requested_size <= max_stack_size, "Requested stack size exceeds system limits");
+    throwingAssert(requested_size <= max_stack_size, "Requested stack size exceeds system limits");
     resource_limit.rlim_cur = requested_size;
     const auto err_code     = setrlimit(RLIMIT_STACK, &resource_limit);
-    util::throwingAssert(not err_code, "Could not increase the stack size to the desired size");
+    throwingAssert(not err_code, "Could not increase the stack size to the desired size");
 }
 } // namespace detail
 
