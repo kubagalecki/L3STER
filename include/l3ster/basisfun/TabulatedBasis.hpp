@@ -2,6 +2,7 @@
 #define L3STER_BASIS_TABULATEDBASIS_HPP
 
 #include "l3ster/basisfun/ReferenceBasisFunction.hpp"
+#include "l3ster/util/SetStackSize.hpp"
 
 namespace lstr::basis
 {
@@ -90,6 +91,7 @@ auto tabulateBasis(std::span< const Point< mesh::ElementTraits< mesh::Element< E
         for (dim_t dim = 0; dim != nat_dim; ++dim)
             retval.getDerivativesMap(dim).row(i) = qd.row(dim);
     }
+    util::requestStackSize< 2 * sizeof retval >();
     return retval;
 }
 } // namespace lstr::basis

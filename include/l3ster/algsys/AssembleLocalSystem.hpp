@@ -59,7 +59,7 @@ class LocalSystemManager
     using batch_update_matrix_t = Eigen::Matrix< val_t, problem_size, batch_update_size, Eigen::ColMajor >;
 
 public:
-    LocalSystemManager() { util::requestStackSize< util::default_stack_size + required_stack_size >(); }
+    LocalSystemManager() { util::requestStackSize< required_stack_size >(); }
 
     using matrix_t = util::eigen::RowMajorSquareMatrix< val_t, problem_size >;
     using rhs_t    = Eigen::Matrix< val_t, problem_size, int{n_rhs} >;

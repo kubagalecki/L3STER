@@ -187,7 +187,7 @@ class L3sterScopeGuard
 {
 public:
     L3sterScopeGuard(int& argc, char** argv)
-        : m_stack_size_guard{util::MaxStackSizeTracker::get()},
+        : m_stack_size_guard{util::MaxStackSizeTracker::get() + (1uz << 23)}, // add 8MB of regular stack
           m_mpi_guard{argc, argv},
           m_max_par_guard{util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNHwThreads()},
           m_kokkos_guard{argc, argv}
