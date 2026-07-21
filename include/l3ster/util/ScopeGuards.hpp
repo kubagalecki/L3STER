@@ -42,11 +42,11 @@ MpiScopeGuard::MpiScopeGuard(int& argc, char**& argv)
     constexpr auto        check_mpi_thread_support = [] {
         int provided_mode{};
         L3STER_INVOKE_MPI(MPI_Query_thread, &provided_mode);
-        util::throwingAssert(provided_mode >= required_mode,
-                             "The provided MPI installation appears not to have the required threading support: "
-                                    "`MPI_THREAD_FUNNELED`\nIf you are initializing MPI yourself (i.e. not via L3STER scope "
-                                    "guards), be sure to do so by calling `MPI_Init_thread` and passing `MPI_THREAD_FUNNELED` "
-                                    "as the requirement, and *not* by calling `MPI_Init`");
+        throwingAssert(provided_mode >= required_mode,
+                       "The provided MPI installation appears not to have the required threading support: "
+                              "`MPI_THREAD_FUNNELED`\nIf you are initializing MPI yourself (i.e. not via L3STER scope "
+                              "guards), be sure to do so by calling `MPI_Init_thread` and passing `MPI_THREAD_FUNNELED` "
+                              "as the requirement, and *not* by calling `MPI_Init`");
     };
     constexpr auto check_initialized = []() -> bool {
         int retval{};
@@ -56,8 +56,8 @@ MpiScopeGuard::MpiScopeGuard(int& argc, char**& argv)
     constexpr auto check_not_finalized = [] {
         int finalized{};
         L3STER_INVOKE_MPI(MPI_Finalized, &finalized);
-        util::terminatingAssert(
-            not finalized, "You are attempting to create `lstr::MpiScopeGuard` after `MPI_Finalize` has been called");
+        terminatingAssert(not finalized,
+                          "You are attempting to create `lstr::MpiScopeGuard` after `MPI_Finalize` has been called");
     };
     const auto initialize = [&] {
         int dummy{};
@@ -150,20 +150,23 @@ class MaxParallelismGuard
         OpenMPThreadGuard           m_openmp_guard;
     };
 
-    static auto getCurrentMaxPar() -> size_t&
+    static auto currentMaxPar() -> size_t&
     {
-        static size_t value = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNHwThreads();
+        static size_t value = std::numeric_limits< size_t >::max();
         return value;
     }
 
 public:
-    explicit MaxParallelismGuard(size_t max_threads) : m_previous{getCurrentMaxPar()}
+    MaxParallelismGuard()
+        : MaxParallelismGuard(GlobalResource< hwloc::Topology >::getMaybeUninitialized().getNHwThreads())
+    {}
+    explicit MaxParallelismGuard(size_t max_threads) : m_previous{currentMaxPar()}
     {
         max_threads = std::max(max_threads, 1uz);
         if (max_threads < m_previous)
         {
             m_thread_guards.emplace(max_threads);
-            getCurrentMaxPar() = max_threads;
+            currentMaxPar() = max_threads;
         }
     }
 
@@ -174,7 +177,7 @@ public:
     ~MaxParallelismGuard()
     {
         if (m_thread_guards)
-            getCurrentMaxPar() = m_previous;
+            currentMaxPar() = m_previous;
     }
 
 private:

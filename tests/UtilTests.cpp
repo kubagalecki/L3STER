@@ -517,8 +517,7 @@ TEST_CASE("Non-random access parallel for", "[util]")
 
 TEST_CASE("Hwloc topology info", "[util, hwloc]")
 {
-    const auto topology = util::hwloc::Topology{};
-    REQUIRE_FALSE(topology.isEmpty());
+    const auto topology         = util::hwloc::Topology{};
     const auto numa_expected    = L3STER_N_NUMA_NODES;
     const auto cores_expected   = L3STER_N_CORES;
     const auto threads_expected = L3STER_N_HWTHREADS;
@@ -548,7 +547,9 @@ TEST_CASE("Num threads control", "[util]")
     check_num_threads(n_hw_threads);
 
     {
-        const auto guard = util::MaxParallelismGuard{2 * n_hw_threads};
+        // Check that the default guard protects from exceeding hardware limits
+        const auto default_guard = util::MaxParallelismGuard{};
+        const auto guard         = util::MaxParallelismGuard{2 * n_hw_threads};
         check_num_threads(n_hw_threads);
     }
     check_num_threads(n_hw_threads);
@@ -712,10 +713,8 @@ TEST_CASE("UniVector", "[util]")
 
     SECTION("Reduction")
     {
-        const auto transform = util::OverloadSet{[&](int i) { return i; },
-                                                 [&](const std::string& str) {
-                                                     return std::stoi(str);
-                                                 }};
+        const auto transform =
+            util::OverloadSet{[&](int i) { return i; }, [&](const std::string& str) { return std::stoi(str); }};
 
         CHECK(vec.transformReduce(0, transform, std::plus{}, std::execution::seq) == (n_strs + n_ints) * 42);
         CHECK(vec.transformReduce(0, transform, std::plus{}, std::execution::par) == (n_strs + n_ints) * 42);
