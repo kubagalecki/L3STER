@@ -6,6 +6,7 @@
 #include "l3ster/util/GlobalResource.hpp"
 #include "l3ster/util/HwlocWrapper.hpp"
 #include "l3ster/util/SetStackSize.hpp"
+#include "l3ster/util/StringUtils.hpp"
 
 #include <optional>
 
@@ -156,10 +157,15 @@ class MaxParallelismGuard
         return value;
     }
 
+    static auto defaultMaxPar() -> size_t
+    {
+        const auto omp_env = std::getenv("OMP_NUM_THREADS");
+        return omp_env ? fromString< size_t >(omp_env)
+                       : GlobalResource< hwloc::Topology >::getMaybeUninitialized().getNHwThreads();
+    }
+
 public:
-    MaxParallelismGuard()
-        : MaxParallelismGuard(GlobalResource< hwloc::Topology >::getMaybeUninitialized().getNHwThreads())
-    {}
+    MaxParallelismGuard() : MaxParallelismGuard{defaultMaxPar()} {}
     explicit MaxParallelismGuard(size_t max_threads) : m_previous{currentMaxPar()}
     {
         max_threads = std::max(max_threads, 1uz);
@@ -191,15 +197,15 @@ class L3sterScopeGuard
 public:
     L3sterScopeGuard(int& argc, char** argv)
         : m_stack_size_guard{util::MaxStackSizeTracker::get() + (1uz << 23)}, // add 8MB of regular stack
+          m_max_par_guard{},                                                  // looks at hwthreads and OMP_NUM_THREADS
           m_mpi_guard{argc, argv},
-          m_max_par_guard{util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNHwThreads()},
           m_kokkos_guard{argc, argv}
     {}
 
 private:
     util::StackSizeGuard      m_stack_size_guard;
-    util::MpiScopeGuard       m_mpi_guard;
     util::MaxParallelismGuard m_max_par_guard;
+    util::MpiScopeGuard       m_mpi_guard;
     util::KokkosScopeGuard    m_kokkos_guard;
 };
 } // namespace lstr
