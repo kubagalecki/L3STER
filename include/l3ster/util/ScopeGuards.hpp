@@ -7,7 +7,9 @@
 #include "l3ster/util/HwlocWrapper.hpp"
 #include "l3ster/util/SetStackSize.hpp"
 #include "l3ster/util/StringUtils.hpp"
+#include "l3ster/util/TbbUtils.hpp"
 
+#include <chrono>
 #include <optional>
 
 namespace lstr
@@ -144,7 +146,31 @@ class MaxParallelismGuard
         explicit ThreadGuards(size_t threads)
             : m_tbb_guard{oneapi::tbb::global_control::max_allowed_parallelism, threads},
               m_openmp_guard{static_cast< int >(threads)}
-        {}
+        {
+            // Force spawn TBB worker threads with the full affinity mask
+            // This is a somewhat crude workaround to avoid pinning TBB threads when OMP_PROC_BIND is set
+            [[maybe_unused]] static const bool initialized = std::invoke([] {
+                const auto& hwloc_topo = GlobalResource< hwloc::Topology >::getMaybeUninitialized();
+                const auto  prev_mask  = hwloc_topo.getThreadBinding();
+                hwloc_topo.bindThread(hwloc_topo.getFullMask());
+                const auto max_threads =
+                    oneapi::tbb::global_control::active_value(oneapi::tbb::global_control::max_allowed_parallelism);
+                auto spawned_bmp = std::vector< std::atomic< bool > >(max_threads);
+                tbb::parallelFor(std::views::iota(0uz, max_threads), [&](size_t i) {
+                    using namespace std::chrono_literals;
+                    spawned_bmp[i] = true;
+                    for (size_t spin = 0; spin != 10000; ++spin)
+                    {
+                        std::this_thread::sleep_for(100us);
+                        if (std::ranges::all_of(spawned_bmp, std::identity{}))
+                            return;
+                    }
+                    terminatingAssert(false, "Critical error: failed to force spawn TBB threads");
+                });
+                hwloc_topo.bindThread(prev_mask);
+                return true;
+            });
+        }
 
     private:
         oneapi::tbb::global_control m_tbb_guard;

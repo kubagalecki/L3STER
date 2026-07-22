@@ -6,13 +6,9 @@
 
 #include "oneapi/tbb.h"
 
-#include <algorithm>
-#include <bit>
 #include <cmath>
 #include <iterator>
-#include <map>
 #include <ranges>
-#include <shared_mutex>
 
 namespace lstr::util::tbb
 {

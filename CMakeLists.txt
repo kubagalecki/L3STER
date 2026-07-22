@@ -22,13 +22,16 @@ endif ()
 ### L3STER options ###
 
 # Build tests
-option( L3STER_ENABLE_TESTS "enable tests" )
+option( L3STER_ENABLE_TESTS "Build tests" OFF )
+
+# Build tests
+option( L3STER_ENABLE_MPI_TESTS "Build MPI tests" ON )
 
 # Set up coverage gathering
-option( L3STER_ENABLE_COVERAGE "enable coverage" )
+option( L3STER_ENABLE_COVERAGE "Build coverage" OFF )
 
 # Build benchmarks
-option( L3STER_ENABLE_BENCHMARKS "enable benchmarks" )
+option( L3STER_ENABLE_BENCHMARKS "Build benchmarks" OFF )
 
 # Disable curvilinear elements - this should significantly improve compile times if only linear elements are required
 option( L3STER_DISABLE_CURVILINEAR_ELEMENTS "disable curvilinear elements for faster compile times" )

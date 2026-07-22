@@ -537,7 +537,8 @@ TEST_CASE("Num threads control", "[util]")
 #endif
     };
 
-    const auto n_hw_threads = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNHwThreads();
+    const auto n_hw_threads  = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNHwThreads();
+    const auto default_guard = util::MaxParallelismGuard{};
     check_num_threads(n_hw_threads);
 
     {
@@ -547,9 +548,7 @@ TEST_CASE("Num threads control", "[util]")
     check_num_threads(n_hw_threads);
 
     {
-        // Check that the default guard protects from exceeding hardware limits
-        const auto default_guard = util::MaxParallelismGuard{};
-        const auto guard         = util::MaxParallelismGuard{2 * n_hw_threads};
+        const auto guard = util::MaxParallelismGuard{2 * n_hw_threads};
         check_num_threads(n_hw_threads);
     }
     check_num_threads(n_hw_threads);
