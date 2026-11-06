@@ -554,6 +554,69 @@ TEST_CASE("Num threads control", "[util]")
     check_num_threads(n_hw_threads);
 }
 
+TEST_CASE("Thread-pinning observer", "[util]")
+{
+    const auto& topo             = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized();
+    const auto  num_threads      = topo.getNHwThreads();
+    auto        thread_locations = std::unordered_map< std::thread::id, std::set< unsigned > >(num_threads);
+    auto        thread_bindings  = std::unordered_map< std::thread::id, std::set< util::hwloc::Mask > >(num_threads);
+    std::mutex  mutex;
+    const auto  update_loc_and_bind = [&](unsigned) {
+        const auto tid = std::this_thread::get_id();
+        {
+            const auto lock = std::scoped_lock{mutex};
+            thread_locations[tid].insert(topo.getLastThreadLocation());
+            thread_bindings[tid].insert(topo.getThreadBinding());
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(400));
+    };
+    const auto sample_loc_bind = [&](util::tbb::Pin pin) {
+        for (int i = 0; i != 100; ++i)
+        {
+            auto arena        = oneapi::tbb::task_arena{static_cast< int >(num_threads)};
+            auto pin_observer = util::tbb::PinningObserver{arena, pin};
+            arena.execute([&] { util::tbb::parallelFor(std::views::iota(0u, num_threads), update_loc_and_bind); });
+        }
+    };
+    const auto check_stable_binding = [&] {
+        REQUIRE(thread_bindings.size() == num_threads);
+        return std::ranges::all_of(thread_bindings, [](const auto& p) { return p.second.size() == 1; });
+    };
+
+    using enum util::tbb::Pin;
+    SECTION("Unpinned")
+    {
+        sample_loc_bind(Unpinned);
+        REQUIRE(check_stable_binding());
+    }
+    SECTION("Thread")
+    {
+        sample_loc_bind(Thread);
+        REQUIRE(check_stable_binding());
+        auto all_locs = util::hwloc::Mask{};
+        for (const auto& [tid, locs] : thread_locations)
+        {
+            REQUIRE(locs.size() == 1);
+            const auto& loc  = *locs.begin();
+            const auto& bind = *thread_bindings.at(tid).begin();
+            REQUIRE(bind.weight() == 1);
+            REQUIRE(bind.test(loc));
+            all_locs.set(loc);
+        }
+        CHECK(all_locs.weight() == num_threads);
+    }
+    SECTION("Core")
+    {
+        sample_loc_bind(Core);
+        REQUIRE(check_stable_binding());
+    }
+    SECTION("Node")
+    {
+        sample_loc_bind(Node);
+        REQUIRE(check_stable_binding());
+    }
+}
+
 TEST_CASE("Memory-mapping utils", "[utils]")
 {
     constexpr size_t size = 1 << 16;

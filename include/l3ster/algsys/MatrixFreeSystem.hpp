@@ -1061,9 +1061,12 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::applyImpl(const tp
     beta == 0. ? y.putScalar(0.) : y.scale(beta);
     const auto domains = util::ArrayOwner{m_mesh->getDomainIds()};
 
-    const auto n_cores       = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNCores();
-    const auto max_par_guard = util::MaxParallelismGuard{n_cores};
-    oneapi::tbb::task_arena hp_arena{oneapi::tbb::task_arena::automatic, 1, oneapi::tbb::task_arena::priority::high};
+    using oneapi::tbb::task_arena;
+    const auto              max_par      = util::tbb::getMaxParallelismCoresOnly();
+    static const auto       pin_type     = util::tbb::getPinTypeFromEnv();
+    auto                    main_arena   = oneapi::tbb::task_arena{static_cast< int >(max_par)};
+    auto                    hp_arena     = task_arena{task_arena::automatic, 1, task_arena::priority::high};
+    auto                    pin_observer = util::tbb::PinningObserver{main_arena, pin_type};
     oneapi::tbb::task_group interior_tasks, border_tasks;
 
     const auto setup_import_export = [&](const auto& x_view, const auto& y_view) {
@@ -1144,21 +1147,23 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::applyImpl(const tp
         finalize_import_export();
     };
 
-    if (x_num_cols == n_rhs)
-    {
-        const auto x_view = x.getLocalViewHost(Tpetra::Access::ReadOnly);
-        const auto y_view = y.getLocalViewHost(Tpetra::Access::ReadWrite);
-        evaluate(x_view, y_view);
-    }
-    else
-        for (size_t rhs = 0; rhs != x_num_cols; ++rhs)
+    main_arena.execute([&] {
+        if (x_num_cols == n_rhs)
         {
-            const auto x_col  = x.getVector(rhs);
-            const auto y_col  = y.getVectorNonConst(rhs);
-            const auto x_view = x_col->getLocalViewHost(Tpetra::Access::ReadOnly);
-            const auto y_view = y_col->getLocalViewHost(Tpetra::Access::ReadWrite);
+            const auto x_view = x.getLocalViewHost(Tpetra::Access::ReadOnly);
+            const auto y_view = y.getLocalViewHost(Tpetra::Access::ReadWrite);
             evaluate(x_view, y_view);
         }
+        else
+            for (size_t rhs = 0; rhs != x_num_cols; ++rhs)
+            {
+                const auto x_col  = x.getVector(rhs);
+                const auto y_col  = y.getVectorNonConst(rhs);
+                const auto x_view = x_col->getLocalViewHost(Tpetra::Access::ReadOnly);
+                const auto y_view = y_col->getLocalViewHost(Tpetra::Access::ReadWrite);
+                evaluate(x_view, y_view);
+            }
+    });
     L3STER_PROFILE_REGION_END("Evaluate matrix-free operator");
 }
 

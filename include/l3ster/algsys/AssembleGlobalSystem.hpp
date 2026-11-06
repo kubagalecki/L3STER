@@ -49,9 +49,12 @@ void assembleGlobalSystem(const DomainEquationKernel< Kernel, params >&         
                 dof_map, global_mat, global_rhs, loc_mat, loc_rhs, element, field_inds_ctwrpr);
         }
     };
-    const auto n_cores       = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNCores();
-    const auto max_par_guard = util::MaxParallelismGuard{n_cores};
-    mesh.visit(process_element, domain_ids, std::execution::par);
+
+    const auto        max_par      = util::tbb::getMaxParallelismCoresOnly();
+    static const auto pin_type     = util::tbb::getPinTypeFromEnv();
+    auto              arena        = oneapi::tbb::task_arena{static_cast< int >(max_par)};
+    auto              pin_observer = util::tbb::PinningObserver{arena, pin_type};
+    arena.execute([&] { mesh.visit(process_element, domain_ids, std::execution::par); });
 }
 
 template < typename Kernel,
@@ -99,9 +102,11 @@ void assembleGlobalSystem(const BoundaryEquationKernel< Kernel, params >&       
                     dof_map, global_mat, global_rhs, loc_mat, loc_rhs, *el_view, field_inds_ctwrpr);
             }
         };
-    const auto n_cores       = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNCores();
-    const auto max_par_guard = util::MaxParallelismGuard{n_cores};
-    mesh.visitBoundaries(process_element, boundary_ids, std::execution::par);
+    static const auto n_cores      = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNCores();
+    static const auto pin_type     = util::tbb::getPinTypeFromEnv();
+    auto              arena        = oneapi::tbb::task_arena{static_cast< int >(n_cores)};
+    auto              pin_observer = util::tbb::PinningObserver{arena, pin_type};
+    arena.execute([&] { mesh.visitBoundaries(process_element, boundary_ids, std::execution::par); });
 }
 } // namespace lstr::algsys
 #endif // L3STER_ALGSYS_ASSEMBLEGLOBALSYSTEM_HPP
