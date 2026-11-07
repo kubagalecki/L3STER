@@ -12,6 +12,7 @@
 #include "l3ster/util/SetStackSize.hpp"
 #include "l3ster/util/SpatialHashTable.hpp"
 #include "l3ster/util/StaticVector.hpp"
+#include "l3ster/util/StringUtils.hpp"
 #include "l3ster/util/TbbUtils.hpp"
 #include "l3ster/util/TypeErasedOverload.hpp"
 #include "l3ster/util/UniVector.hpp"
@@ -26,6 +27,30 @@
 #include <ranges>
 
 using namespace lstr;
+
+TEST_CASE("Assertions", "[util]")
+{
+    CHECK_THROWS_AS(util::throwingAssert(2 < 1, "Math is not mathing"), std::runtime_error);
+    CHECK_THROWS_AS(util::throwingAssert< std::bad_alloc >(2 < 1), std::bad_alloc);
+}
+
+TEST_CASE("String utilities", "[utils]")
+{
+    SECTION("Conversion from string")
+    {
+        CHECK(util::fromString< char >("97") == 'a');
+        CHECK(util::fromString< int >("42") == 42);
+        CHECK(util::fromString< size_t >("42") == 42);
+        CHECK(util::fromString< int >("-42") == -42);
+        CHECK(util::fromString< double >("2.5") == 2.5);
+        CHECK_THROWS(util::fromString< double >("abc"));
+    }
+
+    SECTION("Case-insensitive comparison")
+    {
+        CHECK(util::equalCaseInsensitive("abc,def", "ABc,deF"));
+    }
+}
 
 TEST_CASE("Stack size manipulation", "[util]")
 {
@@ -97,7 +122,7 @@ TEST_CASE("Dynamic bitset", "[util]")
         }
     };
 
-    constexpr std::array sizes{10, 64, 128, 10001};
+    constexpr std::array sizes{10uz, 64uz, 128uz, 10001uz};
 
     SECTION("Single-threaded")
     {
@@ -515,6 +540,26 @@ TEST_CASE("Non-random access parallel for", "[util]")
     }
 }
 
+TEST_CASE("Hwloc bitset wrapper", "[util, hwloc]")
+{
+    SECTION("Comparison")
+    {
+        util::hwloc::Mask b1{}, b2{};
+        b1.set(2);
+        b2.set(1);
+        CHECK(b1 > b2);
+        CHECK(b1 != b2);
+        CHECK(!(b1 < b2));
+    }
+
+    SECTION("Inversion")
+    {
+        util::hwloc::Mask mask{};
+        mask.set(2);
+        CHECK(mask == !(!mask));
+    }
+}
+
 TEST_CASE("Hwloc topology info", "[util, hwloc]")
 {
     const auto topology         = util::hwloc::Topology{};
@@ -552,6 +597,18 @@ TEST_CASE("Num threads control", "[util]")
         check_num_threads(n_hw_threads);
     }
     check_num_threads(n_hw_threads);
+}
+
+TEST_CASE("Interpret OpenMP environment", "[util]")
+{
+    using enum util::tbb::Pin;
+    CHECK(util::tbb::getPinType("false", "sockets") == Unpinned);
+    CHECK(util::tbb::getPinType("false", "cores") == Unpinned);
+    CHECK(util::tbb::getPinType("false", "threads") == Unpinned);
+    CHECK(util::tbb::getPinType("spread", "sockets") == Node);
+    CHECK(util::tbb::getPinType("spread", "cores") == Core);
+    CHECK(util::tbb::getPinType("spread", "threads") == Thread);
+    CHECK_THROWS(util::tbb::getPinType("spread", "numa"));
 }
 
 TEST_CASE("Thread-pinning observer", "[util]")

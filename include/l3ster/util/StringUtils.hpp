@@ -11,7 +11,7 @@
 namespace lstr::util
 {
 template < Arithmetic_c T >
-auto fromString(std::string_view str)
+auto fromString(std::string_view str) -> T
 {
     const auto begin  = str.data();
     const auto end    = std::next(begin, std::ranges::ssize(str));

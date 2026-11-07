@@ -61,17 +61,13 @@ inline bool operator==(const Mask& b1, const Mask& b2)
 inline auto operator<=>(const Mask& b1, const Mask& b2) -> std::strong_ordering
 {
     const auto cmp = hwloc_bitmap_compare(b1.getRaw(), b2.getRaw());
-    switch (cmp)
-    {
-    case -1:
+    if (cmp == -1)
         return std::strong_ordering::less;
-    case 0:
+    if (cmp == 0)
         return std::strong_ordering::equal;
-    case 1:
+    if (cmp == 1)
         return std::strong_ordering::greater;
-    default:
-        std::unreachable();
-    }
+    std::unreachable();
 }
 
 #define L3STER_DEFINE_HWLOC_BMP_BINOP(symbol, op)                                                                      \

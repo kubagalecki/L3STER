@@ -156,25 +156,21 @@ private:
     // Round-robin assignment
     auto getMask(unsigned thread_index) const -> hwloc::Mask
     {
-        const auto& topo   = GlobalResource< hwloc::Topology >::getMaybeUninitialized();
-        auto        assign = [&topo, thread_index](unsigned (hwloc::Topology::*get_num_units)() const,
-                                            hwloc::Mask (hwloc::Topology::*get_mask)(unsigned) const) mutable {
+        const auto& topo    = GlobalResource< hwloc::Topology >::getMaybeUninitialized();
+        auto        get_pin = [&topo, thread_index](unsigned (hwloc::Topology::*get_num_units)() const,
+                                             hwloc::Mask (hwloc::Topology::*get_mask)(unsigned) const) mutable {
             const auto num_units = std::invoke(get_num_units, topo);
             while (thread_index >= num_units)
                 thread_index -= num_units;
             return std::invoke(get_mask, topo, thread_index);
         };
-        switch (m_pin_type)
-        {
-        case Pin::Node:
-            return assign(&hwloc::Topology::getNNodes, &hwloc::Topology::getNodeMask);
-        case Pin::Core:
-            return assign(&hwloc::Topology::getNCores, &hwloc::Topology::getCoreMask);
-        case Pin::Thread:
-            return assign(&hwloc::Topology::getNHwThreads, &hwloc::Topology::getThreadMask);
-        default:
-            std::unreachable();
-        }
+        if (m_pin_type == Pin::Node)
+            return get_pin(&hwloc::Topology::getNNodes, &hwloc::Topology::getNodeMask);
+        if (m_pin_type == Pin::Core)
+            return get_pin(&hwloc::Topology::getNCores, &hwloc::Topology::getCoreMask);
+        if (m_pin_type == Pin::Thread)
+            return get_pin(&hwloc::Topology::getNHwThreads, &hwloc::Topology::getThreadMask);
+        std::unreachable();
     }
 
     Pin                       m_pin_type;
@@ -182,12 +178,10 @@ private:
     ArrayOwner< hwloc::Mask > m_thread_masks;
 };
 
-inline auto getPinTypeFromEnv()
+inline auto getPinType(std::string_view proc_bind, std::string_view places) -> Pin
 {
     using namespace std::string_view_literals;
     constexpr auto bind_strs      = std::array{"true"sv, "close"sv, "spread"sv};
-    const auto     proc_bind      = getEnvOrEmpty("OMP_PROC_BIND");
-    const auto     places         = getEnvOrEmpty("OMP_PLACES");
     constexpr auto starts_with_ci = [](std::string_view str, std::string_view prefix) {
         return equalCaseInsensitive(str.substr(0, prefix.size()), prefix);
     };
@@ -197,9 +191,19 @@ inline auto getPinTypeFromEnv()
             return Pin::Node;
         if (starts_with_ci(places, "cores"))
             return Pin::Core;
-        return Pin::Thread;
+        if (starts_with_ci(places, "threads"))
+            return Pin::Thread;
+        const auto err_msg = std::format("Unknown value for OMP_PLACES: {}", places);
+        throwingAssert(false, err_msg);
     }
     return Pin::Unpinned;
+}
+
+inline auto getPinTypeFromEnv() -> Pin
+{
+    const auto proc_bind = getEnvOrEmpty("OMP_PROC_BIND");
+    const auto places    = getEnvOrEmpty("OMP_PLACES");
+    return getPinType(proc_bind, places);
 }
 
 inline auto getMaxParallelism()
