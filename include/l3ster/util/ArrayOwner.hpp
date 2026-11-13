@@ -4,29 +4,107 @@
 #include "l3ster/util/Assertion.hpp"
 
 #include <algorithm>
-#include <cstdint>
 #include <iterator>
 #include <memory>
 #include <ranges>
 
 namespace lstr::util
 {
-struct CacheAlign
-{};
-inline constexpr CacheAlign cache_align{};
 
-/// Fixed-size dynamically allocated array. Exposed a range interface
-template < std::default_initializable T >
+struct DefaultAllocPolicy
+{
+    template < class T >
+    static constexpr auto alignment = std::align_val_t{alignof(T)};
+
+    template < class T >
+    static constexpr T* allocate(std::size_t n)
+    {
+        return std::allocator< T >{}.allocate(n);
+    }
+    template < class T >
+    static constexpr void deallocate(T* p, std::size_t n) noexcept
+    {
+        std::allocator< T >{}.deallocate(p, n);
+    }
+};
+
+template < std::size_t align >
+struct AlignedAllocPolicy
+{
+    static_assert(align != 0 and (align & (align - 1)) == 0, "Alignment must be a power of two");
+
+    template < class T >
+    static constexpr auto alignment = std::align_val_t{std::max(align, alignof(T))};
+
+    template < class T >
+    static T* allocate(std::size_t n)
+    {
+        return static_cast< T* >(::operator new(n * sizeof(T), alignment< T >));
+    }
+    template < class T >
+    static void deallocate(T* p, std::size_t n) noexcept
+    {
+        ::operator delete(p, n * sizeof(T), alignment< T >);
+    }
+};
+
+template < class P, class T >
+concept AllocPolicyFor_c = requires(T* p, std::size_t n) {
+    { P::template allocate< T >(n) } -> std::same_as< T* >;
+    { P::template deallocate< T >(p, n) } noexcept;
+};
+
+/// Fixed-size dynamically allocated array. Exposes a range interface
+template < std::default_initializable T, AllocPolicyFor_c< T > AllocPolicy = DefaultAllocPolicy >
 class ArrayOwner
 {
-    static constexpr std::size_t cacheline_size = std::hardware_destructive_interference_size;
+    static constexpr T* create(std::size_t size)
+    {
+        auto retval = AllocPolicy::template allocate< T >(size);
+        if consteval
+        {
+            for (std::size_t i = 0; i != size; ++i)
+                std::construct_at(retval + i);
+        }
+        else
+        {
+            std::uninitialized_default_construct_n(retval, size);
+        }
+        return retval;
+    }
+    static constexpr void destroy(T* ptr, std::size_t size)
+    {
+        if (ptr)
+        {
+            std::destroy_n(ptr, size);
+            AllocPolicy::template deallocate< T >(ptr, size);
+        }
+    }
 
 public:
     using size_type = std::size_t;
-    ArrayOwner()    = default;
-    explicit constexpr ArrayOwner(size_type size) : m_size{size}, m_data{std::make_unique_for_overwrite< T[] >(size)} {}
-    ArrayOwner(size_type size, std::align_val_t align) : m_size{size}, m_data{new(align) T[size]} {}
-    ArrayOwner(size_type size, CacheAlign) : ArrayOwner(size, std::align_val_t{std::max(cacheline_size, alignof(T))}) {}
+
+    constexpr ArrayOwner(const ArrayOwner&)            = delete;
+    constexpr ArrayOwner& operator=(const ArrayOwner&) = delete;
+    constexpr ArrayOwner(ArrayOwner&& other) noexcept : m_data{other.m_data}, m_size{other.m_size}
+    {
+        other.m_data = nullptr;
+    }
+    constexpr ArrayOwner& operator=(ArrayOwner&& other) noexcept
+    {
+        if (this != &other)
+        {
+            destroy(m_data, m_size);
+            m_size       = other.m_size;
+            m_data       = other.m_data;
+            other.m_data = nullptr;
+        }
+        return *this;
+    }
+    constexpr ~ArrayOwner() { destroy(m_data, m_size); }
+
+    constexpr ArrayOwner() = default;
+    explicit constexpr ArrayOwner(size_type size) : m_data{create(size)}, m_size{size} {}
     template < std::ranges::range R >
     constexpr ArrayOwner(R&& range) // NOLINT implicit conversion and copy are intended
         requires std::constructible_from< T, std::ranges::range_reference_t< R > >;
@@ -39,24 +117,24 @@ public:
         : ArrayOwner(std::ranges::subrange(i, s))
     {}
 
-    constexpr T*       begin() { return m_data.get(); }
-    constexpr const T* begin() const { return m_data.get(); }
+    constexpr T*       begin() { return m_data; }
+    constexpr const T* begin() const { return m_data; }
     constexpr const T* cbegin() const { return begin(); }
-    constexpr T*       end() { return m_data.get() + m_size; }
-    constexpr const T* end() const { return m_data.get() + m_size; }
+    constexpr T*       end() { return m_data + m_size; }
+    constexpr const T* end() const { return m_data + m_size; }
     constexpr const T* cend() const { return end(); }
-    constexpr T*       data() { return m_data.get(); }
-    constexpr const T* data() const { return m_data.get(); }
+    constexpr T*       data() { return m_data; }
+    constexpr const T* data() const { return m_data; }
     constexpr T&       operator[](size_type i) { return m_data[i]; }
     constexpr const T& operator[](size_type i) const { return m_data[i]; }
     constexpr T&       at(size_type i, std::source_location sl = std::source_location::current())
     {
-        throwingAssert(i < m_size, "ArrayOwner: out of bounds access", sl);
+        throwingAssert< std::out_of_range >(i < m_size, "ArrayOwner: out of bounds access", sl);
         return m_data[i];
     }
     constexpr const T& at(size_type i, std::source_location sl = std::source_location::current()) const
     {
-        throwingAssert(i < m_size, "ArrayOwner: out of bounds access", sl);
+        throwingAssert< std::out_of_range >(i < m_size, "ArrayOwner: out of bounds access", sl);
         return m_data[i];
     }
     constexpr T&        front() { return m_data[0]; }
@@ -73,27 +151,26 @@ public:
     friend constexpr bool operator==(const ArrayOwner& a, const ArrayOwner& b) { return std::ranges::equal(a, b); }
 
 private:
-    size_type              m_size{};
-    std::unique_ptr< T[] > m_data;
+    T*        m_data{};
+    size_type m_size{};
 };
 template < std::ranges::range R >
 ArrayOwner(R&&) -> ArrayOwner< std::ranges::range_value_t< R > >;
 template < typename T >
 ArrayOwner(std::initializer_list< T >) -> ArrayOwner< T >;
 
-template < std::default_initializable T >
+template < std::default_initializable T, AllocPolicyFor_c< T > AllocPolicy >
 template < std::ranges::range R >
-constexpr ArrayOwner< T >::ArrayOwner(R&& range)
+constexpr ArrayOwner< T, AllocPolicy >::ArrayOwner(R&& range)
     requires std::constructible_from< T, std::ranges::range_reference_t< R > >
-    : m_size{static_cast< size_t >(std::ranges::distance(range))}, m_data{std::make_unique_for_overwrite< T[] >(m_size)}
+    : ArrayOwner(static_cast< size_t >(std::ranges::distance(range)))
 {
     std::ranges::copy(std::forward< R >(range), begin());
 }
 
-template < std::default_initializable T >
+template < std::default_initializable T, AllocPolicyFor_c< T > AllocPolicy >
 template < std::convertible_to< T > Vals >
-constexpr ArrayOwner< T >::ArrayOwner(std::initializer_list< Vals > vals)
-    : m_size{vals.size()}, m_data{std::make_unique_for_overwrite< T[] >(m_size)}
+constexpr ArrayOwner< T, AllocPolicy >::ArrayOwner(std::initializer_list< Vals > vals) : ArrayOwner(vals.size())
 {
     std::move(vals.begin(), vals.end(), begin());
 }

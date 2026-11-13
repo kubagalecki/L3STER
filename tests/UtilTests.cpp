@@ -34,6 +34,33 @@ TEST_CASE("Assertions", "[util]")
     CHECK_THROWS_AS(util::throwingAssert< std::bad_alloc >(2 < 1), std::bad_alloc);
 }
 
+TEMPLATE_TEST_CASE("ArrayOwner", "[util]", util::DefaultAllocPolicy, util::AlignedAllocPolicy< 64 >)
+{
+    using array_t   = util::ArrayOwner< int, TestType >;
+    const auto iota = std::views::iota(0, 10);
+    auto       a    = array_t(iota);
+    REQUIRE(a.size() == 10);
+    REQUIRE(std::ranges::equal(a, iota));
+    auto b = std::move(a);
+    REQUIRE(b.size() == 10);
+    REQUIRE(std::ranges::equal(b, iota));
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wself-move"
+#endif
+
+    b = std::move(b);
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
+
+    REQUIRE(b.size() == 10);
+    REQUIRE(std::ranges::equal(b, iota));
+    REQUIRE(std::ranges::equal(array_t{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, iota));
+}
+
 TEST_CASE("String utilities", "[utils]")
 {
     SECTION("Conversion from string")

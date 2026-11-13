@@ -117,7 +117,7 @@ public:
     PinningObserver(oneapi::tbb::task_arena& arena, Pin pin_type)
         : oneapi::tbb::task_scheduler_observer(arena),
           m_pin_type(pin_type),
-          m_thread_masks(static_cast< size_t >(arena.max_concurrency()), cache_align)
+          m_thread_masks(static_cast< size_t >(arena.max_concurrency()))
     {
         if (pin_type == Pin::Unpinned)
             return;
@@ -173,9 +173,9 @@ private:
         std::unreachable();
     }
 
-    Pin                       m_pin_type;
-    hwloc::Mask               m_main_mask;
-    ArrayOwner< hwloc::Mask > m_thread_masks;
+    Pin                                                 m_pin_type;
+    hwloc::Mask                                         m_main_mask;
+    ArrayOwner< hwloc::Mask, AlignedAllocPolicy< 64 > > m_thread_masks;
 };
 
 inline auto getPinType(std::string_view proc_bind, std::string_view places) -> Pin
@@ -193,9 +193,7 @@ inline auto getPinType(std::string_view proc_bind, std::string_view places) -> P
             return Pin::Core;
         if (starts_with_ci(places, "threads"))
             return Pin::Thread;
-        throwingAssert(false, [&] {
-            return std::format("Unknown value for OMP_PLACES: {}", places);
-        });
+        throwingAssert(false, [&] { return std::format("Unknown value for OMP_PLACES: {}", places); });
     }
     return Pin::Unpinned;
 }
