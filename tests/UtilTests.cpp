@@ -709,6 +709,12 @@ TEST_CASE("Thread-pinning observer", "[util]")
     {
         sample_loc_bind(Core);
         REQUIRE(check_stable_binding());
+        const auto smt    = topo.getNHwThreads() / topo.getNCores();
+        const auto lt_smt = [&](const auto& s) {
+            return s.size() <= smt;
+        };
+        CHECK(std::ranges::all_of(thread_bindings | std::views::values, lt_smt));
+        CHECK(std::ranges::all_of(thread_locations | std::views::values, lt_smt));
     }
     SECTION("Node")
     {
