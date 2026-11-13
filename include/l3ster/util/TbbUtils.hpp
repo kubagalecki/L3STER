@@ -126,6 +126,12 @@ public:
         this->observe(true);
     }
 
+    PinningObserver(const PinningObserver&)            = delete;
+    PinningObserver& operator=(const PinningObserver&) = delete;
+    PinningObserver(PinningObserver&&)                 = delete;
+    PinningObserver& operator=(PinningObserver&&)      = delete;
+    ~PinningObserver() override { this->observe(false); }
+
     void on_scheduler_entry(bool is_worker) final
     {
         if (m_pin_type != Pin::Unpinned) [[likely]]
