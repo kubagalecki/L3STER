@@ -575,10 +575,11 @@ TEST_CASE("Hwloc bitset wrapper", "[util, hwloc]")
         b1.set(2);
         b2.set(1);
         CHECK(b1 > b2);
-        CHECK(b1 != b2);
-        CHECK(b1 == b1);
+        CHECK_FALSE(b2 > b1);
         CHECK_FALSE(b1 < b2);
         CHECK_FALSE(b1 < b1);
+        CHECK(b1 != b2);
+        CHECK(b1 == b1);
     }
 
     SECTION("Inversion")
@@ -610,6 +611,7 @@ TEST_CASE("Hwloc topology info", "[util, hwloc]")
     CHECK(numa_expected == topology.getNNodes());
     CHECK(cores_expected == topology.getNCores());
     CHECK(threads_expected == topology.getNHwThreads());
+    CHECK_THROWS(topology.bindThread({})); // Binding to empty mask should not be possible
 }
 
 TEST_CASE("Num threads control", "[util]")
