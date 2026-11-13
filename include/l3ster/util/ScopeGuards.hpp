@@ -150,7 +150,7 @@ class MaxParallelismGuard
             // Force spawn TBB worker threads with the full affinity mask
             // This is a somewhat crude workaround to avoid pinning TBB threads when OMP_PROC_BIND is set
             [[maybe_unused]] static const bool initialized = std::invoke([] {
-                const auto& hwloc_topo = GlobalResource< hwloc::Topology >::getMaybeUninitialized();
+                const auto& hwloc_topo = GlobalResource< hwloc::Topology >::get();
                 const auto  prev_mask  = hwloc_topo.getThreadBinding();
                 hwloc_topo.bindThread(hwloc_topo.getFullMask());
                 const auto max_threads =
@@ -186,8 +186,7 @@ class MaxParallelismGuard
     static auto defaultMaxPar() -> size_t
     {
         const auto omp_env = std::getenv("OMP_NUM_THREADS");
-        return omp_env ? fromString< size_t >(omp_env)
-                       : GlobalResource< hwloc::Topology >::getMaybeUninitialized().getNHwThreads();
+        return omp_env ? fromString< size_t >(omp_env) : GlobalResource< hwloc::Topology >::get().getNHwThreads();
     }
 
 public:

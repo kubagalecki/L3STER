@@ -100,17 +100,17 @@ class PinningObserver : public oneapi::tbb::task_scheduler_observer
     class PinCache
     {
     public:
-        PinCache() : my_mask_{GlobalResource< hwloc::Topology >::getMaybeUninitialized().getThreadBinding()} {}
+        PinCache() : m_last_mask{GlobalResource< hwloc::Topology >::get().getThreadBinding()} {}
         void bind(const hwloc::Mask& mask)
         {
-            if (mask == my_mask_)
+            if (mask == m_last_mask)
                 return;
-            GlobalResource< hwloc::Topology >::getMaybeUninitialized().bindThread(mask);
-            my_mask_ = mask.copy();
+            GlobalResource< hwloc::Topology >::get().bindThread(mask);
+            m_last_mask = hwloc::Mask{mask.getRaw()};
         }
 
     private:
-        hwloc::Mask my_mask_;
+        hwloc::Mask m_last_mask;
     };
 
 public:
@@ -134,7 +134,7 @@ public:
             const auto& mask = m_thread_masks.at(tid);
             if (not is_worker)
             {
-                const auto& topo = GlobalResource< hwloc::Topology >::getMaybeUninitialized();
+                const auto& topo = GlobalResource< hwloc::Topology >::get();
                 m_main_mask      = topo.getThreadBinding();
                 topo.bindThread(mask);
             }
@@ -149,14 +149,14 @@ public:
     void on_scheduler_exit(bool is_worker) final
     {
         if (m_pin_type != Pin::Unpinned and not is_worker) [[likely]]
-            GlobalResource< hwloc::Topology >::getMaybeUninitialized().bindThread(m_main_mask);
+            GlobalResource< hwloc::Topology >::get().bindThread(m_main_mask);
     }
 
 private:
     // Round-robin assignment
     auto getMask(unsigned thread_index) const -> hwloc::Mask
     {
-        const auto& topo    = GlobalResource< hwloc::Topology >::getMaybeUninitialized();
+        const auto& topo    = GlobalResource< hwloc::Topology >::get();
         auto        get_pin = [&topo, thread_index](unsigned (hwloc::Topology::*get_num_units)() const,
                                              hwloc::Mask (hwloc::Topology::*get_mask)(unsigned) const) mutable {
             const auto num_units = std::invoke(get_num_units, topo);
@@ -193,8 +193,9 @@ inline auto getPinType(std::string_view proc_bind, std::string_view places) -> P
             return Pin::Core;
         if (starts_with_ci(places, "threads"))
             return Pin::Thread;
-        const auto err_msg = std::format("Unknown value for OMP_PLACES: {}", places);
-        throwingAssert(false, err_msg);
+        throwingAssert(false, [&] {
+            return std::format("Unknown value for OMP_PLACES: {}", places);
+        });
     }
     return Pin::Unpinned;
 }
@@ -214,8 +215,8 @@ inline auto getMaxParallelism()
 inline auto getMaxParallelismCoresOnly() -> unsigned
 {
     const auto        max_par_global = static_cast< unsigned >(getMaxParallelism());
-    static const auto n_cores        = GlobalResource< hwloc::Topology >::getMaybeUninitialized().getNCores();
-    return std::max(max_par_global, n_cores);
+    static const auto n_cores        = GlobalResource< hwloc::Topology >::get().getNCores();
+    return std::min(max_par_global, n_cores);
 }
 } // namespace lstr::util::tbb
 #endif // L3STER_UTIL_TBBUTILS_HPP

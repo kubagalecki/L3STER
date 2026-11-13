@@ -2,7 +2,6 @@
 #define L3STER_UTIL_STRINGUTILS_HPP
 
 #include "l3ster/util/Assertion.hpp"
-#include "l3ster/util/Concepts.hpp"
 
 #include <cctype>
 #include <charconv>
@@ -10,13 +9,23 @@
 
 namespace lstr::util
 {
-template < Arithmetic_c T >
-auto fromString(std::string_view str) -> T
+template < std::integral T >
+auto fromString(std::string_view str, int base = 10) -> T
 {
     const auto begin  = str.data();
     const auto end    = std::next(begin, std::ranges::ssize(str));
     auto       retval = T{};
-    util::throwingAssert(std::from_chars(begin, end, retval).ec == std::errc{}, "Failed string conversion");
+    util::throwingAssert(std::from_chars(begin, end, retval, base).ec == std::errc{}, "Failed string conversion");
+    return retval;
+}
+
+template < std::floating_point T >
+auto fromString(std::string_view str, std::chars_format format = std::chars_format::general) -> T
+{
+    const auto begin  = str.data();
+    const auto end    = std::next(begin, std::ranges::ssize(str));
+    auto       retval = T{};
+    util::throwingAssert(std::from_chars(begin, end, retval, format).ec == std::errc{}, "Failed string conversion");
     return retval;
 }
 

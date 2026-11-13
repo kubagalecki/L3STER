@@ -24,10 +24,7 @@ struct MpiType
     template <>                                                                                                        \
     struct MpiType< type >                                                                                             \
     {                                                                                                                  \
-        static MPI_Datatype value()                                                                                    \
-        {                                                                                                              \
-            return mpitype;                                                                                            \
-        }                                                                                                              \
+        static MPI_Datatype value() { return mpitype; }                                                                \
     };
 L3STER_MPI_TYPE_MAPPING_STRUCT(char, MPI_SIGNED_CHAR)                      // NOLINT
 L3STER_MPI_TYPE_MAPPING_STRUCT(unsigned char, MPI_UNSIGNED_CHAR)           // NOLINT
@@ -47,8 +44,10 @@ L3STER_MPI_TYPE_MAPPING_STRUCT(std::byte, MPI_BYTE)                        // NO
 inline void
 handleMPIError(int error, std::string_view fun_name, std::source_location src_loc = std::source_location::current())
 {
-    const auto err_msg = std::format("MPI error: call to {} failed with error code {}", fun_name, error);
-    util::throwingAssert(not error, err_msg, src_loc);
+    util::throwingAssert(
+        not error,
+        [&] { return std::format("MPI error: call to {} failed with error code {}", fun_name, error); },
+        src_loc);
 }
 
 #define L3STER_INVOKE_MPI(fun__, ...) comm::handleMPIError(fun__(__VA_ARGS__), #fun__)

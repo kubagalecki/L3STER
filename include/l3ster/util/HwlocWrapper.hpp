@@ -18,19 +18,9 @@ class Mask
     using bitmap_t  = std::remove_pointer_t< hwloc_bitmap_t >;
     using deleter_t = std::remove_const_t< decltype(bitmap_deleter) >;
 
-    struct UnallocatedTag
-    {};
-    struct CopyTag
-    {};
-    static constexpr auto unallocated = UnallocatedTag{};
-
-    Mask(UnallocatedTag) {}
-
 public:
-    static constexpr auto make_copy = CopyTag{};
-
     Mask() : m_bitmap{hwloc_bitmap_alloc()} { assertNotNull(); }
-    Mask(hwloc_const_bitmap_t bitmap, CopyTag) : m_bitmap(hwloc_bitmap_dup(bitmap)) { assertNotNull(); }
+    Mask(hwloc_const_bitmap_t bitmap) : m_bitmap(hwloc_bitmap_dup(bitmap)) { assertNotNull(); }
 
     auto getRaw() const -> hwloc_const_bitmap_t { return m_bitmap.get(); }
     auto getRaw() -> hwloc_bitmap_t { return m_bitmap.get(); }
@@ -38,11 +28,12 @@ public:
     void set(unsigned index) { throwingAssert(not hwloc_bitmap_set(getRaw(), index)); }
     void unset(unsigned index) { throwingAssert(not hwloc_bitmap_clr(getRaw(), index)); }
     auto test(unsigned index) const -> bool { return hwloc_bitmap_isset(getRaw(), index); }
-    auto weight() const -> unsigned { return static_cast< unsigned >(hwloc_bitmap_weight(m_bitmap.get())); }
-    void clear() { hwloc_bitmap_zero(m_bitmap.get()); }
+    auto weight() const -> unsigned { return static_cast< unsigned >(hwloc_bitmap_weight(getRaw())); }
+    void clear() { hwloc_bitmap_zero(getRaw()); }
+
+    auto format() const -> std::string;
 
     inline auto operator!() const -> Mask;
-    inline auto copy() const -> Mask;
 
 private:
     void assertNotNull(std::source_location sl = std::source_location::current()) const
@@ -91,7 +82,7 @@ public:
     inline auto getNCores() const -> unsigned;
     inline auto getNHwThreads() const -> unsigned;
 
-    auto getFullMask() const -> Mask { return {hwloc_topology_get_topology_cpuset(m_topology.get()), Mask::make_copy}; }
+    auto        getFullMask() const -> Mask { return {hwloc_topology_get_topology_cpuset(m_topology.get())}; }
     inline auto getNodeMask(unsigned node) const -> Mask;
     inline auto getCoreMask(unsigned core) const -> Mask;
     inline auto getThreadMask(unsigned thread) const -> Mask;
@@ -106,17 +97,19 @@ private:
     std::unique_ptr< topology_t, decltype(&hwloc_topology_destroy) > m_topology;
 };
 
+inline auto Mask::format() const -> std::string
+{
+    auto       buf = std::array< char, 64 >{};
+    const auto len = hwloc_bitmap_snprintf(buf.data(), buf.size(), getRaw());
+    throwingAssert(len >= 0, "Failed to format hwloc mask");
+    auto retval = std::string{buf.begin(), std::next(buf.begin(), len)};
+    return retval;
+}
+
 auto Mask::operator!() const -> Mask
 {
     auto retval = Mask{};
     hwloc_bitmap_not(retval.getRaw(), getRaw());
-    return retval;
-}
-
-auto Mask::copy() const -> Mask
-{
-    auto retval = Mask{unallocated};
-    retval.m_bitmap.reset(hwloc_bitmap_dup(getRaw()));
     return retval;
 }
 
@@ -162,14 +155,14 @@ auto Topology::getCoreMask(unsigned core) const -> Mask
 {
     throwingAssert< std::out_of_range >(core < getNCores(), "Core index out of bounds");
     const auto full_mask = getFullMask();
-    return {hwloc_get_obj_inside_cpuset_by_type(m_topology.get(), full_mask.getRaw(), HWLOC_OBJ_CORE, core)->cpuset,
-            Mask::make_copy};
+    return {hwloc_get_obj_inside_cpuset_by_type(m_topology.get(), full_mask.getRaw(), HWLOC_OBJ_CORE, core)->cpuset};
 }
 
 inline auto Topology::getThreadMask(unsigned thread) const -> Mask
 {
-    // Manually setting the bit works better than hwloc_get_obj_inside_cpuset_by_type for round-robin thread assignment,
-    // since consecutive threads end up on different cores (standard linux logical-to-hardware thread mapping)
+    // Manually setting the bit works better than hwloc_get_obj_inside_cpuset_by_type for round-robin thread
+    // assignment, since consecutive threads end up on different cores (standard linux logical-to-hardware thread
+    // mapping)
     throwingAssert< std::out_of_range >(thread < getNHwThreads(), "Thread index out of bounds");
     auto retval = Mask{};
     retval.set(thread);
@@ -178,7 +171,8 @@ inline auto Topology::getThreadMask(unsigned thread) const -> Mask
 
 void Topology::bindThread(const Mask& cpu_mask) const
 {
-    throwingAssert(not hwloc_set_cpubind(m_topology.get(), cpu_mask.getRaw(), HWLOC_CPUBIND_THREAD));
+    throwingAssert(not hwloc_set_cpubind(m_topology.get(), cpu_mask.getRaw(), HWLOC_CPUBIND_THREAD),
+                   [&] { return std::format("Failed to bind thread to CPU mask {}\n", cpu_mask.format()); });
 }
 
 auto Topology::getThreadBinding() const -> Mask

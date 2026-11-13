@@ -1062,7 +1062,7 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::applyImpl(const tp
     const auto domains = util::ArrayOwner{m_mesh->getDomainIds()};
 
     using oneapi::tbb::task_arena;
-    const auto              max_par      = util::tbb::getMaxParallelismCoresOnly();
+    static const auto       max_par      = util::tbb::getMaxParallelismCoresOnly();
     static const auto       pin_type     = util::tbb::getPinTypeFromEnv();
     auto                    main_arena   = oneapi::tbb::task_arena{static_cast< int >(max_par)};
     auto                    hp_arena     = task_arena{task_arena::automatic, 1, task_arena::priority::high};

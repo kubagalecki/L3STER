@@ -549,7 +549,9 @@ TEST_CASE("Hwloc bitset wrapper", "[util, hwloc]")
         b2.set(1);
         CHECK(b1 > b2);
         CHECK(b1 != b2);
-        CHECK(!(b1 < b2));
+        CHECK(b1 == b1);
+        CHECK_FALSE(b1 < b2);
+        CHECK_FALSE(b1 < b1);
     }
 
     SECTION("Inversion")
@@ -557,6 +559,18 @@ TEST_CASE("Hwloc bitset wrapper", "[util, hwloc]")
         util::hwloc::Mask mask{};
         mask.set(2);
         CHECK(mask == !(!mask));
+    }
+
+    SECTION("Formatting")
+    {
+        util::hwloc::Mask mask{};
+        mask.set(2);
+        mask.set(4);
+        mask.set(6);
+        const auto str      = mask.format();
+        const auto to_parse = std::string_view{str | std::views::drop(2)};
+        const auto mask_num = util::fromString< int >(to_parse, 16);
+        CHECK(mask_num == 0b1010100);
     }
 }
 
@@ -582,7 +596,7 @@ TEST_CASE("Num threads control", "[util]")
 #endif
     };
 
-    const auto n_hw_threads  = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNHwThreads();
+    const auto n_hw_threads  = util::GlobalResource< util::hwloc::Topology >::get().getNHwThreads();
     const auto default_guard = util::MaxParallelismGuard{};
     check_num_threads(n_hw_threads);
 
@@ -613,7 +627,7 @@ TEST_CASE("Interpret OpenMP environment", "[util]")
 
 TEST_CASE("Thread-pinning observer", "[util]")
 {
-    const auto& topo             = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized();
+    const auto& topo             = util::GlobalResource< util::hwloc::Topology >::get();
     const auto  num_threads      = topo.getNHwThreads();
     auto        thread_locations = std::unordered_map< std::thread::id, std::set< unsigned > >(num_threads);
     auto        thread_bindings  = std::unordered_map< std::thread::id, std::set< util::hwloc::Mask > >(num_threads);
