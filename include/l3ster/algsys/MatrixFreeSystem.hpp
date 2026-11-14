@@ -1062,12 +1062,13 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::applyImpl(const tp
     const auto domains = util::ArrayOwner{m_mesh->getDomainIds()};
 
     using oneapi::tbb::task_arena;
-    static const auto       max_par      = util::tbb::getMaxParallelismCoresOnly();
-    static const auto       pin_type     = util::tbb::getPinTypeFromEnv();
-    auto                    main_arena   = oneapi::tbb::task_arena{static_cast< int >(max_par)};
-    auto                    hp_arena     = task_arena{task_arena::automatic, 1, task_arena::priority::high};
-    auto                    pin_observer = util::tbb::PinningObserver{main_arena, pin_type};
-    oneapi::tbb::task_group interior_tasks, border_tasks;
+    [[maybe_unused]] static const auto main_thread_id = std::this_thread::get_id(); // -Wunused trips for some reason
+    static const auto                  max_par        = util::tbb::getMaxParallelismCoresOnly();
+    static const auto                  pin_type       = util::tbb::getPinTypeFromEnv();
+    auto                               main_arena     = oneapi::tbb::task_arena{static_cast< int >(max_par)};
+    auto                               hp_arena     = task_arena{task_arena::automatic, 1, task_arena::priority::high};
+    auto                               pin_observer = util::tbb::PinningObserver{main_arena, pin_type};
+    oneapi::tbb::task_group            interior_tasks, border_tasks;
 
     const auto setup_import_export = [&](const auto& x_view, const auto& y_view) {
         const auto num_cols = x_view.extent(1);
@@ -1105,7 +1106,8 @@ void MatrixFreeSystem< max_dofs_per_node, n_rhs, orders... >::applyImpl(const tp
                         std::invoke(interior, element, x_view, y_view, alpha);
                     detail::invokeBoundaryKernels(
                         element, &BoundaryEvalKernels::interior, m_kernel_maps.boundary_eval, x_view, y_view, alpha);
-                    if (not m_import->testReceive() and m_import->tryReceive())
+                    thread_local const auto this_thread_id = std::this_thread::get_id();
+                    if (this_thread_id == main_thread_id and m_import->tryReceive())
                         hp_arena.execute([&] { border_tasks.run_and_wait([&] { apply_border(x_view, y_view); }); });
                 };
             m_interior_mesh.visit(eval_interior, std::views::single(domain), std::execution::par);
