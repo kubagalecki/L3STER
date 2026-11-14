@@ -155,18 +155,20 @@ class MaxParallelismGuard
                 hwloc_topo.bindThread(hwloc_topo.getFullMask());
                 const auto max_threads =
                     oneapi::tbb::global_control::active_value(oneapi::tbb::global_control::max_allowed_parallelism);
-                auto spawned_bmp = std::vector< std::atomic< bool > >(max_threads);
+                auto       spawned_bmp       = std::vector< std::atomic< bool > >(max_threads);
+                const auto check_all_spawned = [&] {
+                    return std::ranges::all_of(spawned_bmp, std::identity{});
+                };
                 tbb::parallelFor(std::views::iota(0uz, max_threads), [&](size_t i) {
-                    using namespace std::chrono_literals;
                     spawned_bmp[i] = true;
-                    for (size_t spin = 0; spin != 10000; ++spin)
+                    for (size_t spin = 0; spin != 100'000; ++spin)
                     {
-                        std::this_thread::sleep_for(100us);
-                        if (std::ranges::all_of(spawned_bmp, std::identity{}))
+                        if (check_all_spawned())
                             return;
+                        std::this_thread::sleep_for(std::chrono::microseconds(10));
                     }
-                    terminatingAssert(false, "Critical error: failed to force spawn TBB threads");
                 });
+                terminatingAssert(check_all_spawned(), "Critical error: failed to force spawn TBB threads");
                 hwloc_topo.bindThread(prev_mask);
                 return true;
             });

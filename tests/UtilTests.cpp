@@ -30,8 +30,10 @@ using namespace lstr;
 
 TEST_CASE("Assertions", "[util]")
 {
+    using namespace std::string_literals;
     CHECK_THROWS_AS(util::throwingAssert(2 < 1, "Math is not mathing"), std::runtime_error);
     CHECK_THROWS_AS(util::throwingAssert< std::bad_alloc >(2 < 1), std::bad_alloc);
+    CHECK_THROWS_AS(util::throwingAssert(2 < 1, [] { return "Math is not mathing"s; }), std::runtime_error);
 }
 
 TEMPLATE_TEST_CASE("ArrayOwner", "[util]", util::DefaultAllocPolicy, util::AlignedAllocPolicy< 64 >)
