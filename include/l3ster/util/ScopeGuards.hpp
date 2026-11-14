@@ -6,7 +6,10 @@
 #include "l3ster/util/GlobalResource.hpp"
 #include "l3ster/util/HwlocWrapper.hpp"
 #include "l3ster/util/SetStackSize.hpp"
+#include "l3ster/util/StringUtils.hpp"
+#include "l3ster/util/TbbUtils.hpp"
 
+#include <chrono>
 #include <optional>
 
 namespace lstr
@@ -42,11 +45,11 @@ MpiScopeGuard::MpiScopeGuard(int& argc, char**& argv)
     constexpr auto        check_mpi_thread_support = [] {
         int provided_mode{};
         L3STER_INVOKE_MPI(MPI_Query_thread, &provided_mode);
-        util::throwingAssert(provided_mode >= required_mode,
-                             "The provided MPI installation appears not to have the required threading support: "
-                                    "`MPI_THREAD_FUNNELED`\nIf you are initializing MPI yourself (i.e. not via L3STER scope "
-                                    "guards), be sure to do so by calling `MPI_Init_thread` and passing `MPI_THREAD_FUNNELED` "
-                                    "as the requirement, and *not* by calling `MPI_Init`");
+        throwingAssert(provided_mode >= required_mode,
+                       "The provided MPI installation appears not to have the required threading support: "
+                              "`MPI_THREAD_FUNNELED`\nIf you are initializing MPI yourself (i.e. not via L3STER scope "
+                              "guards), be sure to do so by calling `MPI_Init_thread` and passing `MPI_THREAD_FUNNELED` "
+                              "as the requirement, and *not* by calling `MPI_Init`");
     };
     constexpr auto check_initialized = []() -> bool {
         int retval{};
@@ -56,8 +59,8 @@ MpiScopeGuard::MpiScopeGuard(int& argc, char**& argv)
     constexpr auto check_not_finalized = [] {
         int finalized{};
         L3STER_INVOKE_MPI(MPI_Finalized, &finalized);
-        util::terminatingAssert(
-            not finalized, "You are attempting to create `lstr::MpiScopeGuard` after `MPI_Finalize` has been called");
+        terminatingAssert(not finalized,
+                          "You are attempting to create `lstr::MpiScopeGuard` after `MPI_Finalize` has been called");
     };
     const auto initialize = [&] {
         int dummy{};
@@ -143,27 +146,60 @@ class MaxParallelismGuard
         explicit ThreadGuards(size_t threads)
             : m_tbb_guard{oneapi::tbb::global_control::max_allowed_parallelism, threads},
               m_openmp_guard{static_cast< int >(threads)}
-        {}
+        {
+            // Force spawn TBB worker threads with the full affinity mask
+            // This is a somewhat crude workaround to avoid pinning TBB threads when OMP_PROC_BIND is set
+            [[maybe_unused]] static const bool initialized = std::invoke([] {
+                const auto& hwloc_topo = GlobalResource< hwloc::Topology >::get();
+                const auto  prev_mask  = hwloc_topo.getThreadBinding();
+                hwloc_topo.bindThread(hwloc_topo.getFullMask());
+                const auto max_threads =
+                    oneapi::tbb::global_control::active_value(oneapi::tbb::global_control::max_allowed_parallelism);
+                auto       spawned_bmp       = std::vector< std::atomic< bool > >(max_threads);
+                const auto check_all_spawned = [&] {
+                    return std::ranges::all_of(spawned_bmp, std::identity{});
+                };
+                tbb::parallelFor(std::views::iota(0uz, max_threads), [&](size_t i) {
+                    spawned_bmp[i] = true;
+                    for (size_t spin = 0; spin != 100'000; ++spin)
+                    {
+                        if (check_all_spawned())
+                            return;
+                        std::this_thread::sleep_for(std::chrono::microseconds(10));
+                    }
+                });
+                terminatingAssert(check_all_spawned(), "Critical error: failed to force spawn TBB threads");
+                hwloc_topo.bindThread(prev_mask);
+                return true;
+            });
+        }
 
     private:
         oneapi::tbb::global_control m_tbb_guard;
         OpenMPThreadGuard           m_openmp_guard;
     };
 
-    static auto getCurrentMaxPar() -> size_t&
+    static auto currentMaxPar() -> size_t&
     {
-        static size_t value = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNHwThreads();
+        static size_t value = std::numeric_limits< size_t >::max();
         return value;
     }
 
+    static auto defaultMaxPar() -> size_t
+    {
+        const auto omp_env = std::getenv("OMP_NUM_THREADS");
+        return omp_env ? fromString< size_t >(omp_env) : GlobalResource< hwloc::Topology >::get().getNHwThreads();
+    }
+
 public:
-    explicit MaxParallelismGuard(size_t max_threads) : m_previous{getCurrentMaxPar()}
+    MaxParallelismGuard() : MaxParallelismGuard{defaultMaxPar()} {}
+    explicit MaxParallelismGuard(size_t max_threads) : m_previous{currentMaxPar()}
     {
         max_threads = std::max(max_threads, 1uz);
         if (max_threads < m_previous)
         {
             m_thread_guards.emplace(max_threads);
-            getCurrentMaxPar() = max_threads;
+            currentMaxPar() = max_threads;
         }
     }
 
@@ -174,7 +210,7 @@ public:
     ~MaxParallelismGuard()
     {
         if (m_thread_guards)
-            getCurrentMaxPar() = m_previous;
+            currentMaxPar() = m_previous;
     }
 
 private:
@@ -188,15 +224,15 @@ class L3sterScopeGuard
 public:
     L3sterScopeGuard(int& argc, char** argv)
         : m_stack_size_guard{util::MaxStackSizeTracker::get() + (1uz << 23)}, // add 8MB of regular stack
+          m_max_par_guard{},                                                  // looks at hwthreads and OMP_NUM_THREADS
           m_mpi_guard{argc, argv},
-          m_max_par_guard{util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNHwThreads()},
           m_kokkos_guard{argc, argv}
     {}
 
 private:
     util::StackSizeGuard      m_stack_size_guard;
-    util::MpiScopeGuard       m_mpi_guard;
     util::MaxParallelismGuard m_max_par_guard;
+    util::MpiScopeGuard       m_mpi_guard;
     util::KokkosScopeGuard    m_kokkos_guard;
 };
 } // namespace lstr

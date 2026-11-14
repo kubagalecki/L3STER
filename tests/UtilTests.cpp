@@ -12,6 +12,7 @@
 #include "l3ster/util/SetStackSize.hpp"
 #include "l3ster/util/SpatialHashTable.hpp"
 #include "l3ster/util/StaticVector.hpp"
+#include "l3ster/util/StringUtils.hpp"
 #include "l3ster/util/TbbUtils.hpp"
 #include "l3ster/util/TypeErasedOverload.hpp"
 #include "l3ster/util/UniVector.hpp"
@@ -26,6 +27,59 @@
 #include <ranges>
 
 using namespace lstr;
+
+TEST_CASE("Assertions", "[util]")
+{
+    using namespace std::string_literals;
+    CHECK_THROWS_AS(util::throwingAssert(2 < 1, "Math is not mathing"), std::runtime_error);
+    CHECK_THROWS_AS(util::throwingAssert< std::bad_alloc >(2 < 1), std::bad_alloc);
+    CHECK_THROWS_AS(util::throwingAssert(2 < 1, [] { return "Math is not mathing"s; }), std::runtime_error);
+}
+
+TEMPLATE_TEST_CASE("ArrayOwner", "[util]", util::DefaultAllocPolicy, util::AlignedAllocPolicy< 64 >)
+{
+    using array_t   = util::ArrayOwner< int, TestType >;
+    const auto iota = std::views::iota(0, 10);
+    auto       a    = array_t(iota);
+    REQUIRE(a.size() == 10);
+    REQUIRE(std::ranges::equal(a, iota));
+    auto b = std::move(a);
+    REQUIRE(b.size() == 10);
+    REQUIRE(std::ranges::equal(b, iota));
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wself-move"
+#endif
+
+    b = std::move(b);
+
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
+
+    REQUIRE(b.size() == 10);
+    REQUIRE(std::ranges::equal(b, iota));
+    REQUIRE(std::ranges::equal(array_t{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, iota));
+}
+
+TEST_CASE("String utilities", "[utils]")
+{
+    SECTION("Conversion from string")
+    {
+        CHECK(util::fromString< char >("97") == 'a');
+        CHECK(util::fromString< int >("42") == 42);
+        CHECK(util::fromString< size_t >("42") == 42);
+        CHECK(util::fromString< int >("-42") == -42);
+        CHECK(util::fromString< double >("2.5") == 2.5);
+        CHECK_THROWS(util::fromString< double >("abc"));
+    }
+
+    SECTION("Case-insensitive comparison")
+    {
+        CHECK(util::equalCaseInsensitive("abc,def", "ABc,deF"));
+    }
+}
 
 TEST_CASE("Stack size manipulation", "[util]")
 {
@@ -97,7 +151,7 @@ TEST_CASE("Dynamic bitset", "[util]")
         }
     };
 
-    constexpr std::array sizes{10, 64, 128, 10001};
+    constexpr std::array sizes{10uz, 64uz, 128uz, 10001uz};
 
     SECTION("Single-threaded")
     {
@@ -515,16 +569,51 @@ TEST_CASE("Non-random access parallel for", "[util]")
     }
 }
 
+TEST_CASE("Hwloc bitset wrapper", "[util, hwloc]")
+{
+    SECTION("Comparison")
+    {
+        util::hwloc::Mask b1{}, b2{};
+        b1.set(2);
+        b2.set(1);
+        CHECK(b1 > b2);
+        CHECK_FALSE(b2 > b1);
+        CHECK_FALSE(b1 < b2);
+        CHECK_FALSE(b1 < b1);
+        CHECK(b1 != b2);
+        CHECK(b1 == b1);
+    }
+
+    SECTION("Inversion")
+    {
+        util::hwloc::Mask mask{};
+        mask.set(2);
+        CHECK(mask == !(!mask));
+    }
+
+    SECTION("Formatting")
+    {
+        util::hwloc::Mask mask{};
+        mask.set(2);
+        mask.set(4);
+        mask.set(6);
+        const auto str      = mask.format();
+        const auto to_parse = std::string_view{str | std::views::drop(2)};
+        const auto mask_num = util::fromString< int >(to_parse, 16);
+        CHECK(mask_num == 0b1010100);
+    }
+}
+
 TEST_CASE("Hwloc topology info", "[util, hwloc]")
 {
-    const auto topology = util::hwloc::Topology{};
-    REQUIRE_FALSE(topology.isEmpty());
+    const auto topology         = util::hwloc::Topology{};
     const auto numa_expected    = L3STER_N_NUMA_NODES;
     const auto cores_expected   = L3STER_N_CORES;
     const auto threads_expected = L3STER_N_HWTHREADS;
     CHECK(numa_expected == topology.getNNodes());
     CHECK(cores_expected == topology.getNCores());
     CHECK(threads_expected == topology.getNHwThreads());
+    CHECK_THROWS(topology.bindThread({})); // Binding to empty mask should not be possible
 }
 
 TEST_CASE("Num threads control", "[util]")
@@ -538,7 +627,8 @@ TEST_CASE("Num threads control", "[util]")
 #endif
     };
 
-    const auto n_hw_threads = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNHwThreads();
+    const auto n_hw_threads  = util::GlobalResource< util::hwloc::Topology >::get().getNHwThreads();
+    const auto default_guard = util::MaxParallelismGuard{};
     check_num_threads(n_hw_threads);
 
     {
@@ -552,6 +642,87 @@ TEST_CASE("Num threads control", "[util]")
         check_num_threads(n_hw_threads);
     }
     check_num_threads(n_hw_threads);
+}
+
+TEST_CASE("Interpret OpenMP environment", "[util]")
+{
+    using enum util::tbb::Pin;
+    CHECK(util::tbb::getPinType("false", "sockets") == Unpinned);
+    CHECK(util::tbb::getPinType("false", "cores") == Unpinned);
+    CHECK(util::tbb::getPinType("false", "threads") == Unpinned);
+    CHECK(util::tbb::getPinType("spread", "sockets") == Node);
+    CHECK(util::tbb::getPinType("spread", "cores") == Core);
+    CHECK(util::tbb::getPinType("spread", "threads") == Thread);
+    CHECK_THROWS(util::tbb::getPinType("spread", "numa"));
+}
+
+TEST_CASE("Thread-pinning observer", "[util]")
+{
+    const auto& topo             = util::GlobalResource< util::hwloc::Topology >::get();
+    const auto  num_threads      = topo.getNHwThreads();
+    auto        thread_locations = std::unordered_map< std::thread::id, std::set< unsigned > >(num_threads);
+    auto        thread_bindings  = std::unordered_map< std::thread::id, std::set< util::hwloc::Mask > >(num_threads);
+    std::mutex  mutex;
+    const auto  update_loc_and_bind = [&](unsigned) {
+        const auto tid = std::this_thread::get_id();
+        {
+            const auto lock = std::scoped_lock{mutex};
+            thread_locations[tid].insert(topo.getLastThreadLocation());
+            thread_bindings[tid].insert(topo.getThreadBinding());
+        }
+        std::this_thread::sleep_for(std::chrono::microseconds(400));
+    };
+    const auto sample_loc_bind = [&](util::tbb::Pin pin) {
+        for (int i = 0; i != 100; ++i)
+        {
+            auto arena        = oneapi::tbb::task_arena{static_cast< int >(num_threads)};
+            auto pin_observer = util::tbb::PinningObserver{arena, pin};
+            arena.execute([&] { util::tbb::parallelFor(std::views::iota(0u, num_threads), update_loc_and_bind); });
+        }
+    };
+    const auto check_stable_binding = [&] {
+        REQUIRE(thread_bindings.size() == num_threads);
+        return std::ranges::all_of(thread_bindings, [](const auto& p) { return p.second.size() == 1; });
+    };
+
+    using enum util::tbb::Pin;
+    SECTION("Unpinned")
+    {
+        sample_loc_bind(Unpinned);
+        REQUIRE(check_stable_binding());
+    }
+    SECTION("Thread")
+    {
+        sample_loc_bind(Thread);
+        REQUIRE(check_stable_binding());
+        auto all_locs = util::hwloc::Mask{};
+        for (const auto& [tid, locs] : thread_locations)
+        {
+            REQUIRE(locs.size() == 1);
+            const auto& loc  = *locs.begin();
+            const auto& bind = *thread_bindings.at(tid).begin();
+            REQUIRE(bind.weight() == 1);
+            REQUIRE(bind.test(loc));
+            all_locs.set(loc);
+        }
+        CHECK(all_locs.weight() == num_threads);
+    }
+    SECTION("Core")
+    {
+        sample_loc_bind(Core);
+        REQUIRE(check_stable_binding());
+        const auto smt    = topo.getNHwThreads() / topo.getNCores();
+        const auto lt_smt = [&](const auto& s) {
+            return s.size() <= smt;
+        };
+        CHECK(std::ranges::all_of(thread_bindings | std::views::values, lt_smt));
+        CHECK(std::ranges::all_of(thread_locations | std::views::values, lt_smt));
+    }
+    SECTION("Node")
+    {
+        sample_loc_bind(Node);
+        REQUIRE(check_stable_binding());
+    }
 }
 
 TEST_CASE("Memory-mapping utils", "[utils]")
@@ -712,10 +883,8 @@ TEST_CASE("UniVector", "[util]")
 
     SECTION("Reduction")
     {
-        const auto transform = util::OverloadSet{[&](int i) { return i; },
-                                                 [&](const std::string& str) {
-                                                     return std::stoi(str);
-                                                 }};
+        const auto transform =
+            util::OverloadSet{[&](int i) { return i; }, [&](const std::string& str) { return std::stoi(str); }};
 
         CHECK(vec.transformReduce(0, transform, std::plus{}, std::execution::seq) == (n_strs + n_ints) * 42);
         CHECK(vec.transformReduce(0, transform, std::plus{}, std::execution::par) == (n_strs + n_ints) * 42);

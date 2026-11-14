@@ -76,7 +76,7 @@ MmappedFile::MmappedFile(const std::filesystem::path& filename)
     throwingAssert(!fstat(file, &file_stats), "Could not read file info via fstat syscall");
     const auto size = static_cast< size_t >(file_stats.st_size);
     void*      addr = mmap(nullptr, size, PROT_READ, MAP_PRIVATE, file, 0);
-    throwingAssert(addr != MAP_FAILED, "Failed to mmap file");
+    throwingAssert(addr != MAP_FAILED, [&] { return std::format("Failed to mmap file: {}", filename.c_str()); });
     m_data = std::unique_ptr< char, MunmapDeleter >{static_cast< char* >(addr), MunmapDeleter{size}};
     throwingAssert(!close(file), "Failed to close file after mmap");
 }

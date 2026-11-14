@@ -2,17 +2,16 @@
 #define L3STER_UTIL_TBBUTILS_HPP
 
 #include "l3ster/util/Concepts.hpp"
+#include "l3ster/util/GlobalResource.hpp"
+#include "l3ster/util/HwlocWrapper.hpp"
 #include "l3ster/util/Ranges.hpp"
+#include "l3ster/util/StringUtils.hpp"
 
 #include "oneapi/tbb.h"
 
-#include <algorithm>
-#include <bit>
 #include <cmath>
 #include <iterator>
-#include <map>
 #include <ranges>
-#include <shared_mutex>
 
 namespace lstr::util::tbb
 {
@@ -86,6 +85,142 @@ auto parallelTransformReduce(Range&& range, Zero identity, Reduction reduction =
                                          transform);
         },
         reduction);
+}
+
+enum struct Pin
+{
+    Node,
+    Core,
+    Thread,
+    Unpinned
+};
+
+class PinningObserver : public oneapi::tbb::task_scheduler_observer
+{
+    class PinCache
+    {
+    public:
+        PinCache() : m_last_mask{GlobalResource< hwloc::Topology >::get().getThreadBinding()} {}
+        void bind(const hwloc::Mask& mask)
+        {
+            if (mask == m_last_mask)
+                return;
+            GlobalResource< hwloc::Topology >::get().bindThread(mask);
+            m_last_mask = hwloc::Mask{mask.getRaw()};
+        }
+
+    private:
+        hwloc::Mask m_last_mask;
+    };
+
+public:
+    PinningObserver(oneapi::tbb::task_arena& arena, Pin pin_type)
+        : oneapi::tbb::task_scheduler_observer(arena),
+          m_pin_type(pin_type),
+          m_thread_masks(static_cast< size_t >(arena.max_concurrency()))
+    {
+        if (pin_type == Pin::Unpinned)
+            return;
+        const auto thr_range = std::views::iota(0u, m_thread_masks.size());
+        std::ranges::transform(thr_range, m_thread_masks.begin(), [&](unsigned i) { return getMask(i); });
+        this->observe(true);
+    }
+
+    PinningObserver(const PinningObserver&)            = delete;
+    PinningObserver& operator=(const PinningObserver&) = delete;
+    PinningObserver(PinningObserver&&)                 = delete;
+    PinningObserver& operator=(PinningObserver&&)      = delete;
+    ~PinningObserver() override { this->observe(false); }
+
+    void on_scheduler_entry(bool is_worker) final
+    {
+        if (m_pin_type != Pin::Unpinned) [[likely]]
+        {
+            const auto  tid  = static_cast< unsigned >(oneapi::tbb::this_task_arena::current_thread_index());
+            const auto& mask = m_thread_masks.at(tid);
+            if (not is_worker)
+            {
+                const auto& topo = GlobalResource< hwloc::Topology >::get();
+                m_main_mask      = topo.getThreadBinding();
+                topo.bindThread(mask);
+            }
+            else
+            {
+                thread_local PinCache pin_cache;
+                pin_cache.bind(mask);
+            }
+        }
+    }
+
+    void on_scheduler_exit(bool is_worker) final
+    {
+        if (m_pin_type != Pin::Unpinned and not is_worker) [[likely]]
+            GlobalResource< hwloc::Topology >::get().bindThread(m_main_mask);
+    }
+
+private:
+    // Round-robin assignment
+    auto getMask(unsigned thread_index) const -> hwloc::Mask
+    {
+        const auto& topo    = GlobalResource< hwloc::Topology >::get();
+        auto        get_pin = [&topo, thread_index](unsigned (hwloc::Topology::*get_num_units)() const,
+                                             hwloc::Mask (hwloc::Topology::*get_mask)(unsigned) const) mutable {
+            const auto num_units = std::invoke(get_num_units, topo);
+            while (thread_index >= num_units)
+                thread_index -= num_units;
+            return std::invoke(get_mask, topo, thread_index);
+        };
+        if (m_pin_type == Pin::Node)
+            return get_pin(&hwloc::Topology::getNNodes, &hwloc::Topology::getNodeMask);
+        if (m_pin_type == Pin::Core)
+            return get_pin(&hwloc::Topology::getNCores, &hwloc::Topology::getCoreMask);
+        if (m_pin_type == Pin::Thread)
+            return get_pin(&hwloc::Topology::getNHwThreads, &hwloc::Topology::getThreadMask);
+        std::unreachable();
+    }
+
+    Pin                                                 m_pin_type;
+    hwloc::Mask                                         m_main_mask;
+    ArrayOwner< hwloc::Mask, AlignedAllocPolicy< 64 > > m_thread_masks;
+};
+
+inline auto getPinType(std::string_view proc_bind, std::string_view places) -> Pin
+{
+    using namespace std::string_view_literals;
+    constexpr auto bind_strs      = std::array{"true"sv, "close"sv, "spread"sv};
+    constexpr auto starts_with_ci = [](std::string_view str, std::string_view prefix) {
+        return equalCaseInsensitive(str.substr(0, prefix.size()), prefix);
+    };
+    if (std::ranges::any_of(bind_strs, [&](std::string_view bind_str) { return starts_with_ci(proc_bind, bind_str); }))
+    {
+        if (starts_with_ci(places, "sockets"))
+            return Pin::Node;
+        if (starts_with_ci(places, "cores"))
+            return Pin::Core;
+        if (starts_with_ci(places, "threads"))
+            return Pin::Thread;
+        throwingAssert(false, [&] { return std::format("Unknown value for OMP_PLACES: {}", places); });
+    }
+    return Pin::Unpinned;
+}
+
+inline auto getPinTypeFromEnv() -> Pin
+{
+    const auto proc_bind = getEnvOrEmpty("OMP_PROC_BIND");
+    const auto places    = getEnvOrEmpty("OMP_PLACES");
+    return getPinType(proc_bind, places);
+}
+
+inline auto getMaxParallelism()
+{
+    return oneapi::tbb::global_control::active_value(oneapi::tbb::global_control::max_allowed_parallelism);
+}
+
+inline auto getMaxParallelismCoresOnly() -> unsigned
+{
+    const auto        max_par_global = static_cast< unsigned >(getMaxParallelism());
+    static const auto n_cores        = GlobalResource< hwloc::Topology >::get().getNCores();
+    return std::min(max_par_global, n_cores);
 }
 } // namespace lstr::util::tbb
 #endif // L3STER_UTIL_TBBUTILS_HPP

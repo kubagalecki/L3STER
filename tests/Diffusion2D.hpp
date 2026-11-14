@@ -80,6 +80,14 @@ void test()
     auto solution_manager = SolutionManager{*mesh, problem_def.max_dofs_per_node};
     alg_sys.updateSolution(dof_inds, solution_manager, dof_inds);
 
+    if constexpr (S == OperatorEvaluationStrategy::MatrixFree) // for code coverage
+    {
+        const auto op = alg_sys.getOperator();
+        util::throwingAssert(not op->getRangeMap().is_null());
+        util::throwingAssert(op->hasTransposeApply());
+        util::throwingAssert(op->hasDiagonal());
+    }
+
     // Check results
     constexpr auto params        = KernelParams{.dimension = 2, .n_equations = 3, .n_fields = 3};
     constexpr auto compute_error = [](const auto& in, auto& error) {

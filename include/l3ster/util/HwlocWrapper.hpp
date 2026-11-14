@@ -3,47 +3,37 @@
 
 #include "l3ster/util/Assertion.hpp"
 
-#if defined(__GNUC__) || defined(__GNUG__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wconversion"
-#endif
-
 #include "hwloc.h"
 
-#if defined(__GNUC__) || defined(__GNUG__)
-#pragma GCC diagnostic pop
-#endif
-
 #include <functional>
-#include <limits>
 #include <memory>
-#include <numeric>
-#include <utility>
-#include <vector>
 
 namespace lstr::util::hwloc
 {
-namespace detail
+class Mask
 {
-class BitmapWrapper
-{
+    static constexpr auto bitmap_deleter = [](hwloc_bitmap_t ptr) {
+        hwloc_bitmap_free(ptr);
+    };
+    using bitmap_t  = std::remove_pointer_t< hwloc_bitmap_t >;
+    using deleter_t = std::remove_const_t< decltype(bitmap_deleter) >;
+
 public:
-    BitmapWrapper() : m_bitmap{hwloc_bitmap_alloc(), &hwloc_bitmap_free} { assertNotNull(); }
-    BitmapWrapper(hwloc_const_bitmap_t bmp) : m_bitmap{hwloc_bitmap_dup(bmp), &hwloc_bitmap_free} { assertNotNull(); }
+    Mask() : m_bitmap{hwloc_bitmap_alloc()} { assertNotNull(); }
+    Mask(hwloc_const_bitmap_t bitmap) : m_bitmap(hwloc_bitmap_dup(bitmap)) { assertNotNull(); }
 
-    operator hwloc_bitmap_t() { return m_bitmap.get(); }
-    operator hwloc_const_bitmap_t() const { return m_bitmap.get(); }
+    auto getRaw() const -> hwloc_const_bitmap_t { return m_bitmap.get(); }
+    auto getRaw() -> hwloc_bitmap_t { return m_bitmap.get(); }
 
-    template < std::invocable< unsigned int > Body >
-    void forEachSetIndex(Body&& body) const
-    {
-        unsigned int i{};
-        hwloc_bitmap_foreach_begin(i, m_bitmap.get())
-        {
-            std::invoke(body, i);
-        }
-        hwloc_bitmap_foreach_end();
-    }
+    void set(unsigned index) { throwingAssert(not hwloc_bitmap_set(getRaw(), index)); }
+    void unset(unsigned index) { throwingAssert(not hwloc_bitmap_clr(getRaw(), index)); }
+    auto test(unsigned index) const -> bool { return hwloc_bitmap_isset(getRaw(), index); }
+    auto weight() const -> unsigned { return static_cast< unsigned >(hwloc_bitmap_weight(getRaw())); }
+    void clear() { hwloc_bitmap_zero(getRaw()); }
+
+    auto format() const -> std::string;
+
+    inline auto operator!() const -> Mask;
 
 private:
     void assertNotNull(std::source_location sl = std::source_location::current()) const
@@ -51,97 +41,155 @@ private:
         throwingAssert(bool{m_bitmap}, "Hwloc bitmap allocation failed", sl);
     }
 
-    std::unique_ptr< std::remove_pointer_t< hwloc_bitmap_t >, decltype(&hwloc_bitmap_free) > m_bitmap;
+    std::unique_ptr< bitmap_t, deleter_t > m_bitmap;
 };
 
-inline bool operator==(const BitmapWrapper& b1, const BitmapWrapper& b2)
+inline bool operator==(const Mask& b1, const Mask& b2)
 {
-    return hwloc_bitmap_isequal(b1, b2);
+    return hwloc_bitmap_isequal(b1.getRaw(), b2.getRaw());
 }
-} // namespace detail
+
+inline auto operator<=>(const Mask& b1, const Mask& b2) -> std::strong_ordering
+{
+    const auto cmp = hwloc_bitmap_compare(b1.getRaw(), b2.getRaw());
+    if (cmp == -1)
+        return std::strong_ordering::less;
+    if (cmp == 0)
+        return std::strong_ordering::equal;
+    if (cmp == 1)
+        return std::strong_ordering::greater;
+    std::unreachable();
+}
+
+#define L3STER_DEFINE_HWLOC_BMP_BINOP(symbol, op)                                                                      \
+    inline Mask operator symbol(const Mask& b1, const Mask& b2)                                                        \
+    {                                                                                                                  \
+        auto retval = Mask{};                                                                                          \
+        op(retval.getRaw(), b1.getRaw(), b2.getRaw());                                                                 \
+        return retval;                                                                                                 \
+    }
+L3STER_DEFINE_HWLOC_BMP_BINOP(&, hwloc_bitmap_and);
+L3STER_DEFINE_HWLOC_BMP_BINOP(|, hwloc_bitmap_or);
+L3STER_DEFINE_HWLOC_BMP_BINOP(^, hwloc_bitmap_xor);
+#undef L3STER_DEFINE_HWLOC_BMP_BINOP
 
 class Topology
 {
 public:
-    Topology() : m_topology{nullptr, &hwloc_topology_destroy}
-    {
-        init();
-        populate();
-    }
+    inline Topology();
 
-    size_t getNNodes() const { return m_machine.size(); }
-    size_t getNCores(size_t node) const { return m_machine.at(node).second.size(); }
-    size_t getNCores() const
-    {
-        return std::ranges::fold_left(std::views::iota(0uz, getNNodes()) |
-                                          std::views::transform([this](size_t node) { return getNCores(node); }),
-                                      0uz,
-                                      std::plus{});
-    }
-    size_t getNHwThreads(size_t node, size_t core) const
-    {
-        return static_cast< size_t >(hwloc_bitmap_weight(m_machine.at(node).second.at(core)));
-    }
-    size_t getNHwThreads() const
-    {
-        return std::ranges::fold_left(std::views::iota(0uz, getNNodes()) | std::views::transform([this](size_t node) {
-                                          return std::ranges::fold_left(std::views::iota(0uz, getNCores(node)) |
-                                                                            std::views::transform([&](size_t core) {
-                                                                                return getNHwThreads(node, core);
-                                                                            }),
-                                                                        0uz,
-                                                                        std::plus{});
-                                      }),
-                                      0uz,
-                                      std::plus{});
-    }
-    bool isEmpty() const { return m_machine.empty(); }
+    inline auto getNNodes() const -> unsigned;
+    inline auto getNCores() const -> unsigned;
+    inline auto getNHwThreads() const -> unsigned;
+
+    auto        getFullMask() const -> Mask { return {hwloc_topology_get_topology_cpuset(m_topology.get())}; }
+    inline auto getNodeMask(unsigned node) const -> Mask;
+    inline auto getCoreMask(unsigned core) const -> Mask;
+    inline auto getThreadMask(unsigned thread) const -> Mask;
+
+    inline void bindThread(const Mask& cpu_mask) const;
+    inline auto getThreadBinding() const -> Mask;
+    inline auto getLastThreadLocation() const -> unsigned;
 
 private:
-    inline void init();
-    inline void populate();
+    using topology_t = std::remove_pointer_t< hwloc_topology_t >;
 
-    using Core     = detail::BitmapWrapper;                                   // core cpu set
-    using NumaNode = std::pair< detail::BitmapWrapper, std::vector< Core > >; // node set + cores
-
-    std::vector< NumaNode >                                                                         m_machine;
-    std::unique_ptr< std::remove_pointer_t< hwloc_topology_t >, decltype(&hwloc_topology_destroy) > m_topology;
+    std::unique_ptr< topology_t, decltype(&hwloc_topology_destroy) > m_topology;
 };
 
-void Topology::init()
+inline auto Mask::format() const -> std::string
 {
-    hwloc_topology_t topo_ptr{};
-    const auto       init_err = hwloc_topology_init(&topo_ptr);
+    auto       buf = std::array< char, 64 >{};
+    const auto len = hwloc_bitmap_snprintf(buf.data(), buf.size(), getRaw());
+    throwingAssert(len >= 0, "Failed to format hwloc mask");
+    auto retval = std::string{buf.begin(), std::next(buf.begin(), len)};
+    return retval;
+}
+
+auto Mask::operator!() const -> Mask
+{
+    auto retval = Mask{};
+    hwloc_bitmap_not(retval.getRaw(), getRaw());
+    return retval;
+}
+
+Topology::Topology() : m_topology{nullptr, &hwloc_topology_destroy}
+{
+    const auto init_err = hwloc_topology_init(std::out_ptr(m_topology));
     throwingAssert(not init_err, "Failed to initialize hwloc topology");
-    m_topology.reset(topo_ptr);
     const auto load_err = hwloc_topology_load(m_topology.get());
     throwingAssert(not load_err, "Failed to load hwloc topology");
 }
-
-void Topology::populate()
+auto Topology::getNNodes() const -> unsigned
 {
-    const auto nodeset = detail::BitmapWrapper{hwloc_topology_get_topology_nodeset(m_topology.get())};
-    const auto n_nodes = hwloc_bitmap_weight(nodeset);
-    m_machine.reserve(static_cast< std::size_t >(n_nodes));
-    nodeset.forEachSetIndex([this](unsigned int node) {
-        auto& [node_mask, cores] = m_machine.emplace_back();
-        hwloc_bitmap_set(node_mask, static_cast< unsigned int >(node));
-        auto       node_cpuset       = detail::BitmapWrapper{};
-        const auto node_cpu_conv_err = hwloc_cpuset_from_nodeset(m_topology.get(), node_cpuset, node_mask);
-        throwingAssert(not node_cpu_conv_err, "Failed to convert hwloc nodeset to cpuset");
-        const auto n_cpus_in_node =
-            hwloc_get_nbobjs_inside_cpuset_by_type(m_topology.get(), node_cpuset, HWLOC_OBJ_CORE);
-        throwingAssert(n_cpus_in_node >= 0, "Failed to determine number of cores in NUMA node");
-        const auto n_cpus_in_node_unsigned = static_cast< unsigned int >(n_cpus_in_node);
-        cores.reserve(n_cpus_in_node_unsigned);
-        for (unsigned int cpu_ind = 0; cpu_ind != n_cpus_in_node_unsigned; ++cpu_ind)
-        {
-            const auto cpu_ptr =
-                hwloc_get_obj_inside_cpuset_by_type(m_topology.get(), node_cpuset, HWLOC_OBJ_CORE, cpu_ind);
-            throwingAssert(cpu_ptr, "Failed to query hwloc core object");
-            cores.emplace_back(cpu_ptr->cpuset);
-        }
-    });
+    const auto num_nodes = hwloc_get_nbobjs_by_type(m_topology.get(), HWLOC_OBJ_NUMANODE);
+    throwingAssert(num_nodes > 0, "Failed to get number of NUMA nodes from hwloc");
+    return static_cast< unsigned >(num_nodes);
+}
+
+auto Topology::getNCores() const -> unsigned
+{
+    const auto num_cores = hwloc_get_nbobjs_by_type(m_topology.get(), HWLOC_OBJ_CORE);
+    throwingAssert(num_cores > 0, "Failed to get number of cores from hwloc");
+    return static_cast< unsigned >(num_cores);
+}
+
+auto Topology::getNHwThreads() const -> unsigned
+{
+    const auto num_threads = hwloc_get_nbobjs_by_type(m_topology.get(), HWLOC_OBJ_PU);
+    throwingAssert(num_threads > 0, "Failed to get number of hardware threads from hwloc");
+    return static_cast< unsigned >(num_threads);
+}
+
+auto Topology::getNodeMask(unsigned node) const -> Mask
+{
+    throwingAssert< std::out_of_range >(node < getNNodes(), "Node index out of bounds");
+    auto node_mask = Mask{};
+    node_mask.set(node);
+    auto retval = Mask{};
+    throwingAssert(not hwloc_cpuset_from_nodeset(m_topology.get(), retval.getRaw(), node_mask.getRaw()));
+    return retval;
+}
+
+auto Topology::getCoreMask(unsigned core) const -> Mask
+{
+    throwingAssert< std::out_of_range >(core < getNCores(), "Core index out of bounds");
+    const auto full_mask = getFullMask();
+    return {hwloc_get_obj_inside_cpuset_by_type(m_topology.get(), full_mask.getRaw(), HWLOC_OBJ_CORE, core)->cpuset};
+}
+
+inline auto Topology::getThreadMask(unsigned thread) const -> Mask
+{
+    // Manually setting the bit works better than hwloc_get_obj_inside_cpuset_by_type for round-robin thread
+    // assignment, since consecutive threads end up on different cores (standard linux logical-to-hardware thread
+    // mapping)
+    throwingAssert< std::out_of_range >(thread < getNHwThreads(), "Thread index out of bounds");
+    auto retval = Mask{};
+    retval.set(thread);
+    return retval;
+}
+
+void Topology::bindThread(const Mask& cpu_mask) const
+{
+    throwingAssert(not hwloc_set_cpubind(m_topology.get(), cpu_mask.getRaw(), HWLOC_CPUBIND_THREAD),
+                   [&] { return std::format("Failed to bind thread to CPU mask {}\n", cpu_mask.format()); });
+}
+
+auto Topology::getThreadBinding() const -> Mask
+{
+    auto retval = Mask{};
+    throwingAssert(not hwloc_get_cpubind(m_topology.get(), retval.getRaw(), HWLOC_CPUBIND_THREAD),
+                   "Failed to get thread binding from hwloc");
+    return retval;
+}
+
+auto Topology::getLastThreadLocation() const -> unsigned
+{
+    auto mask = Mask{};
+    hwloc_get_last_cpu_location(m_topology.get(), mask.getRaw(), HWLOC_CPUBIND_THREAD);
+    throwingAssert(mask.weight() == 1);
+    const auto index_range = std::views::iota(0u, getNHwThreads());
+    return *std::ranges::find_if(index_range, [&](unsigned i) { return mask.test(i); });
 }
 } // namespace lstr::util::hwloc
 #endif // L3STER_UTIL_NUMATOPOLOGY_HPP

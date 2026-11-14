@@ -10,6 +10,7 @@
 #include <cmath>
 #include <concepts>
 #include <cstdint>
+#include <cstdlib>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -145,6 +146,12 @@ private:
 
     alignas(alignment) T m_value;
 };
+
+inline auto getEnvOrEmpty(const char* name) -> std::string_view
+{
+    const auto env_val = std::getenv(name);
+    return env_val ? env_val : "";
+}
 
 // Workaround: GCC Bug 97930
 // Needed as template parameter because libstdc++ std::pair is not structural (private base class)

@@ -325,23 +325,28 @@ void StaticCondensationManager< CondensationPolicy::ElementBoundary >::endAssemb
     tpetra_crsmatrix_t&                                    matrix,
     const std::array< std::span< val_t >, n_rhs >&         rhs)
 {
-    const auto n_cores       = util::GlobalResource< util::hwloc::Topology >::getMaybeUninitialized().getNCores();
-    const auto max_par_guard = util::MaxParallelismGuard{n_cores};
-    util::tbb::parallelFor(m_element_ids, [&](el_id_t id) {
-        auto&      elem_data           = m_elem_data_map.at(id);
-        const auto element_ptr_variant = mesh.find(id).value();
-        const auto finalize_element    = [&]< mesh::ElementType ET, el_o_t EO >(
-                                          const mesh::Element< ET, EO >* element_ptr) {
-            elem_data.diag_block_inv = elem_data.diag_block.inverse();
-            thread_local util::eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > primary_upd_mat;
-            thread_local Eigen::Matrix< val_t, Eigen::Dynamic, int{n_rhs} >            primary_upd_rhs;
-            primary_upd_mat = -(elem_data.upper_block * elem_data.diag_block_inv * elem_data.upper_block.transpose());
-            primary_upd_rhs = -(elem_data.upper_block * elem_data.diag_block_inv * elem_data.rhs);
-            const auto [row_dofs, col_dofs, rhs_dofs] = dofs::getDofsFromNodes(
-                dofs::getPrimaryNodesArray< CondensationPolicy::ElementBoundary >(*element_ptr), dof_map);
-            scatterLocalSystem(primary_upd_mat, primary_upd_rhs, matrix, rhs, row_dofs, col_dofs, rhs_dofs);
-        };
-        std::visit(finalize_element, element_ptr_variant);
+    const auto        max_par      = util::tbb::getMaxParallelismCoresOnly();
+    static const auto pin_type     = util::tbb::getPinTypeFromEnv();
+    auto              arena        = oneapi::tbb::task_arena{static_cast< int >(max_par)};
+    auto              pin_observer = util::tbb::PinningObserver{arena, pin_type};
+    arena.execute([&] {
+        util::tbb::parallelFor(m_element_ids, [&](el_id_t id) {
+            auto&      elem_data           = m_elem_data_map.at(id);
+            const auto element_ptr_variant = mesh.find(id).value();
+            const auto finalize_element =
+                [&]< mesh::ElementType ET, el_o_t EO >(const mesh::Element< ET, EO >* element_ptr) {
+                    elem_data.diag_block_inv = elem_data.diag_block.inverse();
+                    thread_local util::eigen::DynamicallySizedMatrix< val_t, Eigen::RowMajor > primary_upd_mat;
+                    thread_local Eigen::Matrix< val_t, Eigen::Dynamic, int{n_rhs} >            primary_upd_rhs;
+                    primary_upd_mat =
+                        -(elem_data.upper_block * elem_data.diag_block_inv * elem_data.upper_block.transpose());
+                    primary_upd_rhs = -(elem_data.upper_block * elem_data.diag_block_inv * elem_data.rhs);
+                    const auto [row_dofs, col_dofs, rhs_dofs] = dofs::getDofsFromNodes(
+                        dofs::getPrimaryNodesArray< CondensationPolicy::ElementBoundary >(*element_ptr), dof_map);
+                    scatterLocalSystem(primary_upd_mat, primary_upd_rhs, matrix, rhs, row_dofs, col_dofs, rhs_dofs);
+                };
+            std::visit(finalize_element, element_ptr_variant);
+        });
     });
 }
 

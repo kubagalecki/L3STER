@@ -50,12 +50,13 @@ auto getNormalizationDofs(const dofs::LocalDofMap< max_dofs_per_node >&     node
     for (const auto& dofs : node_dof_map | std::views::take(num_owned_nodes))
         for (auto&& [current, examined] : std::views::zip(my_norm_dofs, util::makeIndexedView(dofs, norm_inds)))
         {
-            if (not is_valid(examined))
-                continue;
-            if (not is_valid(current))
-                current = examined;
-            else
-                current = std::min(current, examined);
+            if (is_valid(examined))
+            {
+                if (not is_valid(current))
+                    current = examined;
+                else
+                    current = std::min(current, examined);
+            }
         }
     auto      min_ranks = util::StaticVector< int, max_dofs_per_node >{};
     const int my_rank   = comm.getRank();

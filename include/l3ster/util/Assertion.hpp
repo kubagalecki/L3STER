@@ -12,6 +12,7 @@
 #include <source_location>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 
 namespace lstr::util
 {
@@ -90,6 +91,19 @@ constexpr void throwingAssert(bool                 condition,
 {
     if (not condition)
         detail::throwErrorWithLocation< Exception >(err_msg, src_loc);
+}
+
+template < typename Exception = std::runtime_error, typename ErrorMessageGenerator >
+constexpr void throwingAssert(bool                    condition,
+                              ErrorMessageGenerator&& err_msg_gen,
+                              std::source_location    src_loc = std::source_location::current())
+    requires std::is_invocable_r_v< std::string, ErrorMessageGenerator >
+{
+    if (not condition)
+    {
+        const std::string err_msg = std::invoke(std::forward< ErrorMessageGenerator >(err_msg_gen));
+        throwingAssert< Exception >(false, err_msg, src_loc);
+    }
 }
 
 inline void terminatingAssert(bool                 condition,

@@ -52,8 +52,8 @@ namespace detail
 {
 struct BoundaryGroup
 {
-    std::vector< d_id_t >  boundary_ids_src, boundary_ids_dest;
-    std::array< val_t, 3 > translation;
+    std::vector< d_id_t >  boundary_ids_src{}, boundary_ids_dest{};
+    std::array< val_t, 3 > translation{};
 
     bool operator==(const BoundaryGroup&) const  = default;
     auto operator<=>(const BoundaryGroup&) const = default;
